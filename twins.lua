@@ -94,7 +94,7 @@ local function setup_params()
     end
 
     params:add_separator("Transition")
-    params:add_control("steps", "steps", controlspec.new(10, 500000, "lin", 1, 600, ""))
+    params:add_control("steps", "steps", controlspec.new(10, 500000, "lin", 1, 10000, ""))
     params:set_action("steps", function(value) steps = value end)
 
     halfsecond.init()
