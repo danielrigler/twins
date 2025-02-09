@@ -61,56 +61,70 @@ Engine_twins : CroneEngine {
 				context.server.sampleRate * 1,
 			);
 		});
+		
+this.addCommand("granular_gain", "f", { arg msg;
+  var gain = msg[1];
+  voices.do({ arg voice; voice.set(\granular_gain, gain); });
+});
 
-		SynthDef(\synth, {
-			arg out, phase_out, level_out, buf_l, buf_r,
-			gate=0, pos=0, speed=1, jitter=0,
-			size=0.1, density=20, pitch=1, pan=0, spread=0, gain=1, envscale=1,
-			freeze=0, t_reset_pos=0;
+SynthDef(\synth, {
+  arg out, phase_out, level_out, buf_l, buf_r,
+  gate=0, pos=0, speed=1, jitter=0,
+  size=0.1, density=20, pitch=1, pan=0, spread=0, gain=1, envscale=1,
+  freeze=0, t_reset_pos=0,
+  granular_gain=1; // Add granular_gain parameter
 
-			var grain_trig;
-			var jitter_sig;
-			var buf_dur;
-			var pan_sig;
-			var buf_pos;
-			var pos_sig;
-			var sig_l;
-			var sig_r;
-			var sig_mix;
+  var grain_trig;
+  var jitter_sig;
+  var buf_dur;
+  var pan_sig;
+  var buf_pos;
+  var pos_sig;
+  var sig_l;
+  var sig_r;
+  var sig_mix;
+  var dry_sig; // Dry signal
+  var granular_sig; // Granular signal
 
-			var env;
-			var level;
-			grain_trig = Impulse.kr(density);
-			buf_dur = BufDur.kr(buf_l);
+  var env;
+  var level;
+  grain_trig = Impulse.kr(density);
+  buf_dur = BufDur.kr(buf_l);
 
-			pan_sig = TRand.kr(trig: grain_trig,
-				lo: spread.neg,
-				hi: spread);
+  pan_sig = TRand.kr(trig: grain_trig,
+    lo: spread.neg,
+    hi: spread);
 
-			jitter_sig = TRand.kr(trig: grain_trig,
-				lo: buf_dur.reciprocal.neg * jitter,
-				hi: buf_dur.reciprocal * jitter);
+  jitter_sig = TRand.kr(trig: grain_trig,
+    lo: buf_dur.reciprocal.neg * jitter,
+    hi: buf_dur.reciprocal * jitter);
 
-			buf_pos = Phasor.kr(trig: t_reset_pos,
-				rate: buf_dur.reciprocal / ControlRate.ir * speed,
-				resetPos: pos);
+  buf_pos = Phasor.kr(trig: t_reset_pos,
+    rate: buf_dur.reciprocal / ControlRate.ir * speed,
+    resetPos: pos);
 
-			pos_sig = Wrap.kr(Select.kr(freeze, [buf_pos, pos]));
+  pos_sig = Wrap.kr(Select.kr(freeze, [buf_pos, pos]));
 
-			sig_l = GrainBuf.ar(1, grain_trig, size, buf_l, pitch, pos_sig + jitter_sig, 2);
-			sig_r = GrainBuf.ar(1, grain_trig, size, buf_r, pitch, pos_sig + jitter_sig, 2);
+  // Dry signal (unchanged)
+  dry_sig = [PlayBuf.ar(1, buf_l, speed, loop: 1), PlayBuf.ar(1, buf_r, speed, loop: 1)];
 
-			sig_mix = Balance2.ar(sig_l, sig_r, pan + pan_sig);
+  // Granular signal
+  sig_l = GrainBuf.ar(1, grain_trig, size, buf_l, pitch, pos_sig + jitter_sig, 2);
+  sig_r = GrainBuf.ar(1, grain_trig, size, buf_r, pitch, pos_sig + jitter_sig, 2);
+  granular_sig = Balance2.ar(sig_l, sig_r, pan + pan_sig);
 
-			env = EnvGen.kr(Env.asr(1, 1, 1), gate: gate, timeScale: envscale);
+  env = EnvGen.kr(Env.asr(1, 1, 1), gate: gate, timeScale: envscale);
 
-			level = env;
+  level = env;
 
-			Out.ar(out, sig_mix * level * gain);
-			Out.kr(phase_out, pos_sig);
-			// ignore gain for level out
-			Out.kr(level_out, level);
-		}).add;
+  // Mix dry and granular signals
+  sig_mix = (dry_sig * (1 - granular_gain)) + (granular_sig * granular_gain);
+
+  // Output the mixed signal
+  Out.ar(out, sig_mix * level * gain);
+  Out.kr(phase_out, pos_sig);
+  Out.kr(level_out, level);
+}).add;
 
 SynthDef(\effect, {
   arg in, out, mix=0.5, predelay=0, input_amount=100, input_lowpass_cutoff=10000, input_highpass_cutoff=100, input_diffusion_1=75, input_diffusion_2=62.5, tail_density=70, decay=50, damping=5500, modulator_frequency=1, modulator_depth=0.5;
