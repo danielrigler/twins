@@ -82,48 +82,45 @@ local function setup_ui_metro()
   ui_metro:start()
 end
 
-local function setup_params()
-  params:add_separator("Samples")
+for i=1,2 do
+  params:add_file(i .. "sample", i .. " sample")
+  params:set_action(i .. "sample", function(file) engine.read(i, file) end)
   
-  for i=1,2 do
-    params:add_file(i .. "sample", i .. " sample")
-    params:set_action(i .. "sample", function(file) engine.read(i, file) end)
-    
-    params:add_taper(i .. "volume", i .. " volume", -60, 20, 0, 0, "dB")
-    params:set_action(i .. "volume", function(value) engine.volume(i, math.pow(10, value / 20)) end)
- 
-    params:add_taper(i .."pan", i .. " pan", -100, 100, 0, 0, "%")
-    params:set_action(i .."pan", function(value) engine.pan(i, value / 100) end)
+  params:add_taper(i .. "volume", i .. " volume", -60, 20, 0, 0, "dB")
+  params:set_action(i .. "volume", function(value) engine.volume(i, math.pow(10, value / 20)) end)
+
+  params:add_taper(i .."pan", i .. " pan", -100, 100, 0, 0, "%")
+  params:set_action(i .."pan", function(value) engine.pan(i, value / 100) end)
+
+  params:add_taper(i .. "speed", i .. " speed", -400, 400, 0, 0, "%")
+  params:set_action(i .. "speed", function(value) engine.speed(i, value / 100) end)
+
+  params:add_taper(i .. "jitter", i .. " jitter", 0, 500, 250, 5, "ms")
+  params:set_action(i .. "jitter", function(value) engine.jitter(i, value / 1000) end)
+
+  params:add_taper(i .. "size", i .. " size", 1, 500, 100, 5, "ms")
+  params:set_action(i .. "size", function(value) engine.size(i, value / 1000) end)
+
+  params:add_taper(i .. "density", i .. " density", 0, 50, 20, 6)
+  params:set_action(i .. "density", function(value) engine.density(i, value) end)
+
+  params:add_taper(i .. "pitch", i .. " pitch", -48, 48, 0, 0)
+  params:set_action(i .. "pitch", function(value) engine.pitch(i, math.pow(0.5, -value / 12)) end)
   
-    params:add_taper(i .. "speed", i .. " speed", -400, 400, 0, 0, "%")
-    params:set_action(i .. "speed", function(value) engine.speed(i, value / 100) end)
+  params:add_taper(i .. "spread", i .. " spread", 0, 100, 0, 0, "%")
+  params:set_action(i .. "spread", function(value) engine.spread(i, value / 100) end)
   
-    params:add_taper(i .. "jitter", i .. " jitter", 0, 500, 250, 5, "ms")
-    params:set_action(i .. "jitter", function(value) engine.jitter(i, value / 1000) end)
+  params:add_control(i .. "seek", i .. " seek", controlspec.new(0, 100, "lin", 0.01, 0, "%", 0.01/100))
+  params:set_action(i .. "seek", function(value) engine.seek(i, value / 10) end)
   
-    params:add_taper(i .. "size", i .. " size", 1, 500, 100, 5, "ms")
-    params:set_action(i .. "size", function(value) engine.size(i, value / 1000) end)
-  
-    params:add_taper(i .. "density", i .. " density", 0, 50, 20, 6)
-    params:set_action(i .. "density", function(value) engine.density(i, value) end)
-  
-    params:add_taper(i .. "pitch", i .. " pitch", -48, 48, 0, 0)
-    params:set_action(i .. "pitch", function(value) engine.pitch(i, math.pow(0.5, -value / 12)) end)
-    
-    params:add_taper(i .. "spread", i .. " spread", 0, 100, 0, 0, "%")
-    params:set_action(i .. "spread", function(value) engine.spread(i, value / 100) end)
-    
-    params:add_control(i .. "seek", i .. " seek", controlspec.new(0, 100, "lin", 0.01, 0, "%", 0.01/100))
-    params:set_action(i .. "seek", function(value) engine.seek(i, value / 10) end)
-    
-    params:hide(i .. "speed")
-    params:hide(i .. "volume")
-    params:hide(i .. "jitter")
-    params:hide(i .. "size")
-    params:hide(i .. "pitch")
-    params:hide(i .. "spread")
-    params:hide(i .. "seek")
-  end
+  params:hide(i .. "speed")
+  params:hide(i .. "volume")
+  params:hide(i .. "jitter")
+  params:hide(i .. "size")
+  params:hide(i .. "pitch")
+  params:hide(i .. "spread")
+  params:hide(i .. "seek")
+end
 
 params:add_separator("Transition")
 
@@ -132,6 +129,20 @@ params:add_separator("Transition")
 
   halfsecond.init()
   
+
+
+  params:add_taper("1pan_mod_rate", "1 pan mod rate", 0.1, 10, 1, 0.1, "Hz")
+  params:set_action("1pan_mod_rate", function(value) engine.pan_mod_rate(1, value) end)
+
+  params:add_taper("1pan_mod_depth", "1 pan mod depth", 0, 100, 50, 0, "%")
+  params:set_action("1pan_mod_depth", function(value) engine.pan_mod_depth(1, value / 100) end)
+
+  params:add_taper("2pan_mod_rate", "2 pan mod rate", 0.1, 10, 1, 0.1, "Hz")
+  params:set_action("2pan_mod_rate", function(value) engine.pan_mod_rate(2, value) end)
+
+  params:add_taper("2pan_mod_depth", "2 pan mod depth", 0, 100, 50, 0, "%")
+  params:set_action("2pan_mod_depth", function(value) engine.pan_mod_depth(2, value / 100) end)
+
   params:add_group("Fverb2",12)
 
 params:add_taper("reverb_mix", "Mix", 0, 100, 16.5, 0, "%")
