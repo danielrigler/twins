@@ -34,6 +34,11 @@ function sc.init()
 
   end
   params:add_separator("Settings")
+  
+  params:add_taper("granular_gain", "Granular Mix", 0, 100, 100, 0, "%")
+  params:set_action("granular_gain", function(value) engine.granular_gain(value / 100) end)  -- Scale to 0.0 to 1.0 
+
+  
   params:add_group("HalfSecond",3)
   
   params:add{id="delay_h",name="Delay mix",type="control",
