@@ -15,7 +15,7 @@
 -- K1+E1: Seek1 >< Seek2
 -- K1+E2: Volume1
 -- K1+E3: Volume2
--- 
+
 
 
 halfsecond = include("lib/halfsecond")
