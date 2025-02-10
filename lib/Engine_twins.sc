@@ -1,4 +1,3 @@
-
 Engine_twins : CroneEngine {
 	classvar nvoices = 7;
 
@@ -61,96 +60,99 @@ Engine_twins : CroneEngine {
 				context.server.sampleRate * 1,
 			);
 		});
-		
-this.addCommand("granular_gain", "f", { arg msg;
-  var gain = msg[1];
-  voices.do({ arg voice; voice.set(\granular_gain, gain); });
-});
 
-SynthDef(\synth, {
-  arg out, phase_out, level_out, buf_l, buf_r,
-  gate=0, pos=0, speed=1, jitter=0,
-  size=0.1, density=20, pitch=1, pan=0, spread=0, gain=1, envscale=1,
-  freeze=0, t_reset_pos=0,
-  granular_gain=1; // Add granular_gain parameter
+		// Define the SynthDef
+		SynthDef(\synth, {
+			arg out, phase_out, level_out, buf_l, buf_r,
+			gate=0, pos=0, speed=1, jitter=0,
+			size=0.1, density=20, density_mod_amt=0, pitch=1, pan=0, spread=0, gain=1, envscale=1,
+			freeze=0, t_reset_pos=0,
+			granular_gain=1; // Add granular_gain parameter
 
-  var grain_trig;
-  var jitter_sig;
-  var buf_dur;
-  var pan_sig;
-  var buf_pos;
-  var pos_sig;
-  var sig_l;
-  var sig_r;
-  var sig_mix;
-  var dry_sig; // Dry signal
-  var granular_sig; // Granular signal
+			var grain_trig;
+			var jitter_sig;
+			var buf_dur;
+			var pan_sig;
+			var buf_pos;
+			var pos_sig;
+			var sig_l;
+			var sig_r;
+			var sig_mix;
+			var density_mod;
+			var dry_sig; // Dry signal
+			var granular_sig; // Granular signal
+			var env;
+			var level;
 
-  var env;
-  var level;
-  grain_trig = Impulse.kr(density);
-  buf_dur = BufDur.kr(buf_l);
+			// Density modulation
+			var trig_rnd = LFNoise1.kr(density);
+			density_mod = density * (2**(trig_rnd * density_mod_amt));
+			grain_trig = Impulse.kr(density_mod);
 
-  pan_sig = TRand.kr(trig: grain_trig,
-    lo: spread.neg,
-    hi: spread);
+			buf_dur = BufDur.kr(buf_l);
 
-  jitter_sig = TRand.kr(trig: grain_trig,
-    lo: buf_dur.reciprocal.neg * jitter,
-    hi: buf_dur.reciprocal * jitter);
+			pan_sig = TRand.kr(trig: grain_trig,
+				lo: spread.neg,
+				hi: spread);
 
-  buf_pos = Phasor.kr(trig: t_reset_pos,
-    rate: buf_dur.reciprocal / ControlRate.ir * speed,
-    resetPos: pos);
+			jitter_sig = TRand.kr(trig: grain_trig,
+				lo: buf_dur.reciprocal.neg * jitter,
+				hi: buf_dur.reciprocal * jitter);
 
-  pos_sig = Wrap.kr(Select.kr(freeze, [buf_pos, pos]));
+			buf_pos = Phasor.kr(trig: t_reset_pos,
+				rate: buf_dur.reciprocal / ControlRate.ir * speed,
+				resetPos: pos);
 
-  // Dry signal (unchanged)
-  dry_sig = [PlayBuf.ar(1, buf_l, speed, loop: 1), PlayBuf.ar(1, buf_r, speed, loop: 1)];
+			pos_sig = Wrap.kr(Select.kr(freeze, [buf_pos, pos]));
 
-  // Granular signal
-  sig_l = GrainBuf.ar(1, grain_trig, size, buf_l, pitch, pos_sig + jitter_sig, 2);
-  sig_r = GrainBuf.ar(1, grain_trig, size, buf_r, pitch, pos_sig + jitter_sig, 2);
-  granular_sig = Balance2.ar(sig_l, sig_r, pan + pan_sig);
+			// Dry signal (unchanged)
+			dry_sig = [PlayBuf.ar(1, buf_l, speed, loop: 1), PlayBuf.ar(1, buf_r, speed, loop: 1)];
 
-  env = EnvGen.kr(Env.asr(1, 1, 1), gate: gate, timeScale: envscale);
+			// Granular signal
+			sig_l = GrainBuf.ar(1, grain_trig, size, buf_l, pitch, pos_sig + jitter_sig, 2);
+			sig_r = GrainBuf.ar(1, grain_trig, size, buf_r, pitch, pos_sig + jitter_sig, 2);
+			granular_sig = Balance2.ar(sig_l, sig_r, pan + pan_sig);
 
-  level = env;
+			env = EnvGen.kr(Env.asr(1, 1, 1), gate: gate, timeScale: envscale);
 
-  // Mix dry and granular signals
-  sig_mix = (dry_sig * (1 - granular_gain)) + (granular_sig * granular_gain);
+			level = env;
 
-  // Output the mixed signal
-  Out.ar(out, sig_mix * level * gain);
-  Out.kr(phase_out, pos_sig);
-  Out.kr(level_out, level);
-}).add;
+			// Mix dry and granular signals
+			granular_gain = granular_gain.clip(0, 1); // Ensure granular_gain is within bounds
+			sig_mix = (dry_sig * (1 - granular_gain)) + (granular_sig * granular_gain);
 
-SynthDef(\effect, {
-  arg in, out, mix=0.5, predelay=0, input_amount=100, input_lowpass_cutoff=10000, input_highpass_cutoff=100, input_diffusion_1=75, input_diffusion_2=62.5, tail_density=70, decay=50, damping=5500, modulator_frequency=1, modulator_depth=0.5;
-  var dry = In.ar(in, 2); // Capture the dry signal from the input bus
-  var wet = Fverb2.ar(
-    dry[0], dry[1], // Stereo input
-    predelay,
-    input_amount,
-    input_lowpass_cutoff,
-    input_highpass_cutoff,
-    input_diffusion_1,
-    input_diffusion_2,
-    tail_density,
-    decay,
-    damping,
-    modulator_frequency,
-    modulator_depth
-  );
-  var sig = (wet * mix) + (dry * (1 - mix)); // Mix dry and wet signals
-  Out.ar(out, sig); // Output the mixed signal
-}).add;
+			// Output the mixed signal
+			Out.ar(out, sig_mix * level * gain);
+			Out.kr(phase_out, pos_sig);
+			Out.kr(level_out, level);
+		}).add;
+
+		// Define the effect SynthDef
+		SynthDef(\effect, {
+			arg in, out, mix=0.5, predelay=0, input_amount=100, input_lowpass_cutoff=10000, input_highpass_cutoff=100, input_diffusion_1=75, input_diffusion_2=62.5, tail_density=70, decay=50, damping=5500, modulator_frequency=1, modulator_depth=0.5;
+			var dry = In.ar(in, 2); // Capture the dry signal from the input bus
+			var wet = Fverb2.ar(
+				dry[0], dry[1], // Stereo input
+				predelay,
+				input_amount,
+				input_lowpass_cutoff,
+				input_highpass_cutoff,
+				input_diffusion_1,
+				input_diffusion_2,
+				tail_density,
+				decay,
+				damping,
+				modulator_frequency,
+				modulator_depth
+			);
+			var sig = (wet * mix) + (dry * (1 - mix)); // Mix dry and wet signals
+			Out.ar(out, sig); // Output the mixed signal
+		}).add;
 
 		context.server.sync;
 
 		// mix bus for all synth outputs
-		mixBus =  Bus.audio(context.server, 2);
+		mixBus = Bus.audio(context.server, 2);
 
 		effect = Synth.new(\effect, [\in, mixBus.index, \out, context.out_b.index], target: context.xg);
 
@@ -166,23 +168,36 @@ SynthDef(\effect, {
 				\level_out, levels[i].index,
 				\buf_l, buffersL[i],
 				\buf_r, buffersR[i],
+				\granular_gain, 1, // Initialize granular_gain
+				\density_mod_amt, 0, // Initialize density_mod_amt
 			], target: pg);
 		});
 
 		context.server.sync;
 
-this.addCommand("reverb_mix", "f", { arg msg; effect.set(\mix, msg[1]); });
-this.addCommand("reverb_predelay", "f", { arg msg; effect.set(\predelay, msg[1]); });
-this.addCommand("reverb_input_amount", "f", { arg msg; effect.set(\input_amount, msg[1]); });
-this.addCommand("reverb_lowpass_cutoff", "f", { arg msg; effect.set(\input_lowpass_cutoff, msg[1]); });
-this.addCommand("reverb_highpass_cutoff", "f", { arg msg; effect.set(\input_highpass_cutoff, msg[1]); });
-this.addCommand("reverb_diffusion_1", "f", { arg msg; effect.set(\input_diffusion_1, msg[1]); });
-this.addCommand("reverb_diffusion_2", "f", { arg msg; effect.set(\input_diffusion_2, msg[1]); });
-this.addCommand("reverb_tail_density", "f", { arg msg; effect.set(\tail_density, msg[1]); });
-this.addCommand("reverb_decay", "f", { arg msg; effect.set(\decay, msg[1]); });
-this.addCommand("reverb_damping", "f", { arg msg; effect.set(\damping, msg[1]); });
-this.addCommand("reverb_modulator_frequency", "f", { arg msg; effect.set(\modulator_frequency, msg[1]); });
-this.addCommand("reverb_modulator_depth", "f", { arg msg; effect.set(\modulator_depth, msg[1]); });
+		// Add commands
+		this.addCommand("granular_gain", "f", { arg msg;
+			var gain = msg[1];
+			voices.do({ arg voice; voice.set(\granular_gain, gain); });
+		});
+
+		this.addCommand("density_mod_amt", "if", { arg msg;
+			var voice = msg[1] - 1;
+			voices[voice].set(\density_mod_amt, msg[2]);
+		});
+
+		this.addCommand("reverb_mix", "f", { arg msg; effect.set(\mix, msg[1]); });
+		this.addCommand("reverb_predelay", "f", { arg msg; effect.set(\predelay, msg[1]); });
+		this.addCommand("reverb_input_amount", "f", { arg msg; effect.set(\input_amount, msg[1]); });
+		this.addCommand("reverb_lowpass_cutoff", "f", { arg msg; effect.set(\input_lowpass_cutoff, msg[1]); });
+		this.addCommand("reverb_highpass_cutoff", "f", { arg msg; effect.set(\input_highpass_cutoff, msg[1]); });
+		this.addCommand("reverb_diffusion_1", "f", { arg msg; effect.set(\input_diffusion_1, msg[1]); });
+		this.addCommand("reverb_diffusion_2", "f", { arg msg; effect.set(\input_diffusion_2, msg[1]); });
+		this.addCommand("reverb_tail_density", "f", { arg msg; effect.set(\tail_density, msg[1]); });
+		this.addCommand("reverb_decay", "f", { arg msg; effect.set(\decay, msg[1]); });
+		this.addCommand("reverb_damping", "f", { arg msg; effect.set(\damping, msg[1]); });
+		this.addCommand("reverb_modulator_frequency", "f", { arg msg; effect.set(\modulator_frequency, msg[1]); });
+		this.addCommand("reverb_modulator_depth", "f", { arg msg; effect.set(\modulator_depth, msg[1]); });
 
 		this.addCommand("read", "is", { arg msg;
 			this.readBuf(msg[1] - 1, msg[2]);

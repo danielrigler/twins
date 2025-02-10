@@ -80,18 +80,29 @@ local function setup_ui_metro()
 end
 
 local function setup_params()
-    
-    params:add_separator("Samples")
-    for i = 1, 2 do
-        params:add_file(i .. "sample", i .. " sample")
-        params:set_action(i .. "sample", function(file) engine.read(i, file) end)
-        
-        params:add_taper(i .. "pan", i .. " pan", -100, 100, 0, 0, "%")
-        params:set_action(i .. "pan", function(value) engine.pan(i, value / 100) end)
-        
-        params:add_taper(i .. "speed", i .. " speed", -400, 400, 0, 0, "%")
-        params:set_action(i .. "speed", function(value) engine.speed(i, value / 100) end)
-    end
+  params:add_separator("Samples")
+  for i = 1, 2 do
+    params:add_file(i .. "sample", i .. " sample")
+    params:set_action(i .. "sample", function(file)
+      if file ~= nil and file ~= "" and file ~= "none" and file ~= "-" then
+        print("Loading sample for voice " .. i .. ": " .. file)
+        engine.read(i, file) -- Send the voice index and file path to the SuperCollider engine
+      else
+        print("Invalid file path for voice " .. i)
+      end
+    end)
+
+    -- Add pan parameter for each voice
+    params:add_taper(i .. "pan", i .. " pan", -100, 100, 0, 0, "%")
+    params:set_action(i .. "pan", function(value)
+      print("Setting pan for voice " .. i .. ": " .. value / 100)
+      engine.pan(i, value / 100) -- Send the voice index and pan value to the SuperCollider engine
+    end)
+
+    -- Add other parameters for each voice
+    params:add_taper(i .. "speed", i .. " speed", -400, 400, 0, 0, "%")
+    params:set_action(i .. "speed", function(value) engine.speed(i, value / 100) end)
+  end
 
     params:add_separator("Transition")
     params:add_control("steps", "steps", controlspec.new(10, 500000, "lin", 1, 10000, ""))

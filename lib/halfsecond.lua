@@ -38,7 +38,9 @@ function sc.init()
   params:add_taper("granular_gain", "Granular Mix", 0, 100, 100, 0, "%")
   params:set_action("granular_gain", function(value) engine.granular_gain(value / 100) end)  -- Scale to 0.0 to 1.0 
 
-  
+  params:add_taper("density_mod_amt", "Density Mod", 0, 100, 0, 0, "%")
+  params:set_action("density_mod_amt", function(value) engine.density_mod_amt(1, value / 100) end) -- Send voice index (1) and value
+
   params:add_group("HalfSecond",3)
   
   params:add{id="delay_h",name="Delay mix",type="control",
