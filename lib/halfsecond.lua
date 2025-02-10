@@ -33,16 +33,7 @@ function sc.init()
     softcut.filter_rq(i,2.0);
 
   end
-  params:add_separator("Settings")
-  
-  params:add_taper("granular_gain", "Granular Mix", 0, 100, 100, 0, "%")
-  params:set_action("granular_gain", function(value) engine.granular_gain(value / 100) end)  -- Scale to 0.0 to 1.0 
 
-  params:add_taper("density_mod_amt", "Density Mod", 0, 100, 0, 0, "%")
-  params:set_action("density_mod_amt", function(value) engine.density_mod_amt(1, value / 100) end) -- Send voice index (1) and value
-
-  params:add_group("HalfSecond",3)
-  
   params:add{id="delay_h",name="Delay mix",type="control",
     controlspec=controlspec.new(0,1,'lin',0,0.2,""),
   action=function(x) softcut.level(1,x*math.random(90,110)/100);softcut.level(2,x*math.random(90,110)/100) end}

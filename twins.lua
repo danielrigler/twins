@@ -56,7 +56,7 @@ local double_press_threshold = 0.2 -- seconds
 -- Blinking effect variables
 local blink_state = false
 local blink_metro = metro.init()
-blink_metro.time = 0.25 -- Blink every 0.5 seconds
+blink_metro.time = 0.3 -- Blink every 0.5 seconds
 blink_metro.event = function()
     blink_state = not blink_state
     redraw()
@@ -87,15 +87,12 @@ local function setup_params()
       if file ~= nil and file ~= "" and file ~= "none" and file ~= "-" then
         print("Loading sample for voice " .. i .. ": " .. file)
         engine.read(i, file) -- Send the voice index and file path to the SuperCollider engine
-      else
-        print("Invalid file path for voice " .. i)
       end
     end)
 
     -- Add pan parameter for each voice
     params:add_taper(i .. "pan", i .. " pan", -100, 100, 0, 0, "%")
     params:set_action(i .. "pan", function(value)
-      print("Setting pan for voice " .. i .. ": " .. value / 100)
       engine.pan(i, value / 100) -- Send the voice index and pan value to the SuperCollider engine
     end)
 
@@ -105,8 +102,19 @@ local function setup_params()
   end
 
     params:add_separator("Transition")
-    params:add_control("steps", "steps", controlspec.new(10, 500000, "lin", 1, 10000, ""))
+    params:add_control("steps", "steps", controlspec.new(0, 50000, "lin", 100, 1000, ""))
     params:set_action("steps", function(value) steps = value end)
+
+
+  params:add_separator("Settings")
+  
+  params:add_taper("granular_gain", "Granular Mix", 0, 100, 100, 0, "%")
+  params:set_action("granular_gain", function(value) engine.granular_gain(value / 100) end)  -- Scale to 0.0 to 1.0 
+
+  params:add_taper("density_mod_amt", "Density Mod", 0, 100, 0, 0, "%")
+  params:set_action("density_mod_amt", function(value) engine.density_mod_amt(1, value / 100) end) -- Send voice index (1) and value
+
+  params:add_group("HalfSecond",3)
 
     halfsecond.init()
     
