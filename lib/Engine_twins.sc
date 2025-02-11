@@ -62,70 +62,75 @@ Engine_twins : CroneEngine {
 		});
 
 		// Define the SynthDef
-		SynthDef(\synth, {
-			arg out, phase_out, level_out, buf_l, buf_r,
-			gate=0, pos=0, speed=1, jitter=0,
-			size=0.1, density=20, density_mod_amt=0, pitch=1, pan=0, spread=0, gain=1, envscale=1,
-			freeze=0, t_reset_pos=0,
-			granular_gain=1; // Add granular_gain parameter
 
-			var grain_trig;
-			var jitter_sig;
-			var buf_dur;
-			var pan_sig;
-			var buf_pos;
-			var pos_sig;
-			var sig_l;
-			var sig_r;
-			var sig_mix;
-			var density_mod;
-			var dry_sig; // Dry signal
-			var granular_sig; // Granular signal
-			var env;
-			var level;
+SynthDef(\synth, {
+	arg out, phase_out, level_out, buf_l, buf_r,
+	gate=0, pos=0, speed=1, jitter=0,
+	size=0.1, density=20, density_mod_amt=0, pitch=1, pan=0, spread=0, gain=1, envscale=1,
+	freeze=0, t_reset_pos=0,
+	granular_gain=1; // Add granular_gain parameter
 
-			// Density modulation
-			var trig_rnd = LFNoise1.kr(density);
-			density_mod = density * (2**(trig_rnd * density_mod_amt));
-			grain_trig = Impulse.kr(density_mod);
+	var grain_trig;
+	var jitter_sig;
+	var buf_dur;
+	var pan_sig;
+	var buf_pos;
+	var pos_sig;
+	var sig_l;
+	var sig_r;
+	var sig_mix;
+	var density_mod;
+	var dry_sig; // Dry signal
+	var granular_sig; // Granular signal
+	var env;
+	var level;
 
-			buf_dur = BufDur.kr(buf_l);
+	// Density modulation
+	var trig_rnd = LFNoise1.kr(density);
+	density_mod = density * (2**(trig_rnd * density_mod_amt));
+	grain_trig = Impulse.kr(density_mod);
 
-			pan_sig = TRand.kr(trig: grain_trig,
-				lo: spread.neg,
-				hi: spread);
+	buf_dur = BufDur.kr(buf_l);
 
-			jitter_sig = TRand.kr(trig: grain_trig,
-				lo: buf_dur.reciprocal.neg * jitter,
-				hi: buf_dur.reciprocal * jitter);
+	pan_sig = TRand.kr(trig: grain_trig,
+		lo: spread.neg,
+		hi: spread);
 
-			buf_pos = Phasor.kr(trig: t_reset_pos,
-				rate: buf_dur.reciprocal / ControlRate.ir * speed,
-				resetPos: pos);
+	jitter_sig = TRand.kr(trig: grain_trig,
+		lo: buf_dur.reciprocal.neg * jitter,
+		hi: buf_dur.reciprocal * jitter);
 
-			pos_sig = Wrap.kr(Select.kr(freeze, [buf_pos, pos]));
+	buf_pos = Phasor.kr(trig: t_reset_pos,
+		rate: buf_dur.reciprocal / ControlRate.ir * speed,
+		resetPos: pos);
 
-			// Dry signal (unchanged)
-			dry_sig = [PlayBuf.ar(1, buf_l, speed, loop: 1), PlayBuf.ar(1, buf_r, speed, loop: 1)];
+	pos_sig = Wrap.kr(Select.kr(freeze, [buf_pos, pos]));
 
-			// Granular signal
-			sig_l = GrainBuf.ar(1, grain_trig, size, buf_l, pitch, pos_sig + jitter_sig, 2);
-			sig_r = GrainBuf.ar(1, grain_trig, size, buf_r, pitch, pos_sig + jitter_sig, 2);
-			granular_sig = Balance2.ar(sig_l, sig_r, pan + pan_sig);
+	// Dry signal (unchanged)
+	dry_sig = [PlayBuf.ar(1, buf_l, speed, loop: 1), PlayBuf.ar(1, buf_r, speed, loop: 1)];
 
-			env = EnvGen.kr(Env.asr(1, 1, 1), gate: gate, timeScale: envscale);
+	// Apply pan to the dry signal
+	dry_sig = Balance2.ar(dry_sig[0], dry_sig[1], pan + pan_sig);
 
-			level = env;
+	// Granular signal
+	sig_l = GrainBuf.ar(1, grain_trig, size, buf_l, pitch, pos_sig + jitter_sig, 2);
+	sig_r = GrainBuf.ar(1, grain_trig, size, buf_r, pitch, pos_sig + jitter_sig, 2);
+	granular_sig = Balance2.ar(sig_l, sig_r, pan + pan_sig);
 
-			// Mix dry and granular signals
-			granular_gain = granular_gain.clip(0, 1); // Ensure granular_gain is within bounds
-			sig_mix = (dry_sig * (1 - granular_gain)) + (granular_sig * granular_gain);
+	env = EnvGen.kr(Env.asr(1, 1, 1), gate: gate, timeScale: envscale);
 
-			// Output the mixed signal
-			Out.ar(out, sig_mix * level * gain);
-			Out.kr(phase_out, pos_sig);
-			Out.kr(level_out, level);
-		}).add;
+	level = env;
+
+	// Mix dry and granular signals
+	granular_gain = granular_gain.clip(0, 1); // Ensure granular_gain is within bounds
+	sig_mix = (dry_sig * (1 - granular_gain)) + (granular_sig * granular_gain);
+
+	// Output the mixed signal
+	Out.ar(out, sig_mix * level * gain);
+	Out.kr(phase_out, pos_sig);
+	Out.kr(level_out, level);
+}).add;
+
 
 		// Define the effect SynthDef
 		SynthDef(\effect, {
@@ -185,6 +190,18 @@ Engine_twins : CroneEngine {
 			var voice = msg[1] - 1;
 			voices[voice].set(\density_mod_amt, msg[2]);
 		});
+		
+		this.addCommand("granular_gain_l", "if", { arg msg;
+	var voice = msg[1] - 1;
+	var gain = msg[2];
+	voices[voice].set(\granular_gain_l, gain);
+});
+
+this.addCommand("granular_gain_r", "if", { arg msg;
+	var voice = msg[1] - 1;
+	var gain = msg[2];
+	voices[voice].set(\granular_gain_r, gain);
+});
 
 		this.addCommand("reverb_mix", "f", { arg msg; effect.set(\mix, msg[1]); });
 		this.addCommand("reverb_predelay", "f", { arg msg; effect.set(\predelay, msg[1]); });
