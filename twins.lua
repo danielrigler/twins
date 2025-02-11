@@ -51,12 +51,12 @@ local max_speed = 10
 -- New variables for double press detection
 local last_key2_press_time = 0
 local last_key3_press_time = 0
-local double_press_threshold = 0.2 -- seconds
+local double_press_threshold = 0.3 -- seconds
 
 -- Blinking effect variables
 local blink_state = false
 local blink_metro = metro.init()
-blink_metro.time = 0.3 -- Blink every 0.5 seconds
+blink_metro.time = 0.25
 blink_metro.event = function()
     blink_state = not blink_state
     redraw()
