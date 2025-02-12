@@ -136,7 +136,7 @@ SynthDef(\synth, {
 		SynthDef(\effect, {
 			arg in, out, mix=0.5, predelay=0, input_amount=100, input_lowpass_cutoff=10000, input_highpass_cutoff=100, input_diffusion_1=75, input_diffusion_2=62.5, tail_density=70, decay=50, damping=5500, modulator_frequency=1, modulator_depth=0.5;
 			var dry = In.ar(in, 2); // Capture the dry signal from the input bus
-			var wet = Fverb2.ar(
+			var wet = Fverb.ar(
 				dry[0], dry[1], // Stereo input
 				predelay,
 				input_amount,

@@ -1,7 +1,6 @@
 local sc={}
 
 function sc.init()
-  print("starting halfsecond")
   audio.level_cut(1.0)
   audio.level_adc_cut(1)
   audio.level_eng_cut(1)
@@ -34,16 +33,16 @@ function sc.init()
 
   end
 
-  params:add{id="delay_h",name="Delay mix",type="control",
-    controlspec=controlspec.new(0,1,'lin',0,0.2,""),
+  params:add{id="delay_h",name="Mix",type="control",
+    controlspec=controlspec.new(0,1,'lin',0,0.3,""),
   action=function(x) softcut.level(1,x*math.random(90,110)/100);softcut.level(2,x*math.random(90,110)/100) end}
   
-  params:add{id="delay_rate",name="Delay rate",type="control",
-    controlspec=controlspec.new(0.5,2.0,'lin',0,0.5,""),
+  params:add{id="delay_rate",name="Rate",type="control",
+    controlspec=controlspec.new(0.5,2.0,'lin',0,1,""),
   action=function(x) softcut.rate(1,x*math.random(90,110)/100);softcut.rate(2,x*math.random(90,110)/100) end}
   
-  params:add{id="delay_feedback",name="Delay feedback",type="control",
-    controlspec=controlspec.new(0,1.0,'lin',0,0.25,""),
+  params:add{id="delay_feedback",name="Feedback",type="control",
+    controlspec=controlspec.new(0,1.0,'lin',0,0.8,""),
   action=function(x) softcut.pre_level(1,x*math.random(90,110)/100);softcut.pre_level(2,x*math.random(90,110)/100) end}
 
 end
