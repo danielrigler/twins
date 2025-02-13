@@ -21,28 +21,26 @@ local key2_pressed = false
 local key3_pressed = false
 local enc1_position = 0
 local initial_seek1, initial_seek2 = 0, 0
-local seek_mode = false -- Tracks whether we're in seek mode
+local current_mode = "speed" -- Tracks the current mode: "speed", "seek", or "pan"
 
 -- New variables for double press detection
 local last_key2_press_time = 0
 local last_key3_press_time = 0
-local double_press_threshold = 0.2 -- seconds
+local double_press_threshold = 0.3 -- seconds
 
 -- Blinking effect variables
 local blink_state = false
 local blink_metro = metro.init()
-blink_metro.time = 0.25
+blink_metro.time = 0.5
 blink_metro.event = function()
     blink_state = not blink_state
     redraw()
 end
 blink_metro:start()
 
--- Helper function to check if a sample is loaded for a given track
 local function is_audio_loaded(track_num)
-    local file_param = track_num .. "sample"
-    local file_path = params:get(file_param)
-    return file_path ~= nil and file_path ~= "" and file_path ~= "none" and file_path ~= "-"
+    local file_path = params:get(track_num .. "sample")
+    return file_path and file_path ~= "" and file_path ~= "none" and file_path ~= "-"
 end
 
 local function random_float(l, h)
@@ -85,6 +83,15 @@ local function setup_params()
     params:set_action("steps", function(value) steps = value end)
 
     params:add_separator("Settings")
+
+   -- Add pitch mode parameter
+    params:add_option("pitch_mode", "Pitch Mode", {"match speed", "independent"}, 2)
+    params:set_action("pitch_mode", function(value)
+        -- Convert Lua's 1-based index to 0-based for the engine
+        engine.pitch_mode(1, value - 1) -- Update pitch mode for voice 1
+        engine.pitch_mode(2, value - 1) -- Update pitch mode for voice 2
+    end)
+
     params:add_taper("granular_gain", "Granular Mix", 0, 100, 100, 0, "%")
     params:set_action("granular_gain", function(value) engine.granular_gain(value / 100) end)  -- Scale to 0.0 to 1.0 
 
@@ -136,7 +143,7 @@ local function setup_params()
     params:add_taper("max_jitter", "jitter (max)", 0, 500, 500, 5, "ms")
     params:add_taper("min_size", "size (min)", 1, 500, 50, 5, "ms")
     params:add_taper("max_size", "size (max)", 1, 500, 500, 5, "ms")
-    params:add_taper("min_density", "density (min)", 0, 50, 0, 5, "Hz")
+    params:add_taper("min_density", "density (min)", 0, 50, 1, 5, "Hz")
     params:add_taper("max_density", "density (max)", 0, 50, 40, 5, "Hz")
     params:add_taper("min_spread", "spread (min)", 0, 100, 25, 0, "%")
     params:add_taper("max_spread", "spread (max)", 0, 100, 100, 0, "%")
@@ -159,7 +166,7 @@ local function setup_params()
         params:add_taper(i .. "density", i .. " density", 0, 50, 20, 6)
         params:set_action(i .. "density", function(value) engine.density(i, value) end)
         params:add_taper(i .. "pitch", i .. " pitch", -48, 48, 0, 0)
-        params:set_action(i .. "pitch", function(value) engine.pitch(i, math.pow(0.5, -value / 12)) end)
+        params:set_action(i .. "pitch", function(value) engine.pitch_offset(i, math.pow(0.5, -value / 12)) end)
         params:add_taper(i .. "jitter", i .. " jitter", 0, 500, 250, 5, "ms")
         params:set_action(i .. "jitter", function(value) engine.jitter(i, value / 1000) end)
         params:add_taper(i .. "size", i .. " size", 1, 500, 100, 5, "ms")
@@ -173,15 +180,9 @@ local function setup_params()
     params:bang()
 end
 
-local function random_float(l, h)
-    return l + math.random() * (h - l)
-end
-
 local function interpolate(start_val, end_val, factor)
     return start_val + (end_val - start_val) * factor
 end
-
-
 
 local function randomize(n)
     if not randomize_metro[n] then
@@ -191,45 +192,41 @@ local function randomize(n)
     randomize_metro[n]:stop()
 
     local targets = {}
-    if params:get(n .. "lock_jitter") == 1 then
-        targets[n .. "jitter"] = random_float(params:get("min_jitter"), params:get("max_jitter"))
-    end
-    if params:get(n .. "lock_size") == 1 then
-        targets[n .. "size"] = random_float(params:get("min_size"), params:get("max_size"))
-    end
-    if params:get(n .. "lock_density") == 1 then
-        targets[n .. "density"] = random_float(params:get("min_density"), params:get("max_density"))
-    end
-    if params:get(n .. "lock_spread") == 1 then
-        targets[n .. "spread"] = random_float(params:get("min_spread"), params:get("max_spread"))
-    end
-    if params:get(n .. "lock_pitch") == 1 then
-        targets[n .. "pitch"] = math.floor(random_float(params:get("min_pitch"), params:get("max_pitch")) + 0.5)
-    end
+    local locks = {
+        jitter = params:get(n .. "lock_jitter") == 1,
+        size = params:get(n .. "lock_size") == 1,
+        density = params:get(n .. "lock_density") == 1,
+        spread = params:get(n .. "lock_spread") == 1,
+        pitch = params:get(n .. "lock_pitch") == 1
+    }
 
- 
-    -- Define a small tolerance threshold for when we consider the values "reached"
+    if locks.jitter then targets[n .. "jitter"] = random_float(params:get("min_jitter"), params:get("max_jitter")) end
+    if locks.size then targets[n .. "size"] = random_float(params:get("min_size"), params:get("max_size")) end
+    if locks.density then targets[n .. "density"] = random_float(params:get("min_density"), params:get("max_density")) end
+    if locks.spread then targets[n .. "spread"] = random_float(params:get("min_spread"), params:get("max_spread")) end
+    if locks.pitch then targets[n .. "pitch"] = math.floor(random_float(params:get("min_pitch"), params:get("max_pitch")) + 0.5) end
+
     local tolerance = 0.001
 
     randomize_metro[n].time = 1/30
     randomize_metro[n].event = function(count)
         local factor = count / steps
-        local all_params_set = true -- Flag to check if all parameters are close enough to their target
+        local all_params_set = true
 
         for param, target in pairs(targets) do
             local current_value = params:get(param)
             local new_value = interpolate(current_value, target, factor)
 
-            -- Check if the difference between the current and new value is larger than the tolerance
             if math.abs(new_value - target) > tolerance then
                 all_params_set = false
-                else randomize_metro[n]:stop()
             end
 
-            -- Set the parameter with the interpolated value
             params:set(param, new_value)
         end
 
+        if all_params_set then
+            randomize_metro[n]:stop()
+        end
     end
     randomize_metro[n]:start()
 end
@@ -263,64 +260,104 @@ local function wrap_value(value, min, max)
     end
 end
 
-local function crossfade_seek(delta)
-    enc1_position = enc1_position + 0.5 * delta
-    enc1_position = wrap_value(enc1_position, 0, 100)
-    local seek1 = wrap_value(initial_seek1 + enc1_position, 0, 100)
-    local seek2 = wrap_value(initial_seek2 - enc1_position, 0, 100)
-    params:set("1seek", seek1)
-    params:set("2seek", seek2)
+local pan_direction = 1  -- 1 for increasing, -1 for decreasing
+
+local function crossfade_pan(delta)
+    -- Update enc1_position based on delta and pan_direction
+    enc1_position = enc1_position + delta * pan_direction
+
+    -- Calculate pan values
+    local pan1, pan2
+    if enc1_position <= 50 then
+        pan1 = -100 + (enc1_position / 50) * 100  -- pan1: -100 to 0
+        pan2 = 100 - (enc1_position / 50) * 100   -- pan2: 100 to 0
+    else
+        pan1 = (enc1_position - 50) / 50 * 100    -- pan1: 0 to 100
+        pan2 = -((enc1_position - 50) / 50 * 100) -- pan2: 0 to -100
+    end
+
+    -- Handle direction reversal at extremes
+    if pan1 <= -100 or pan1 >= 100 or pan2 <= -100 or pan2 >= 100 then
+        pan_direction = -pan_direction  -- Reverse direction
+        enc1_position = enc1_position + delta * pan_direction  -- Adjust position
+    end
+
+    -- Clamp and set pan values
+    params:set("1pan", math.max(-100, math.min(100, pan1)))
+    params:set("2pan", math.max(-100, math.min(100, pan2)))
 end
 
+
 function enc(n, d)
-    if key1_pressed then
-        if n == 1 then
-            crossfade_seek(d)
-        elseif n == 2 then
-            adjust_volume("1", d)
-        elseif n == 3 then
-            adjust_volume("2", d)
-        end
-    else
-        if n == 1 then
-            adjust_volume("1", d)
-            adjust_volume("2", d)
-        elseif n == 2 then
-            if seek_mode then
-                -- In seek mode, enc2 controls seek for track 1
-                local current_seek = params:get("1seek")
-                local new_seek = wrap_value(current_seek + d, 0, 100)
-                params:set("1seek", new_seek)
-                -- Send normalized seek position to SuperCollider (0 to 1)
-                engine.seek(1, new_seek / 100)
+    local enc_actions = {
+        [1] = function()
+            if key1_pressed then
+                crossfade_pan(d)
             else
-                -- In speed mode, enc2 controls speed for track 1
-                local current_speed = params:get("1speed")
-                local new_speed = wrap_value(current_speed + (d * 0.01), -4, 4)  -- Increment by 0.01
-                params:set("1speed", new_speed)
+                adjust_volume("1", d)
+                adjust_volume("2", d)
             end
-        elseif n == 3 then
-            if seek_mode then
-                -- In seek mode, enc3 controls seek for track 2
-                local current_seek = params:get("2seek")
-                local new_seek = wrap_value(current_seek + d, 0, 100)
-                params:set("2seek", new_seek)
-                -- Send normalized seek position to SuperCollider (0 to 1)
-                engine.seek(2, new_seek / 100)
+        end,
+        [2] = function()
+            if key1_pressed then
+                adjust_volume("1", d)
             else
-                -- In speed mode, enc3 controls speed for track 2
-                local current_speed = params:get("2speed")
-                local new_speed = wrap_value(current_speed + (d * 0.01), -4, 4)  -- Increment by 0.01
-                params:set("2speed", new_speed)
+                if current_mode == "seek" then
+                    -- In seek mode, enc2 controls seek for track 1
+                    local current_seek = params:get("1seek")
+                    local new_seek = wrap_value(current_seek + d, 0, 100)
+                    params:set("1seek", new_seek)
+                    engine.seek(1, new_seek / 100)
+                elseif current_mode == "pan" then
+                    -- In pan mode, enc2 controls pan for track 1
+                    local current_pan = params:get("1pan")
+                    local new_pan = math.max(-100, math.min(100, current_pan + d)) -- Clamp to -100 to +100
+                    params:set("1pan", new_pan)
+                else
+                    -- In speed mode, enc2 controls speed for track 1
+                    local current_speed = params:get("1speed")
+                    local new_speed = wrap_value(current_speed + (d * 0.01), -4, 4)  -- Increment by 0.01
+                    params:set("1speed", new_speed)
+                end
+            end
+        end,
+        [3] = function()
+            if key1_pressed then
+                adjust_volume("2", d)
+            else
+                if current_mode == "seek" then
+                    -- In seek mode, enc3 controls seek for track 2
+                    local current_seek = params:get("2seek")
+                    local new_seek = wrap_value(current_seek + d, 0, 100)
+                    params:set("2seek", new_seek)
+                    engine.seek(2, new_seek / 100)
+                elseif current_mode == "pan" then
+                    -- In pan mode, enc3 controls pan for track 2
+                    local current_pan = params:get("2pan")
+                    local new_pan = math.max(-100, math.min(100, current_pan + d)) -- Clamp to -100 to +100
+                    params:set("2pan", new_pan)
+                else
+                    -- In speed mode, enc3 controls speed for track 2
+                    local current_speed = params:get("2speed")
+                    local new_speed = wrap_value(current_speed + (d * 0.01), -4, 4)  -- Increment by 0.01
+                    params:set("2speed", new_speed)
+                end
             end
         end
-    end
+    }
+
+    if enc_actions[n] then enc_actions[n]() end
 end
 
 function key(n, z)
     -- Update key states
     if n == 1 then
         key1_pressed = z == 1
+        if key1_pressed then
+            -- Capture initial seek positions when key1 is pressed
+            initial_seek1 = params:get("1seek")
+            initial_seek2 = params:get("2seek")
+        end
     elseif n == 2 then
         key2_pressed = z == 1
     elseif n == 3 then
@@ -328,44 +365,34 @@ function key(n, z)
     end
 
     -- Handle key combinations
-    if key1_pressed and key2_pressed and z == 1 then
-        -- Toggle seek mode when key1 + key2 is pressed
-        seek_mode = not seek_mode
-        redraw() -- Force a redraw to update the display
-        return -- Exit early to avoid handling single key presses
-    end
-
-    -- Handle key1 + key3 combination to toggle pitch lock
-    if key1_pressed and key3_pressed and z == 1 then
-        -- Toggle pitch lock for both tracks
-        local current_lock1 = params:get("1lock_pitch")
-        local current_lock2 = params:get("2lock_pitch")
-        params:set("1lock_pitch", current_lock1 == 1 and 2 or 1)
-        params:set("2lock_pitch", current_lock2 == 1 and 2 or 1)
-        redraw() -- Force a redraw to update the display
-        return -- Exit early to avoid handling single key presses
+    if z == 1 then
+        if key1_pressed and key2_pressed then
+            -- Cycle through modes: speed -> seek -> pan -> speed
+            current_mode = current_mode == "speed" and "seek" or current_mode == "seek" and "pan" or "speed"
+            redraw()
+            return
+        elseif key1_pressed and key3_pressed then
+            -- Toggle pitch lock for both tracks
+            params:set("1lock_pitch", params:get("1lock_pitch") == 1 and 2 or 1)
+            params:set("2lock_pitch", params:get("2lock_pitch") == 1 and 2 or 1)
+            redraw()
+            return
+        end
     end
 
     -- Handle single key presses (only if key1 is not pressed)
-    if not key1_pressed then
-        if n == 2 and z == 1 then
-            -- Handle single key2 press
-            local current_time = util.time()
+    if not key1_pressed and z == 1 then
+        local current_time = util.time()
+        if n == 2 then
             if current_time - last_key2_press_time < double_press_threshold then
-                if randomize_metro[1] then
-                    randomize_metro[1]:stop()
-                end
+                if randomize_metro[1] then randomize_metro[1]:stop() end
             else
                 randomize(1)
             end
             last_key2_press_time = current_time
-        elseif n == 3 and z == 1 then
-            -- Handle single key3 press
-            local current_time = util.time()
+        elseif n == 3 then
             if current_time - last_key3_press_time < double_press_threshold then
-                if randomize_metro[2] then
-                    randomize_metro[2]:stop()
-                end
+                if randomize_metro[2] then randomize_metro[2]:stop() end
             else
                 randomize(2)
             end
@@ -443,60 +470,63 @@ end
 function redraw()
     screen.clear()
 
+    -- Draw parameter rows
     draw_param_row(10, "jitter:    ", "1jitter", "2jitter")
     draw_param_row(20, "size:     ", "1size", "2size")
     draw_param_row(30, "density:  ", "1density", "2density", true)
     draw_param_row(40, "spread:   ", "1spread", "2spread")
     draw_param_row(50, "pitch:    ", "1pitch", "2pitch", false, true)
 
-    -- Display "seek:" or "speed:" based on the current mode
+    -- Display "seek:", "speed:", or "pan:" based on the current mode
     screen.move(0, 60)
     screen.level(15)
-    if seek_mode then
+    if current_mode == "seek" then
         screen.text("seek:     ")
+    elseif current_mode == "pan" then
+        screen.text("pan:      ")
     else
         screen.text("speed:    ")
     end
 
+    -- Display track 1 value
     if is_audio_loaded(1) then
         screen.level(15)
     else
         screen.level(5)
     end
     screen.move(ALI_X, 60)
-    if seek_mode then
+    if current_mode == "seek" then
         screen.text(format_seek(params:get("1seek"))) -- Display seek for track 1
+    elseif current_mode == "pan" then
+        screen.text(string.format("%.0f%%", params:get("1pan"))) -- Display pan for track 1 with sign
     else
         local speed1 = params:get("1speed")
-        screen.text(string.format("%.2fx", speed1))  -- Multiply by 100 and show 2 decimal places
+        screen.text(string.format("%.2fx", speed1))  -- Display speed for track 1
     end
 
+    -- Display track 2 value
     if is_audio_loaded(2) then
         screen.level(15)
     else
         screen.level(5)
     end
     screen.move(ALI2_X, 60)
-    if seek_mode then
+    if current_mode == "seek" then
         screen.text(format_seek(params:get("2seek"))) -- Display seek for track 2
+    elseif current_mode == "pan" then
+        screen.text(string.format("%.0f%%", params:get("2pan"))) -- Display pan for track 2 with sign
     else
         local speed2 = params:get("2speed")
-        screen.text(string.format("%.2fx", speed2))  -- Multiply by 100 and show 2 decimal places
+        screen.text(string.format("%.2fx", speed2))  -- Display speed for track 2
     end
 
     screen.update()
 end
 
 function cleanup()
-    if ui_metro ~= nil then
-        ui_metro:stop()
-    end
-       if blink_metro ~= nil then
-        blink_metro:stop()
-    end
+    if ui_metro then ui_metro:stop() end
+    if blink_metro then blink_metro:stop() end
     for i = 1, 2 do
-        if randomize_metro[i] ~= nil then
-            randomize_metro[i]:stop()
-        end
+        if randomize_metro[i] then randomize_metro[i]:stop() end
     end
 end

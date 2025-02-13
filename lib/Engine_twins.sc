@@ -66,9 +66,10 @@ Engine_twins : CroneEngine {
 SynthDef(\synth, {
 	arg out, phase_out, level_out, buf_l, buf_r,
 	gate=0, pos=0, speed=1, jitter=0,
-	size=0.1, density=20, density_mod_amt=0, pitch=1, pan=0, spread=0, gain=1, envscale=1,
+	size=0.1, density=20, density_mod_amt=0, pitch_offset=1, pan=0, spread=0, gain=1, envscale=1,
 	freeze=0, t_reset_pos=0,
-	granular_gain=1; // Add granular_gain parameter
+	granular_gain=1, // Add granular_gain parameter
+	pitch_mode=0; // Add pitch_mode parameter (0 = grains match speed, 1 = independent pitch)
 
 	var grain_trig;
 	var jitter_sig;
@@ -84,6 +85,7 @@ SynthDef(\synth, {
 	var granular_sig; // Granular signal
 	var env;
 	var level;
+	var grain_pitch; // Grain pitch calculation
 
 	// Density modulation
 	var trig_rnd = LFNoise1.kr(density);
@@ -112,9 +114,15 @@ SynthDef(\synth, {
 	// Apply pan to the dry signal
 	dry_sig = Balance2.ar(dry_sig[0], dry_sig[1], pan + pan_sig);
 
+	// Calculate grain pitch based on pitch_mode
+	grain_pitch = Select.kr(pitch_mode, [
+		speed * pitch_offset, // Mode 0: grains match dry signal speed, with pitch offset
+		pitch_offset          // Mode 1: grains use independent pitch
+	]);
+
 	// Granular signal
-	sig_l = GrainBuf.ar(1, grain_trig, size, buf_l, pitch, pos_sig + jitter_sig, 2);
-	sig_r = GrainBuf.ar(1, grain_trig, size, buf_r, pitch, pos_sig + jitter_sig, 2);
+	sig_l = GrainBuf.ar(1, grain_trig, size, buf_l, grain_pitch, pos_sig + jitter_sig, 2);
+	sig_r = GrainBuf.ar(1, grain_trig, size, buf_r, grain_pitch, pos_sig + jitter_sig, 2);
 	granular_sig = Balance2.ar(sig_l, sig_r, pan + pan_sig);
 
 	env = EnvGen.kr(Env.asr(1, 1, 1), gate: gate, timeScale: envscale);
@@ -267,6 +275,13 @@ this.addCommand("granular_gain_r", "if", { arg msg;
 			var voice = msg[1] - 1;
 			voices[voice].set(\gate, msg[2]);
 		});
+		
+		
+		this.addCommand("pitch_mode", "ii", { arg msg;
+	var voice = msg[1] - 1;
+	var mode = msg[2];
+	voices[voice].set(\pitch_mode, mode);
+});
 
 		this.addCommand("speed", "if", { arg msg;
 			var voice = msg[1] - 1;
@@ -292,6 +307,11 @@ this.addCommand("granular_gain_r", "if", { arg msg;
 			var voice = msg[1] - 1;
 			voices[voice].set(\pitch, msg[2]);
 		});
+		
+		this.addCommand("pitch_offset", "if", { arg msg;
+	var voice = msg[1] - 1;
+	voices[voice].set(\pitch_offset, msg[2]);
+});
 
 		this.addCommand("pan", "if", { arg msg;
 			var voice = msg[1] - 1;
