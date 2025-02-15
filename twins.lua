@@ -282,7 +282,6 @@ function enc(n, d)
             if key1_pressed then
                 adjust_volume("1", d)
             else
-                -- Handle enc2 based on the current_mode
                 if current_mode == "speed" then
                     local current_speed = params:get("1speed")
                     local new_speed = wrap_value(current_speed + (d * 0.01), -4, 4)
@@ -323,7 +322,6 @@ function enc(n, d)
             if key1_pressed then
                 adjust_volume("2", d)
             else
-                -- Handle enc3 based on the current_mode
                 if current_mode == "speed" then
                     local current_speed = params:get("2speed")
                     local new_speed = wrap_value(current_speed + (d * 0.01), -4, 4)
@@ -366,7 +364,6 @@ function enc(n, d)
 end
 
 function key(n, z)
-    -- Update key states
     if n == 1 then
         key1_pressed = z == 1
     elseif n == 2 then
@@ -590,6 +587,22 @@ function redraw()
         local speed2 = params:get("2speed")
         screen.text(string.format("%.2fx", speed2))  -- Display speed for track 2
     end
+
+    -- Draw pan indicator bar at the bottom of the screen
+    local pan1 = params:get("1pan") -- Get pan value for channel 1 (-100 to 100)
+    local pan2 = params:get("2pan") -- Get pan value for channel 2 (-100 to 100)
+
+    -- Convert pan values to screen positions (0 to 128)
+    local pan1_pos = util.linlin(-100, 100, 0, 128, pan1)
+    local pan2_pos = util.linlin(-100, 100, 0, 128, pan2)
+
+    screen.level(5) 
+    screen.rect(pan1_pos - 1, 63, 2, 1) 
+    screen.fill()
+
+    screen.level(5) 
+    screen.rect(pan2_pos - 1, 63, 2, 1) 
+    screen.fill()
 
     screen.update()
 end
