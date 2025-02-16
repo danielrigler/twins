@@ -55,10 +55,87 @@ local function setup_ui_metro()
     ui_metro:start()
 end
 
+local lfo = include("lib/hnds")
+local lfo_targets = {
+  "none",
+  "1volume",
+  "2volume",
+  "1pan",
+  "2pan",
+  "1speed",  
+  "2speed",
+  "1pitch",
+  "2pitch",
+  "time",
+  "size",
+  "damp",
+  "diff",
+  "feedback",
+  "mod_depth",
+  "mod_freq"
+  }
+
+function lfo.process()
+  -- for lib hnds
+  for i = 1, 4 do
+    local target = params:get(i .. "lfo_target")
+    if params:get(i .. "lfo") == 2 then
+      
+      
+      -- 1volume
+      if target == 2 then
+        params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, -100.00, 100.00))
+      -- 2volume
+      elseif target == 3 then
+        params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, -100.00, 100.00))
+      -- 1pan
+      elseif target == 4 then
+        params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, -100.00, 100.00))
+      -- 2pan
+      elseif target == 5 then
+        params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, -100.00, 100.00))
+      -- 1speed
+      elseif target == 6 then
+        params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, -4.00, 4.00))
+      -- 2speed
+      elseif target == 7 then
+        params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, -100.00, 100.00))        
+      -- 1pitch
+      elseif target == 8 then
+        params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, -12.00, 12.00))
+      -- 2pitch
+      elseif target == 9 then
+        params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, -12.00, 12.00))        
+      -- Greyhole delay time
+      elseif target == 10 then
+        params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 2.0, 0.00, 6.00))
+      -- Greyhole size
+      elseif target == 11 then
+        params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 2.0, 0.50, 5.00))
+      -- Greyhole dampening
+      elseif target == 12 then
+        params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 2.0, 0.00, 1.00))
+      -- Greyhole diffusion
+      elseif target == 13 then
+        params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 2.0, 0.00, 1.00))
+      -- Greyhole feedback
+      elseif target == 14 then
+        params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 2.0, 0.00, 1.00))
+      -- Greyhole delay line modulation depth
+      elseif target == 15 then
+        params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 2.0, 0.00, 1.00))
+      -- Greyhole delay line modulation frequency
+      elseif target == 16 then
+        params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 2.0, 0.00, 10.00))
+      end
+    end
+  end
+end
+
 local function setup_params()
     params:add_separator("Samples")
     for i = 1, 2 do
-        params:add_file(i .. "sample", i .. " sample")
+        params:add_file(i .. "sample", "Sample " ..i)
         params:set_action(i .. "sample", function(file)
             if file ~= nil and file ~= "" and file ~= "none" and file ~= "-" then
                 engine.read(i, file)
@@ -68,37 +145,46 @@ local function setup_params()
                 end
             end
         end)
-
-        params:add_taper(i .. "pan", i .. " pan", -100, 100, 0, 0, "%")
-        params:set_action(i .. "pan", function(value) engine.pan(i, value / 100)  end)
-        
-        params:add_control(i .. "speed", i .. " speed", controlspec.new(-4, 4, "lin", 0.01, 0, "")) 
-        params:set_action(i .. "speed", function(value) engine.speed(i, value) end)
     end 
     
-    params:add_separator("Transition")
-    params:add_control("steps", "steps", controlspec.new(5, 200000, "lin", 5, 5, ""))
-    params:set_action("steps", function(value) steps = value end)
-
     params:add_separator("Settings")
-
     params:add_option("pitch_mode", "Pitch Mode", {"match speed", "independent"}, 2)
     params:set_action("pitch_mode", function(value)
         engine.pitch_mode(1, value - 1)
         engine.pitch_mode(2, value - 1)
     end)
-
     params:add_taper("granular_gain", "Granular Mix", 0, 100, 100, 0, "%")
     params:set_action("granular_gain", function(value) engine.granular_gain(value / 100) end) 
-
     params:add_taper("density_mod_amt", "Density Mod", 0, 100, 20, 0, "%")
     params:set_action("density_mod_amt", function(value) engine.density_mod_amt(1, value / 100) end)
 
     params:add_group("Delay", 3)
     halfsecond.init()
 
+    params:add_group("Greyhole", 7)
+    params:add_control("time", "time", controlspec.new(0.00, 10.00, "lin", 0.01, 2.00, ""))
+    params:set_action("time", function(value) engine.greyhole_delay_time(value) end)
+    -- delay size
+    params:add_control("size", "size", controlspec.new(0.5, 5.0, "lin", 0.01, 2.00, ""))
+    params:set_action("size", function(value) engine.greyhole_size(value) end)
+    -- dampening 
+    params:add_control("damp", "damp", controlspec.new(0.0, 1.0, "lin", 0.01, 0.10, ""))
+    params:set_action("damp", function(value) engine.greyhole_damp(value) end)
+    -- diffusion
+    params:add_control("diff", "diff", controlspec.new(0.0, 1.0, "lin", 0.01, 0.707, ""))
+    params:set_action("diff", function(value) engine.greyhole_diff(value) end)
+    -- feedback
+    params:add_control("feedback", "feedback", controlspec.new(0.00, 1.0, "lin", 0.01, 0.20, ""))
+    params:set_action("feedback", function(value) engine.greyhole_feedback(value) end)
+    -- mod depth
+    params:add_control("mod_depth", "mod depth", controlspec.new(0.0, 1.0, "lin", 0.01, 0.00, ""))
+    params:set_action("mod_depth", function(value) engine.greyhole_mod_depth(value) end)
+    -- mod rate
+    params:add_control("mod_freq", "mod freq", controlspec.new(0.0, 10.0, "lin", 0.01, 0.10, "hz"))
+    params:set_action("mod_freq", function(value) engine.greyhole_mod_freq(value) end)
+
     params:add_group("Fverb", 12)
-    params:add_taper("reverb_mix", "Mix", 0, 100, 25, 0, "%")
+    params:add_taper("reverb_mix", "Mix", 0, 100, 15, 0, "%")
     params:set_action("reverb_mix", function(value) engine.reverb_mix(value / 100) end)
 
     params:add_taper("reverb_predelay", "Predelay", 0, 100, 25, 0, "ms")
@@ -134,6 +220,12 @@ local function setup_params()
     params:add_taper("reverb_modulator_depth", "Modulator depth", 0, 100, 90, 0, "%")
     params:set_action("reverb_modulator_depth", function(value) engine.reverb_modulator_depth(value / 100) end)
 
+    params:add_group("LFOs", 28)
+    for i = 1, 4 do
+      lfo[i].lfo_targets = lfo_targets
+    end
+    lfo.init()
+
     params:add_group("Randomizer", 10)
     params:add_taper("min_jitter", "jitter (min)", 0, 500, 0, 5, "ms")
     params:add_taper("max_jitter", "jitter (max)", 0, 500, 500, 5, "ms")
@@ -155,10 +247,14 @@ local function setup_params()
         params:add_option(i .. "lock_pitch", i .. " lock pitch", {"off", "on"}, 1)
     end
 
-    params:add_group("Parameters", 16)
+    params:add_group("Parameters", 20)
     for i = 1, 2 do
         params:add_taper(i .. "volume", i .. " volume", -60, 20, 0, 0, "dB")
         params:set_action(i .. "volume", function(value) engine.volume(i, math.pow(10, value / 20)) end)
+        params:add_taper(i .. "pan", i .. " pan", -100, 100, 0, 0, "%")
+        params:set_action(i .. "pan", function(value) engine.pan(i, value / 100)  end)
+        params:add_control(i .. "speed", i .. " speed", controlspec.new(-4, 4, "lin", 0.01, 0, "")) 
+        params:set_action(i .. "speed", function(value) engine.speed(i, value) end)
         params:add_taper(i .. "density", i .. " density", 0, 50, 20, 6)
         params:set_action(i .. "density", function(value) engine.density(i, value) end)
         params:add_taper(i .. "pitch", i .. " pitch", -48, 48, 0, 0)
@@ -174,6 +270,10 @@ local function setup_params()
         params:add_taper(i .."fade", i .." att / dec", 1, 9000, 1000, 3, "ms")
         params:set_action(i .."fade", function(value) engine.envscale(i, value / 1000) end)
     end
+    
+    params:add_separator("Transition")
+    params:add_control("steps", "Steps", controlspec.new(5, 200000, "lin", 5, 5, ""))
+    params:set_action("steps", function(value) steps = value end)
     
     params:bang()
 end
@@ -464,8 +564,8 @@ local function draw_param_row(y, label, param1, param2, is_density, is_pitch, is
     local is_locked1 = is_param_locked(1, param_name)
     local is_locked2 = is_param_locked(2, param_name)
 
-    -- Draw the label (shifted 3 pixels to the right)
-    screen.move(5, y) -- Shifted 3 pixels to the right
+    -- Draw the label
+    screen.move(5, y)
     if is_highlighted then
         screen.level(15) -- Bright text for highlighted row
     else
@@ -473,8 +573,8 @@ local function draw_param_row(y, label, param1, param2, is_density, is_pitch, is
     end
     screen.text(label)
 
-    -- Draw the parameter values with blinking effect if locked (shifted 3 pixels to the right)
-    screen.move(ALI_X + 4, y) -- Shifted 3 pixels to the right
+    -- Draw the parameter values with blinking effect if locked
+    screen.move(ALI_X + 4, y)
     if is_locked1 and blink_state then
         screen.level(0) -- Hide the value when blinking
     else
@@ -488,11 +588,11 @@ local function draw_param_row(y, label, param1, param2, is_density, is_pitch, is
         screen.text(params:string(param1))
     end
 
-    screen.move(ALIDASH_X + 4, y) -- Shifted 3 pixels to the right
+    screen.move(ALIDASH_X + 4, y)
     screen.level(1)
     screen.text(" / ")
 
-    screen.move(ALI2_X + 4, y) -- Shifted 3 pixels to the right
+    screen.move(ALI2_X + 4, y)
     if is_locked2 and blink_state then
         screen.level(0) -- Hide the value when blinking
     else
@@ -520,29 +620,19 @@ function redraw()
         return util.linlin(-60, 20, 0, 64, volume)
     end
 
-    local bar_width = 1 -- Width of the volume bars (now 2 pixels)
+    local bar_width = 1 -- Width of the volume bars
     local bar1_height = volume_to_height(volume1) -- Height of channel 1 volume bar
     local bar2_height = volume_to_height(volume2) -- Height of channel 2 volume bar
 
-    -- Draw channel 1 volume bar (left side)
-    screen.level(5) -- Dim level for the bar background
-    screen.rect(0, 64 - bar1_height, bar_width, bar1_height) -- Draw the bar
-    screen.fill()
-
-    -- Draw channel 2 volume bar (right side)
-    screen.level(5) -- Dim level for the bar background
-    screen.rect(128 - bar_width, 64 - bar2_height, bar_width, bar2_height) -- Draw the bar
-    screen.fill()
-
-    -- Draw parameter rows with highlighting (shifted 3 pixels to the right)
+    -- Draw parameter rows with highlighting
     draw_param_row(10, "jitter:    ", "1jitter", "2jitter", false, false, current_mode == "jitter")
     draw_param_row(20, "size:     ", "1size", "2size", false, false, current_mode == "size")
     draw_param_row(30, "density:  ", "1density", "2density", true, false, current_mode == "density")
     draw_param_row(40, "spread:   ", "1spread", "2spread", false, false, current_mode == "spread")
     draw_param_row(50, "pitch:    ", "1pitch", "2pitch", false, true, current_mode == "pitch")
 
-    -- Display "seek:", "speed:", or "pan:" based on the current mode (shifted 3 pixels to the right)
-    screen.move(5, 60) -- Shifted 3 pixels to the right
+    -- Display "seek:", "speed:", or "pan:" based on the current mode
+    screen.move(5, 60)
     if current_mode == "seek" or current_mode == "pan" or current_mode == "speed" then
         screen.level(15) -- Bright text for highlighted row
     else
@@ -556,8 +646,8 @@ function redraw()
         screen.text("speed:    ")
     end
 
-    -- Display track 1 value (always bright if it's the active mode, shifted 3 pixels to the right)
-    screen.move(ALI_X + 4, 60) -- Shifted 3 pixels to the right
+    -- Display track 1 value (always bright if it's the active mode)
+    screen.move(ALI_X + 4, 60)
     if current_mode == "seek" or current_mode == "pan" or current_mode == "speed" then
         screen.level(15) -- Bright text for highlighted row
     else
@@ -572,10 +662,11 @@ function redraw()
         screen.text(string.format("%.2fx", speed1))  -- Display speed for track 1
     end
 
-    -- Display track 2 value (always bright if it's the active mode, shifted 3 pixels to the right)
-    screen.move(ALI2_X + 4, 60) -- Shifted 3 pixels to the right
+    -- Display track 2 value (always bright if it's the active mode)
+    screen.move(ALI2_X + 4, 60)
     if current_mode == "seek" or current_mode == "pan" or current_mode == "speed" then
         screen.level(15) -- Bright text for highlighted row
+        
     else
         screen.level(5) -- Dim text for non-highlighted rows
     end
@@ -588,22 +679,23 @@ function redraw()
         screen.text(string.format("%.2fx", speed2))  -- Display speed for track 2
     end
 
-    -- Draw pan indicator bar at the bottom of the screen
-    local pan1 = params:get("1pan") -- Get pan value for channel 1 (-100 to 100)
-    local pan2 = params:get("2pan") -- Get pan value for channel 2 (-100 to 100)
+    screen.level(5)
 
-    -- Convert pan values to screen positions (0 to 128)
-    local pan1_pos = util.linlin(-100, 100, 0, 128, pan1)
-    local pan2_pos = util.linlin(-100, 100, 0, 128, pan2)
+    if is_audio_loaded(1) then
+        screen.rect(0, 64 - bar1_height, bar_width, bar1_height) -- Draw the bar
+        local pan1 = params:get("1pan") -- Get pan value for channel 1 (-100 to 100)
+        local pan1_pos = util.linlin(-100, 100, 0, 128, pan1) -- Convert pan to screen position
+        screen.rect(pan1_pos - 1, 63, 2, 1)
+        screen.fill()
+    end
 
-    screen.level(5) 
-    screen.rect(pan1_pos - 1, 63, 2, 1) 
-    screen.fill()
-
-    screen.level(5) 
-    screen.rect(pan2_pos - 1, 63, 2, 1) 
-    screen.fill()
-
+    if is_audio_loaded(2) then
+        screen.rect(128 - bar_width, 64 - bar2_height, bar_width, bar2_height) -- Draw the bar
+        local pan2 = params:get("2pan") -- Get pan value for channel 2 (-100 to 100)
+        local pan2_pos = util.linlin(-100, 100, 0, 128, pan2) -- Convert pan to screen position
+        screen.rect(pan2_pos - 1, 63, 2, 1)
+        screen.fill()
+    end
     screen.update()
 end
 

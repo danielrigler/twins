@@ -34,7 +34,7 @@ function sc.init()
   end
 
   params:add{id="delay_h",name="Mix",type="control",
-    controlspec=controlspec.new(0,1,'lin',0,0.3,""),
+    controlspec=controlspec.new(0,1,'lin',0,0.15,""),
   action=function(x) softcut.level(1,x*math.random(90,110)/100);softcut.level(2,x*math.random(90,110)/100) end}
   
   params:add{id="delay_rate",name="Rate",type="control",
