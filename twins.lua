@@ -57,31 +57,14 @@ end
 
 local lfo = include("lib/hnds")
 local lfo_targets = {
-  "none",
-  "1volume",
-  "2volume",
-  "1pan",
-  "2pan",
-  "1speed",  
-  "2speed",
-  "1pitch",
-  "2pitch",
-  "time",
-  "size",
-  "damp",
-  "diff",
-  "feedback",
-  "mod_depth",
-  "mod_freq"
-  }
+  "none","1volume","2volume","1pan","2pan","1speed","2speed","1jitter","2jitter","1spread","2spread","1density","2density","1pitch","2pitch","time","size","damp","diff","feedback","mod_depth","mod_freq"}
 
 function lfo.process()
   -- for lib hnds
-  for i = 1, 4 do
+  for i = 1, 8 do
     local target = params:get(i .. "lfo_target")
     if params:get(i .. "lfo") == 2 then
-      
-      
+
       -- 1volume
       if target == 2 then
         params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, -100.00, 100.00))
@@ -99,33 +82,51 @@ function lfo.process()
         params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, -4.00, 4.00))
       -- 2speed
       elseif target == 7 then
-        params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, -100.00, 100.00))        
-      -- 1pitch
+        params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, -4.00, 4.00))
+      -- 1jitter
       elseif target == 8 then
+        params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 0, 500))
+      -- 2jitter
+      elseif target == 9 then
+        params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 0, 500))
+      -- 1spread
+      elseif target == 10 then
+        params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 0, 100))
+      -- 2spread
+      elseif target == 11 then
+        params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 0, 100)) 
+      -- 1density
+      elseif target == 12 then
+        params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 0, 40))
+      -- 2density
+      elseif target == 13 then
+        params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 0, 40)) 
+      -- 1pitch
+      elseif target == 14 then
         params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, -12.00, 12.00))
       -- 2pitch
-      elseif target == 9 then
+      elseif target == 15 then
         params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, -12.00, 12.00))        
       -- Greyhole delay time
-      elseif target == 10 then
+      elseif target == 16 then
         params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 2.0, 0.00, 6.00))
       -- Greyhole size
-      elseif target == 11 then
+      elseif target == 17 then
         params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 2.0, 0.50, 5.00))
       -- Greyhole dampening
-      elseif target == 12 then
+      elseif target == 18 then
         params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 2.0, 0.00, 1.00))
       -- Greyhole diffusion
-      elseif target == 13 then
+      elseif target == 19 then
         params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 2.0, 0.00, 1.00))
       -- Greyhole feedback
-      elseif target == 14 then
+      elseif target == 20 then
         params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 2.0, 0.00, 1.00))
       -- Greyhole delay line modulation depth
-      elseif target == 15 then
+      elseif target == 21 then
         params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 2.0, 0.00, 1.00))
       -- Greyhole delay line modulation frequency
-      elseif target == 16 then
+      elseif target == 22 then
         params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 2.0, 0.00, 10.00))
       end
     end
@@ -148,39 +149,33 @@ local function setup_params()
     end 
     
     params:add_separator("Settings")
-    params:add_option("pitch_mode", "Pitch Mode", {"match speed", "independent"}, 2)
-    params:set_action("pitch_mode", function(value)
-        engine.pitch_mode(1, value - 1)
-        engine.pitch_mode(2, value - 1)
-    end)
-    params:add_taper("granular_gain", "Granular Mix", 0, 100, 100, 0, "%")
-    params:set_action("granular_gain", function(value) engine.granular_gain(value / 100) end) 
-    params:add_taper("density_mod_amt", "Density Mod", 0, 100, 20, 0, "%")
-    params:set_action("density_mod_amt", function(value) engine.density_mod_amt(1, value / 100) end)
-
     params:add_group("Delay", 3)
     halfsecond.init()
-
-    params:add_group("Greyhole", 7)
-    params:add_control("time", "time", controlspec.new(0.00, 10.00, "lin", 0.01, 2.00, ""))
+    
+    params:add_group("Greyhole", 8)
+    -- mix
+    params:add_control("greyhole_mix", "Mix", controlspec.new(0.0, 1.0, "lin", 0.01, 0.35, ""))
+    params:set_action("greyhole_mix", function(value) engine.greyhole_mix(value) end)
+    -- delay size
+    params:add_control("time", "Time", controlspec.new(0.00, 10.00, "lin", 0.01, 2.00, ""))
     params:set_action("time", function(value) engine.greyhole_delay_time(value) end)
     -- delay size
-    params:add_control("size", "size", controlspec.new(0.5, 5.0, "lin", 0.01, 2.00, ""))
+    params:add_control("size", "Size", controlspec.new(0.5, 5.0, "lin", 0.01, 2.00, ""))
     params:set_action("size", function(value) engine.greyhole_size(value) end)
     -- dampening 
-    params:add_control("damp", "damp", controlspec.new(0.0, 1.0, "lin", 0.01, 0.10, ""))
+    params:add_control("damp", "Damping", controlspec.new(0.0, 1.0, "lin", 0.01, 0.10, ""))
     params:set_action("damp", function(value) engine.greyhole_damp(value) end)
     -- diffusion
-    params:add_control("diff", "diff", controlspec.new(0.0, 1.0, "lin", 0.01, 0.707, ""))
+    params:add_control("diff", "Diffusion", controlspec.new(0.0, 1.0, "lin", 0.01, 0.707, ""))
     params:set_action("diff", function(value) engine.greyhole_diff(value) end)
     -- feedback
-    params:add_control("feedback", "feedback", controlspec.new(0.00, 1.0, "lin", 0.01, 0.20, ""))
+    params:add_control("feedback", "Feedback", controlspec.new(0.00, 1.0, "lin", 0.01, 0.20, ""))
     params:set_action("feedback", function(value) engine.greyhole_feedback(value) end)
     -- mod depth
-    params:add_control("mod_depth", "mod depth", controlspec.new(0.0, 1.0, "lin", 0.01, 0.00, ""))
+    params:add_control("mod_depth", "Mod depth", controlspec.new(0.0, 1.0, "lin", 0.01, 0.00, ""))
     params:set_action("mod_depth", function(value) engine.greyhole_mod_depth(value) end)
     -- mod rate
-    params:add_control("mod_freq", "mod freq", controlspec.new(0.0, 10.0, "lin", 0.01, 0.10, "hz"))
+    params:add_control("mod_freq", "Mod freq", controlspec.new(0.0, 10.0, "lin", 0.01, 0.10, "hz"))
     params:set_action("mod_freq", function(value) engine.greyhole_mod_freq(value) end)
 
     params:add_group("Fverb", 12)
@@ -220,8 +215,8 @@ local function setup_params()
     params:add_taper("reverb_modulator_depth", "Modulator depth", 0, 100, 90, 0, "%")
     params:set_action("reverb_modulator_depth", function(value) engine.reverb_modulator_depth(value / 100) end)
 
-    params:add_group("LFOs", 28)
-    for i = 1, 4 do
+    params:add_group("LFOs", 56)
+    for i = 1, 8 do
       lfo[i].lfo_targets = lfo_targets
     end
     lfo.init()
@@ -229,11 +224,11 @@ local function setup_params()
     params:add_group("Randomizer", 10)
     params:add_taper("min_jitter", "jitter (min)", 0, 500, 0, 5, "ms")
     params:add_taper("max_jitter", "jitter (max)", 0, 500, 500, 5, "ms")
-    params:add_taper("min_size", "size (min)", 1, 500, 50, 5, "ms")
+    params:add_taper("min_size", "size (min)", 1, 500, 100, 5, "ms")
     params:add_taper("max_size", "size (max)", 1, 500, 500, 5, "ms")
     params:add_taper("min_density", "density (min)", 0, 50, 1, 5, "Hz")
-    params:add_taper("max_density", "density (max)", 0, 50, 40, 5, "Hz")
-    params:add_taper("min_spread", "spread (min)", 0, 100, 25, 0, "%")
+    params:add_taper("max_density", "density (max)", 0, 50, 30, 5, "Hz")
+    params:add_taper("min_spread", "spread (min)", 0, 100, 0, 0, "%")
     params:add_taper("max_spread", "spread (max)", 0, 100, 100, 0, "%")
     params:add_control("min_pitch", "pitch (min)", controlspec.new(-48, 48, "lin", 1, -12, "st"))
     params:add_control("max_pitch", "pitch (max)", controlspec.new(-48, 48, "lin", 1, 12, "st"))
@@ -271,6 +266,19 @@ local function setup_params()
         params:set_action(i .."fade", function(value) engine.envscale(i, value / 1000) end)
     end
     
+    params:add_taper("granular_gain", "Granular Mix", 0, 100, 100, 0, "%")
+    params:set_action("granular_gain", function(value) engine.granular_gain(value / 100) end) 
+    params:add_taper("density_mod_amt", "Density Mod", 0, 100, 20, 0, "%")
+    params:set_action("density_mod_amt", function(value) engine.density_mod_amt(1, value / 100) end)
+    params:add_option("pitch_mode", "Pitch Mode", {"match speed", "independent"}, 2)
+    params:set_action("pitch_mode", function(value) engine.pitch_mode(1, value - 1) engine.pitch_mode(2, value - 1) end)
+    
+    params:add_control("subharmonics","Subharmonics",controlspec.new(0.00,1.00,"lin",0.01,0.1))
+    params:set_action("subharmonics",function(value) engine.subharmonics(1,value) engine.subharmonics(2,value) end)
+
+    params:add_control("overtones","Overtones",controlspec.new(0.00,1.00,"lin",0.01,0.3))
+    params:set_action("overtones",function(value) engine.overtones(1,value) engine.overtones(2,value) end)
+
     params:add_separator("Transition")
     params:add_control("steps", "Steps", controlspec.new(5, 200000, "lin", 5, 5, ""))
     params:set_action("steps", function(value) steps = value end)
@@ -350,29 +358,12 @@ local function wrap_value(value, min, max)
 end
 
 local pan_direction = 1  -- 1 for increasing, -1 for decreasing
-local function crossfade_pan(delta)
-    enc1_position = enc1_position + 2 * delta * pan_direction
-    local pan1, pan2
-    if enc1_position <= 50 then
-        pan1 = -100 + (enc1_position / 50) * 100  -- pan1: -100 to 0
-        pan2 = 100 - (enc1_position / 50) * 100   -- pan2: 100 to 0
-    else
-        pan1 = (enc1_position - 50) / 50 * 100    -- pan1: 0 to 100
-        pan2 = -((enc1_position - 50) / 50 * 100) -- pan2: 0 to -100
-    end
-    if pan1 <= -100 or pan1 >= 100 or pan2 <= -100 or pan2 >= 100 then
-        pan_direction = -pan_direction
-        enc1_position = enc1_position + 2 * delta * pan_direction  
-    end
-    params:set("1pan", math.max(-100, math.min(100, pan1)))
-    params:set("2pan", math.max(-100, math.min(100, pan2)))
-end
 
 function enc(n, d)
     local enc_actions = {
         [1] = function()
             if key1_pressed then
-                crossfade_pan(d)
+               -- something something
             else
                 adjust_volume("1", d)
                 adjust_volume("2", d)

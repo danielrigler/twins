@@ -1,5 +1,5 @@
 Engine_twins : CroneEngine {
-	classvar nvoices = 7;
+	classvar nvoices = 6;
 
 	var pg;
 	var greyholeEffect; // Greyhole effect
@@ -68,7 +68,9 @@ Engine_twins : CroneEngine {
 			size=0.1, density=20, density_mod_amt=0, pitch_offset=1, pan=0, spread=0, gain=1, envscale=1,
 			freeze=0, t_reset_pos=0,
 			granular_gain=1, // Add granular_gain parameter
-			pitch_mode=0; // Add pitch_mode parameter (0 = grains match speed, 1 = independent pitch)
+			pitch_mode=0, // Add pitch_mode parameter (0 = grains match speed, 1 = independent pitch)
+			subharmonics=0, // New parameter for subharmonics
+			overtones=0; // New parameter for overtones
 
 			var grain_trig;
 			var jitter_sig;
@@ -85,6 +87,10 @@ Engine_twins : CroneEngine {
 			var env;
 			var level;
 			var grain_pitch; // Grain pitch calculation
+			var main_vol = 1.0 / (1.0 + subharmonics + overtones); // Volume for main grains
+			var subharmonic_vol = subharmonics / (1.0 + subharmonics + overtones) * 2; // Double the volume of subharmonics
+			var overtone_vol = overtones / (1.0 + subharmonics + overtones); // Volume for overtones
+      var subharmonic_size = size * 2; // Double the grain size for subharmonics
 
 			// Density modulation
 			var trig_rnd = LFNoise1.kr(density);
@@ -119,9 +125,20 @@ Engine_twins : CroneEngine {
 				pitch_offset          // Mode 1: grains use independent pitch
 			]);
 
-			// Granular signal
-			sig_l = GrainBuf.ar(1, grain_trig, size, buf_l, grain_pitch, pos_sig + jitter_sig, 2);
-			sig_r = GrainBuf.ar(1, grain_trig, size, buf_r, grain_pitch, pos_sig + jitter_sig, 2);
+			// Granular signal (main grains)
+			sig_l = GrainBuf.ar(1, grain_trig, size, buf_l, grain_pitch, pos_sig + jitter_sig, 2, mul: main_vol);
+			sig_r = GrainBuf.ar(1, grain_trig, size, buf_r, grain_pitch, pos_sig + jitter_sig, 2, mul: main_vol);
+
+			// Subharmonics (pitched down)
+      sig_l = sig_l + GrainBuf.ar(1, grain_trig, subharmonic_size, buf_l, grain_pitch / 2, pos_sig + jitter_sig, 2, mul: subharmonic_vol);
+      sig_r = sig_r + GrainBuf.ar(1, grain_trig, subharmonic_size, buf_r, grain_pitch / 2, pos_sig + jitter_sig, 2, mul: subharmonic_vol);
+
+			// Overtones (pitched up)
+			sig_l = sig_l + GrainBuf.ar(1, grain_trig, size, buf_l, grain_pitch * 2, pos_sig + jitter_sig, 2, mul: overtone_vol * 0.7);
+			sig_r = sig_r + GrainBuf.ar(1, grain_trig, size, buf_r, grain_pitch * 2, pos_sig + jitter_sig, 2, mul: overtone_vol * 0.7);
+			sig_l = sig_l + GrainBuf.ar(1, grain_trig, size, buf_l, grain_pitch * 4, pos_sig + jitter_sig, 2, mul: overtone_vol * 0.3);
+			sig_r = sig_r + GrainBuf.ar(1, grain_trig, size, buf_r, grain_pitch * 4, pos_sig + jitter_sig, 2, mul: overtone_vol * 0.3);
+
 			granular_sig = Balance2.ar(sig_l, sig_r, pan + pan_sig);
 
 			env = EnvGen.kr(Env.asr(1, 1, 1), gate: gate, timeScale: envscale);
@@ -138,11 +155,11 @@ Engine_twins : CroneEngine {
 			Out.kr(level_out, level);
 		}).add;
 
-		// Define the Greyhole effect SynthDef
+		// Define the Greyhole effect SynthDef with mix control
 		SynthDef(\greyhole, {
-			arg in, out, delayTime=2.0, damp=0.1, size=3.0, diff=0.7, feedback=0.2, modDepth=0.0, modFreq=0.1;
-			var sig = In.ar(in, 2); // Capture the dry signal from the input bus
-			var wet = Greyhole.ar(sig,
+			arg in, out, delayTime=2.0, damp=0.1, size=3.0, diff=0.7, feedback=0.2, modDepth=0.0, modFreq=0.1, mix=0.5;
+			var dry = In.ar(in, 2); // Capture the dry signal from the input bus
+			var wet = Greyhole.ar(dry,
 				delayTime,
 				damp,
 				size,
@@ -151,7 +168,8 @@ Engine_twins : CroneEngine {
 				modDepth,
 				modFreq
 			);
-			Out.ar(out, wet); // Output the wet signal
+			var sig = (wet * mix) + (dry * (1 - mix)); // Mix dry and wet signals
+			Out.ar(out, sig); // Output the mixed signal
 		}).add;
 
 		// Define the Fverb effect SynthDef
@@ -191,8 +209,9 @@ Engine_twins : CroneEngine {
 			\diff, 0.7,
 			\feedback, 0.2,
 			\modDepth, 0.0,
-			\modFreq, 1.0],
-		context.xg);
+			\modFreq, 1.0,
+			\mix, 0.5 // Default mix value
+		], context.xg);
 
 		// Create the Fverb effect (placed after Greyhole)
 		fverbEffect = Synth.new(\fverb, [
@@ -209,8 +228,8 @@ Engine_twins : CroneEngine {
 			\decay, 50,
 			\damping, 5500,
 			\modulator_frequency, 1,
-			\modulator_depth, 0.5],
-		context.xg);
+			\modulator_depth, 0.5
+		], context.xg);
 
 		phases = Array.fill(nvoices, { arg i; Bus.control(context.server); });
 		levels = Array.fill(nvoices, { arg i; Bus.control(context.server); });
@@ -226,6 +245,8 @@ Engine_twins : CroneEngine {
 				\buf_r, buffersR[i],
 				\granular_gain, 1, // Initialize granular_gain
 				\density_mod_amt, 0, // Initialize density_mod_amt
+				\subharmonics, 0, // Initialize subharmonics
+				\overtones, 0, // Initialize overtones
 			], target: pg);
 		});
 
@@ -253,6 +274,9 @@ Engine_twins : CroneEngine {
 		this.addCommand("greyhole_mod_freq", "f", {|msg|
 			greyholeEffect.set(\modFreq, msg[1]);
 		});
+		this.addCommand("greyhole_mix", "f", {|msg| // New command for Greyhole mix control
+			greyholeEffect.set(\mix, msg[1]);
+		});
 
 		// Add commands for Fverb (existing commands)
 		this.addCommand("reverb_mix", "f", { arg msg; fverbEffect.set(\mix, msg[1]); });
@@ -268,6 +292,7 @@ Engine_twins : CroneEngine {
 		this.addCommand("reverb_modulator_frequency", "f", { arg msg; fverbEffect.set(\modulator_frequency, msg[1]); });
 		this.addCommand("reverb_modulator_depth", "f", { arg msg; fverbEffect.set(\modulator_depth, msg[1]); });
 
+		
 		
 		
 		// Add commands
@@ -295,6 +320,19 @@ this.addCommand("granular_gain_r", "if", { arg msg;
 		
 		
 		
+		
+		
+		// Add commands for subharmonics and overtones
+		this.addCommand("subharmonics", "if", { arg msg;
+			var voice = msg[1] - 1;
+			voices[voice].set(\subharmonics, msg[2]);
+		});
+
+		this.addCommand("overtones", "if", { arg msg;
+			var voice = msg[1] - 1;
+			voices[voice].set(\overtones, msg[2]);
+		});
+
 		// Add other existing commands (e.g., read, seek, gate, etc.)
 		this.addCommand("read", "is", { arg msg;
 			this.readBuf(msg[1] - 1, msg[2]);
