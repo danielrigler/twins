@@ -141,8 +141,8 @@ local function setup_params()
             if file ~= nil and file ~= "" and file ~= "none" and file ~= "-" then
                 engine.read(i, file)
                 if is_audio_loaded(1) and is_audio_loaded(2) then
-                    params:set("1pan", -40)
-                    params:set("2pan", 40)
+                    params:set("1pan", -25)
+                    params:set("2pan", 25)
                 end
             end
         end)
@@ -154,7 +154,7 @@ local function setup_params()
     
     params:add_group("Greyhole", 8)
     -- mix
-    params:add_control("greyhole_mix", "Mix", controlspec.new(0.0, 1.0, "lin", 0.01, 0.35, ""))
+    params:add_control("greyhole_mix", "Mix", controlspec.new(0.0, 1.0, "lin", 0.01, 0.45, ""))
     params:set_action("greyhole_mix", function(value) engine.greyhole_mix(value) end)
     -- delay size
     params:add_control("time", "Time", controlspec.new(0.00, 10.00, "lin", 0.01, 2.00, ""))
@@ -214,6 +214,16 @@ local function setup_params()
 
     params:add_taper("reverb_modulator_depth", "Modulator depth", 0, 100, 90, 0, "%")
     params:set_action("reverb_modulator_depth", function(value) engine.reverb_modulator_depth(value / 100) end)
+
+    params:add_group("Filters", 4)
+      params:add_control("1cutoff","1 LPF cutoff",controlspec.new(20,20000,"exp",0,20000,"Hz"))
+      params:set_action("1cutoff",function(value) engine.cutoff(1,value) end)
+      params:add_control("1q","1 LPF rq",controlspec.new(0.1,1.00,"lin",0.01,1))
+      params:set_action("1q",function(value) engine.q(1,value) end)
+      params:add_control("2cutoff","2 LPF cutoff",controlspec.new(20,20000,"exp",0,20000,"Hz"))
+      params:set_action("2cutoff",function(value) engine.cutoff(2,value) end)
+      params:add_control("2q","2 LPF rq",controlspec.new(0.1,1.00,"lin",0.01,1))
+      params:set_action("2q",function(value) engine.q(2,value) end)
 
     params:add_group("LFOs", 56)
     for i = 1, 8 do
@@ -335,6 +345,7 @@ local function setup_engine()
     engine.gate(2, 1)
     randomize(1)
     randomize(2)
+    audio.level_adc(0)
 end
 
 function init()
@@ -357,8 +368,6 @@ local function wrap_value(value, min, max)
     end
 end
 
-local pan_direction = 1  -- 1 for increasing, -1 for decreasing
-
 function enc(n, d)
     local enc_actions = {
         [1] = function()
@@ -374,38 +383,24 @@ function enc(n, d)
                 adjust_volume("1", d)
             else
                 if current_mode == "speed" then
-                    local current_speed = params:get("1speed")
-                    local new_speed = wrap_value(current_speed + (d * 0.01), -4, 4)
-                    params:set("1speed", new_speed)
+                    params:delta("1speed", d * 0.1) -- Adjust speed with delta
                 elseif current_mode == "seek" then
                     local current_seek = params:get("1seek")
                     local new_seek = wrap_value(current_seek + d, 0, 100)
                     params:set("1seek", new_seek)
                     engine.seek(1, new_seek / 100)
-                elseif current_mode == "pan" then
-                    local current_pan = params:get("1pan")
-                    local new_pan = math.max(-100, math.min(100, current_pan + d))
-                    params:set("1pan", new_pan)
+                elseif current_mode == "lpf" then
+                    params:delta("1cutoff", d) -- Adjust LPF cutoff with delta
                 elseif current_mode == "jitter" then
-                    local current_jitter = params:get("1jitter")
-                    local new_jitter = math.max(0, math.min(500, current_jitter + 2*d))
-                    params:set("1jitter", new_jitter)
+                    params:delta("1jitter", d * 2) -- Adjust jitter with delta
                 elseif current_mode == "size" then
-                    local current_size = params:get("1size")
-                    local new_size = math.max(1, math.min(500, current_size + 2*d))
-                    params:set("1size", new_size)
+                    params:delta("1size", d * 2) -- Adjust size with delta
                 elseif current_mode == "density" then
-                    local current_density = params:get("1density")
-                    local new_density = math.max(0, math.min(50, current_density + d))
-                    params:set("1density", new_density)
+                    params:delta("1density", d) -- Adjust density with delta
                 elseif current_mode == "spread" then
-                    local current_spread = params:get("1spread")
-                    local new_spread = math.max(0, math.min(100, current_spread + 2*d))
-                    params:set("1spread", new_spread)
+                    params:delta("1spread", d * 2) -- Adjust spread with delta
                 elseif current_mode == "pitch" then
-                    local current_pitch = params:get("1pitch")
-                    local new_pitch = math.max(-48, math.min(48, current_pitch + d))
-                    params:set("1pitch", new_pitch)
+                    params:delta("1pitch", d) -- Adjust pitch with delta
                 end
             end
         end,
@@ -414,38 +409,24 @@ function enc(n, d)
                 adjust_volume("2", d)
             else
                 if current_mode == "speed" then
-                    local current_speed = params:get("2speed")
-                    local new_speed = wrap_value(current_speed + (d * 0.01), -4, 4)
-                    params:set("2speed", new_speed)
+                    params:delta("2speed", d * 0.1) -- Adjust speed with delta
                 elseif current_mode == "seek" then
                     local current_seek = params:get("2seek")
                     local new_seek = wrap_value(current_seek + d, 0, 100)
                     params:set("2seek", new_seek)
                     engine.seek(2, new_seek / 100)
-                elseif current_mode == "pan" then
-                    local current_pan = params:get("2pan")
-                    local new_pan = math.max(-100, math.min(100, current_pan + d))
-                    params:set("2pan", new_pan)
+                elseif current_mode == "lpf" then
+                    params:delta("2cutoff", d) -- Adjust LPF cutoff with delta
                 elseif current_mode == "jitter" then
-                    local current_jitter = params:get("2jitter")
-                    local new_jitter = math.max(0, math.min(500, current_jitter + 2*d))
-                    params:set("2jitter", new_jitter)
+                    params:delta("2jitter", d * 2) -- Adjust jitter with delta
                 elseif current_mode == "size" then
-                    local current_size = params:get("2size")
-                    local new_size = math.max(1, math.min(500, current_size + 2*d))
-                    params:set("2size", new_size)
+                    params:delta("2size", d * 2) -- Adjust size with delta
                 elseif current_mode == "density" then
-                    local current_density = params:get("2density")
-                    local new_density = math.max(0, math.min(50, current_density + d))
-                    params:set("2density", new_density)
+                    params:delta("2density", d) -- Adjust density with delta
                 elseif current_mode == "spread" then
-                    local current_spread = params:get("2spread")
-                    local new_spread = math.max(0, math.min(100, current_spread + 2*d))
-                    params:set("2spread", new_spread)
+                    params:delta("2spread", d * 2) -- Adjust spread with delta
                 elseif current_mode == "pitch" then
-                    local current_pitch = params:get("2pitch")
-                    local new_pitch = math.max(-48, math.min(48, current_pitch + d))
-                    params:set("2pitch", new_pitch)
+                    params:delta("2pitch", d) -- Adjust pitch with delta
                 end
             end
         end
@@ -479,8 +460,8 @@ function key(n, z)
     -- Handle single key presses for switching active row
     if not key1_pressed and z == 1 then
         if n == 2 then
-            -- Cycle through modes in reverse order: pitch -> spread -> density -> size -> jitter -> pan -> seek -> speed -> pitch
-            local modes = {"pitch", "spread", "density", "size", "jitter", "pan", "seek", "speed"}
+            -- Cycle through modes in reverse order: pitch -> spread -> density -> size -> jitter -> lpf -> seek -> speed -> pitch
+            local modes = {"pitch", "spread", "density", "size", "jitter", "lpf", "seek", "speed"}
             local current_index = 1
             for i, mode in ipairs(modes) do
                 if mode == current_mode then
@@ -491,8 +472,8 @@ function key(n, z)
             current_mode = modes[(current_index % #modes) + 1]
             redraw()
         elseif n == 3 then
-            -- Cycle through modes in forward order: speed -> seek -> pan -> jitter -> size -> density -> spread -> pitch -> speed
-            local modes = {"speed", "seek", "pan", "jitter", "size", "density", "spread", "pitch"}
+            -- Cycle through modes in forward order: speed -> seek -> lpf -> jitter -> size -> density -> spread -> pitch -> speed
+            local modes = {"speed", "seek", "lpf", "jitter", "size", "density", "spread", "pitch"}
             local current_index = 1
             for i, mode in ipairs(modes) do
                 if mode == current_mode then
@@ -622,32 +603,32 @@ function redraw()
     draw_param_row(40, "spread:   ", "1spread", "2spread", false, false, current_mode == "spread")
     draw_param_row(50, "pitch:    ", "1pitch", "2pitch", false, true, current_mode == "pitch")
 
-    -- Display "seek:", "speed:", or "pan:" based on the current mode
+    -- Display "seek:", "speed:", or "lpf:" based on the current mode
     screen.move(5, 60)
-    if current_mode == "seek" or current_mode == "pan" or current_mode == "speed" then
+    if current_mode == "seek" or current_mode == "lpf" or current_mode == "speed" then
         screen.level(15) -- Bright text for highlighted row
     else
         screen.level(5) -- Dim text for non-highlighted rows
     end
     if current_mode == "seek" then
         screen.text("seek:     ")
-    elseif current_mode == "pan" then
-        screen.text("pan:      ")
+    elseif current_mode == "lpf" then
+        screen.text("filter:      ")
     else
         screen.text("speed:    ")
     end
 
     -- Display track 1 value (always bright if it's the active mode)
     screen.move(ALI_X + 4, 60)
-    if current_mode == "seek" or current_mode == "pan" or current_mode == "speed" then
+    if current_mode == "seek" or current_mode == "lpf" or current_mode == "speed" then
         screen.level(15) -- Bright text for highlighted row
     else
         screen.level(5) -- Dim text for non-highlighted rows
     end
     if current_mode == "seek" then
         screen.text(format_seek(params:get("1seek"))) -- Display seek for track 1
-    elseif current_mode == "pan" then
-        screen.text(string.format("%.0f%%", params:get("1pan"))) -- Display pan for track 1 with sign
+    elseif current_mode == "lpf" then
+        screen.text(string.format("%.0f", params:get("1cutoff"))) -- Display lpf for track 1 
     else
         local speed1 = params:get("1speed")
         screen.text(string.format("%.2fx", speed1))  -- Display speed for track 1
@@ -655,7 +636,7 @@ function redraw()
 
     -- Display track 2 value (always bright if it's the active mode)
     screen.move(ALI2_X + 4, 60)
-    if current_mode == "seek" or current_mode == "pan" or current_mode == "speed" then
+    if current_mode == "seek" or current_mode == "lpf" or current_mode == "speed" then
         screen.level(15) -- Bright text for highlighted row
         
     else
@@ -663,8 +644,8 @@ function redraw()
     end
     if current_mode == "seek" then
         screen.text(format_seek(params:get("2seek"))) -- Display seek for track 2
-    elseif current_mode == "pan" then
-        screen.text(string.format("%.0f%%", params:get("2pan"))) -- Display pan for track 2 with sign
+    elseif current_mode == "lpf" then
+        screen.text(string.format("%.0f", params:get("2cutoff"))) -- Display lpf for track 2
     else
         local speed2 = params:get("2speed")
         screen.text(string.format("%.2fx", speed2))  -- Display speed for track 2
@@ -673,18 +654,22 @@ function redraw()
     screen.level(5)
 
     if is_audio_loaded(1) then
-        screen.rect(0, 64 - bar1_height, bar_width, bar1_height) -- Draw the bar
-        local pan1 = params:get("1pan") -- Get pan value for channel 1 (-100 to 100)
-        local pan1_pos = util.linlin(-100, 100, 0, 128, pan1) -- Convert pan to screen position
-        screen.rect(pan1_pos - 1, 63, 2, 1)
+        screen.rect(0, 64 - bar1_height, bar_width, bar1_height) -- Draw the volume bar
+        local center_start = 47
+        local center_end = 74
+        local pan1 = params:get("1pan")
+        local pan1_pos = util.linlin(-100, 100, center_start, center_end, pan1)
+        screen.rect(pan1_pos - 1, 0, 2, 1) -- Draw the pan bar  - 2 pixels wide, 1 pixel height
         screen.fill()
     end
 
     if is_audio_loaded(2) then
         screen.rect(128 - bar_width, 64 - bar2_height, bar_width, bar2_height) -- Draw the bar
-        local pan2 = params:get("2pan") -- Get pan value for channel 2 (-100 to 100)
-        local pan2_pos = util.linlin(-100, 100, 0, 128, pan2) -- Convert pan to screen position
-        screen.rect(pan2_pos - 1, 63, 2, 1)
+        local center_start = 94
+        local center_end = 121
+        local pan1 = params:get("2pan")
+        local pan1_pos = util.linlin(-100, 100, center_start, center_end, pan1)
+        screen.rect(pan1_pos - 1, 0, 2, 1) -- Draw the pan bar  - 2 pixels wide, 1 pixel height
         screen.fill()
     end
     screen.update()

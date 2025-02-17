@@ -10,6 +10,7 @@ function sc.init()
   softcut.level_input_cut(2,2,1.0)
   softcut.pan(1,-1)
   softcut.pan(2,1)
+  
   for i=1,2 do
     softcut.level(i,1.0)
     softcut.play(i,1)
@@ -30,20 +31,19 @@ function sc.init()
     softcut.filter_lp(i,0);
     softcut.filter_bp(i,1.0);
     softcut.filter_rq(i,2.0);
-
   end
 
   params:add{id="delay_h",name="Mix",type="control",
-    controlspec=controlspec.new(0,1,'lin',0,0.15,""),
+  controlspec=controlspec.new(0,1,'lin',0,0.1,""),
   action=function(x) softcut.level(1,x*math.random(90,110)/100);softcut.level(2,x*math.random(90,110)/100) end}
   
   params:add{id="delay_rate",name="Rate",type="control",
-    controlspec=controlspec.new(0.5,2.0,'lin',0,1,""),
+  controlspec=controlspec.new(0.5,2.0,'lin',0,1.4,""),
   action=function(x) softcut.rate(1,x*math.random(90,110)/100);softcut.rate(2,x*math.random(90,110)/100) end}
   
   params:add{id="delay_feedback",name="Feedback",type="control",
-    controlspec=controlspec.new(0,1.0,'lin',0,0.8,""),
+  controlspec=controlspec.new(0,1.0,'lin',0,0.35,""),
   action=function(x) softcut.pre_level(1,x*math.random(90,110)/100);softcut.pre_level(2,x*math.random(90,110)/100) end}
-
 end
+
 return sc
