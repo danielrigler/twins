@@ -91,7 +91,7 @@ Engine_twins : CroneEngine {
             var level;
             var grain_pitch; // Grain pitch calculation
             var main_vol = 1.0 / (1.0 + subharmonics + overtones); // Volume for main grains
-            var subharmonic_vol = subharmonics / (1.0 + subharmonics + overtones) * 2; // Double the volume of subharmonics
+            var subharmonic_vol = subharmonics / (1.0 + subharmonics + overtones); // Volume for subharmonics
             var overtone_vol = overtones / (1.0 + subharmonics + overtones); // Volume for overtones
             var subharmonic_size = size * 2; // Double the grain size for subharmonics
 
@@ -144,9 +144,9 @@ Engine_twins : CroneEngine {
 
             granular_sig = Balance2.ar(sig_l, sig_r, pan + pan_sig);
 
-            env = EnvGen.kr(Env.asr(1, 1, 1), gate: gate, timeScale: envscale);
+			env = EnvGen.kr(Env.asr(1, 1, 1), gate: gate, timeScale: envscale);
 
-            level = env;
+			level = env;
 
             // Mix dry and granular signals
             granular_gain = granular_gain.clip(0, 1); // Ensure granular_gain is within bounds
@@ -447,18 +447,6 @@ Engine_twins : CroneEngine {
         this.addCommand("envscale", "if", { arg msg;
             var voice = msg[1] - 1;
             voices[voice].set(\envscale, msg[2]);
-        });
-
-        nvoices.do({ arg i;
-            this.addPoll(("phase_" ++ (i+1)).asSymbol, {
-                var val = phases[i].getSynchronous;
-                val
-            });
-
-            this.addPoll(("level_" ++ (i+1)).asSymbol, {
-                var val = levels[i].getSynchronous;
-                val
-            });
         });
 
         seek_tasks = Array.fill(nvoices, { arg i;
