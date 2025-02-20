@@ -94,7 +94,8 @@ Engine_twins : CroneEngine {
             var subharmonic_vol = subharmonics / (1.0 + subharmonics + overtones); // Volume for subharmonics
             var overtone_vol = overtones / (1.0 + subharmonics + overtones); // Volume for overtones
             var subharmonic_size = size * 2; // Double the grain size for subharmonics
-
+     
+          	
             // Density modulation
             var trig_rnd = LFNoise1.kr(density);
             density_mod = density * (2**(trig_rnd * density_mod_amt));
@@ -120,7 +121,7 @@ Engine_twins : CroneEngine {
             dry_sig = [PlayBuf.ar(1, buf_l, speed, loop: 1), PlayBuf.ar(1, buf_r, speed, loop: 1)];
 
             // Apply pan to the dry signal
-            dry_sig = Balance2.ar(dry_sig[0], dry_sig[1], pan + pan_sig);
+            dry_sig = Balance2.ar(dry_sig[0], dry_sig[1], pan);
 
             // Calculate grain pitch based on pitch_mode
             grain_pitch = Select.kr(pitch_mode, [
@@ -176,28 +177,7 @@ Engine_twins : CroneEngine {
             Out.ar(out, sig); // Output the mixed signal
         }).add;
 
-        // Define the Fverb effect SynthDef
-        SynthDef(\fverb, {
-            arg in, out, mix=0.5, predelay=0, input_amount=100, input_lowpass_cutoff=10000, input_highpass_cutoff=100, input_diffusion_1=75, input_diffusion_2=62.5, tail_density=70, decay=50, damping=5500, modulator_frequency=1, modulator_depth=0.5;
-            var dry = In.ar(in, 2); // Capture the dry signal from the input bus
-            var wet = Fverb.ar(
-                dry[0], dry[1], // Stereo input
-                predelay,
-                input_amount,
-                input_lowpass_cutoff,
-                input_highpass_cutoff,
-                input_diffusion_1,
-                input_diffusion_2,
-                tail_density,
-                decay,
-                damping,
-                modulator_frequency,
-                modulator_depth
-            );
-            var sig = (wet * mix) + (dry * (1 - mix)); // Mix dry and wet signals
-            Out.ar(out, sig); // Output the mixed signal
-        }).add;
-
+       
         context.server.sync;
 
         // Mix bus for all synth outputs
@@ -217,24 +197,7 @@ Engine_twins : CroneEngine {
             \mix, 0.5 // Default mix value
         ], context.xg);
 
-        // Create the Fverb effect (placed after Greyhole)
-        fverbEffect = Synth.new(\fverb, [
-            \in, mixBus.index,
-            \out, context.out_b.index,
-            \mix, 0.5,
-            \predelay, 0,
-            \input_amount, 100,
-            \input_lowpass_cutoff, 10000,
-            \input_highpass_cutoff, 100,
-            \input_diffusion_1, 75,
-            \input_diffusion_2, 62.5,
-            \tail_density, 70,
-            \decay, 50,
-            \damping, 5500,
-            \modulator_frequency, 1,
-            \modulator_depth, 0.5
-        ], context.xg);
-
+      
         phases = Array.fill(nvoices, { arg i; Bus.control(context.server); });
         levels = Array.fill(nvoices, { arg i; Bus.control(context.server); });
 
@@ -282,20 +245,7 @@ Engine_twins : CroneEngine {
             greyholeEffect.set(\mix, msg[1]);
         });
 
-        // Add commands for Fverb (existing commands)
-        this.addCommand("reverb_mix", "f", { arg msg; fverbEffect.set(\mix, msg[1]); });
-        this.addCommand("reverb_predelay", "f", { arg msg; fverbEffect.set(\predelay, msg[1]); });
-        this.addCommand("reverb_input_amount", "f", { arg msg; fverbEffect.set(\input_amount, msg[1]); });
-        this.addCommand("reverb_lowpass_cutoff", "f", { arg msg; fverbEffect.set(\input_lowpass_cutoff, msg[1]); });
-        this.addCommand("reverb_highpass_cutoff", "f", { arg msg; fverbEffect.set(\input_highpass_cutoff, msg[1]); });
-        this.addCommand("reverb_diffusion_1", "f", { arg msg; fverbEffect.set(\input_diffusion_1, msg[1]); });
-        this.addCommand("reverb_diffusion_2", "f", { arg msg; fverbEffect.set(\input_diffusion_2, msg[1]); });
-        this.addCommand("reverb_tail_density", "f", { arg msg; fverbEffect.set(\tail_density, msg[1]); });
-        this.addCommand("reverb_decay", "f", { arg msg; fverbEffect.set(\decay, msg[1]); });
-        this.addCommand("reverb_damping", "f", { arg msg; fverbEffect.set(\damping, msg[1]); });
-        this.addCommand("reverb_modulator_frequency", "f", { arg msg; fverbEffect.set(\modulator_frequency, msg[1]); });
-        this.addCommand("reverb_modulator_depth", "f", { arg msg; fverbEffect.set(\modulator_depth, msg[1]); });
-
+        
         this.addCommand("cutoff", "if", { arg msg;
             var voice = msg[1] - 1;
             voices[voice].set(\cutoff, msg[2]);
@@ -461,7 +411,6 @@ Engine_twins : CroneEngine {
         buffersL.do({ arg b; b.free; });
         buffersR.do({ arg b; b.free; });
         greyholeEffect.free;
-        fverbEffect.free;
         mixBus.free;
     }
 }

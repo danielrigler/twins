@@ -5,11 +5,8 @@
 --
 
 halfsecond = include("lib/halfsecond")
-installer_ = include("lib/scinstaller/scinstaller")
 local lfo = include("lib/hnds")
-installer = installer_:new{requirements = {"Fverb"}}
-
-engine.name = installer:ready() and 'twins' or nil
+engine.name = 'twins'
 
 local ALI_X = 46
 local ALI2_X = 93
@@ -166,68 +163,31 @@ local function setup_params()
     params:add_group("Delay", 3)
     halfsecond.init()
     
-    params:add_group("Greyhole", 8)
+    params:add_group("Reverb", 8)
     -- mix
     params:add_control("greyhole_mix", "Mix", controlspec.new(0.0, 1.0, "lin", 0.01, 0.5, ""))
     params:set_action("greyhole_mix", function(value) engine.greyhole_mix(value) end)
     -- delay size
-    params:add_control("time", "Time", controlspec.new(0.00, 10.00, "lin", 0.01, 1.7, ""))
+    params:add_control("time", "Time", controlspec.new(0.00, 10.00, "lin", 0.01, 3, ""))
     params:set_action("time", function(value) engine.greyhole_delay_time(value) end)
     -- delay size
     params:add_control("size", "Size", controlspec.new(0.5, 5.0, "lin", 0.01, 4.00, ""))
     params:set_action("size", function(value) engine.greyhole_size(value) end)
     -- dampening 
-    params:add_control("damp", "Damping", controlspec.new(0.0, 1.0, "lin", 0.01, 0.13, ""))
+    params:add_control("damp", "Damping", controlspec.new(0.0, 1.0, "lin", 0.01, 0.1, ""))
     params:set_action("damp", function(value) engine.greyhole_damp(value) end)
     -- diffusion
     params:add_control("diff", "Diffusion", controlspec.new(0.0, 1.0, "lin", 0.01, 0.5, ""))
     params:set_action("diff", function(value) engine.greyhole_diff(value) end)
     -- feedback
-    params:add_control("feedback", "Feedback", controlspec.new(0.00, 1.0, "lin", 0.01, 0.20, ""))
+    params:add_control("feedback", "Feedback", controlspec.new(0.00, 1.0, "lin", 0.01, 0.22, ""))
     params:set_action("feedback", function(value) engine.greyhole_feedback(value) end)
     -- mod depth
-    params:add_control("mod_depth", "Mod depth", controlspec.new(0.0, 1.0, "lin", 0.01, 0.75, ""))
+    params:add_control("mod_depth", "Mod depth", controlspec.new(0.0, 1.0, "lin", 0.01, 0.85, ""))
     params:set_action("mod_depth", function(value) engine.greyhole_mod_depth(value) end)
     -- mod rate
-    params:add_control("mod_freq", "Mod freq", controlspec.new(0.0, 10.0, "lin", 0.01, 1, "hz"))
+    params:add_control("mod_freq", "Mod freq", controlspec.new(0.0, 10.0, "lin", 0.01, 0.7, "hz"))
     params:set_action("mod_freq", function(value) engine.greyhole_mod_freq(value) end)
-
-    params:add_group("Fverb", 12)
-    params:add_taper("reverb_mix", "Mix", 0, 100, 17.5, 0, "%")
-    params:set_action("reverb_mix", function(value) engine.reverb_mix(value / 100) end)
-
-    params:add_taper("reverb_predelay", "Predelay", 0, 100, 60, 0, "ms")
-    params:set_action("reverb_predelay", function(value) engine.reverb_predelay(value) end)
-
-    params:add_taper("reverb_input_amount", "Input amount", 0, 100, 100, 0, "%")
-    params:set_action("reverb_input_amount", function(value) engine.reverb_input_amount(value) end)
-
-    params:add_taper("reverb_lowpass_cutoff", "Lowpass cutoff", 0, 20000, 10500, 0, "Hz")
-    params:set_action("reverb_lowpass_cutoff", function(value) engine.reverb_lowpass_cutoff(value) end)
-
-    params:add_taper("reverb_highpass_cutoff", "Highpass cutoff", 0, 20000, 150, 0, "Hz")
-    params:set_action("reverb_highpass_cutoff", function(value) engine.reverb_highpass_cutoff(value) end)
-
-    params:add_taper("reverb_diffusion_1", "Diffusion 1", 0, 100, 75, 0, "%")
-    params:set_action("reverb_diffusion_1", function(value) engine.reverb_diffusion_1(value) end)
-
-    params:add_taper("reverb_diffusion_2", "Diffusion 2", 0, 100, 62.5, 0, "%")
-    params:set_action("reverb_diffusion_2", function(value) engine.reverb_diffusion_2(value) end)
-
-    params:add_taper("reverb_tail_density", "Tail density", 0, 100, 70, 0, "%")
-    params:set_action("reverb_tail_density", function(value) engine.reverb_tail_density(value) end)
-
-    params:add_taper("reverb_decay", "Decay", 0, 100, 80, 0, "%")
-    params:set_action("reverb_decay", function(value) engine.reverb_decay(value) end)
-
-    params:add_taper("reverb_damping", "Damping", 0, 20000, 6500, 0, "Hz")
-    params:set_action("reverb_damping", function(value) engine.reverb_damping(value) end)
-
-    params:add_taper("reverb_modulator_frequency", "Modulator frequency", 0, 10, 1, 0, "Hz")
-    params:set_action("reverb_modulator_frequency", function(value) engine.reverb_modulator_frequency(value) end)
-
-    params:add_taper("reverb_modulator_depth", "Modulator depth", 0, 100, 90, 0, "%")
-    params:set_action("reverb_modulator_depth", function(value) engine.reverb_modulator_depth(value / 100) end)
 
     params:add_group("Filters", 4)
       params:add_control("1cutoff","1 LPF cutoff",controlspec.new(20,20000,"exp",0,20000,"Hz"))
@@ -559,13 +519,9 @@ local function draw_param_row(y, label, param1, param2, is_density, is_pitch, is
     local is_locked1 = is_param_locked(1, param_name)
     local is_locked2 = is_param_locked(2, param_name)
 
-    -- Draw the label
+    -- Draw the label (always bright)
     screen.move(5, y)
-    if is_highlighted then
-        screen.level(15) -- Bright text for highlighted row
-    else
-        screen.level(5) -- Dim text for non-highlighted rows
-    end
+    screen.level(15) -- Always bright text for labels
     screen.text(label)
 
     -- Draw the parameter values with blinking effect if locked
@@ -628,11 +584,8 @@ function redraw()
 
     -- Display "seek:", "speed:", "pan:", or "filter:" based on the current mode
     screen.move(5, 60)
-    if current_mode == "seek" or current_mode == "lpf" or current_mode == "speed" or current_mode == "pan" then
-        screen.level(15) -- Bright text for highlighted row
-    else
-        screen.level(5) -- Dim text for non-highlighted rows
-    end
+    screen.level(15)
+    
     if current_mode == "seek" then
         screen.text("seek:     ")
     elseif current_mode == "pan" then

@@ -38,11 +38,11 @@ function sc.init()
   action=function(x) softcut.level(1,x*math.random(90,110)/100);softcut.level(2,x*math.random(90,110)/100) end}
   
   params:add{id="delay_rate",name="Rate",type="control",
-  controlspec=controlspec.new(0.5,2.0,'lin',0,1.4,""),
+  controlspec=controlspec.new(0.5,2.0,'lin',0,1,""),
   action=function(x) softcut.rate(1,x*math.random(90,110)/100);softcut.rate(2,x*math.random(90,110)/100) end}
   
   params:add{id="delay_feedback",name="Feedback",type="control",
-  controlspec=controlspec.new(0,1.0,'lin',0,0.75,""),
+  controlspec=controlspec.new(0,1.0,'lin',0,0.8,""),
   action=function(x) softcut.pre_level(1,x*math.random(90,110)/100);softcut.pre_level(2,x*math.random(90,110)/100) end}
 end
 
