@@ -5,8 +5,8 @@
 --
 
 halfsecond = include("lib/halfsecond")
-
 installer_ = include("lib/scinstaller/scinstaller")
+local lfo = include("lib/hnds")
 installer = installer_:new{requirements = {"Fverb"}}
 
 engine.name = installer:ready() and 'twins' or nil
@@ -52,84 +52,95 @@ local function setup_ui_metro()
     ui_metro:start()
 end
 
-local lfo = include("lib/hnds")
-local lfo_targets = {
-  "none","1volume","2volume","1pan","2pan","1speed","2speed","1seek","2seek","1jitter","2jitter","1spread","2spread","1density","2density","1pitch","2pitch","time","size","damp","diff","feedback","mod_depth","mod_freq"}
+local function clearLFOs()
+    for i = 1, 8 do
+        if params:get(i .. "lfo") == 2 then
+            params:set(i .. "lfo", 1) -- Turn off the LFO
+        end
+        params:set(i .. "lfo_target", 1) -- Reset LFO target to "none"
+    end
+end
+
+local lfo_targets = {"none","1pan","2pan","1speed","2speed","1seek","2seek","1jitter","2jitter","1spread","2spread","1size","2size","1density","2density","1volume","2volume","1pitch","2pitch","time","size","damp","diff","feedback","mod_depth","mod_freq"}
 
 function lfo.process()
-  -- for lib hnds
   for i = 1, 8 do
     local target = params:get(i .. "lfo_target")
     if params:get(i .. "lfo") == 2 then
-
-      -- 1volume
+      -- 1pan
       if target == 2 then
         params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, -100.00, 100.00))
-      -- 2volume
+      -- 2pan
       elseif target == 3 then
         params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, -100.00, 100.00))
-      -- 1pan
-      elseif target == 4 then
-        params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, -100.00, 100.00))
-      -- 2pan
-      elseif target == 5 then
-        params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, -100.00, 100.00))
       -- 1speed
-      elseif target == 6 then
+      elseif target == 4 then
         params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, -2.00, 2.00))
       -- 2speed
-      elseif target == 7 then
+      elseif target == 5 then
         params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, -2.00, 2.00))
       -- 1seek
-      elseif target == 8 then
+      elseif target == 6 then
         params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 0, 100))
       -- 2seek
-      elseif target == 9 then
+      elseif target == 7 then
         params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 0, 100))
       -- 1jitter
-      elseif target == 10 then
+      elseif target == 8 then
         params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 0, 500))
       -- 2jitter
-      elseif target == 11 then
+      elseif target == 9 then
         params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 0, 500))
       -- 1spread
-      elseif target == 12 then
+      elseif target == 10 then
         params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 0, 100))
       -- 2spread
-      elseif target == 13 then
+      elseif target == 11 then
         params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 0, 100)) 
+      -- 1size
+      elseif target == 12 then
+        params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 1, 500))
+      -- 2size
+      elseif target == 13 then
+        params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 1, 500)) 
       -- 1density
       elseif target == 14 then
         params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 0, 40))
       -- 2density
       elseif target == 15 then
         params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 0, 40)) 
-      -- 1pitch
+      -- 1volume
       elseif target == 16 then
+        params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, -100.00, 100.00))
+      -- 2volume
+      elseif target == 17 then
+        params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, -100.00, 100.00))
+      -- 1pitch
+      elseif target == 18 then
         params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, -12.00, 12.00))
       -- 2pitch
-      elseif target == 17 then
+      elseif target == 19 then
         params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, -12.00, 12.00))        
       -- Greyhole delay time
-      elseif target == 18 then
+      elseif target == 20 then
         params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 2.0, 0.00, 6.00))
       -- Greyhole size
-      elseif target == 19 then
+      elseif target == 21 then
         params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 2.0, 0.50, 5.00))
       -- Greyhole dampening
-      elseif target == 20 then
-        params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 2.0, 0.00, 1.00))
-      -- Greyhole diffusion
-      elseif target == 21 then
-        params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 2.0, 0.00, 1.00))
-      -- Greyhole feedback
       elseif target == 22 then
         params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 2.0, 0.00, 1.00))
-      -- Greyhole delay line modulation depth
+      -- Greyhole diffusion
       elseif target == 23 then
         params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 2.0, 0.00, 1.00))
-      -- Greyhole delay line modulation frequency
+      -- Greyhole feedback
       elseif target == 24 then
+        params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 2.0, 0.00, 1.00))
+      -- Greyhole delay line modulation depth
+      elseif target == 25 then
+        params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 2.0, 0.00, 1.00))
+      -- Greyhole delay line modulation frequency
+      elseif target == 26 then
         params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 2.0, 0.00, 10.00))
       end
     end
@@ -228,7 +239,9 @@ local function setup_params()
       params:add_control("2q","2 LPF rq",controlspec.new(0.1,1.00,"lin",0.01,1))
       params:set_action("2q",function(value) engine.q(2,value) end)
 
-    params:add_group("LFOs", 56)
+    params:add_group("LFOs", 57)
+      params:add_binary("ClearLFOs", "Clear LFOs", "trigger", 0)
+      params:set_action("ClearLFOs", function() clearLFOs() end)
     for i = 1, 8 do
       lfo[i].lfo_targets = lfo_targets
     end
@@ -239,8 +252,8 @@ local function setup_params()
     params:add_taper("max_jitter", "jitter (max)", 0, 500, 500, 5, "ms")
     params:add_taper("min_size", "size (min)", 1, 500, 100, 5, "ms")
     params:add_taper("max_size", "size (max)", 1, 500, 500, 5, "ms")
-    params:add_taper("min_density", "density (min)", 0, 50, 1, 5, "Hz")
-    params:add_taper("max_density", "density (max)", 0, 50, 30, 5, "Hz")
+    params:add_taper("min_density", "density (min)", 1, 50, 1, 5, "Hz")
+    params:add_taper("max_density", "density (max)", 1, 50, 40, 5, "Hz")
     params:add_taper("min_spread", "spread (min)", 0, 100, 0, 0, "%")
     params:add_taper("max_spread", "spread (max)", 0, 100, 100, 0, "%")
     params:add_control("min_pitch", "pitch (min)", controlspec.new(-48, 48, "lin", 1, -12, "st"))
@@ -263,7 +276,7 @@ local function setup_params()
         params:set_action(i .. "pan", function(value) engine.pan(i, value / 100)  end)
         params:add_control(i .. "speed", i .. " speed", controlspec.new(-2, 2, "lin", 0.01, 0, "")) 
         params:set_action(i .. "speed", function(value) engine.speed(i, value) end)
-        params:add_taper(i .. "density", i .. " density", 0, 50, 20, 6)
+        params:add_taper(i .. "density", i .. " density", 1, 50, 20, 6)
         params:set_action(i .. "density", function(value) engine.density(i, value) end)
         params:add_taper(i .. "pitch", i .. " pitch", -48, 48, 0, 0)
         params:set_action(i .. "pitch", function(value) engine.pitch_offset(i, math.pow(0.5, -value / 12)) end)
@@ -395,6 +408,8 @@ function enc(n, d)
                     local new_seek = wrap_value(current_seek + d, 0, 100)
                     params:set("1seek", new_seek)
                     engine.seek(1, new_seek / 100)
+                elseif current_mode == "pan" then
+                    params:delta("1pan", d * 5) -- Adjust pan with delta
                 elseif current_mode == "lpf" then
                     params:delta("1cutoff", d) -- Adjust LPF cutoff with delta
                 elseif current_mode == "jitter" then
@@ -402,7 +417,7 @@ function enc(n, d)
                 elseif current_mode == "size" then
                     params:delta("1size", d * 2) -- Adjust size with delta
                 elseif current_mode == "density" then
-                    params:delta("1density", d) -- Adjust density with delta
+                    params:delta("1density", d * 2) -- Adjust density with delta
                 elseif current_mode == "spread" then
                     params:delta("1spread", d * 2) -- Adjust spread with delta
                 elseif current_mode == "pitch" then
@@ -421,6 +436,8 @@ function enc(n, d)
                     local new_seek = wrap_value(current_seek + d, 0, 100)
                     params:set("2seek", new_seek)
                     engine.seek(2, new_seek / 100)
+                elseif current_mode == "pan" then
+                    params:delta("2pan", d * 5) -- Adjust pan with delta
                 elseif current_mode == "lpf" then
                     params:delta("2cutoff", d) -- Adjust LPF cutoff with delta
                 elseif current_mode == "jitter" then
@@ -428,7 +445,7 @@ function enc(n, d)
                 elseif current_mode == "size" then
                     params:delta("2size", d * 2) -- Adjust size with delta
                 elseif current_mode == "density" then
-                    params:delta("2density", d) -- Adjust density with delta
+                    params:delta("2density", d * 2) -- Adjust density with delta
                 elseif current_mode == "spread" then
                     params:delta("2spread", d * 2) -- Adjust spread with delta
                 elseif current_mode == "pitch" then
@@ -467,7 +484,7 @@ function key(n, z)
     if not key1_pressed and z == 1 then
         if n == 2 then
             -- Cycle through modes in reverse order: pitch -> spread -> density -> size -> jitter -> lpf -> seek -> speed -> pitch
-            local modes = {"pitch", "spread", "density", "size", "jitter", "lpf", "seek", "speed"}
+            local modes = {"pitch", "spread", "density", "size", "jitter", "lpf", "pan", "seek", "speed"}
             local current_index = 1
             for i, mode in ipairs(modes) do
                 if mode == current_mode then
@@ -479,7 +496,7 @@ function key(n, z)
             redraw()
         elseif n == 3 then
             -- Cycle through modes in forward order: speed -> seek -> lpf -> jitter -> size -> density -> spread -> pitch -> speed
-            local modes = {"speed", "seek", "lpf", "jitter", "size", "density", "spread", "pitch"}
+            local modes = {"speed", "seek", "pan", "lpf", "jitter", "size", "density", "spread", "pitch"}
             local current_index = 1
             for i, mode in ipairs(modes) do
                 if mode == current_mode then
@@ -609,15 +626,17 @@ function redraw()
     draw_param_row(40, "spread:   ", "1spread", "2spread", false, false, current_mode == "spread")
     draw_param_row(50, "pitch:    ", "1pitch", "2pitch", false, true, current_mode == "pitch")
 
-    -- Display "seek:", "speed:", or "lpf:" based on the current mode
+    -- Display "seek:", "speed:", "pan:", or "filter:" based on the current mode
     screen.move(5, 60)
-    if current_mode == "seek" or current_mode == "lpf" or current_mode == "speed" then
+    if current_mode == "seek" or current_mode == "lpf" or current_mode == "speed" or current_mode == "pan" then
         screen.level(15) -- Bright text for highlighted row
     else
         screen.level(5) -- Dim text for non-highlighted rows
     end
     if current_mode == "seek" then
         screen.text("seek:     ")
+    elseif current_mode == "pan" then
+        screen.text("pan:      ")
     elseif current_mode == "lpf" then
         screen.text("filter:      ")
     else
@@ -626,13 +645,15 @@ function redraw()
 
     -- Display track 1 value (always bright if it's the active mode)
     screen.move(ALI_X, 60)
-    if current_mode == "seek" or current_mode == "lpf" or current_mode == "speed" then
+    if current_mode == "seek" or current_mode == "lpf" or current_mode == "speed" or current_mode == "pan" then
         screen.level(15) -- Bright text for highlighted row
     else
         screen.level(5) -- Dim text for non-highlighted rows
     end
     if current_mode == "seek" then
         screen.text(format_seek(params:get("1seek"))) -- Display seek for track 1
+    elseif current_mode == "pan" then
+        screen.text(string.format("%.0f%%", params:get("1pan"))) -- Display pan for track 1
     elseif current_mode == "lpf" then
         screen.text(string.format("%.0f", params:get("1cutoff"))) -- Display lpf for track 1 
     else
@@ -642,13 +663,15 @@ function redraw()
 
     -- Display track 2 value (always bright if it's the active mode)
     screen.move(ALI2_X, 60)
-    if current_mode == "seek" or current_mode == "lpf" or current_mode == "speed" then
+    if current_mode == "seek" or current_mode == "lpf" or current_mode == "speed" or current_mode == "pan" then
         screen.level(15) -- Bright text for highlighted row
     else
         screen.level(5) -- Dim text for non-highlighted rows
     end
     if current_mode == "seek" then
         screen.text(format_seek(params:get("2seek"))) -- Display seek for track 2
+    elseif current_mode == "pan" then
+        screen.text(string.format("%.0f%%", params:get("2pan"))) -- Display pan for track 2
     elseif current_mode == "lpf" then
         screen.text(string.format("%.0f", params:get("2cutoff"))) -- Display lpf for track 2
     else
@@ -674,10 +697,10 @@ function redraw()
     local lfo_assigned_to_pan2 = false
 
     for i = 1, 8 do
-        if params:get(i .. "lfo_target") == 4 then -- 4 corresponds to "1pan"
+        if params:get(i .. "lfo_target") == 2 then -- 2 corresponds to "1pan"
             lfo_assigned_to_pan1 = true
         end
-        if params:get(i .. "lfo_target") == 5 then -- 5 corresponds to "2pan"
+        if params:get(i .. "lfo_target") == 3 then -- 3 corresponds to "2pan"
             lfo_assigned_to_pan2 = true
         end
     end

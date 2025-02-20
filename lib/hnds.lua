@@ -30,6 +30,7 @@ for i = 1, number_of_outputs do
   }
 end
 
+
 -- redefine in user script ---------
 for i = 1, number_of_outputs do
   lfo[i].lfo_targets = {"none"}
