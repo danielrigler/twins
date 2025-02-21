@@ -160,6 +160,31 @@ local function setup_params()
     end 
     
     params:add_separator("Settings")
+    
+params:add_group("Tape", 6)
+-- Tape parameters
+params:add_control("tape_bias", "Tape Bias", controlspec.new(0, 1, 'lin', 0, 0.5))
+params:set_action("tape_bias", function(value) engine.tape_bias(value) end)
+
+params:add_control("tape_saturation", "Tape Saturation", controlspec.new(0, 1, 'lin', 0, 0.5))
+params:set_action("tape_saturation", function(value) engine.tape_saturation(value) end)
+
+params:add_control("tape_drive", "Tape Drive", controlspec.new(0, 1, 'lin', 0, 0.5))
+params:set_action("tape_drive", function(value) engine.tape_drive(value) end)
+
+-- Chew parameters
+params:add_control("chew_depth", "Chew Depth", controlspec.new(0, 1, 'lin', 0, 0.5))
+params:set_action("chew_depth", function(value) engine.chew_depth(value) end)
+
+params:add_control("chew_freq", "Chew Frequency", controlspec.new(0.1, 10, 'exp', 0, 1))
+params:set_action("chew_freq", function(value) engine.chew_freq(value) end)
+
+params:add_control("chew_variance", "Chew Variance", controlspec.new(0, 1, 'lin', 0, 0.5))
+params:set_action("chew_variance", function(value) engine.chew_variance(value) end)
+
+
+   
+   
     params:add_group("Delay", 3)
     halfsecond.init()
     
@@ -300,15 +325,22 @@ local function randomize(n)
 
     randomize_metro[n].time = 1/30
     randomize_metro[n].event = function(count)
-    local factor = count / steps
-      
+        local factor = count / steps
+        local all_done = true  -- Flag to track if all parameters have reached their targets
+
         for param, target in pairs(targets) do
             local current_value = params:get(param)
             local new_value = interpolate(current_value, target, factor)
-            if math.abs(new_value - target) < tolerance then
-            randomize_metro[n]:stop()
-            end
+            
             params:set(param, new_value)
+
+            if math.abs(new_value - target) >= tolerance then
+                all_done = false  -- At least one parameter is not done
+            end
+        end
+
+        if all_done then
+            randomize_metro[n]:stop()  -- Stop only when all parameters are done
         end
     end
     randomize_metro[n]:start()

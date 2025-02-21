@@ -62,103 +62,115 @@ Engine_twins : CroneEngine {
             );
         });
 
-        // Define the SynthDef
-        SynthDef(\synth, {
-            arg out, phase_out, level_out, buf_l, buf_r,
-            gate=0, pos=0, speed=1, jitter=0,
-            size=0.1, density=20, density_mod_amt=0, pitch_offset=1, pan=0, spread=0, gain=1, envscale=1,
-            freeze=0, t_reset_pos=0,
-            granular_gain=1, // Add granular_gain parameter
-            pitch_mode=0, // Add pitch_mode parameter (0 = grains match speed, 1 = independent pitch)
-            subharmonics=0, // New parameter for subharmonics
-            overtones=0, // New parameter for overtones
-            cutoff=20000, // Add cutoff frequency for LPF
-            q=1.0; // Add resonance/Q for LPF
+// Define the SynthDef
+SynthDef(\synth, {
+    arg out, phase_out, level_out, buf_l, buf_r,
+    gate=0, pos=0, speed=1, jitter=0,
+    size=0.1, density=20, density_mod_amt=0, pitch_offset=0, pan=0, spread=0, gain=1, envscale=1,
+    freeze=0, t_reset_pos=0,
+    granular_gain=1,
+    pitch_mode=0,
+    subharmonics=0, 
+    overtones=0, 
+    cutoff=20000, 
+    q=1.0,
+    tape_bias=0.5,
+    tape_saturation=0.5,
+    tape_drive=0.5,
+    chew_depth=0.5,
+    chew_freq=0.5,
+    chew_variance=0.5;
+    
+    
 
-            var grain_trig;
-            var jitter_sig;
-            var buf_dur;
-            var pan_sig;
-            var buf_pos;
-            var pos_sig;
-            var sig_l;
-            var sig_r;
-            var sig_mix;
-            var density_mod;
-            var dry_sig; // Dry signal
-            var granular_sig; // Granular signal
-            var env;
-            var level;
-            var grain_pitch; // Grain pitch calculation
-            var main_vol = 1.0 / (1.0 + subharmonics + overtones); // Volume for main grains
-            var subharmonic_vol = subharmonics / (1.0 + subharmonics + overtones); // Volume for subharmonics
-            var overtone_vol = overtones / (1.0 + subharmonics + overtones); // Volume for overtones
-            var subharmonic_size = size * 2; // Double the grain size for subharmonics
-     
-          	
-            // Density modulation
-            var trig_rnd = LFNoise1.kr(density);
-            density_mod = density * (2**(trig_rnd * density_mod_amt));
-            grain_trig = Impulse.kr(density_mod);
+    var grain_trig;
+    var jitter_sig;
+    var buf_dur;
+    var pan_sig;
+    var buf_pos;
+    var pos_sig;
+    var sig_l;
+    var sig_r;
+    var sig_mix;
+    var density_mod;
+    var dry_sig; // Dry signal
+    var granular_sig; // Granular signal
+    var env;
+    var level;
+    var grain_pitch; // Grain pitch calculation
+    var main_vol = 1.0 / (1.0 + subharmonics + overtones); // Volume for main grains
+    var subharmonic_vol = subharmonics / (1.0 + subharmonics + overtones); // Volume for subharmonics
+    var overtone_vol = overtones / (1.0 + subharmonics + overtones); // Volume for overtones
+    var subharmonic_size = size * 2; // Double the grain size for subharmonics
 
-            buf_dur = BufDur.kr(buf_l);
+    // Density modulation
+    var trig_rnd = LFNoise1.kr(density);
+    density_mod = density * (2**(trig_rnd * density_mod_amt));
+    grain_trig = Impulse.kr(density_mod);
 
-            pan_sig = TRand.kr(trig: grain_trig,
-                lo: spread.neg,
-                hi: spread);
+    buf_dur = BufDur.kr(buf_l);
 
-            jitter_sig = TRand.kr(trig: grain_trig,
-                lo: buf_dur.reciprocal.neg * jitter,
-                hi: buf_dur.reciprocal * jitter);
+    pan_sig = TRand.kr(trig: grain_trig,
+        lo: spread.neg,
+        hi: spread);
 
-            buf_pos = Phasor.kr(trig: t_reset_pos,
-                rate: buf_dur.reciprocal / ControlRate.ir * speed,
-                resetPos: pos);
+    jitter_sig = TRand.kr(trig: grain_trig,
+        lo: buf_dur.reciprocal.neg * jitter,
+        hi: buf_dur.reciprocal * jitter);
 
-            pos_sig = Wrap.kr(Select.kr(freeze, [buf_pos, pos]));
+    buf_pos = Phasor.kr(trig: t_reset_pos,
+        rate: buf_dur.reciprocal / ControlRate.ir * speed,
+        resetPos: pos);
 
-            // Dry signal (unchanged)
-            dry_sig = [PlayBuf.ar(1, buf_l, speed, loop: 1), PlayBuf.ar(1, buf_r, speed, loop: 1)];
+    pos_sig = Wrap.kr(Select.kr(freeze, [buf_pos, pos]));
 
-            // Apply pan to the dry signal
-            dry_sig = Balance2.ar(dry_sig[0], dry_sig[1], pan);
+    // Dry signal (unchanged)
+    dry_sig = [PlayBuf.ar(1, buf_l, speed, loop: 1), PlayBuf.ar(1, buf_r, speed, loop: 1)];
 
-            // Calculate grain pitch based on pitch_mode
-            grain_pitch = Select.kr(pitch_mode, [
-                speed * pitch_offset, // Mode 0: grains match dry signal speed, with pitch offset
-                pitch_offset          // Mode 1: grains use independent pitch
-            ]);
+    // Apply pan to the dry signal
+    dry_sig = Balance2.ar(dry_sig[0], dry_sig[1], pan);
 
-            // Granular signal (main grains)
-            sig_l = GrainBuf.ar(1, grain_trig, size, buf_l, grain_pitch, pos_sig + jitter_sig, 2, mul: main_vol);
-            sig_r = GrainBuf.ar(1, grain_trig, size, buf_r, grain_pitch, pos_sig + jitter_sig, 2, mul: main_vol);
+    // Calculate grain pitch based on pitch_mode
+    grain_pitch = Select.kr(pitch_mode, [
+        speed * pitch_offset, // Mode 0: grains match dry signal speed, with pitch offset
+        pitch_offset          // Mode 1: grains use independent pitch
+    ]);
 
-            // Subharmonics (pitched down)
-            sig_l = sig_l + GrainBuf.ar(1, grain_trig, subharmonic_size, buf_l, grain_pitch / 2, pos_sig + jitter_sig, 2, mul: subharmonic_vol);
-            sig_r = sig_r + GrainBuf.ar(1, grain_trig, subharmonic_size, buf_r, grain_pitch / 2, pos_sig + jitter_sig, 2, mul: subharmonic_vol);
+    // Granular signal (main grains)
+    sig_l = GrainBuf.ar(1, grain_trig, size, buf_l, grain_pitch, pos_sig + jitter_sig, 2, mul: main_vol);
+    sig_r = GrainBuf.ar(1, grain_trig, size, buf_r, grain_pitch, pos_sig + jitter_sig, 2, mul: main_vol);
 
-            // Overtones (pitched up)
-            sig_l = sig_l + GrainBuf.ar(1, grain_trig, size, buf_l, grain_pitch * 2, pos_sig + jitter_sig, 2, mul: overtone_vol * 0.7);
-            sig_r = sig_r + GrainBuf.ar(1, grain_trig, size, buf_r, grain_pitch * 2, pos_sig + jitter_sig, 2, mul: overtone_vol * 0.7);
-            sig_l = sig_l + GrainBuf.ar(1, grain_trig, size, buf_l, grain_pitch * 4, pos_sig + jitter_sig, 2, mul: overtone_vol * 0.3);
-            sig_r = sig_r + GrainBuf.ar(1, grain_trig, size, buf_r, grain_pitch * 4, pos_sig + jitter_sig, 2, mul: overtone_vol * 0.3);
+    // Subharmonics (pitched down)
+    sig_l = sig_l + GrainBuf.ar(1, grain_trig, subharmonic_size, buf_l, grain_pitch / 2, pos_sig + jitter_sig, 2, mul: subharmonic_vol);
+    sig_r = sig_r + GrainBuf.ar(1, grain_trig, subharmonic_size, buf_r, grain_pitch / 2, pos_sig + jitter_sig, 2, mul: subharmonic_vol);
 
-            granular_sig = Balance2.ar(sig_l, sig_r, pan + pan_sig);
+    // Overtones (pitched up)
+    sig_l = sig_l + GrainBuf.ar(1, grain_trig, size, buf_l, grain_pitch * 2, pos_sig + jitter_sig, 2, mul: overtone_vol * 0.7);
+    sig_r = sig_r + GrainBuf.ar(1, grain_trig, size, buf_r, grain_pitch * 2, pos_sig + jitter_sig, 2, mul: overtone_vol * 0.7);
+    sig_l = sig_l + GrainBuf.ar(1, grain_trig, size, buf_l, grain_pitch * 4, pos_sig + jitter_sig, 2, mul: overtone_vol * 0.3);
+    sig_r = sig_r + GrainBuf.ar(1, grain_trig, size, buf_r, grain_pitch * 4, pos_sig + jitter_sig, 2, mul: overtone_vol * 0.3);
 
-			env = EnvGen.kr(Env.asr(1, 1, 1), gate: gate, timeScale: envscale);
+    granular_sig = Balance2.ar(sig_l, sig_r, pan + pan_sig);
 
-			level = env;
+    // Mix dry and granular signals
+    granular_gain = granular_gain.clip(0, 1); // Ensure granular_gain is within bounds
+   
+    sig_mix = (dry_sig * (1 - granular_gain)) + (granular_sig * granular_gain);
+    sig_mix = BLowPass4.ar(sig_mix, cutoff, q);
+    sig_mix = AnalogTape.ar(sig_mix, ~tape_bias.kr, ~tape_saturation.kr, ~tape_drive.kr, 0, 0);
+    sig_mix = AnalogChew.ar(sig_mix, ~chew_depth.kr, ~chew_freq.kr, ~chew_variance.kr);
 
-            // Mix dry and granular signals
-            granular_gain = granular_gain.clip(0, 1); // Ensure granular_gain is within bounds
-            sig_mix = (dry_sig * (1 - granular_gain)) + (granular_sig * granular_gain);
-            sig_mix = BLowPass4.ar(sig_mix, cutoff, q);
 
-            // Output the mixed signal
-            Out.ar(out, sig_mix * level * gain);
-            Out.kr(phase_out, pos_sig);
-            Out.kr(level_out, level);
-        }).add;
+
+    
+    env = EnvGen.kr(Env.asr(1, 1, 1), gate: gate, timeScale: envscale);
+    level = env;
+
+    // Output the mixed signal
+    Out.ar(out, sig_mix * level * gain);
+    Out.kr(phase_out, pos_sig);
+    Out.kr(level_out, level);
+}).add;
 
         // Define the Greyhole effect SynthDef with mix control
         SynthDef(\greyhole, {
@@ -183,7 +195,7 @@ Engine_twins : CroneEngine {
         // Mix bus for all synth outputs
         mixBus = Bus.audio(context.server, 2);
 
-        // Create the Greyhole effect (placed before Fverb)
+        // Create the Greyhole effect
         greyholeEffect = Synth.new(\greyhole, [
             \in, mixBus.index,
             \out, context.out_b.index,
@@ -245,6 +257,18 @@ Engine_twins : CroneEngine {
             greyholeEffect.set(\mix, msg[1]);
         });
 
+
+// Tape parameters
+this.addParam("tape_bias", "Tape Bias", \lin, 0, 1, 0.5);
+this.addParam("tape_saturation", "Tape Saturation", \lin, 0, 1, 0.5);
+this.addParam("tape_drive", "Tape Drive", \lin, 0, 1, 0.5);
+
+// Chew parameters
+this.addParam("chew_depth", "Chew Depth", \lin, 0, 1, 0.5);
+this.addParam("chew_freq", "Chew Frequency", \exp, 0.1, 10, 1);
+this.addParam("chew_variance", "Chew Variance", \lin, 0, 1, 0.5);
+
+
         
         this.addCommand("cutoff", "if", { arg msg;
             var voice = msg[1] - 1;
@@ -266,7 +290,8 @@ Engine_twins : CroneEngine {
             var voice = msg[1] - 1;
             voices[voice].set(\density_mod_amt, msg[2]);
         });
-
+        
+        
         this.addCommand("granular_gain_l", "if", { arg msg;
             var voice = msg[1] - 1;
             var gain = msg[2];
@@ -290,6 +315,7 @@ Engine_twins : CroneEngine {
             voices[voice].set(\overtones, msg[2]);
         });
 
+        
         // Add other existing commands (e.g., read, seek, gate, etc.)
         this.addCommand("read", "is", { arg msg;
             this.readBuf(msg[1] - 1, msg[2]);
