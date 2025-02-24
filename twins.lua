@@ -7,7 +7,7 @@
 delay = include("lib/delay")
 local lfo = include("lib/lfo")
 installer_ = include("lib/scinstaller/scinstaller")
-installer = installer_:new{requirements = {"Fverb2", "Fverb", "AnalogTape", "AnalogChew", "AnalogLoss", "AnalogDegrade"}, 
+installer = installer_:new{requirements = {"Fverb2", "Fverb", "AnalogTape", "AnalogChew", "AnalogLoss", "AnalogDegrade"},
   zip = "https://github.com/schollz/portedplugins/releases/download/v0.4.6/PortedPlugins-RaspberryPi.zip"}
 engine.name = installer:ready() and 'twins' or nil
 
@@ -173,7 +173,7 @@ local function setup_params()
     params:set_action("2q",function(value) engine.q(2,value) end)
 
     params:add_group("LFOs", 57)
-    params:add_binary("ClearLFOs", "Clear LFOs", "trigger", 0)
+    params:add_binary("ClearLFOs", "Clear all LFOs", "trigger", 0)
     params:set_action("ClearLFOs", function() clearLFOs() end)
     for i = 1, 8 do
       lfo[i].lfo_targets = lfo_targets
