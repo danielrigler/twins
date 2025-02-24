@@ -291,8 +291,7 @@ function enc(n, d) if not installer:ready() then do return end end
         [2] = function()
             if key1_pressed then adjust_volume("1", 0.75*d)
             else
-                if current_mode == "speed" then
-                    params:delta("1speed", d)
+                if current_mode == "speed" then params:delta("1speed", d)
                 elseif current_mode == "seek" then
                     local current_seek = params:get("1seek")
                     local new_seek = wrap_value(current_seek + d, 0, 100)
