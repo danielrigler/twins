@@ -85,7 +85,7 @@ function lfo.process()
       elseif target == 18 then params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, -12.00, 12.00)) --1pitch
       elseif target == 19 then params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, -12.00, 12.00)) --2pitch
       elseif target == 20 then params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 20, 20000)) --1cutoff
-      elseif target == 21 then params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 200, 20000)) --2cutoff
+      elseif target == 21 then params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 20, 20000)) --2cutoff
       elseif target == 22 then params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 2.0, 0.00, 6.00)) --GH time
       elseif target == 23 then params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 2.0, 0.50, 5.00)) --GH size
       elseif target == 24 then params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 2.0, 0.00, 1.00)) --GH damp
