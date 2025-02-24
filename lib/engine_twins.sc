@@ -48,19 +48,13 @@ Engine_twins : CroneEngine {
 
   alloc {
         // Allocate buffers for left and right channels
-        buffersL = Array.fill(nvoices, { arg i;
-            Buffer.alloc(
-                context.server,
-                context.server.sampleRate * 1,
-            );
-        });
+      buffersL = Array.fill(nvoices, { arg i;
+        Buffer.alloc(context.server, context.server.sampleRate * 1);
+    });
 
-        buffersR = Array.fill(nvoices, { arg i;
-            Buffer.alloc(
-                context.server,
-                context.server.sampleRate * 1,
-            );
-        });
+    buffersR = Array.fill(nvoices, { arg i;
+        Buffer.alloc(context.server, context.server.sampleRate * 1);
+    });
 
         SynthDef(\synth, {
             arg out, phase_out, level_out, buf_l, buf_r,
@@ -69,7 +63,8 @@ Engine_twins : CroneEngine {
             freeze=0, t_reset_pos=0,
             granular_gain=1,
             pitch_mode=0,
-            subharmonics=0, 
+            subharmonics_1=0, 
+            subharmonics_2=0,
             overtones_1=0, 
             overtones_2=0, 
             cutoff=20000, 
@@ -90,10 +85,11 @@ Engine_twins : CroneEngine {
             var env;
             var level;
             var grain_pitch;
-            var main_vol = 1.0 / (1.0 + subharmonics + overtones_1 + overtones_2);
-            var subharmonic_vol = subharmonics / (1.0 + subharmonics + overtones_1 + overtones_2) * 3;
-            var overtone_1_vol = overtones_1 / (1.0 + subharmonics + overtones_1 + overtones_2) * 2;
-            var overtone_2_vol = overtones_2 / (1.0 + subharmonics + overtones_1 + overtones_2) * 2;
+            var main_vol = 1.0 / (1.0 + subharmonics_1 + subharmonics_2 + overtones_1 + overtones_2);
+            var subharmonic_1_vol = subharmonics_1 / (1.0 + subharmonics_1 + subharmonics_2 + overtones_1 + overtones_2) * 2.5;
+            var subharmonic_2_vol = subharmonics_2 / (1.0 + subharmonics_1 + subharmonics_2 + overtones_1 + overtones_2) * 2.5;
+            var overtone_1_vol = overtones_1 / (1.0 + subharmonics_1 + subharmonics_2 + overtones_1 + overtones_2) * 2;
+            var overtone_2_vol = overtones_2 / (1.0 + subharmonics_1 + subharmonics_2 + overtones_1 + overtones_2) * 2;
             
          
             // Density modulation
@@ -134,14 +130,16 @@ Engine_twins : CroneEngine {
             sig_r = GrainBuf.ar(1, grain_trig, size, buf_r, grain_pitch, pos_sig + jitter_sig, 2, mul: main_vol);
 
             // Subharmonics (pitched down)
-            sig_l = sig_l + GrainBuf.ar(1, grain_trig, size * 2, buf_l, grain_pitch / 2, pos_sig + jitter_sig, 2, mul: subharmonic_vol);
-            sig_r = sig_r + GrainBuf.ar(1, grain_trig, size * 2, buf_r, grain_pitch / 2, pos_sig + jitter_sig, 2, mul: subharmonic_vol);
+            sig_l = sig_l + GrainBuf.ar(1, grain_trig, size * 2, buf_l, grain_pitch / 2, pos_sig + jitter_sig, 2, mul: subharmonic_1_vol);
+            sig_r = sig_r + GrainBuf.ar(1, grain_trig, size * 2, buf_r, grain_pitch / 2, pos_sig + jitter_sig, 2, mul: subharmonic_1_vol);
+            sig_l = sig_l + GrainBuf.ar(1, grain_trig, size * 2, buf_l, grain_pitch / 4, pos_sig + jitter_sig, 2, mul: subharmonic_2_vol);
+            sig_r = sig_r + GrainBuf.ar(1, grain_trig, size * 2, buf_r, grain_pitch / 4, pos_sig + jitter_sig, 2, mul: subharmonic_2_vol);
 
             // Overtones (pitched up)
             sig_l = sig_l + GrainBuf.ar(1, grain_trig, size, buf_l, grain_pitch * 2, pos_sig + jitter_sig, 2, mul: overtone_1_vol * 0.7);
             sig_r = sig_r + GrainBuf.ar(1, grain_trig, size, buf_r, grain_pitch * 2, pos_sig + jitter_sig, 2, mul: overtone_1_vol * 0.7);
-            sig_l = sig_l + GrainBuf.ar(1, grain_trig, size * 0.75, buf_l, grain_pitch * 4, pos_sig + jitter_sig, 2, mul: overtone_2_vol * 0.5);
-            sig_r = sig_r + GrainBuf.ar(1, grain_trig, size * 0.75, buf_r, grain_pitch * 4, pos_sig + jitter_sig, 2, mul: overtone_2_vol * 0.5);
+            sig_l = sig_l + GrainBuf.ar(1, grain_trig, size, buf_l, grain_pitch * 4, pos_sig + jitter_sig, 2, mul: overtone_2_vol * 0.5);
+            sig_r = sig_r + GrainBuf.ar(1, grain_trig, size, buf_r, grain_pitch * 4, pos_sig + jitter_sig, 2, mul: overtone_2_vol * 0.5);
             
 
             granular_sig = Balance2.ar(sig_l, sig_r, pan + pan_sig);
@@ -252,7 +250,8 @@ Engine_twins : CroneEngine {
                 \buf_r, buffersR[i],
                 \granular_gain, 1, // Initialize granular_gain
                 \density_mod_amt, 0, // Initialize density_mod_amt
-                \subharmonics, 0, // Initialize subharmonics
+                \subharmonics_1, 0, // Initialize subharmonics
+                \subharmonics_2, 0, // Initialize subharmonics
                 \overtones_1, 0, // Initialize overtones_1
                 \overtones_2, 0, // Initialize overtones_2
             ], target: pg);
@@ -286,7 +285,7 @@ Engine_twins : CroneEngine {
         });
 
 
- // Add commands for Fverb (existing commands)
+ // Add commands for Fverb
         this.addCommand("reverb_mix", "f", { arg msg; fverbEffect.set(\mix, msg[1]); });
         this.addCommand("reverb_predelay", "f", { arg msg; fverbEffect.set(\predelay, msg[1]); });
         this.addCommand("reverb_input_amount", "f", { arg msg; fverbEffect.set(\input_amount, msg[1]); });
@@ -311,11 +310,11 @@ Engine_twins : CroneEngine {
             voices[voice].set(\q, msg[2]);
         });
 
-this.addCommand("granular_gain", "if", { arg msg;
-    var voice = msg[1] - 1; // Voice index (0 for Channel 1, 1 for Channel 2)
-    var gain = msg[2];      // Granular gain value
-    voices[voice].set(\granular_gain, gain);
-});
+        this.addCommand("granular_gain", "if", { arg msg;
+            var voice = msg[1] - 1;
+            var gain = msg[2];
+            voices[voice].set(\granular_gain, gain);
+        });
 
         this.addCommand("density_mod_amt", "if", { arg msg;
             var voice = msg[1] - 1;
@@ -323,10 +322,14 @@ this.addCommand("granular_gain", "if", { arg msg;
         });
         
       
-        // Add commands for subharmonics and overtones
-        this.addCommand("subharmonics", "if", { arg msg;
+        this.addCommand("subharmonics_1", "if", { arg msg;
             var voice = msg[1] - 1;
-            voices[voice].set(\subharmonics, msg[2]);
+            voices[voice].set(\subharmonics_1, msg[2]);
+        });
+        
+        this.addCommand("subharmonics_2", "if", { arg msg;
+            var voice = msg[1] - 1;
+            voices[voice].set(\subharmonics_2, msg[2]);
         });
 
         this.addCommand("overtones_1", "if", { arg msg;

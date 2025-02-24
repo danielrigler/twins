@@ -7,8 +7,7 @@
 delay = include("lib/delay")
 local lfo = include("lib/lfo")
 installer_ = include("lib/scinstaller/scinstaller")
-installer = installer_:new{requirements = {"Fverb2", "Fverb", "AnalogTape", "AnalogChew", "AnalogLoss", "AnalogDegrade"},
-  zip = "https://github.com/schollz/portedplugins/releases/download/v0.4.6/PortedPlugins-RaspberryPi.zip"}
+installer = installer_:new{requirements = {"Fverb2", "Fverb", "AnalogTape", "AnalogChew", "AnalogLoss", "AnalogDegrade"}, zip = "https://github.com/schollz/portedplugins/releases/download/v0.4.6/PortedPlugins-RaspberryPi.zip"}
 engine.name = installer:ready() and 'twins' or nil
 
 local ui_metro
@@ -51,56 +50,8 @@ local function setup_ui_metro()
     ui_metro:start()
 end
 
-local function clearLFOs()
-    for i = 1, 8 do
-        if params:get(i .. "lfo") == 2 then
-            params:set(i .. "lfo", 1) -- Turn off the LFO
-        end
-        params:set(i .. "lfo_target", 1) -- Reset LFO target to "none"
-    end
-end
-
-local lfo_targets = {"none","1pan","2pan","1speed","2speed","1seek","2seek","1jitter","2jitter","1spread","2spread","1size","2size","1density","2density","1volume","2volume","1pitch","2pitch","1cutoff","2cutoff","time","size","damp","diff","feedback","mod_depth","mod_freq"}
-
-function lfo.process()
-  for i = 1, 8 do
-    local target = params:get(i .. "lfo_target")
-    if params:get(i .. "lfo") == 2 then
-      if target == 2 then params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, -100.00, 100.00)) --1pan
-      elseif target == 3 then params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, -100.00, 100.00)) --2pan
-      elseif target == 4 then params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, -2.00, 2.00)) --1speed
-      elseif target == 5 then params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, -2.00, 2.00)) --2speed
-      elseif target == 6 then params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 0, 100)) --1seek
-      elseif target == 7 then params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 0, 100)) --2seek
-      elseif target == 8 then params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 0, 999)) --1jitter
-      elseif target == 9 then params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 0, 999)) --2jitter
-      elseif target == 10 then params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 0, 100)) --1spread
-      elseif target == 11 then params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 0, 100)) --2spread
-      elseif target == 12 then params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 1, 500)) --1size
-      elseif target == 13 then params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 1, 500)) --2size
-      elseif target == 14 then params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 0, 40)) --1density
-      elseif target == 15 then params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 0, 40)) --2density
-      elseif target == 16 then params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, -100.00, 100.00)) --1volume
-      elseif target == 17 then params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, -100.00, 100.00)) --2volume
-      elseif target == 18 then params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, -12.00, 12.00)) --1pitch
-      elseif target == 19 then params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, -12.00, 12.00)) --2pitch
-      elseif target == 20 then params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 20, 20000)) --1cutoff
-      elseif target == 21 then params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 20, 20000)) --2cutoff
-      elseif target == 22 then params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 2.0, 0.00, 6.00)) --GH time
-      elseif target == 23 then params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 2.0, 0.50, 5.00)) --GH size
-      elseif target == 24 then params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 2.0, 0.00, 1.00)) --GH damp
-      elseif target == 25 then params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 2.0, 0.00, 1.00)) --GH diff
-      elseif target == 26 then params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 2.0, 0.00, 1.00)) --GH fdbck
-      elseif target == 27 then params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 2.0, 0.00, 1.00)) --GH mod dpth
-      elseif target == 28 then params:set(lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 2.0, 0.00, 10.00)) --GH mod frq
-      end
-    end
-  end
-end
-
 local function setup_params()
-    
-     params:add_separator("Samples")
+    params:add_separator("Samples")
     for i = 1, 2 do
         params:add_file(i .. "sample", "Sample " ..i)
         params:set_action(i .. "sample", function(file)
@@ -174,22 +125,23 @@ local function setup_params()
 
     params:add_group("LFOs", 57)
     params:add_binary("ClearLFOs", "Clear all LFOs", "trigger", 0)
-    params:set_action("ClearLFOs", function() clearLFOs() end)
-    for i = 1, 8 do
-      lfo[i].lfo_targets = lfo_targets
-    end
+    params:set_action("ClearLFOs", function() lfo.clearLFOs() end)
     lfo.init()
 
     params:add_taper("1granular_gain", "Granular Mix 1", 0, 100, 100, 0, "%")
     params:set_action("1granular_gain", function(value) engine.granular_gain(1, value / 100) end)
+    params:add_option("1pitch_mode", "Pitch Mode 1", {"match speed", "independent"}, 2)
+    params:set_action("1pitch_mode", function(value) engine.pitch_mode(1, value - 1) end)
     params:add_taper("2granular_gain", "Granular Mix 2", 0, 100, 100, 0, "%")
     params:set_action("2granular_gain", function(value) engine.granular_gain(2, value / 100) end)
+    params:add_option("2pitch_mode", "Pitch Mode 2", {"match speed", "independent"}, 2)
+    params:set_action("2pitch_mode", function(value) engine.pitch_mode(2, value - 1) end)
     params:add_taper("density_mod_amt", "Density Mod", 0, 100, 0, 0, "%")
     params:set_action("density_mod_amt", function(value) engine.density_mod_amt(1, value / 100) engine.density_mod_amt(2, value / 100) end)
-    params:add_option("pitch_mode", "Pitch Mode", {"match speed", "independent"}, 2)
-    params:set_action("pitch_mode", function(value) engine.pitch_mode(1, value - 1) engine.pitch_mode(2, value - 1) end)
-    params:add_control("subharmonics","Subharmonics",controlspec.new(0.00,1.00,"lin",0.01,0))
-    params:set_action("subharmonics",function(value) engine.subharmonics(1,value) engine.subharmonics(2,value) end)
+    params:add_control("subharmonics_2","Subharmonics -2oct",controlspec.new(0.00,1.00,"lin",0.01,0))
+    params:set_action("subharmonics_2",function(value) engine.subharmonics_2(1,value) engine.subharmonics_2(2,value) end)
+    params:add_control("subharmonics_1","Subharmonics -1oct",controlspec.new(0.00,1.00,"lin",0.01,0))
+    params:set_action("subharmonics_1",function(value) engine.subharmonics_1(1,value) engine.subharmonics_1(2,value) end)
     params:add_control("overtones_1","Overtones +1oct",controlspec.new(0.00,1.00,"lin",0.01,0))
     params:set_action("overtones_1",function(value) engine.overtones_1(1,value) engine.overtones_1(2,value) end)
     params:add_control("overtones_2","Overtones +2oct",controlspec.new(0.00,1.00,"lin",0.01,0))
@@ -251,9 +203,7 @@ local function interpolate(start_val, end_val, factor)
 end
 
 local function randomize(n)
-    if not randomize_metro[n] then
-        randomize_metro[n] = metro.init()
-    end
+    if not randomize_metro[n] then randomize_metro[n] = metro.init() end
 
     local targets = {}
     local locks = {
@@ -261,8 +211,7 @@ local function randomize(n)
         size = params:get(n .. "lock_size") == 1,
         density = params:get(n .. "lock_density") == 1,
         spread = params:get(n .. "lock_spread") == 1,
-        pitch = params:get(n .. "lock_pitch") == 1
-    }
+        pitch = params:get(n .. "lock_pitch") == 1}
 
     -- Randomize non-pitch parameters
     if locks.jitter then targets[n .. "jitter"] = random_float(params:get("min_jitter"), params:get("max_jitter")) end
@@ -270,37 +219,31 @@ local function randomize(n)
     if locks.density then targets[n .. "density"] = random_float(params:get("min_density"), params:get("max_density")) end
     if locks.spread then targets[n .. "spread"] = random_float(params:get("min_spread"), params:get("max_spread")) end
 
-    -- Randomize pitch and ensure it is within ±7 semitones of the current value
+    -- Randomize pitch and ensure it is within ±5 semitones of the current value
     if locks.pitch then
         local current_pitch = params:get(n .. "pitch") -- Get the current pitch value
-        local min_pitch = math.max(params:get("min_pitch"), current_pitch - 5) -- Clamp min to current_pitch - 7
-        local max_pitch = math.min(params:get("max_pitch"), current_pitch + 5) -- Clamp max to current_pitch + 7
-        local random_pitch = random_float(min_pitch, max_pitch) -- Generate a random pitch within the clamped range
-        local rounded_pitch = math.floor(random_pitch + 0.5) -- Round to nearest integer
-        params:set(n .. "pitch", rounded_pitch) -- Set pitch directly to the new value
+        local min_pitch = math.max(params:get("min_pitch"), current_pitch - 5)
+        local max_pitch = math.min(params:get("max_pitch"), current_pitch + 5)
+        local random_pitch = math.random(min_pitch, max_pitch)
+        params:set(n .. "pitch", random_pitch)
     end
 
-    local tolerance = 0.01
+    local delay_mix_chance = math.random()  -- Randomize delay mix parameter
+    if delay_mix_chance <= 0.65 then params:set("delay_h", 0) else params:set("delay_h", math.random(15, 65)) end
 
     randomize_metro[n].time = 1/30
     randomize_metro[n].event = function(count)
+    local tolerance = 0.01
         local factor = count / steps
         local all_done = true  -- Flag to track if all parameters have reached their targets
 
         for param, target in pairs(targets) do
             local current_value = params:get(param)
             local new_value = interpolate(current_value, target, factor)
-            
             params:set(param, new_value)
-
-            if math.abs(new_value - target) >= tolerance then
-                all_done = false  -- At least one parameter is not done
-            end
+              if math.abs(new_value - target) >= tolerance then all_done = false end
         end
-
-        if all_done then
-            randomize_metro[n]:stop()  -- Stop only when all parameters are done
-        end
+        if all_done then randomize_metro[n]:stop() end
     end
     randomize_metro[n]:start()
 end
@@ -311,19 +254,7 @@ local function setup_engine()
     audio.level_adc(0)
 end
 
-function init()
-  
-      if not installer:ready() then
-        clock.run(function()
-            while true do
-                redraw()
-                clock.sleep(1 / 10)
-            end
-        end)
-        do
-            return
-        end
-    end
+function init() if not installer:ready() then clock.run(function() while true do redraw() clock.sleep(1 / 10) end end) do return end end
     setup_ui_metro()
     setup_params()
     setup_engine()
@@ -343,13 +274,7 @@ local function wrap_value(value, min, max)
     end
 end
 
-function enc(n, d)
-  
-      if not installer:ready() then
-        do
-          return
-        end
-    end
+function enc(n, d) if not installer:ready() then do return end end
   
     local enc_actions = {
         [1] = function()
@@ -401,17 +326,11 @@ function enc(n, d)
                 elseif current_mode == "pitch" then params:delta("2pitch", d)
                 end
             end
-        end
-    }
-
+        end}
     if enc_actions[n] then enc_actions[n]() end
 end
 
-function key(n, z)
-    if not installer:ready() then
-        installer:key(n, z)
-        return
-    end
+function key(n, z) if not installer:ready() then installer:key(n, z) return end
 
     if n == 1 then
         key1_pressed = z == 1
@@ -564,14 +483,7 @@ local function draw_param_row(y, label, param1, param2, is_density, is_pitch, is
     end
 end
 
-function redraw()
-    if not installer:ready() then
-        installer:redraw()
-        do
-            return
-        end
-    end
-
+function redraw() if not installer:ready() then installer:redraw() do return end end
     screen.clear()
     -- Draw vertical volume bars for channel 1 (left) and channel 2 (right)
     local volume1 = params:get("1volume") 

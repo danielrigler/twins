@@ -21,16 +21,58 @@ for i = 1, number_of_outputs do
   }
 end
 
-
--- redefine in user script ---------
-for i = 1, number_of_outputs do
-  lfo[i].lfo_targets = {"none"}
+function lfo.clearLFOs()
+    for i = 1, 8 do
+        if params:get(i .. "lfo") == 2 then
+            params:set(i .. "lfo", 1) -- Turn off the LFO
+        end
+        params:set(i .. "lfo_target", 1) -- Reset LFO target to "none"
+    end
 end
+
+-- Define lfo_targets as part of the lfo table
+lfo.lfo_targets = {
+    "none", "1pan", "2pan", "1speed", "2speed", "1seek", "2seek", "1jitter", "2jitter", 
+    "1spread", "2spread", "1size", "2size", "1density", "2density", "1volume", "2volume", 
+    "1pitch", "2pitch", "1cutoff", "2cutoff", "time", "size", "damp", "diff", "feedback", 
+    "mod_depth", "mod_freq"
+}
 
 function lfo.process()
+  for i = 1, 8 do
+    local target = params:get(i .. "lfo_target")
+    if params:get(i .. "lfo") == 2 then
+      if target == 2 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, -100.00, 100.00)) --1pan
+      elseif target == 3 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, -100.00, 100.00)) --2pan
+      elseif target == 4 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, -2.00, 2.00)) --1speed
+      elseif target == 5 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, -2.00, 2.00)) --2speed
+      elseif target == 6 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 0, 100)) --1seek
+      elseif target == 7 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 0, 100)) --2seek
+      elseif target == 8 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 0, 999)) --1jitter
+      elseif target == 9 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 0, 999)) --2jitter
+      elseif target == 10 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 0, 100)) --1spread
+      elseif target == 11 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 0, 100)) --2spread
+      elseif target == 12 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 1, 500)) --1size
+      elseif target == 13 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 1, 500)) --2size
+      elseif target == 14 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 0, 40)) --1density
+      elseif target == 15 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 0, 40)) --2density
+      elseif target == 16 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, -100.00, 100.00)) --1volume
+      elseif target == 17 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, -100.00, 100.00)) --2volume
+      elseif target == 18 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, -12.00, 12.00)) --1pitch
+      elseif target == 19 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, -12.00, 12.00)) --2pitch
+      elseif target == 20 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 20, 20000)) --1cutoff
+      elseif target == 21 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 20, 20000)) --2cutoff
+      elseif target == 22 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 2.0, 0.00, 6.00)) --GH time
+      elseif target == 23 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 2.0, 0.50, 5.00)) --GH size
+      elseif target == 24 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 2.0, 0.00, 1.00)) --GH damp
+      elseif target == 25 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 2.0, 0.00, 1.00)) --GH diff
+      elseif target == 26 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 2.0, 0.00, 1.00)) --GH fdbck
+      elseif target == 27 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 2.0, 0.00, 1.00)) --GH mod dpth
+      elseif target == 28 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 2.0, 0.00, 10.00)) --GH mod frq
+      end
+    end
+  end
 end
-------------------------------------
-
 
 function lfo.scale(old_value, old_min, old_max, new_min, new_max)
   -- scale ranges
@@ -46,7 +88,6 @@ function lfo.scale(old_value, old_min, old_max, new_min, new_max)
   return new_value
 end
 
-
 local function make_sine(n)
   return 1 * math.sin(((tau / 100) * (lfo[n].counter)) - (tau / (lfo[n].freq / 1000)))
 end
@@ -54,7 +95,6 @@ end
 local function make_square(n)
   return make_sine(n) >= 0 and 1 or -1
 end
-
 
 local function make_sh(n)
   local polarity = make_square(n)
@@ -66,12 +106,11 @@ local function make_sh(n)
   end
 end
 
-
 function lfo.init()
   for i = 1, number_of_outputs do
     params:add_separator("LFO " .. i)
     -- modulation destination
-    params:add_option(i .. "lfo_target", i .. " target", lfo[i].lfo_targets, 1)
+    params:add_option(i .. "lfo_target", i .. " target", lfo.lfo_targets, 1)
     -- lfo shape
     params:add_option(i .. "lfo_shape", i .. " shape", options.lfotypes, 1)
     params:set_action(i .. "lfo_shape", function(value) lfo[i].waveform = options.lfotypes[value] end)
