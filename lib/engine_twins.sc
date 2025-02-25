@@ -264,52 +264,16 @@ Engine_twins : CroneEngine {
         this.addCommand("subharmonics_2", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\subharmonics_2, msg[2]); });
         this.addCommand("overtones_1", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\overtones_1, msg[2]); });
         this.addCommand("overtones_2", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\overtones_2, msg[2]); });
-        
-        this.addCommand("read", "is", { arg msg; this.readBuf(msg[1] - 1, msg[2]); });
-        this.addCommand("seek", "if", { arg msg; var voice = msg[1] - 1; var lvl, pos; var seek_rate = 1 / 750; seek_tasks[voice].stop;
-            // TODO: async get
-            lvl = levels[voice].getSynchronous();
-
-            if (false, { // disable seeking until fully implemented
-                var step;
-                var target_pos;
-
-                // TODO: async get
-                pos = phases[voice].getSynchronous();
-                voices[voice].set(\freeze, 1);
-
-                target_pos = msg[2];
-                step = (target_pos - pos) * seek_rate;
-
-                seek_tasks[voice] = Routine {
-                    while({ abs(target_pos - pos) > abs(step) }, {
-                        pos = pos + step;
-                        voices[voice].set(\pos, pos);
-                        seek_rate.wait;
-                    });
-
-                    voices[voice].set(\pos, target_pos);
-                    voices[voice].set(\freeze, 0);
-                    voices[voice].set(\t_reset_pos, 1);
-                };
-
-                seek_tasks[voice].play();
-            }, {
-                pos = msg[2];
-
-                voices[voice].set(\pos, pos);
-                voices[voice].set(\t_reset_pos, 1);
-                voices[voice].set(\freeze, 0);
-            });
-        });
-
-        this.addCommand("gate", "ii", { arg msg; var voice = msg[1] - 1; voices[voice].set(\gate, msg[2]); });
         this.addCommand("pitch_mode", "ii", { arg msg; var voice = msg[1] - 1; var mode = msg[2]; voices[voice].set(\pitch_mode, mode); });
+        this.addCommand("pitch_offset", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\pitch_offset, msg[2]); });
+
+        this.addCommand("read", "is", { arg msg; this.readBuf(msg[1] - 1, msg[2]); });
+        this.addCommand("seek", "if", { arg msg; var voice = msg[1] - 1; var pos; seek_tasks[voice].stop; pos = msg[2]; voices[voice].set(\pos, pos); voices[voice].set(\t_reset_pos, 1); voices[voice].set(\freeze, 0);});
+        this.addCommand("gate", "ii", { arg msg; var voice = msg[1] - 1; voices[voice].set(\gate, msg[2]); });
         this.addCommand("speed", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\speed, msg[2]); });
         this.addCommand("jitter", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\jitter, msg[2]); });
         this.addCommand("size", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\size, msg[2]); });
         this.addCommand("density", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\density, msg[2]); });
-        this.addCommand("pitch_offset", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\pitch_offset, msg[2]); });
         this.addCommand("pan", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\pan, msg[2]); });
         this.addCommand("spread", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\spread, msg[2]); });
         this.addCommand("volume", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\gain, msg[2]); });
@@ -317,7 +281,6 @@ Engine_twins : CroneEngine {
         
         seek_tasks = Array.fill(nvoices, { arg i; Routine {} });
     }
-
       free {
         voices.do({ arg voice; voice.free; });
         phases.do({ arg bus; bus.free; });
