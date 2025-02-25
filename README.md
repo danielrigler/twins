@@ -1,5 +1,5 @@
 # twins
-A randomized dual granulator for Monome Norns. Its a highly customized version of Twine by @cfd90.
+A randomized dual granulator for Monome Norns. It is a highly customized version of Twine by @cfdrake.
 
 Currently in development. Use with caution! :)
 I'll provide more detailed info soon.
