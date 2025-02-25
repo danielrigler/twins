@@ -230,8 +230,8 @@ local function randomize(n)
     -- Randomize pitch and ensure it is within ±5 semitones of the current value
     if locks.pitch then
         local current_pitch = params:get(n .. "pitch")
-        local min_pitch = math.max(params:get("min_pitch"), current_pitch - 5)
-        local max_pitch = math.min(params:get("max_pitch"), current_pitch + 5)
+        local min_pitch = math.max(params:get("min_pitch"), current_pitch - 7)
+        local max_pitch = math.min(params:get("max_pitch"), current_pitch + 7)
         local random_pitch = math.random(min_pitch, max_pitch)
         params:set(n .. "pitch", random_pitch)
     end
