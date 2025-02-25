@@ -12,7 +12,7 @@ engine.name = installer:ready() and 'twins' or nil
 
 local ui_metro
 local randomize_metro = { [1] = nil, [2] = nil }
-local key1_pressed,key2_pressed,key3_pressed  = false
+local key1_pressed, key2_pressed, key3_pressed = false
 local last_key2_key3_press_time = 0
 local enc1_position = 0
 local current_mode = "speed"

@@ -90,8 +90,7 @@ Engine_twins : CroneEngine {
             var subharmonic_2_vol = subharmonics_2 / (1.0 + subharmonics_1 + subharmonics_2 + overtones_1 + overtones_2) * 2.5;
             var overtone_1_vol = overtones_1 / (1.0 + subharmonics_1 + subharmonics_2 + overtones_1 + overtones_2) * 2;
             var overtone_2_vol = overtones_2 / (1.0 + subharmonics_1 + subharmonics_2 + overtones_1 + overtones_2) * 2;
-            
-         
+                     
             // Density modulation
             var trig_rnd = LFNoise1.kr(density);
             density_mod = density * (2**(trig_rnd * density_mod_amt));
@@ -159,19 +158,11 @@ Engine_twins : CroneEngine {
             Out.kr(level_out, level);
         }).add;
 
-          // Define the Greyhole effect SynthDef
+        // Define the Greyhole effect SynthDef
         SynthDef(\greyhole, {
             arg in, out, delayTime=2.0, damp=0.1, size=3.0, diff=0.7, feedback=0.2, modDepth=0.0, modFreq=0.1, mix=0.5;
             var dry = In.ar(in, 2);
-            var wet = Greyhole.ar(dry,
-                delayTime,
-                damp,
-                size,
-                diff,
-                feedback,
-                modDepth,
-                modFreq
-            );
+            var wet = Greyhole.ar(dry, delayTime, damp, size, diff, feedback, modDepth, modFreq);
             var sig = (wet * mix) + (dry * (1 - mix));
             Out.ar(out, sig);
         }).add;
@@ -180,28 +171,14 @@ Engine_twins : CroneEngine {
         SynthDef(\fverb, {
             arg in, out, mix=0.5, predelay=0, input_amount=100, input_lowpass_cutoff=10000, input_highpass_cutoff=100, input_diffusion_1=75, input_diffusion_2=62.5, tail_density=70, decay=50, damping=5500, modulator_frequency=1, modulator_depth=0.5;
             var dry = In.ar(in, 2); 
-            var wet = Fverb.ar(
-                dry[0], dry[1],
-                predelay,
-                input_amount,
-                input_lowpass_cutoff,
-                input_highpass_cutoff,
-                input_diffusion_1,
-                input_diffusion_2,
-                tail_density,
-                decay,
-                damping,
-                modulator_frequency,
-                modulator_depth
-            );
+            var wet = Fverb.ar(dry[0], dry[1], predelay, input_amount, input_lowpass_cutoff, input_highpass_cutoff, input_diffusion_1, input_diffusion_2, tail_density, decay, damping, modulator_frequency, modulator_depth);
             var sig = (wet * mix) + (dry * (1 - mix)); 
             Out.ar(out, sig);
         }).add;
 
         context.server.sync;
-      
-      
-       // Mix bus for all synth outputs
+            
+        // Mix bus for all synth outputs
         mixBus = Bus.audio(context.server, 2);
 
         // Create the Greyhole effect
@@ -218,7 +195,7 @@ Engine_twins : CroneEngine {
             \mix, 0.5
         ], context.xg);
       
-              // Create the Fverb effect (placed after Greyhole)
+        // Create the Fverb effect (placed after Greyhole)
         fverbEffect = Synth.new(\fverb, [
             \in, mixBus.index,
             \out, context.out_b.index,
@@ -257,35 +234,15 @@ Engine_twins : CroneEngine {
             ], target: pg);
         });
         
+        this.addCommand("greyhole_delay_time", "f", { arg msg; greyholeEffect.set(\delayTime, msg[1]); });
+        this.addCommand("greyhole_damp", "f", { arg msg; greyholeEffect.set(\damp, msg[1]); });
+        this.addCommand("greyhole_size", "f", { arg msg; greyholeEffect.set(\size, msg[1]); });
+        this.addCommand("greyhole_diff", "f", { arg msg; greyholeEffect.set(\diff, msg[1]); });
+        this.addCommand("greyhole_feedback", "f", { arg msg; greyholeEffect.set(\feedback, msg[1]); });
+        this.addCommand("greyhole_mod_depth", "f", { arg msg; greyholeEffect.set(\modDepth, msg[1]); });
+        this.addCommand("greyhole_mod_freq", "f", { arg msg; greyholeEffect.set(\modFreq, msg[1]); });
+        this.addCommand("greyhole_mix", "f", { arg msg; greyholeEffect.set(\mix, msg[1]); });
 
-        // Add commands for Greyhole
-        this.addCommand("greyhole_delay_time", "f", {|msg|
-            greyholeEffect.set(\delayTime, msg[1]);
-        });
-        this.addCommand("greyhole_damp", "f", {|msg|
-            greyholeEffect.set(\damp, msg[1]);
-        });
-        this.addCommand("greyhole_size", "f", {|msg|
-            greyholeEffect.set(\size, msg[1]);
-        });
-        this.addCommand("greyhole_diff", "f", {|msg|
-            greyholeEffect.set(\diff, msg[1]);
-        });
-        this.addCommand("greyhole_feedback", "f", {|msg|
-            greyholeEffect.set(\feedback, msg[1]);
-        });
-        this.addCommand("greyhole_mod_depth", "f", {|msg|
-            greyholeEffect.set(\modDepth, msg[1]);
-        });
-        this.addCommand("greyhole_mod_freq", "f", {|msg|
-            greyholeEffect.set(\modFreq, msg[1]);
-        });
-        this.addCommand("greyhole_mix", "f", {|msg| // New command for Greyhole mix control
-            greyholeEffect.set(\mix, msg[1]);
-        });
-
-
- // Add commands for Fverb
         this.addCommand("reverb_mix", "f", { arg msg; fverbEffect.set(\mix, msg[1]); });
         this.addCommand("reverb_predelay", "f", { arg msg; fverbEffect.set(\predelay, msg[1]); });
         this.addCommand("reverb_input_amount", "f", { arg msg; fverbEffect.set(\input_amount, msg[1]); });
@@ -299,62 +256,17 @@ Engine_twins : CroneEngine {
         this.addCommand("reverb_modulator_frequency", "f", { arg msg; fverbEffect.set(\modulator_frequency, msg[1]); });
         this.addCommand("reverb_modulator_depth", "f", { arg msg; fverbEffect.set(\modulator_depth, msg[1]); });
 
-
-        this.addCommand("cutoff", "if", { arg msg;
-            var voice = msg[1] - 1;
-            voices[voice].set(\cutoff, msg[2]);
-        });
-
-        this.addCommand("q", "if", { arg msg;
-            var voice = msg[1] - 1;
-            voices[voice].set(\q, msg[2]);
-        });
-
-        this.addCommand("granular_gain", "if", { arg msg;
-            var voice = msg[1] - 1;
-            var gain = msg[2];
-            voices[voice].set(\granular_gain, gain);
-        });
-
-        this.addCommand("density_mod_amt", "if", { arg msg;
-            var voice = msg[1] - 1;
-            voices[voice].set(\density_mod_amt, msg[2]);
-        });
+        this.addCommand("cutoff", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\cutoff, msg[2]); });
+        this.addCommand("q", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\q, msg[2]); });
+        this.addCommand("granular_gain", "if", { arg msg; var voice = msg[1] - 1; var gain = msg[2]; voices[voice].set(\granular_gain, gain); });
+        this.addCommand("density_mod_amt", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\density_mod_amt, msg[2]); });
+        this.addCommand("subharmonics_1", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\subharmonics_1, msg[2]); });
+        this.addCommand("subharmonics_2", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\subharmonics_2, msg[2]); });
+        this.addCommand("overtones_1", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\overtones_1, msg[2]); });
+        this.addCommand("overtones_2", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\overtones_2, msg[2]); });
         
-      
-        this.addCommand("subharmonics_1", "if", { arg msg;
-            var voice = msg[1] - 1;
-            voices[voice].set(\subharmonics_1, msg[2]);
-        });
-        
-        this.addCommand("subharmonics_2", "if", { arg msg;
-            var voice = msg[1] - 1;
-            voices[voice].set(\subharmonics_2, msg[2]);
-        });
-
-        this.addCommand("overtones_1", "if", { arg msg;
-            var voice = msg[1] - 1;
-            voices[voice].set(\overtones_1, msg[2]);
-        });
-
-        this.addCommand("overtones_2", "if", { arg msg;
-            var voice = msg[1] - 1;
-            voices[voice].set(\overtones_2, msg[2]);
-        });
-
-        
-        // Add other existing commands (e.g., read, seek, gate, etc.)
-        this.addCommand("read", "is", { arg msg;
-            this.readBuf(msg[1] - 1, msg[2]);
-        });
-
-        this.addCommand("seek", "if", { arg msg;
-            var voice = msg[1] - 1;
-            var lvl, pos;
-            var seek_rate = 1 / 750;
-
-            seek_tasks[voice].stop;
-
+        this.addCommand("read", "is", { arg msg; this.readBuf(msg[1] - 1, msg[2]); });
+        this.addCommand("seek", "if", { arg msg; var voice = msg[1] - 1; var lvl, pos; var seek_rate = 1 / 750; seek_tasks[voice].stop;
             // TODO: async get
             lvl = levels[voice].getSynchronous();
 
@@ -391,66 +303,19 @@ Engine_twins : CroneEngine {
             });
         });
 
-        this.addCommand("gate", "ii", { arg msg;
-            var voice = msg[1] - 1;
-            voices[voice].set(\gate, msg[2]);
-        });
-
-        this.addCommand("pitch_mode", "ii", { arg msg;
-            var voice = msg[1] - 1;
-            var mode = msg[2];
-            voices[voice].set(\pitch_mode, mode);
-        });
-
-        this.addCommand("speed", "if", { arg msg;
-            var voice = msg[1] - 1;
-            voices[voice].set(\speed, msg[2]);
-        });
-
-        this.addCommand("jitter", "if", { arg msg;
-            var voice = msg[1] - 1;
-            voices[voice].set(\jitter, msg[2]);
-        });
-
-        this.addCommand("size", "if", { arg msg;
-            var voice = msg[1] - 1;
-            voices[voice].set(\size, msg[2]);
-        });
-
-        this.addCommand("density", "if", { arg msg;
-            var voice = msg[1] - 1;
-            voices[voice].set(\density, msg[2]);
-        });
-
-
-        this.addCommand("pitch_offset", "if", { arg msg;
-            var voice = msg[1] - 1;
-            voices[voice].set(\pitch_offset, msg[2]);
-        });
-
-        this.addCommand("pan", "if", { arg msg;
-            var voice = msg[1] - 1;
-            voices[voice].set(\pan, msg[2]);
-        });
-
-        this.addCommand("spread", "if", { arg msg;
-            var voice = msg[1] - 1;
-            voices[voice].set(\spread, msg[2]);
-        });
-
-        this.addCommand("volume", "if", { arg msg;
-            var voice = msg[1] - 1;
-            voices[voice].set(\gain, msg[2]);
-        });
-
-        this.addCommand("envscale", "if", { arg msg;
-            var voice = msg[1] - 1;
-            voices[voice].set(\envscale, msg[2]);
-        });
-
-        seek_tasks = Array.fill(nvoices, { arg i;
-            Routine {}
-        });
+        this.addCommand("gate", "ii", { arg msg; var voice = msg[1] - 1; voices[voice].set(\gate, msg[2]); });
+        this.addCommand("pitch_mode", "ii", { arg msg; var voice = msg[1] - 1; var mode = msg[2]; voices[voice].set(\pitch_mode, mode); });
+        this.addCommand("speed", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\speed, msg[2]); });
+        this.addCommand("jitter", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\jitter, msg[2]); });
+        this.addCommand("size", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\size, msg[2]); });
+        this.addCommand("density", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\density, msg[2]); });
+        this.addCommand("pitch_offset", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\pitch_offset, msg[2]); });
+        this.addCommand("pan", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\pan, msg[2]); });
+        this.addCommand("spread", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\spread, msg[2]); });
+        this.addCommand("volume", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\gain, msg[2]); });
+        this.addCommand("envscale", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\envscale, msg[2]); });
+        
+        seek_tasks = Array.fill(nvoices, { arg i; Routine {} });
     }
 
       free {
