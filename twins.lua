@@ -227,7 +227,7 @@ local function randomize(n)
     if locks.density then targets[n .. "density"] = random_float(params:get("min_density"), params:get("max_density")) end
     if locks.spread then targets[n .. "spread"] = random_float(params:get("min_spread"), params:get("max_spread")) end
 
-    -- Randomize pitch and ensure it is within ±5 semitones of the current value
+    -- Randomize pitch and ensure it is within ±7 semitones of the current value
     if locks.pitch then
         local current_pitch = params:get(n .. "pitch")
         local min_pitch = math.max(params:get("min_pitch"), current_pitch - 7)
