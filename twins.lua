@@ -4,10 +4,12 @@
 --           by: @dddstudio                       
 --
 
-delay = include("lib/delay")
 local lfo = include("lib/lfo")
+local randpara = include("lib/randpara")
+delay = include("lib/delay")
 installer_ = include("lib/scinstaller/scinstaller")
-installer = installer_:new{requirements = {"Fverb2", "Fverb", "AnalogTape", "AnalogChew", "AnalogLoss", "AnalogDegrade"}, zip = "https://github.com/schollz/portedplugins/releases/download/v0.4.6/PortedPlugins-RaspberryPi.zip"}
+installer = installer_:new{requirements = {"Fverb"}, 
+  zip = "https://github.com/schollz/portedplugins/releases/download/v0.4.6/PortedPlugins-RaspberryPi.zip"}
 engine.name = installer:ready() and 'twins' or nil
 
 local ui_metro
@@ -66,6 +68,7 @@ local function setup_params()
     end 
     
     params:add_separator("Settings")
+
     params:add_group("Delay", 3)
     delay.init()
     
@@ -128,6 +131,9 @@ local function setup_params()
     params:set_action("ClearLFOs", function() lfo.clearLFOs() end)
     lfo.init()
 
+    params:add_binary("randomize_params", "RaNd0m1ze!", "trigger", 0)
+    params:set_action("randomize_params", function() randpara.randomize_params() end)
+
     params:add_taper("1granular_gain", "Granular Mix 1", 0, 100, 100, 0, "%")
     params:set_action("1granular_gain", function(value) engine.granular_gain(1, value / 100) end)
     params:add_option("1pitch_mode", "Pitch Mode 1", {"match speed", "independent"}, 2)
@@ -177,7 +183,7 @@ local function setup_params()
     params:add_taper("min_size", "size (min)", 1, 599, 100, 5, "ms")
     params:add_taper("max_size", "size (max)", 1, 599, 599, 5, "ms")
     params:add_taper("min_density", "density (min)", 1, 50, 1, 5, "Hz")
-    params:add_taper("max_density", "density (max)", 1, 50, 25, 5, "Hz")
+    params:add_taper("max_density", "density (max)", 1, 50, 20, 5, "Hz")
     params:add_taper("min_spread", "spread (min)", 0, 100, 0, 0, "%")
     params:add_taper("max_spread", "spread (max)", 0, 100, 100, 0, "%")
     params:add_control("min_pitch", "pitch (min)", controlspec.new(-48, 48, "lin", 1, -12, "st"))
@@ -192,7 +198,9 @@ local function setup_params()
       params:add_option(i .. "lock_pitch", i .. " lock pitch", {"off", "on"}, 1)
     end
     
-    params:add_control("steps", "Transition steps", controlspec.new(5, 25000, "lin", 1, 5, ""))
+    params:add_control("volume_compensation", "Volume compensation", controlspec.new(0,1,"lin",0.01,0.15))
+    params:set_action("volume_compensation", function(value) engine.compensation_factor(1,value) engine.compensation_factor(2,value) end)
+    params:add_taper("steps", "Transition steps", 5, 25000, 10, 5, "")
     params:set_action("steps", function(value) steps = value end)
     
     params:bang()
@@ -221,15 +229,12 @@ local function randomize(n)
 
     -- Randomize pitch and ensure it is within ±5 semitones of the current value
     if locks.pitch then
-        local current_pitch = params:get(n .. "pitch") -- Get the current pitch value
+        local current_pitch = params:get(n .. "pitch")
         local min_pitch = math.max(params:get("min_pitch"), current_pitch - 5)
         local max_pitch = math.min(params:get("max_pitch"), current_pitch + 5)
         local random_pitch = math.random(min_pitch, max_pitch)
         params:set(n .. "pitch", random_pitch)
     end
-
-    local delay_mix_chance = math.random()  -- Randomize delay mix parameter
-    if delay_mix_chance <= 0.65 then params:set("delay_h", 0) else params:set("delay_h", math.random(15, 65)) end
 
     randomize_metro[n].time = 1/30
     randomize_metro[n].event = function(count)
@@ -284,8 +289,8 @@ function enc(n, d) if not installer:ready() then do return end end
                 adjust_volume("2", -0.75*d) 
             else
                 -- Normal behavior: adjust both volumes in the same direction
-                adjust_volume("1", d)
-                adjust_volume("2", d)
+                adjust_volume("1", 0.75*d)
+                adjust_volume("2", 0.75*d)
             end
         end,
         [2] = function()

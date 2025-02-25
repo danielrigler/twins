@@ -2,7 +2,7 @@ local sc={}
 
 function sc.init()
   audio.level_cut(1.0)
-  audio.level_adc_cut(1)
+  audio.level_adc_cut(0)
   audio.level_eng_cut(1)
 
   softcut.level_slew_time(1,0.25)
