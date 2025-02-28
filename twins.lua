@@ -52,6 +52,18 @@ local function setup_ui_metro()
     ui_metro:start()
 end
 
+local function is_lfo_active_for_param(param_name)
+    for i = 1, 8 do
+        -- Get the target parameter name for the LFO
+        local target_index = params:get(i .. "lfo_target")
+        local target_param = lfo.lfo_targets[target_index]
+        if target_param == param_name and params:get(i .. "lfo") == 2 then
+            return true, i
+        end
+    end
+    return false, nil
+end
+
 local function setup_params()
     params:add_separator("Samples")
     for i = 1, 2 do
@@ -93,7 +105,7 @@ local function setup_params()
     params:add_group("Fverb", 12)
     params:add_taper("reverb_mix", "Mix", 0, 100, 15, 0, "%")
     params:set_action("reverb_mix", function(value) engine.reverb_mix(value / 100) end)
-    params:add_taper("reverb_predelay", "Predelay", 0, 100, 60, 0, "ms")
+    params:add_taper("reverb_predelay", "Predelay", 0, 250, 60, 0, "ms")
     params:set_action("reverb_predelay", function(value) engine.reverb_predelay(value) end)
     params:add_taper("reverb_input_amount", "Input amount", 0, 100, 100, 0, "%")
     params:set_action("reverb_input_amount", function(value) engine.reverb_input_amount(value) end)
@@ -126,13 +138,12 @@ local function setup_params()
     params:add_control("2q","2 LPF resonance",controlspec.new(0,4,"lin",0.01,0.4))
     params:set_action("2q",function(value) engine.q(2,value) end)
 
-    params:add_group("LFOs", 57)
-    params:add_binary("ClearLFOs", "Clear all LFOs", "trigger", 0)
+    params:add_group("LFOs", 58)
+    params:add_binary("randomize_lfos", "Randomize LFOs", "trigger", 0)
+    params:set_action("randomize_lfos", function() lfo.randomize_lfos() end)
+    params:add_binary("ClearLFOs", "Clear All LFOs", "trigger", 0)
     params:set_action("ClearLFOs", function() lfo.clearLFOs() end)
     lfo.init()
-
-    params:add_binary("randomize_params", "RaNd0m1ze!", "trigger", 0)
-    params:set_action("randomize_params", function() randpara.randomize_params() end)
 
     params:add_taper("1granular_gain", "Granular Mix 1", 0, 100, 100, 0, "%")
     params:set_action("1granular_gain", function(value) engine.granular_gain(1, value / 100) end)
@@ -144,6 +155,8 @@ local function setup_params()
     params:set_action("2pitch_mode", function(value) engine.pitch_mode(2, value - 1) end)
     params:add_taper("density_mod_amt", "Density Mod", 0, 100, 0, 0, "%")
     params:set_action("density_mod_amt", function(value) engine.density_mod_amt(1, value / 100) engine.density_mod_amt(2, value / 100) end)
+    params:add_binary("randomize_params", "RaNd0m1ze!", "trigger", 0)
+    params:set_action("randomize_params", function() randpara.randomize_params() end)
     params:add_control("subharmonics_2","Subharmonics -2oct",controlspec.new(0.00,1.00,"lin",0.01,0))
     params:set_action("subharmonics_2",function(value) engine.subharmonics_2(1,value) engine.subharmonics_2(2,value) end)
     params:add_control("subharmonics_1","Subharmonics -1oct",controlspec.new(0.00,1.00,"lin",0.01,0))
@@ -152,6 +165,10 @@ local function setup_params()
     params:set_action("overtones_1",function(value) engine.overtones_1(1,value) engine.overtones_1(2,value) end)
     params:add_control("overtones_2","Overtones +2oct",controlspec.new(0.00,1.00,"lin",0.01,0))
     params:set_action("overtones_2",function(value) engine.overtones_2(1,value) engine.overtones_2(2,value) end)
+    params:add_control("sine_wet", "Shaper Mix", controlspec.new(0, 100, "lin", 1, 0, "%"))
+    params:set_action("sine_wet", function(value) engine.sine_wet(1, value / 100) engine.sine_wet(2, value / 100) end)
+    params:add_control("sine_drive", "Shaper Drive", controlspec.new(0, 2, "lin", 0.01, 1, ""))
+    params:set_action("sine_drive", function(value) engine.sine_drive(1, value) engine.sine_drive(2, value) end)
 
     params:add_group("Parameters", 20)
     for i = 1, 2 do
@@ -182,7 +199,7 @@ local function setup_params()
     params:add_taper("max_jitter", "jitter (max)", 0, 999, 999, 5, "ms")
     params:add_taper("min_size", "size (min)", 1, 599, 100, 5, "ms")
     params:add_taper("max_size", "size (max)", 1, 599, 599, 5, "ms")
-    params:add_taper("min_density", "density (min)", 1, 50, 1, 5, "Hz")
+    params:add_taper("min_density", "density (min)", 1, 50, 2, 5, "Hz")
     params:add_taper("max_density", "density (max)", 1, 50, 20, 5, "Hz")
     params:add_taper("min_spread", "spread (min)", 0, 100, 0, 0, "%")
     params:add_taper("max_spread", "spread (max)", 0, 100, 100, 0, "%")
@@ -198,7 +215,7 @@ local function setup_params()
       params:add_option(i .. "lock_pitch", i .. " lock pitch", {"off", "on"}, 1)
     end
     
-    params:add_control("volume_compensation", "Volume compensation", controlspec.new(0,1,"lin",0.01,0.15))
+    params:add_control("volume_compensation", "Volume compensation", controlspec.new(0,1,"lin",0.01,0.1))
     params:set_action("volume_compensation", function(value) engine.compensation_factor(1,value) engine.compensation_factor(2,value) end)
     params:add_taper("steps", "Transition steps", 5, 25000, 10, 5, "")
     params:set_action("steps", function(value) steps = value end)
@@ -212,7 +229,7 @@ end
 
 local function randomize(n)
     if not randomize_metro[n] then randomize_metro[n] = metro.init() end
-
+  
     local targets = {}
     local locks = {
         jitter = params:get(n .. "lock_jitter") == 1,
@@ -280,7 +297,6 @@ local function wrap_value(value, min, max)
 end
 
 function enc(n, d) if not installer:ready() then do return end end
-  
     local enc_actions = {
         [1] = function()
             if key1_pressed then
@@ -296,41 +312,114 @@ function enc(n, d) if not installer:ready() then do return end end
         [2] = function()
             if key1_pressed then adjust_volume("1", 0.75*d)
             else
-                if current_mode == "speed" then params:delta("1speed", d)
+                local param_name
+                if current_mode == "speed" then
+                    param_name = "1speed"
+                elseif current_mode == "seek" then
+                    param_name = "1seek"
+                elseif current_mode == "pan" then
+                    param_name = "1pan"
+                elseif current_mode == "lpf" then
+                    param_name = "1cutoff"
+                elseif current_mode == "jitter" then
+                    param_name = "1jitter"
+                elseif current_mode == "size" then
+                    param_name = "1size"
+                elseif current_mode == "density" then
+                    param_name = "1density"
+                elseif current_mode == "spread" then
+                    param_name = "1spread"
+                elseif current_mode == "pitch" then
+                    param_name = "1pitch"
+                end
+
+                -- Check if an LFO is active for the parameter
+                local is_active, lfo_index = is_lfo_active_for_param(param_name)
+                if is_active then
+                    params:set(lfo_index .. "lfo", 1) -- Deactivate the LFO
+                end
+
+                -- Adjust the parameter
+                if current_mode == "speed" then
+                    params:delta("1speed", d)
                 elseif current_mode == "seek" then
                     local current_seek = params:get("1seek")
                     local new_seek = wrap_value(current_seek + d, 0, 100)
                     params:set("1seek", new_seek)
                     engine.seek(1, new_seek / 100)
-                elseif current_mode == "pan" then params:delta("1pan", d * 5)
-                elseif current_mode == "lpf" then params:delta("1cutoff", d)
-                elseif current_mode == "jitter" then params:delta("1jitter", d * 2)
-                elseif current_mode == "size" then params:delta("1size", d * 2)
-                elseif current_mode == "density" then params:delta("1density", d * 2)
-                elseif current_mode == "spread" then params:delta("1spread", d * 2)
-                elseif current_mode == "pitch" then params:delta("1pitch", d)
+                elseif current_mode == "pan" then
+                    params:delta("1pan", d * 5)
+                elseif current_mode == "lpf" then
+                    params:delta("1cutoff", d)
+                elseif current_mode == "jitter" then
+                    params:delta("1jitter", d * 2)
+                elseif current_mode == "size" then
+                    params:delta("1size", d * 2)
+                elseif current_mode == "density" then
+                    params:delta("1density", d * 2)
+                elseif current_mode == "spread" then
+                    params:delta("1spread", d * 2)
+                elseif current_mode == "pitch" then
+                    params:delta("1pitch", d)
                 end
             end
         end,
         [3] = function()
             if key1_pressed then adjust_volume("2", 0.75*d)
             else
-                if current_mode == "speed" then params:delta("2speed", d) 
+                local param_name
+                if current_mode == "speed" then
+                    param_name = "2speed"
+                elseif current_mode == "seek" then
+                    param_name = "2seek"
+                elseif current_mode == "pan" then
+                    param_name = "2pan"
+                elseif current_mode == "lpf" then
+                    param_name = "2cutoff"
+                elseif current_mode == "jitter" then
+                    param_name = "2jitter"
+                elseif current_mode == "size" then
+                    param_name = "2size"
+                elseif current_mode == "density" then
+                    param_name = "2density"
+                elseif current_mode == "spread" then
+                    param_name = "2spread"
+                elseif current_mode == "pitch" then
+                    param_name = "2pitch"
+                end
+
+                -- Check if an LFO is active for the parameter
+                local is_active, lfo_index = is_lfo_active_for_param(param_name)
+                if is_active then
+                    params:set(lfo_index .. "lfo", 1) -- Deactivate the LFO
+                end
+
+                -- Adjust the parameter
+                if current_mode == "speed" then
+                    params:delta("2speed", d) 
                 elseif current_mode == "seek" then
                     local current_seek = params:get("2seek")
                     local new_seek = wrap_value(current_seek + d, 0, 100)
                     params:set("2seek", new_seek)
                     engine.seek(2, new_seek / 100)
-                elseif current_mode == "pan" then params:delta("2pan", d * 5)
-                elseif current_mode == "lpf" then params:delta("2cutoff", d) 
-                elseif current_mode == "jitter" then params:delta("2jitter", d * 2) 
-                elseif current_mode == "size" then params:delta("2size", d * 2)
-                elseif current_mode == "density" then params:delta("2density", d * 2)
-                elseif current_mode == "spread" then params:delta("2spread", d * 2)
-                elseif current_mode == "pitch" then params:delta("2pitch", d)
+                elseif current_mode == "pan" then
+                    params:delta("2pan", d * 5)
+                elseif current_mode == "lpf" then
+                    params:delta("2cutoff", d) 
+                elseif current_mode == "jitter" then
+                    params:delta("2jitter", d * 2) 
+                elseif current_mode == "size" then
+                    params:delta("2size", d * 2)
+                elseif current_mode == "density" then
+                    params:delta("2density", d * 2)
+                elseif current_mode == "spread" then
+                    params:delta("2spread", d * 2)
+                elseif current_mode == "pitch" then
+                    params:delta("2pitch", d)
                 end
             end
-        end}
+        end
+    }
     if enc_actions[n] then enc_actions[n]() end
 end
 
@@ -517,7 +606,7 @@ function redraw() if not installer:ready() then installer:redraw() do return end
     elseif current_mode == "pan" then
         screen.text("pan:      ")
     elseif current_mode == "lpf" then
-        screen.text("filter:      ")
+        screen.text("lpf:      ")
     else
         screen.text("speed:    ")
     end
