@@ -6,7 +6,9 @@ local function randomize_params()
 
     --DELAY
     if math.random() <= 0.5 then params:set("delay_h", 0) else params:set("delay_h", math.random(0, 50)) end
+    if math.random() <= 0.5 then params:set("delay_h", 0) else params:set("delay_h", math.random(0, 50)) end
     params:set("delay_rate", random_float(0.3, 1.5))
+    params:set("delay_feedback", math.random(20, 90))
     params:set("delay_feedback", math.random(20, 90))
 
     --GREYHOLE      
@@ -29,6 +31,8 @@ local function randomize_params()
     params:set("reverb_tail_density", math.random(40, 90))
     params:set("reverb_decay", math.random(50, 95))
     params:set("reverb_damping", math.random(5500, 7500))
+    params:set("reverb_modulator_frequency", random_float(0.1, 1))
+    params:set("reverb_modulator_depth", math.random(40, 100))
     params:set("reverb_modulator_frequency", random_float(0.1, 1))
     params:set("reverb_modulator_depth", math.random(40, 100))
     
