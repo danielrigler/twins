@@ -46,67 +46,67 @@ lfo.target_ranges = {
         offset = { min = -0.15, max = 0 },   
         frequency = { min = 0.02, max = 0.25 }, 
         waveform = { "sine" }, 
-        chance = 0.75 
+        chance = 0.7 
     },
     ["2pan"] = {
         depth = { min = 10, max = 75 },       
         offset = { min = 0, max = 0.15 },   
         frequency = { min = 0.02, max = 0.25 }, 
         waveform = { "sine" },
-        chance = 0.75
+        chance = 0.7
     },
     ["1jitter"] = {
-        depth = { min = 5, max = 60 },
+        depth = { min = 2, max = 60 },
         offset = { min = -0.75, max = 0.75 },
         frequency = { min = 0.01, max = 0.1 },
         waveform = { "sine" },
         chance = 0.6
     },
     ["2jitter"] = {
-        depth = { min = 5, max = 60 },
+        depth = { min = 2, max = 60 },
         offset = { min = -0.75, max = 0.75 },
         frequency = { min = 0.01, max = 0.1 },
         waveform = { "sine" },
         chance = 0.6
     },
     ["1spread"] = {
-        depth = { min = 5, max = 40 },
+        depth = { min = 2, max = 40 },
         offset = { min = -0.75, max = 0.2 },
         frequency = { min = 0.01, max = 0.1 },
         waveform = { "sine" },
         chance = 0.6
     },
     ["2spread"] = {
-        depth = { min = 5, max = 40 },
+        depth = { min = 2, max = 40 },
         offset = { min = -0.75, max = 0.2 },
         frequency = { min = 0.01, max = 0.1 },
         waveform = { "sine" },
         chance = 0.6
     },
     ["1size"] = {
-        depth = { min = 5, max = 50 },
-        offset = { min = -0.5, max = 0.5 },
+        depth = { min = 2, max = 50 },
+        offset = { min = -0.6, max = 0.6 },
         frequency = { min = 0.01, max = 0.1 },
         waveform = { "sine" },
         chance = 0.6
     },
     ["2size"] = {
-        depth = { min = 5, max = 50 },
-        offset = { min = -0.5, max = 0.5 },
+        depth = { min = 2, max = 50 },
+        offset = { min = -0.6, max = 0.6 },
         frequency = { min = 0.01, max = 0.1 },
         waveform = { "sine" },
         chance = 0.6
     },
     ["1density"] = {
-        depth = { min = 5, max = 40 },
-        offset = { min = -0.5, max = 0.5 },
+        depth = { min = 2, max = 40 },
+        offset = { min = -0.6, max = 0.6 },
         frequency = { min = 0.01, max = 0.1 },
         waveform = { "sine" },
         chance = 0.6
     },
     ["2density"] = {
-        depth = { min = 10, max = 40 },
-        offset = { min = -0.5, max = 0.5 },
+        depth = { min = 2, max = 40 },
+        offset = { min = -0.6, max = 0.6 },
         frequency = { min = 0.01, max = 0.1 },
         waveform = { "sine" },
         chance = 0.6

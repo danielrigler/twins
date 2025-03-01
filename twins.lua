@@ -1,8 +1,22 @@
---  __ __|         _)             
+--  __ __|         _)          v0.1    
 --     | \ \  \  / |  \ |  (_< 
 --     |  \_/\_/ _| _| _| __/ 
 --           by: @dddstudio                       
 --
+--
+-- E1: Master Volume
+-- K1+E2/E3: Volume 1/2
+-- K1+E1: Crossfade Volumes
+-- K2/K3: Navigate
+-- E2/E3: Adjust Parameters
+-- K1+K2/K3: Randomize 1/2
+-- K1+K2/K3 x2: Stop Randomize
+-- K2+K3 x2: Lock Parameters
+--
+--
+-- Thanks to @infinitedigits 
+-- @cfdrake @artfwo @nzimas
+-- @justmat
 
 local lfo = include("lib/lfo")
 local randpara = include("lib/randpara")
@@ -166,8 +180,8 @@ local function setup_params()
     params:set_action("sine_drive", function(value) engine.sine_drive(1, value) engine.sine_drive(2, value) end)
     params:add_control("volume_compensation", "Volume compensation", controlspec.new(0,1,"lin",0.01,0.1))
     params:set_action("volume_compensation", function(value) engine.compensation_factor(1,value) engine.compensation_factor(2,value) end)
-    params:add_number("steps", "Transition steps", 1, 100, 1)
-    params:set_action("steps", function(value) steps = value*10 end)
+    params:add_control("steps","Transition steps",controlspec.new(10,200000,"lin",5,1))
+    params:set_action("steps", function(value) steps = value end)
     
     params:add_binary("randomize_params", "RaNd0m1ze!", "trigger", 0)
     params:set_action("randomize_params", function() randpara.randomize_params() end)
@@ -617,7 +631,7 @@ function redraw() if not installer:ready() then installer:redraw() do return end
     elseif current_mode == "pan" then
         screen.text("pan:      ")
     elseif current_mode == "lpf" then
-        screen.text("lpf:      ")
+        screen.text("filter:      ")
     else
         screen.text("speed:    ")
     end
