@@ -43,41 +43,41 @@ lfo.lfo_targets = {
 lfo.target_ranges = {
     ["1pan"] = {
         depth = { min = 10, max = 75 },       
-        offset = { min = -0.15, max = 0 },   
+        offset = { min = 0, max = 0 },   
         frequency = { min = 0.02, max = 0.25 }, 
         waveform = { "sine" }, 
         chance = 0.7 
     },
     ["2pan"] = {
         depth = { min = 10, max = 75 },       
-        offset = { min = 0, max = 0.15 },   
+        offset = { min = 0, max = 0 },   
         frequency = { min = 0.02, max = 0.25 }, 
         waveform = { "sine" },
         chance = 0.7
     },
     ["1jitter"] = {
-        depth = { min = 2, max = 60 },
+        depth = { min = 2, max = 70 },
         offset = { min = -0.75, max = 0.75 },
         frequency = { min = 0.01, max = 0.1 },
         waveform = { "sine" },
         chance = 0.6
     },
     ["2jitter"] = {
-        depth = { min = 2, max = 60 },
+        depth = { min = 2, max = 70 },
         offset = { min = -0.75, max = 0.75 },
         frequency = { min = 0.01, max = 0.1 },
         waveform = { "sine" },
         chance = 0.6
     },
     ["1spread"] = {
-        depth = { min = 2, max = 40 },
+        depth = { min = 2, max = 45 },
         offset = { min = -0.75, max = 0.2 },
         frequency = { min = 0.01, max = 0.1 },
         waveform = { "sine" },
         chance = 0.6
     },
     ["2spread"] = {
-        depth = { min = 2, max = 40 },
+        depth = { min = 2, max = 45 },
         offset = { min = -0.75, max = 0.2 },
         frequency = { min = 0.01, max = 0.1 },
         waveform = { "sine" },
@@ -99,14 +99,14 @@ lfo.target_ranges = {
     },
     ["1density"] = {
         depth = { min = 2, max = 40 },
-        offset = { min = -0.6, max = 0.6 },
+        offset = { min = -0.7, max = 0.4 },
         frequency = { min = 0.01, max = 0.1 },
         waveform = { "sine" },
         chance = 0.6
     },
     ["2density"] = {
         depth = { min = 2, max = 40 },
-        offset = { min = -0.6, max = 0.6 },
+        offset = { min = -0.7, max = 0.4 },
         frequency = { min = 0.01, max = 0.1 },
         waveform = { "sine" },
         chance = 0.6
@@ -191,9 +191,6 @@ function lfo.randomize_lfos()
         params:set(i .. "lfo", 2)
     end
 end
-
-
-
 
 function lfo.process()
   for i = 1, 8 do

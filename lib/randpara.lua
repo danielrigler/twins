@@ -20,24 +20,24 @@ local function randomize_params()
     params:set("damp", random_float(0.05, 0.3))
     
     --FVERB
-    params:set("reverb_mix", math.random(0, 40))
+    params:set("reverb_mix", math.random(0, 30))
     params:set("reverb_predelay", math.random(0, 250))
-    params:set("reverb_lowpass_cutoff", math.random(8000, 12000))
-    params:set("reverb_highpass_cutoff", math.random(100, 300))
-    params:set("reverb_diffusion_1", math.random(50, 90))
-    params:set("reverb_diffusion_2", math.random(50, 90))
-    params:set("reverb_tail_density", math.random(40, 90))
+    params:set("reverb_lowpass_cutoff", math.random(7000, 11000))
+    params:set("reverb_highpass_cutoff", math.random(75, 350))
+    params:set("reverb_diffusion_1", math.random(60, 90))
+    params:set("reverb_diffusion_2", math.random(60, 90))
+    params:set("reverb_tail_density", math.random(50, 90))
     params:set("reverb_decay", math.random(50, 95))
     params:set("reverb_damping", math.random(5500, 7500))
     params:set("reverb_modulator_frequency", random_float(0.1, 1))
-    params:set("reverb_modulator_depth", math.random(40, 100))
+    params:set("reverb_modulator_depth", math.random(50, 100))
     
-    --OTHERS
-    if math.random() <= 0.5 then params:set("density_mod_amt", 0) else params:set("density_mod_amt", math.random(0, 40)) end
-    if math.random() <= 0.75 then params:set("subharmonics_1", 0) else params:set("subharmonics_1", random_float(0, 0.8)) end
-    if math.random() <= 0.75 then params:set("subharmonics_2", 0) else params:set("subharmonics_2", random_float(0, 0.8)) end   
-    if math.random() <= 0.75 then params:set("overtones_1", 0) else params:set("overtones_1", random_float(0, 0.8)) end
-    if math.random() <= 0.75 then params:set("overtones_2", 0) else params:set("overtones_2", random_float(0, 0.8)) end    
+     --EXTRAS
+    if math.random() <= 0.5 then params:set("density_mod_amt", 0) else params:set("density_mod_amt", math.random(0, 50)) end
+    if math.random() <= 0.75 then params:set("subharmonics_1", 0) else params:set("subharmonics_1", random_float(0, 0.5)) end
+    if math.random() <= 0.75 then params:set("subharmonics_2", 0) else params:set("subharmonics_2", random_float(0, 0.5)) end   
+    if math.random() <= 0.75 then params:set("overtones_1", 0) else params:set("overtones_1", random_float(0, 0.5)) end
+    if math.random() <= 0.75 then params:set("overtones_2", 0) else params:set("overtones_2", random_float(0, 0.5)) end    
 end
 
 return {
