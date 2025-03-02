@@ -337,11 +337,6 @@ Engine_twins : CroneEngine {
         this.addCommand("volume", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\gain, msg[2]); });
         this.addCommand("envscale", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\envscale, msg[2]); });
         
-        this.addCommand("tape_wet", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\tape_wet, msg[2]); });
-        this.addCommand("tape_bias", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\tape_bias, msg[2]); });
-        this.addCommand("saturation", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\saturation, msg[2]); });
-        this.addCommand("drive", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\drive, msg[2]); });
-        
         this.addCommand("chew_wet", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\chew_wet, msg[2]); });
         this.addCommand("chew_depth", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\chew_depth, msg[2]); });
         this.addCommand("chew_freq", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\chew_freq, msg[2]); });
