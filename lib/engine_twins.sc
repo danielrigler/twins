@@ -60,7 +60,7 @@ Engine_twins : CroneEngine {
         // Allocate buffer for sine wave
         bufSine = Buffer.alloc(context.server, 1024 * 16, 1);
         bufSine.sine2([2], [0.5], false);
-        context.server.sync; // Ensure buffer allocation is complete
+        context.server.sync;
 
         SynthDef(\synth, {
             arg out, phase_out, level_out, buf_l, buf_r,
@@ -276,21 +276,11 @@ Engine_twins : CroneEngine {
                 \subharmonics_2, 0,
                 \overtones_1, 0,
                 \overtones_2, 0,
-                \tascam, 0 // Initialize Tascam filter to off
+                \tascam, 0
             ], target: pg);
         });
         
-        this.addCommand("tascam", "ii", { arg msg;
-            var voice = msg[1] - 1; 
-            var state = msg[2]; 
-            voices[voice].set(\tascam, state);
-        });
 
-        this.addCommand("hpf", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\hpf, msg[2]); });
-        this.addCommand("hpfrq", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\hpfrq, msg[2]); });
-
-        this.addCommand("sine_drive", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\sine_drive, msg[2]); });
-        this.addCommand("sine_wet", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\sine_wet, msg[2]); });
         this.addCommand("greyhole_delay_time", "f", { arg msg; greyholeEffect.set(\delayTime, msg[1]); });
         this.addCommand("greyhole_damp", "f", { arg msg; greyholeEffect.set(\damp, msg[1]); });
         this.addCommand("greyhole_size", "f", { arg msg; greyholeEffect.set(\size, msg[1]); });
@@ -315,6 +305,9 @@ Engine_twins : CroneEngine {
 
         this.addCommand("cutoff", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\cutoff, msg[2]); });
         this.addCommand("q", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\q, msg[2]); });
+        this.addCommand("hpf", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\hpf, msg[2]); });
+        this.addCommand("hpfrq", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\hpfrq, msg[2]); });
+        
         this.addCommand("granular_gain", "if", { arg msg; var voice = msg[1] - 1; var gain = msg[2]; voices[voice].set(\granular_gain, gain); });
         this.addCommand("density_mod_amt", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\density_mod_amt, msg[2]); });
         this.addCommand("subharmonics_1", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\subharmonics_1, msg[2]); });
@@ -337,17 +330,18 @@ Engine_twins : CroneEngine {
         this.addCommand("volume", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\gain, msg[2]); });
         this.addCommand("envscale", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\envscale, msg[2]); });
         
+        this.addCommand("sine_drive", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\sine_drive, msg[2]); });
+        this.addCommand("sine_wet", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\sine_wet, msg[2]); });
+        this.addCommand("tascam", "ii", { arg msg; var voice = msg[1] - 1; var state = msg[2]; voices[voice].set(\tascam, state); });
         this.addCommand("chew_wet", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\chew_wet, msg[2]); });
         this.addCommand("chew_depth", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\chew_depth, msg[2]); });
         this.addCommand("chew_freq", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\chew_freq, msg[2]); });
         this.addCommand("chew_variance", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\chew_variance, msg[2]); });
-
         this.addCommand("loss_wet", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\loss_wet, msg[2]); });
         this.addCommand("loss_gap", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\loss_gap, msg[2]); });
         this.addCommand("loss_thick", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\loss_thick, msg[2]); });
         this.addCommand("loss_space", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\loss_space, msg[2]); });
         this.addCommand("loss_speed", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\loss_speed, msg[2]); });
-
         this.addCommand("degrade_wet", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\degrade_wet, msg[2]); });
         this.addCommand("degrade_depth", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\degrade_depth, msg[2]); });
         this.addCommand("degrade_amount", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\degrade_amount, msg[2]); });
