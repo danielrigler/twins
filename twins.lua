@@ -49,16 +49,6 @@ local last_key2_press_time = 0
 local last_key3_press_time = 0
 local double_press_threshold = 0.3 -- seconds
 
--- Blinking effect variables
-local blink_state = false
-local blink_metro = metro.init()
-blink_metro.time = 0.35
-blink_metro.event = function()
-    blink_state = not blink_state
-    redraw()
-end
-blink_metro:start()
-
 local function is_audio_loaded(track_num)
     local file_path = params:get(track_num .. "sample")
     return file_path and file_path ~= "" and file_path ~= "none" and file_path ~= "-"
@@ -526,9 +516,11 @@ function key(n, z)
             end
             redraw()
         else
-            -- Original behavior: toggle lock state
+            -- Only toggle lock state for parameters that have lock parameters
+            local lockable_params = {"jitter", "size", "density", "spread", "pitch"}
             local param_name = string.match(current_mode, "%a+") -- Extract the parameter name (e.g., "jitter" from "jitter:")
-            if param_name then
+
+            if param_name and table.find(lockable_params, param_name) then
                 -- Toggle lock state for both tracks
                 params:set("1lock_" .. param_name, params:get("1lock_" .. param_name) == 1 and 2 or 1)
                 params:set("2lock_" .. param_name, params:get("2lock_" .. param_name) == 1 and 2 or 1)
@@ -586,18 +578,30 @@ local function draw_param_row(y, label, param1, param2, is_density, is_pitch, is
     local is_locked2 = is_param_locked(2, param_name)
 
     screen.move(5, y)
-    screen.level(15)
+    screen.level(15)  -- Always use level 15 for the label
     screen.text(label)
 
-    screen.move(50, y)
-    if is_locked1 then
-        if is_highlighted then
-            screen.level(blink_state and 15 or 0)
-        else
-            screen.level(blink_state and 1 or 0)
+    -- Draw a small L-shaped letter for locked parameters
+    local function draw_l_shape(x, y, is_locked)
+        if is_locked then
+            screen.level(1)  -- Locked state is displayed with level 1
+            screen.move(x - 4, y )  -- Move 3 pixels left and 1 pixel up
+            screen.line_rel(2, 0)      -- Draw a horizontal line (2 pixels to the right)
+            screen.move(x - 3, y )  -- Move back to the starting point
+            screen.line_rel(0, -4)      -- Draw a vertical line (2 pixels downward)
+            screen.stroke()            -- Stroke the lines
         end
+    end
+
+    -- Track 1 value
+    if is_locked1 then
+        draw_l_shape(50, y, is_locked1)  -- Draw L-shape before the value
+    end
+    screen.move(50, y)  -- Keep the parameter value in its original position
+    if is_highlighted then
+        screen.level(15)  -- Active row is always level 15, even if locked
     else
-        screen.level(is_highlighted and 15 or 5)
+        screen.level(is_locked1 and 1 or 2)  -- Inactive rows: locked = level 1, unlocked = level 2
     end
     if is_density then
         screen.text(format_density(params:get(param1)))
@@ -609,15 +613,15 @@ local function draw_param_row(y, label, param1, param2, is_density, is_pitch, is
         screen.text(params:string(param1))
     end
 
-    screen.move(93, y)
+    -- Track 2 value
     if is_locked2 then
-        if is_highlighted then
-            screen.level(blink_state and 15 or 0)
-        else
-            screen.level(blink_state and 1 or 0)
-        end
+        draw_l_shape(93, y, is_locked2)  -- Draw L-shape before the value
+    end
+    screen.move(93, y)  -- Keep the parameter value in its original position
+    if is_highlighted then
+        screen.level(15)  -- Active row is always level 15, even if locked
     else
-        screen.level(is_highlighted and 15 or 5)
+        screen.level(is_locked2 and 1 or 2)  -- Inactive rows: locked = level 1, unlocked = level 2
     end
     if is_density then
         screen.text(format_density(params:get(param2)))
@@ -677,7 +681,7 @@ function redraw()
     if current_mode == "seek" or current_mode == "lpf" or current_mode == "hpf" or current_mode == "speed" or current_mode == "pan" then
         screen.level(15) -- Bright text for highlighted row
     else
-        screen.level(5) -- Dim text for non-highlighted rows
+        screen.level(2) -- Dim text for non-highlighted rows
     end
     if current_mode == "seek" then
         screen.text(format_seek(params:get("1seek"))) -- Display seek for track 1
@@ -700,7 +704,7 @@ function redraw()
     if current_mode == "seek" or current_mode == "lpf" or current_mode == "hpf" or current_mode == "speed" or current_mode == "pan" then
         screen.level(15) -- Bright text for highlighted row
     else
-        screen.level(5) -- Dim text for non-highlighted rows
+        screen.level(2) -- Dim text for non-highlighted rows
     end
     if current_mode == "seek" then
         screen.text(format_seek(params:get("2seek"))) -- Display seek for track 2
@@ -718,7 +722,7 @@ function redraw()
         screen.text(string.format("%.2fx", speed2))  -- Display speed for track 2
     end
 
-    screen.level(5)
+    screen.level(3)
 
     -- Draw volume bars if files are loaded
     if is_audio_loaded(1) then
@@ -767,7 +771,6 @@ end
 
 function cleanup()
     if ui_metro then ui_metro:stop() end
-    if blink_metro then blink_metro:stop() end
     for i = 1, 2 do
         if randomize_metro[i] then randomize_metro[i]:stop() end
     end

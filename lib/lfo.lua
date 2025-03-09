@@ -21,16 +21,44 @@ for i = 1, number_of_outputs do
   }
 end
 
-function lfo.clearLFOs()
-    for i = 1, 8 do
-        if params:get(i .. "lfo") == 2 then
-            params:set(i .. "lfo", 1) -- Turn off the LFO
+table.find = function(tbl, value)
+    for i, v in ipairs(tbl) do
+        if v == value then
+            return i
         end
-        params:set(i .. "lfo_target", 1) -- Reset LFO target to "none"
+    end
+    return nil
+end
+
+function lfo.clearLFOs()
+    local function is_locked(target)
+        local track = string.sub(target, 1, 1)
+        local param = string.sub(target, 2)
+
+        local lockable_params = {"jitter", "size", "density", "spread", "pitch"}
+        
+        if table.find(lockable_params, param) then
+            local lock_param = track .. "lock_" .. param
+            return params:get(lock_param) == 2
+        else
+            return false
+        end
+    end
+
+    for i = 1, 8 do
+        local target_index = params:get(i .. "lfo_target")
+        local target_param = lfo.lfo_targets[target_index]
+
+        if not is_locked(target_param) then
+            if params:get(i .. "lfo") == 2 then
+                params:set(i .. "lfo", 1)
+            end
+            params:set(i .. "lfo_target", 1)
+        end
     end
 end
 
--- Define lfo_targets as part of the lfo table
+
 lfo.lfo_targets = {
     "none", "1pan", "2pan", "1speed", "2speed", "1seek", "2seek", "1jitter", "2jitter", 
     "1spread", "2spread", "1size", "2size", "1density", "2density", "1volume", "2volume", 
@@ -114,81 +142,71 @@ lfo.target_ranges = {
 }
 
 function lfo.randomize_lfos()
-      lfo.clearLFOs()
-      params:set("1pan", -15)
-      params:set("2pan", 15)
-    -- Create a list of available LFO targets based on their chances
-    local available_targets = {}
-    for target, ranges in pairs(lfo.target_ranges) do
-        if math.random() < ranges.chance then -- Use the chance value for selection
-            table.insert(available_targets, target)
-        end
-    end
+    local function is_locked(target)
+        local track = string.sub(target, 1, 1)
+        local param = string.sub(target, 2)
 
-    -- Randomly select 8 targets from the available ones
-    local selected_targets = {}
-    for i = 1, 8 do
-        if #available_targets > 0 then
-            -- Randomly pick a target from the available list
-            local index = math.random(1, #available_targets)
-            table.insert(selected_targets, available_targets[index])
-            -- Remove the selected target from the available list to avoid duplicates
-            table.remove(available_targets, index)
+        local lockable_params = {"jitter", "size", "density", "spread", "pitch"}
+
+        if table.find(lockable_params, param) then
+            local lock_param = track .. "lock_" .. param
+            return params:get(lock_param) == 2
         else
-            -- If no more targets are available, break the loop
-            break
+            return false
         end
     end
 
-    -- Assign random LFO parameters to each selected target
-    for i, target in ipairs(selected_targets) do
-        -- Find the index of the target in the lfo_targets list
-        local target_index = 1
-        for j, t in ipairs(lfo.lfo_targets) do
-            if t == target then
-                target_index = j
-                break
-            end
+    local function randomize_lfo(i, target)
+        local ranges = lfo.target_ranges[target]
+        if not ranges then return end
+
+        local target_index = table.find(lfo.lfo_targets, target)
+        if target_index then
+            params:set(i .. "lfo_target", target_index)
         end
 
-        -- Assign the target to the LFO
-        params:set(i .. "lfo_target", target_index)
-
-        -- Get the ranges for this target
-        local ranges = lfo.target_ranges[target]
-
-        -- Randomize LFO parameters based on the target's ranges
         if ranges.depth then
-            -- Randomize depth within the specified range
             lfo[i].depth = math.random(ranges.depth.min, ranges.depth.max)
-            -- Update the corresponding parameter
             params:set(i .. "lfo_depth", lfo[i].depth)
         end
 
         if ranges.offset then
-            -- Randomize offset within the specified range
             lfo[i].offset = math.random(ranges.offset.min * 100, ranges.offset.max * 100) / 100
-            -- Update the corresponding parameter
             params:set(i .. "offset", lfo[i].offset)
         end
 
         if ranges.frequency then
-            -- Randomize frequency within the specified range
             lfo[i].freq = math.random(ranges.frequency.min * 100, ranges.frequency.max * 100) / 100
-            -- Update the corresponding parameter
             params:set(i .. "lfo_freq", lfo[i].freq)
         end
 
         if ranges.waveform then
-            -- Randomly select a waveform from the available options
             local waveform_index = math.random(1, #ranges.waveform)
             lfo[i].waveform = ranges.waveform[waveform_index]
-            -- Update the corresponding parameter
             params:set(i .. "lfo_shape", waveform_index)
         end
 
-        -- Turn on the LFO
         params:set(i .. "lfo", 2)
+    end
+
+    local available_targets = {}
+    for target, ranges in pairs(lfo.target_ranges) do
+        if not is_locked(target) and math.random() < ranges.chance then
+            table.insert(available_targets, target)
+        end
+    end
+
+    for i = 1, 8 do
+        local target_index = params:get(i .. "lfo_target")
+        local target_param = lfo.lfo_targets[target_index]
+
+        if is_locked(target_param) then
+         elseif #available_targets > 0 then
+            local index = math.random(1, #available_targets)
+            local selected_target = available_targets[index]
+            table.remove(available_targets, index)
+             randomize_lfo(i, selected_target)
+        end
     end
 end
 
