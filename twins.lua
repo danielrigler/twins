@@ -603,11 +603,13 @@ local function draw_param_row(y, label, param1, param2, is_density, is_pitch, is
         screen.text(format_density(params:get(param1)))
     elseif is_pitch then
         screen.text(format_pitch(params:get(param1)))
+    elseif param_name == "spread" then
+        screen.text(string.format("%.0f%%", params:get(param1)))
     else
         screen.text(params:string(param1))
     end
 
-    screen.move(94, y)
+    screen.move(93, y)
     if is_locked2 then
         if is_highlighted then
             screen.level(blink_state and 15 or 0)
@@ -621,6 +623,8 @@ local function draw_param_row(y, label, param1, param2, is_density, is_pitch, is
         screen.text(format_density(params:get(param2)))
     elseif is_pitch then
         screen.text(format_pitch(params:get(param2)))
+    elseif param_name == "spread" then
+        screen.text(string.format("%.0f%%", params:get(param2)))
     else
         screen.text(params:string(param2))
     end
@@ -692,7 +696,7 @@ function redraw()
     end
 
     -- Display track 2 value (always bright if it's the active mode)
-    screen.move(94, 60)
+    screen.move(93, 60)
     if current_mode == "seek" or current_mode == "lpf" or current_mode == "hpf" or current_mode == "speed" or current_mode == "pan" then
         screen.level(15) -- Bright text for highlighted row
     else
@@ -751,8 +755,8 @@ function redraw()
     end
 
     if is_audio_loaded(2) and lfo_assigned_to_pan2 then
-        local center_start = 95
-        local center_end = 120
+        local center_start = 94
+        local center_end = 119
         local pan2 = params:get("2pan")
         local pan2_pos = util.linlin(-100, 100, center_start, center_end, pan2)
         screen.rect(pan2_pos - 1, 0, 4, 1)
