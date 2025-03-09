@@ -6,7 +6,7 @@
 --           by: @dddstudio                       
 --
 --                          
---                             v0.1 
+--                            v0.11
 -- E1: Master Volume
 -- K1+E2/E3: Volume 1/2
 -- K1+E1: Crossfade Volumes
@@ -34,7 +34,7 @@ local lfo = include("lib/lfo")
 local randpara = include("lib/randpara")
 delay = include("lib/delay")
 installer_ = include("lib/scinstaller/scinstaller")
-installer = installer_:new{requirements = {"Fverb","AnalogChew","AnalogLoss","AnalogDegrade"}, 
+installer = installer_:new{requirements = {"Fverb","AnalogChew"}, 
   zip = "https://github.com/schollz/portedplugins/releases/download/v0.4.6/PortedPlugins-RaspberryPi.zip"}
 engine.name = installer:ready() and 'twins' or nil
 
@@ -135,15 +135,15 @@ local function setup_params()
 
     params:add_group("Filters", 8)
     params:add_control("1cutoff","1 LPF cutoff",controlspec.new(20,20000,"exp",0,20000,"Hz")) params:set_action("1cutoff",function(value) engine.cutoff(1,value) end)
-    params:add_control("1q","1 LPF resonance",controlspec.new(0,4,"lin",0.01,0.4)) params:set_action("1q",function(value) engine.q(1,value) end)
+    params:add_control("1q","1 LPF resonance",controlspec.new(0,4,"lin",0.01,0)) params:set_action("1q",function(value) engine.q(1,value) end)
     params:add_control("2cutoff","2 LPF cutoff",controlspec.new(20,20000,"exp",0,20000,"Hz")) params:set_action("2cutoff",function(value) engine.cutoff(2,value) end)
-    params:add_control("2q","2 LPF resonance",controlspec.new(0,4,"lin",0.01,0.4)) params:set_action("2q",function(value) engine.q(2,value) end)
+    params:add_control("2q","2 LPF resonance",controlspec.new(0,4,"lin",0.01,0)) params:set_action("2q",function(value) engine.q(2,value) end)
     params:add_control("1hpf", "1 HPF cutoff", controlspec.new(20, 20000, "exp", 0, 20, "Hz")) params:set_action("1hpf", function(value) engine.hpf(1, value) end)
     params:add_control("1hpfrq","1 HPF resonance",controlspec.new(0,1,"lin",0.01,1)) params:set_action("1hpfrq",function(value) engine.hpfrq(1,value) end)
     params:add_control("2hpf", "2 HPF cutoff", controlspec.new(20, 20000, "exp", 0, 20, "Hz")) params:set_action("2hpf", function(value) engine.hpf(2, value) end)
     params:add_control("2hpfrq","2 HPF resonance",controlspec.new(0,1,"lin",0.01,1)) params:set_action("2hpfrq",function(value) engine.hpfrq(2,value) end)
     
-    params:add_group("Tape", 17)
+    params:add_group("Tape", 7)
     
     params:add_option("tascam_filter", "Tascam Filter", {"off", "on"}, 1) params:set_action("tascam_filter", function(value) engine.tascam(1, value - 1) engine.tascam(2, value - 1) end)
     params:add_control("sine_wet", "Sine Drive Mix", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("sine_wet", function(value) engine.sine_wet(1, value / 100) engine.sine_wet(2, value / 100) end)
@@ -152,16 +152,6 @@ local function setup_params()
     params:add{type = "control", id = "chew_depth", name = "Chew Depth", controlspec = controlspec.new(0, 1, "lin", 0.01, 0.5, ""), action = function(value) engine.chew_depth(1, value) engine.chew_depth(2, value) end}
     params:add{type = "control", id = "chew_freq", name = "Chew Freq", controlspec = controlspec.new(0, 1, "lin", 0.01, 0.5, ""), action = function(value) engine.chew_freq(1, value) engine.chew_freq(2, value) end}
     params:add{type = "control", id = "chew_variance", name = "Chew Variance", controlspec = controlspec.new(0, 1, "lin", 0.01, 0.5, ""), action = function(value) engine.chew_variance(1, value) engine.chew_variance(2, value) end}
-    params:add{type = "control", id = "loss_wet", name = "Loss Mix", controlspec = controlspec.new(0, 100, "lin", 1, 0, "%"), action = function(value) engine.loss_wet(1, value / 100) engine.loss_wet(2, value / 100) end}
-    params:add{type = "control", id = "loss_gap", name = "Loss Gap", controlspec = controlspec.new(0, 1, "lin", 0.01, 0.5, ""), action = function(value) engine.loss_gap(1, value) engine.loss_gap(2, value) end}
-    params:add{type = "control", id = "loss_thick", name = "Loss Thick", controlspec = controlspec.new(0, 1, "lin", 0.01, 0.5, ""), action = function(value) engine.loss_thick(1, value) engine.loss_thick(2, value) end}
-    params:add{type = "control", id = "loss_space", name = "Loss Space", controlspec = controlspec.new(0, 1, "lin", 0.01, 0.5, ""), action = function(value) engine.loss_space(1, value) engine.loss_space(2, value) end}
-    params:add{type = "control", id = "loss_speed", name = "Loss Speed", controlspec = controlspec.new(0, 2, "lin", 0.01, 1.0, ""), action = function(value) engine.loss_speed(1, value) engine.loss_speed(2, value) end}
-    params:add{type = "control", id = "degrade_wet", name = "Degrade Mix", controlspec = controlspec.new(0, 100, "lin", 1, 0, "%"), action = function(value) engine.degrade_wet(1, value / 100) engine.degrade_wet(2, value / 100) end}
-    params:add{type = "control", id = "degrade_depth", name = "Degrade Depth", controlspec = controlspec.new(0, 1, "lin", 0.01, 0.5, ""), action = function(value) engine.degrade_depth(1, value) engine.degrade_depth(2, value) end}
-    params:add{type = "control", id = "degrade_amount", name = "Degrade Amount", controlspec = controlspec.new(0, 1, "lin", 0.01, 0.5, ""), action = function(value) engine.degrade_amount(1, value) engine.degrade_amount(2, value) end}
-    params:add{type = "control", id = "degrade_variance", name = "Degrade Variance", controlspec = controlspec.new(0, 1, "lin", 0.01, 0.5, ""), action = function(value) engine.degrade_variance(1, value) engine.degrade_variance(2, value) end}
-    params:add{type = "control", id = "degrade_envelope", name = "Degrade Envelope", controlspec = controlspec.new(0, 1, "lin", 0.01, 0.5, ""), action = function(value) engine.degrade_envelope(1, value) engine.degrade_envelope(2, value) end}
 
     params:add_group("LFOs", 56)
     lfo.init()
@@ -189,7 +179,7 @@ local function setup_params()
       params:add_control(i .. "speed", i .. " speed", controlspec.new(-2, 2, "lin", 0.01, 0, "")) params:set_action(i .. "speed", function(value) engine.speed(i, value) end)
       params:add_taper(i .. "density", i .. " density", 1, 50, 20, 1) params:set_action(i .. "density", function(value) engine.density(i, value) end)
       params:add_control(i .. "pitch", i .. " pitch", controlspec.new(-48, 48, "lin", 1, 0, "st")) params:set_action(i .. "pitch", function(value) engine.pitch_offset(i, math.pow(0.5, -value / 12)) end)
-      params:add_taper(i .. "jitter", i .. " jitter", 0, 999, 250, 5, "ms") params:set_action(i .. "jitter", function(value) engine.jitter(i, value / 1000) end)
+      params:add_taper(i .. "jitter", i .. " jitter", 0, 1999, 250, 5, "ms") params:set_action(i .. "jitter", function(value) engine.jitter(i, value / 1000) end)
       params:add_taper(i .. "size", i .. " size", 1, 599, 100, 5, "ms") params:set_action(i .. "size", function(value) engine.size(i, value / 1000) end)
       params:add_taper(i .. "spread", i .. " spread", 0, 100, 0, 0, "%") params:set_action(i .. "spread", function(value) engine.spread(i, value / 100) end)
       params:add_control(i .. "seek", i .. " seek", controlspec.new(0, 100, "lin", 0.01, 0, "%")) params:set_action(i .. "seek", function(value) engine.seek(i, value) end)
@@ -209,11 +199,11 @@ local function setup_params()
 
     params:add_group("Randomizer", 10)
     params:add_taper("min_jitter", "jitter (min)", 0, 500, 0, 5, "ms")
-    params:add_taper("max_jitter", "jitter (max)", 0, 999, 999, 5, "ms")
+    params:add_taper("max_jitter", "jitter (max)", 0, 1999, 1999, 5, "ms")
     params:add_taper("min_size", "size (min)", 1, 599, 100, 5, "ms")
-    params:add_taper("max_size", "size (max)", 1, 599, 599, 5, "ms")
+    params:add_taper("max_size", "size (max)", 1, 599, 500, 5, "ms")
     params:add_taper("min_density", "density (min)", 1, 50, 2, 5, "Hz")
-    params:add_taper("max_density", "density (max)", 1, 50, 20, 5, "Hz")
+    params:add_taper("max_density", "density (max)", 1, 50, 15, 5, "Hz")
     params:add_taper("min_spread", "spread (min)", 0, 100, 0, 0, "%")
     params:add_taper("max_spread", "spread (max)", 0, 100, 100, 0, "%")
     params:add_control("min_pitch", "pitch (min)", controlspec.new(-48, 48, "lin", 1, -12, "st"))
@@ -341,10 +331,6 @@ function init() if not installer:ready() then clock.run(function() while true do
     setup_engine()
 end
 
-local function adjust_volume(sample_num, delta)
-    params:delta(sample_num .. "volume", 5 * delta)
-end
-
 local function wrap_value(value, min, max)
     if value < min then
         return max + (value - min)
@@ -362,17 +348,17 @@ function enc(n, d)
         [1] = function()
             if key1_pressed then
                 -- Adjust volumes in opposite directions
-                adjust_volume("1", 0.75*d)  
-                adjust_volume("2", -0.75*d) 
+                params:delta("1volume", 5*d)    
+                params:delta("2volume", -5*d)    
             else
                 -- Normal behavior: adjust both volumes in the same direction
-                adjust_volume("1", 0.75*d)
-                adjust_volume("2", 0.75*d)
+                params:delta("1volume", 5*d)    
+                params:delta("2volume", 5*d)    
             end
         end,
         [2] = function()
             if key1_pressed then 
-                adjust_volume("1", 0.75*d)
+                params:delta("1volume", 5*d) 
             else
                 local param_name
                 if current_mode == "speed" then param_name = "1speed"
@@ -423,7 +409,7 @@ function enc(n, d)
         end,
         [3] = function()
             if key1_pressed then 
-                adjust_volume("2", 0.75*d)
+                params:delta("2volume", 5*d) 
             else
                 local param_name
                 if current_mode == "speed" then param_name = "2speed"

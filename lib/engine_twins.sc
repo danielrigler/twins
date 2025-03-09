@@ -79,8 +79,6 @@ Engine_twins : CroneEngine {
             sine_drive=1, sine_wet=0,
             compensation_factor=0.1,
             chew_wet=0, chew_depth=0.5, chew_freq=0.5, chew_variance=0.5,
-            loss_wet=0, loss_gap=0.5, loss_thick=0.5, loss_space=0.5, loss_speed=1,
-            degrade_wet=0, degrade_depth=0.5, degrade_amount=0.5, degrade_variance=0.5, degrade_envelope=0.5,
             tascam=0;
 
             var grain_trig;
@@ -185,21 +183,11 @@ Engine_twins : CroneEngine {
                 AnalogChew.ar(sig_mix, chew_depth, chew_freq, chew_variance)
             ]);
 
-            sig_mix = SelectX.ar(Lag.kr(loss_wet), [
-                sig_mix,
-                AnalogLoss.ar(sig_mix, loss_gap, loss_thick, loss_space, loss_speed)
-            ]);
-
-            sig_mix = SelectX.ar(Lag.kr(degrade_wet), [
-                sig_mix,
-                AnalogDegrade.ar(sig_mix, degrade_depth, degrade_amount, degrade_variance, degrade_envelope)
-            ]);
-
             env = EnvGen.kr(Env.asr(1, 1, 1), gate: gate, timeScale: envscale);
             level = env;
 
             // Output the mixed signal
-            Out.ar(out, sig_mix * level * Lag.kr(gain));
+            Out.ar(out, sig_mix * level * gain);
             Out.kr(phase_out, pos_sig);
             Out.kr(level_out, level);
         }).add;
@@ -337,16 +325,6 @@ Engine_twins : CroneEngine {
         this.addCommand("chew_depth", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\chew_depth, msg[2]); });
         this.addCommand("chew_freq", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\chew_freq, msg[2]); });
         this.addCommand("chew_variance", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\chew_variance, msg[2]); });
-        this.addCommand("loss_wet", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\loss_wet, msg[2]); });
-        this.addCommand("loss_gap", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\loss_gap, msg[2]); });
-        this.addCommand("loss_thick", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\loss_thick, msg[2]); });
-        this.addCommand("loss_space", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\loss_space, msg[2]); });
-        this.addCommand("loss_speed", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\loss_speed, msg[2]); });
-        this.addCommand("degrade_wet", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\degrade_wet, msg[2]); });
-        this.addCommand("degrade_depth", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\degrade_depth, msg[2]); });
-        this.addCommand("degrade_amount", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\degrade_amount, msg[2]); });
-        this.addCommand("degrade_variance", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\degrade_variance, msg[2]); });
-        this.addCommand("degrade_envelope", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\degrade_envelope, msg[2]); });
         
         seek_tasks = Array.fill(nvoices, { arg i; Routine {} });
     }
