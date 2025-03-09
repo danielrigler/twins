@@ -98,14 +98,14 @@ lfo.target_ranges = {
         chance = 0.6
     },
     ["1density"] = {
-        depth = { min = 2, max = 40 },
+        depth = { min = 2, max = 30 },
         offset = { min = -0.7, max = 0.4 },
         frequency = { min = 0.01, max = 0.1 },
         waveform = { "sine" },
         chance = 0.6
     },
     ["2density"] = {
-        depth = { min = 2, max = 40 },
+        depth = { min = 2, max = 30 },
         offset = { min = -0.7, max = 0.4 },
         frequency = { min = 0.01, max = 0.1 },
         waveform = { "sine" },
