@@ -16,7 +16,7 @@ local function randomize_params()
     params:set("mod_depth", random_float(0.5, 1))
     params:set("mod_freq", random_float(0.1, 1.5))
     params:set("diff", random_float(0.50, 0.9))
-    params:set("feedback", random_float(0.1, 0.75))
+    params:set("feedback", random_float(0.1, 0.6))
     params:set("damp", random_float(0.05, 0.3))
     
     --FVERB

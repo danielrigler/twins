@@ -70,44 +70,44 @@ lfo.target_ranges = {
         chance = 0.6
     },
     ["1spread"] = {
-        depth = { min = 2, max = 50 },
+        depth = { min = 2, max = 60 },
         offset = { min = -0.5, max = 0.2 },
         frequency = { min = 0.01, max = 0.1 },
         waveform = { "sine" },
         chance = 0.6
     },
     ["2spread"] = {
-        depth = { min = 2, max = 50 },
+        depth = { min = 2, max = 60 },
         offset = { min = -0.5, max = 0.2 },
         frequency = { min = 0.01, max = 0.1 },
         waveform = { "sine" },
         chance = 0.6
     },
     ["1size"] = {
-        depth = { min = 2, max = 50 },
-        offset = { min = -0.6, max = 0.6 },
+        depth = { min = 5, max = 70 },
+        offset = { min = -0.7, max = 0.7 },
         frequency = { min = 0.01, max = 0.1 },
         waveform = { "sine" },
         chance = 0.6
     },
     ["2size"] = {
-        depth = { min = 2, max = 50 },
-        offset = { min = -0.6, max = 0.6 },
+        depth = { min = 5, max = 70 },
+        offset = { min = -0.7, max = 0.7 },
         frequency = { min = 0.01, max = 0.1 },
         waveform = { "sine" },
         chance = 0.6
     },
     ["1density"] = {
-        depth = { min = 2, max = 30 },
-        offset = { min = -0.7, max = 0.4 },
-        frequency = { min = 0.01, max = 0.1 },
+        depth = { min = 2, max = 40 },
+        offset = { min = -0.75, max = 0.4 },
+        frequency = { min = 0.01, max = 0.3 },
         waveform = { "sine" },
         chance = 0.6
     },
     ["2density"] = {
-        depth = { min = 2, max = 30 },
-        offset = { min = -0.7, max = 0.4 },
-        frequency = { min = 0.01, max = 0.1 },
+        depth = { min = 2, max = 40 },
+        offset = { min = -0.75, max = 0.4 },
+        frequency = { min = 0.01, max = 0.3 },
         waveform = { "sine" },
         chance = 0.6
     }
@@ -204,10 +204,10 @@ function lfo.process()
       elseif target == 7 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 0, 100)) --2seek
       elseif target == 8 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 0, 1999)) --1jitter
       elseif target == 9 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 0, 1999)) --2jitter
-      elseif target == 10 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 0, 100)) --1spread
-      elseif target == 11 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 0, 100)) --2spread
-      elseif target == 12 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 1, 400)) --1size
-      elseif target == 13 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 1, 400)) --2size
+      elseif target == 10 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 0, 90)) --1spread
+      elseif target == 11 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 0, 90)) --2spread
+      elseif target == 12 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 100, 500)) --1size
+      elseif target == 13 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 100, 500)) --2size
       elseif target == 14 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 1, 20)) --1density
       elseif target == 15 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 1, 20)) --2density
       elseif target == 16 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, -100.00, 100.00)) --1volume
