@@ -36,7 +36,7 @@ norns
 **K1**+**K2** or **K1**+**K3**: Randomize 1/2
 ### Download
 
-**v0.11** **[github link](https://github.com/danielrigler/twins)**
+**v0.12** **[github link](https://github.com/danielrigler/twins)**
 
 or from Maiden:
 ```
@@ -44,5 +44,6 @@ or from Maiden:
 ```
 And after this do not forget to restart. 
 ### Version history
+* **v0.12** - Volume fix, reverse direction mod
 * **v0.11** - Minor tweaks and optimizations. Increased grain size range. Locking enhancements.
 * **v0.1** - First release.
