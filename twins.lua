@@ -148,10 +148,10 @@ local function setup_params()
     params:add_group("Extras", 13)
     params:add_taper("1granular_gain", "Granular Mix 1", 0, 100, 100, 0, "%") params:set_action("1granular_gain", function(value) engine.granular_gain(1, value / 100) end)
     params:add_option("1pitch_mode", "Pitch Mode 1", {"match speed", "independent"}, 2) params:set_action("1pitch_mode", function(value) engine.pitch_mode(1, value - 1) end)
-    params:add_control("direction_mod", "Reverse 1", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("direction_mod", function(value) engine.direction_mod(1, value / 100) end)
+    params:add_control("1direction_mod", "Reverse 1", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("1direction_mod", function(value) engine.direction_mod(1, value / 100) end)
     params:add_taper("2granular_gain", "Granular Mix 2", 0, 100, 100, 0, "%") params:set_action("2granular_gain", function(value) engine.granular_gain(2, value / 100) end)
     params:add_option("2pitch_mode", "Pitch Mode 2", {"match speed", "independent"}, 2) params:set_action("2pitch_mode", function(value) engine.pitch_mode(2, value - 1) end)
-    params:add_control("direction_mod", "Reverse 2", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("direction_mod", function(value) engine.direction_mod(2, value / 100) end)
+    params:add_control("2direction_mod", "Reverse 2", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("2direction_mod", function(value) engine.direction_mod(2, value / 100) end)
     params:add_taper("density_mod_amt", "Density Mod", 0, 100, 0, 0, "%") params:set_action("density_mod_amt", function(value) engine.density_mod_amt(1, value / 100) engine.density_mod_amt(2, value / 100) end)
     params:add_control("subharmonics_2","Subharmonics -2oct",controlspec.new(0.00,1.00,"lin",0.01,0)) params:set_action("subharmonics_2",function(value) engine.subharmonics_2(1,value) engine.subharmonics_2(2,value) end)
     params:add_control("subharmonics_1","Subharmonics -1oct",controlspec.new(0.00,1.00,"lin",0.01,0)) params:set_action("subharmonics_1",function(value) engine.subharmonics_1(1,value) engine.subharmonics_1(2,value) end)
@@ -339,17 +339,17 @@ function enc(n, d)
         [1] = function()
             if key1_pressed then
                 -- Adjust volumes in opposite directions
-                params:delta("1volume", 4*d)    
-                params:delta("2volume", -4*d)    
+                params:delta("1volume", 3*d)    
+                params:delta("2volume", -3*d)    
             else
                 -- Normal behavior: adjust both volumes in the same direction
-                params:delta("1volume", 4*d)    
-                params:delta("2volume", 4*d)    
+                params:delta("1volume", 3*d)    
+                params:delta("2volume", 3*d)    
             end
         end,
         [2] = function()
             if key1_pressed then 
-                params:delta("1volume", 4*d) 
+                params:delta("1volume", 3*d) 
             else
                 local param_name
                 if current_mode == "speed" then param_name = "1speed"
@@ -400,7 +400,7 @@ function enc(n, d)
         end,
         [3] = function()
             if key1_pressed then 
-                params:delta("2volume", 4*d) 
+                params:delta("2volume", 3*d) 
             else
                 local param_name
                 if current_mode == "speed" then param_name = "2speed"
@@ -712,7 +712,6 @@ function redraw()
     elseif current_mode == "pan" then
         screen.text(string.format("%.0f%%", params:get("2pan"))) -- Display pan for track 2
     elseif current_mode == "lpf" or current_mode == "hpf" then
-        -- Display LPF or HPF cutoff based on current_filter_mode
         if current_filter_mode == "lpf" then
             screen.text(string.format("%.0f", params:get("2cutoff"))) -- Display LPF for track 2
         else
@@ -725,16 +724,15 @@ function redraw()
 
     screen.level(3)
 
-    -- Draw volume bars if files are loaded
-   -- if is_audio_loaded(1) then
-        screen.rect(0, 64 - bar1_height, bar_width, bar1_height) -- Draw the volume bar
+    if is_audio_loaded(1) then
+        screen.rect(0, 64 - bar1_height, bar_width, bar1_height)
         screen.fill()
-  --  end
+    end
 
-  --  if is_audio_loaded(2) then
-        screen.rect(128 - bar_width, 64 - bar2_height, bar_width, bar2_height) -- Draw the volume bar
+    if is_audio_loaded(2) then
+        screen.rect(128 - bar_width, 64 - bar2_height, bar_width, bar2_height)
         screen.fill()
- --   end
+    end
 
     -- Check if an LFO is assigned to the panning parameters
     local lfo_assigned_to_pan1 = false
@@ -749,7 +747,6 @@ function redraw()
         end
     end
 
-    -- Draw panning bars only if an LFO is assigned to the panning parameters
     if is_audio_loaded(1) and lfo_assigned_to_pan1 then
         local center_start = 51
         local center_end = 76
