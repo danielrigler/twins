@@ -6,7 +6,7 @@
 --           by: @dddstudio                       
 --
 --                          
---                            v0.11
+--                            v0.12
 -- E1: Master Volume
 -- K1+E2/E3: Volume 1/2
 -- K1+E1: Crossfade Volumes
@@ -110,18 +110,18 @@ local function setup_params()
     params:add_control("mod_freq", "Mod freq", controlspec.new(0.0, 10.0, "lin", 0.01, 0.7, "Hz")) params:set_action("mod_freq", function(value) engine.greyhole_mod_freq(value) end)
     
     params:add_group("Fverb", 12)
-    params:add_taper("reverb_mix", "Mix", 0, 100, 15, 0, "%") params:set_action("reverb_mix", function(value) engine.reverb_mix(value / 100) end)
-    params:add_taper("reverb_predelay", "Predelay", 0, 250, 60, 0, "ms") params:set_action("reverb_predelay", function(value) engine.reverb_predelay(value) end)
+    params:add_taper("reverb_mix", "Mix", 0, 100, 17.5, 0, "%") params:set_action("reverb_mix", function(value) engine.reverb_mix(value / 100) end)
+    params:add_taper("reverb_predelay", "Predelay", 0, 250, 20, 0, "ms") params:set_action("reverb_predelay", function(value) engine.reverb_predelay(value) end)
     params:add_taper("reverb_input_amount", "Input amount", 0, 100, 100, 0, "%") params:set_action("reverb_input_amount", function(value) engine.reverb_input_amount(value) end)
-    params:add_taper("reverb_lowpass_cutoff", "Lowpass cutoff", 0, 20000, 10500, 0, "Hz") params:set_action("reverb_lowpass_cutoff", function(value) engine.reverb_lowpass_cutoff(value) end)
-    params:add_taper("reverb_highpass_cutoff", "Highpass cutoff", 0, 20000, 200, 0, "Hz") params:set_action("reverb_highpass_cutoff", function(value) engine.reverb_highpass_cutoff(value) end)
-    params:add_taper("reverb_diffusion_1", "Diffusion 1", 0, 100, 75, 0, "%") params:set_action("reverb_diffusion_1", function(value) engine.reverb_diffusion_1(value) end)
-    params:add_taper("reverb_diffusion_2", "Diffusion 2", 0, 100, 62.5, 0, "%") params:set_action("reverb_diffusion_2", function(value) engine.reverb_diffusion_2(value) end)
-    params:add_taper("reverb_tail_density", "Tail density", 0, 100, 70, 0, "%") params:set_action("reverb_tail_density", function(value) engine.reverb_tail_density(value) end)
-    params:add_taper("reverb_decay", "Decay", 0, 100, 85, 0, "%") params:set_action("reverb_decay", function(value) engine.reverb_decay(value) end)
-    params:add_taper("reverb_damping", "Damping", 0, 20000, 6500, 0, "Hz") params:set_action("reverb_damping", function(value) engine.reverb_damping(value) end)
+    params:add_taper("reverb_lowpass_cutoff", "Lowpass cutoff", 0, 20000, 8000, 0, "Hz") params:set_action("reverb_lowpass_cutoff", function(value) engine.reverb_lowpass_cutoff(value) end)
+    params:add_taper("reverb_highpass_cutoff", "Highpass cutoff", 0, 20000, 75, 0, "Hz") params:set_action("reverb_highpass_cutoff", function(value) engine.reverb_highpass_cutoff(value) end)
+    params:add_taper("reverb_diffusion_1", "Diffusion 1", 0, 100, 85, 0, "%") params:set_action("reverb_diffusion_1", function(value) engine.reverb_diffusion_1(value) end)
+    params:add_taper("reverb_diffusion_2", "Diffusion 2", 0, 100, 85, 0, "%") params:set_action("reverb_diffusion_2", function(value) engine.reverb_diffusion_2(value) end)
+    params:add_taper("reverb_tail_density", "Tail density", 0, 100, 75, 0, "%") params:set_action("reverb_tail_density", function(value) engine.reverb_tail_density(value) end)
+    params:add_taper("reverb_decay", "Decay", 0, 100, 80, 0, "%") params:set_action("reverb_decay", function(value) engine.reverb_decay(value) end)
+    params:add_taper("reverb_damping", "Damping", 0, 20000, 6000, 0, "Hz") params:set_action("reverb_damping", function(value) engine.reverb_damping(value) end)
     params:add_taper("reverb_modulator_frequency", "Modulator frequency", 0, 10, 1, 0, "Hz") params:set_action("reverb_modulator_frequency", function(value) engine.reverb_modulator_frequency(value) end)
-    params:add_taper("reverb_modulator_depth", "Modulator depth", 0, 100, 90, 0, "%") params:set_action("reverb_modulator_depth", function(value) engine.reverb_modulator_depth(value / 100) end)
+    params:add_taper("reverb_modulator_depth", "Modulator depth", 0, 100, 40, 0, "%") params:set_action("reverb_modulator_depth", function(value) engine.reverb_modulator_depth(value / 100) end)
 
     params:add_group("Filters", 8)
     params:add_control("1cutoff","1 LPF cutoff",controlspec.new(20,20000,"exp",0,20000,"Hz")) params:set_action("1cutoff",function(value) engine.cutoff(1,value) end)
@@ -133,11 +133,10 @@ local function setup_params()
     params:add_control("2hpf", "2 HPF cutoff", controlspec.new(20, 20000, "exp", 0, 20, "Hz")) params:set_action("2hpf", function(value) engine.hpf(2, value) end)
     params:add_control("2hpfrq","2 HPF resonance",controlspec.new(0,1,"lin",0.01,1)) params:set_action("2hpfrq",function(value) engine.hpfrq(2,value) end)
     
-    params:add_group("Tape", 7)
+    params:add_group("Tape", 6)
     
-    params:add_option("tascam_filter", "Tascam Filter", {"off", "on"}, 1) params:set_action("tascam_filter", function(value) engine.tascam(1, value - 1) engine.tascam(2, value - 1) end)
-    params:add_control("sine_wet", "Sine Drive Mix", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("sine_wet", function(value) engine.sine_wet(1, value / 100) engine.sine_wet(2, value / 100) end)
-    params:add_control("sine_drive", "Sine Drive", controlspec.new(0, 2, "lin", 0.01, 1, "")) params:set_action("sine_drive", function(value) engine.sine_drive(1, value) engine.sine_drive(2, value) end)
+    params:add_control("sine_wet", "Shaper Drive Mix", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("sine_wet", function(value) engine.sine_wet(1, value / 100) engine.sine_wet(2, value / 100) end)
+    params:add_control("sine_drive", "Shaper Drive", controlspec.new(0, 5, "lin", 0.01, 1, "")) params:set_action("sine_drive", function(value) engine.sine_drive(1, value) engine.sine_drive(2, value) end)
     params:add{type = "control", id = "chew_wet", name = "Chew Mix", controlspec = controlspec.new(0, 100, "lin", 1, 0, "%"), action = function(value) engine.chew_wet(1, value /100) engine.chew_wet(2, value / 100) end}
     params:add{type = "control", id = "chew_depth", name = "Chew Depth", controlspec = controlspec.new(0, 1, "lin", 0.01, 0.5, ""), action = function(value) engine.chew_depth(1, value) engine.chew_depth(2, value) end}
     params:add{type = "control", id = "chew_freq", name = "Chew Freq", controlspec = controlspec.new(0, 1, "lin", 0.01, 0.5, ""), action = function(value) engine.chew_freq(1, value) engine.chew_freq(2, value) end}
@@ -146,11 +145,13 @@ local function setup_params()
     params:add_group("LFOs", 56)
     lfo.init()
 
-    params:add_group("Extras", 11)
+    params:add_group("Extras", 13)
     params:add_taper("1granular_gain", "Granular Mix 1", 0, 100, 100, 0, "%") params:set_action("1granular_gain", function(value) engine.granular_gain(1, value / 100) end)
     params:add_option("1pitch_mode", "Pitch Mode 1", {"match speed", "independent"}, 2) params:set_action("1pitch_mode", function(value) engine.pitch_mode(1, value - 1) end)
+    params:add_control("direction_mod", "Reverse 1", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("direction_mod", function(value) engine.direction_mod(1, value / 100) end)
     params:add_taper("2granular_gain", "Granular Mix 2", 0, 100, 100, 0, "%") params:set_action("2granular_gain", function(value) engine.granular_gain(2, value / 100) end)
     params:add_option("2pitch_mode", "Pitch Mode 2", {"match speed", "independent"}, 2) params:set_action("2pitch_mode", function(value) engine.pitch_mode(2, value - 1) end)
+    params:add_control("direction_mod", "Reverse 2", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("direction_mod", function(value) engine.direction_mod(2, value / 100) end)
     params:add_taper("density_mod_amt", "Density Mod", 0, 100, 0, 0, "%") params:set_action("density_mod_amt", function(value) engine.density_mod_amt(1, value / 100) engine.density_mod_amt(2, value / 100) end)
     params:add_control("subharmonics_2","Subharmonics -2oct",controlspec.new(0.00,1.00,"lin",0.01,0)) params:set_action("subharmonics_2",function(value) engine.subharmonics_2(1,value) engine.subharmonics_2(2,value) end)
     params:add_control("subharmonics_1","Subharmonics -1oct",controlspec.new(0.00,1.00,"lin",0.01,0)) params:set_action("subharmonics_1",function(value) engine.subharmonics_1(1,value) engine.subharmonics_1(2,value) end)
@@ -164,7 +165,7 @@ local function setup_params()
     params:add_binary("ClearLFOs", "Clear All LFOs", "trigger", 0) params:set_action("ClearLFOs", function() lfo.clearLFOs() end)
 
     for i = 1, 2 do
-      params:add_taper(i .. "volume", i .. " volume", -60, 20, 0, 0, "dB") params:set_action(i .. "volume", function(value) engine.volume(i, math.pow(10, value / 20)) end)
+      params:add_taper(i .. "volume", i .. " volume", -70, 20, 0, 0, "dB") params:set_action(i .. "volume", function(value) if value == -70 then engine.volume(i, 0) else engine.volume(i, math.pow(10, value / 20)) end end)
       params:add_taper(i .. "pan", i .. " pan", -100, 100, 0, 0, "%") params:set_action(i .. "pan", function(value) engine.pan(i, value / 100)  end)
       params:add_control(i .. "speed", i .. " speed", controlspec.new(-2, 2, "lin", 0.01, 0, "")) params:set_action(i .. "speed", function(value) engine.speed(i, value) end)
       params:add_taper(i .. "density", i .. " density", 1, 30, 20, 1) params:set_action(i .. "density", function(value) engine.density(i, value) end)
@@ -195,7 +196,7 @@ local function setup_params()
     params:add_taper("min_density", "density (min)", 1, 30, 2, 5, "Hz")
     params:add_taper("max_density", "density (max)", 1, 30, 16, 5, "Hz")
     params:add_taper("min_spread", "spread (min)", 0, 100, 0, 0, "%")
-    params:add_taper("max_spread", "spread (max)", 0, 100, 100, 0, "%")
+    params:add_taper("max_spread", "spread (max)", 0, 100, 90, 0, "%")
     params:add_control("min_pitch", "pitch (min)", controlspec.new(-48, 48, "lin", 1, -12, "st"))
     params:add_control("max_pitch", "pitch (max)", controlspec.new(-48, 48, "lin", 1, 12, "st"))
 
@@ -338,17 +339,17 @@ function enc(n, d)
         [1] = function()
             if key1_pressed then
                 -- Adjust volumes in opposite directions
-                params:delta("1volume", 5*d)    
-                params:delta("2volume", -5*d)    
+                params:delta("1volume", 4*d)    
+                params:delta("2volume", -4*d)    
             else
                 -- Normal behavior: adjust both volumes in the same direction
-                params:delta("1volume", 5*d)    
-                params:delta("2volume", 5*d)    
+                params:delta("1volume", 4*d)    
+                params:delta("2volume", 4*d)    
             end
         end,
         [2] = function()
             if key1_pressed then 
-                params:delta("1volume", 5*d) 
+                params:delta("1volume", 4*d) 
             else
                 local param_name
                 if current_mode == "speed" then param_name = "1speed"
@@ -399,7 +400,7 @@ function enc(n, d)
         end,
         [3] = function()
             if key1_pressed then 
-                params:delta("2volume", 5*d) 
+                params:delta("2volume", 4*d) 
             else
                 local param_name
                 if current_mode == "speed" then param_name = "2speed"
@@ -585,10 +586,10 @@ local function draw_param_row(y, label, param1, param2, is_density, is_pitch, is
     local function draw_l_shape(x, y, is_locked)
         if is_locked then
             screen.level(1)  -- Locked state is displayed with level 1
-            screen.move(x - 4, y )  -- Move 3 pixels left and 1 pixel up
+            screen.move(x - 4, y)  -- Move 3 pixels left and 1 pixel up
             screen.line_rel(2, 0)      -- Draw a horizontal line (2 pixels to the right)
-            screen.move(x - 3, y )  -- Move back to the starting point
-            screen.line_rel(0, -4)      -- Draw a vertical line (2 pixels downward)
+            screen.move(x - 3, y)  -- Move back to the starting point
+            screen.line_rel(0, -3)      -- Draw a vertical line (2 pixels downward)
             screen.stroke()            -- Stroke the lines
         end
     end
@@ -599,9 +600,9 @@ local function draw_param_row(y, label, param1, param2, is_density, is_pitch, is
     end
     screen.move(50, y)  -- Keep the parameter value in its original position
     if is_highlighted then
-        screen.level(15)  -- Active row is always level 15, even if locked
+        screen.level(15)  -- Highlighted row is always level 15
     else
-        screen.level(is_locked1 and 1 or 2)  -- Inactive rows: locked = level 1, unlocked = level 2
+        screen.level(1)  -- All non-highlighted rows are level 1
     end
     if is_density then
         screen.text(format_density(params:get(param1)))
@@ -619,9 +620,9 @@ local function draw_param_row(y, label, param1, param2, is_density, is_pitch, is
     end
     screen.move(93, y)  -- Keep the parameter value in its original position
     if is_highlighted then
-        screen.level(15)  -- Active row is always level 15, even if locked
+        screen.level(15)  -- Highlighted row is always level 15
     else
-        screen.level(is_locked2 and 1 or 2)  -- Inactive rows: locked = level 1, unlocked = level 2
+        screen.level(1)  -- All non-highlighted rows are level 1
     end
     if is_density then
         screen.text(format_density(params:get(param2)))
@@ -679,9 +680,9 @@ function redraw()
     -- Display track 1 value (always bright if it's the active mode)
     screen.move(50, 60)
     if current_mode == "seek" or current_mode == "lpf" or current_mode == "hpf" or current_mode == "speed" or current_mode == "pan" then
-        screen.level(15) -- Bright text for highlighted row
+        screen.level(15) -- Highlighted row is always level 15
     else
-        screen.level(2) -- Dim text for non-highlighted rows
+        screen.level(1) -- Non-highlighted rows are level 1
     end
     if current_mode == "seek" then
         screen.text(format_seek(params:get("1seek"))) -- Display seek for track 1
@@ -702,9 +703,9 @@ function redraw()
     -- Display track 2 value (always bright if it's the active mode)
     screen.move(93, 60)
     if current_mode == "seek" or current_mode == "lpf" or current_mode == "hpf" or current_mode == "speed" or current_mode == "pan" then
-        screen.level(15) -- Bright text for highlighted row
+        screen.level(15) -- Highlighted row is always level 15
     else
-        screen.level(2) -- Dim text for non-highlighted rows
+        screen.level(1) -- Non-highlighted rows are level 1
     end
     if current_mode == "seek" then
         screen.text(format_seek(params:get("2seek"))) -- Display seek for track 2
@@ -725,15 +726,15 @@ function redraw()
     screen.level(3)
 
     -- Draw volume bars if files are loaded
-    if is_audio_loaded(1) then
+   -- if is_audio_loaded(1) then
         screen.rect(0, 64 - bar1_height, bar_width, bar1_height) -- Draw the volume bar
         screen.fill()
-    end
+  --  end
 
-    if is_audio_loaded(2) then
+  --  if is_audio_loaded(2) then
         screen.rect(128 - bar_width, 64 - bar2_height, bar_width, bar2_height) -- Draw the volume bar
         screen.fill()
-    end
+ --   end
 
     -- Check if an LFO is assigned to the panning parameters
     local lfo_assigned_to_pan1 = false
