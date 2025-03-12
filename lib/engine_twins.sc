@@ -79,9 +79,8 @@ SynthDef(\synth, {
     sine_drive=1, sine_wet=0,
     compensation_factor=0.1,
     chew_wet=0, chew_depth=0.5, chew_freq=0.5, chew_variance=0.5,
-    tascam=0,
     direction_mod=0,
-    size_variation=0; // Add this new parameter for random size variation
+    size_variation=0;
 
     var grain_trig;
     var jitter_sig;
@@ -251,8 +250,7 @@ SynthDef(\synth, {
                 \subharmonics_1, 0,
                 \subharmonics_2, 0,
                 \overtones_1, 0,
-                \overtones_2, 0,
-                \tascam, 0
+                \overtones_2, 0
             ], target: pg);
         });
         
