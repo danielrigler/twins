@@ -6,7 +6,7 @@
 --           by: @dddstudio                       
 --
 --                          
---                            v0.12
+--                            v0.13
 -- E1: Master Volume
 -- K1+E2/E3: Volume 1/2
 -- K1+E1: Crossfade Volumes
