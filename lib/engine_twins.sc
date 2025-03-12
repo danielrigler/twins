@@ -99,10 +99,10 @@ SynthDef(\synth, {
     var grain_pitch;
     var shaped;
     var main_vol = 1.0 / (1.0 + subharmonics_1 + subharmonics_2 + overtones_1 + overtones_2);
-    var subharmonic_1_vol = subharmonics_1 / (1.0 + subharmonics_1 + subharmonics_2 + overtones_1 + overtones_2) * 2.5;
-    var subharmonic_2_vol = subharmonics_2 / (1.0 + subharmonics_1 + subharmonics_2 + overtones_1 + overtones_2) * 2.5;
-    var overtone_1_vol = overtones_1 / (1.0 + subharmonics_1 + subharmonics_2 + overtones_1 + overtones_2) * 2;
-    var overtone_2_vol = overtones_2 / (1.0 + subharmonics_1 + subharmonics_2 + overtones_1 + overtones_2) * 2;
+    var subharmonic_1_vol = subharmonics_1 / (1.0 + subharmonics_1 + subharmonics_2 + overtones_1 + overtones_2) * 2;
+    var subharmonic_2_vol = subharmonics_2 / (1.0 + subharmonics_1 + subharmonics_2 + overtones_1 + overtones_2) * 2;
+    var overtone_1_vol = overtones_1 / (1.0 + subharmonics_1 + subharmonics_2 + overtones_1 + overtones_2);
+    var overtone_2_vol = overtones_2 / (1.0 + subharmonics_1 + subharmonics_2 + overtones_1 + overtones_2);
     var lagSpeed = Lag.kr(speed);
     var lagPitchOffset = Lag.kr(pitch_offset, 0.5);
     var compensation = 1 / (1 + (lagPitchOffset.abs * compensation_factor));
@@ -148,10 +148,10 @@ SynthDef(\synth, {
     sig_l = sig_l + GrainBuf.ar(1, grain_trig, grain_size * 2, buf_l, grain_pitch / 4 * grain_direction, pos_sig + jitter_sig, 2, mul: subharmonic_2_vol);
     sig_r = sig_r + GrainBuf.ar(1, grain_trig, grain_size * 2, buf_r, grain_pitch / 4 * grain_direction, pos_sig + jitter_sig, 2, mul: subharmonic_2_vol);
 
-    sig_l = sig_l + GrainBuf.ar(1, grain_trig, grain_size, buf_l, grain_pitch * 2 * grain_direction, pos_sig + jitter_sig, 2, mul: overtone_1_vol * 0.7);
-    sig_r = sig_r + GrainBuf.ar(1, grain_trig, grain_size, buf_r, grain_pitch * 2 * grain_direction, pos_sig + jitter_sig, 2, mul: overtone_1_vol * 0.7);
-    sig_l = sig_l + GrainBuf.ar(1, grain_trig, grain_size, buf_l, grain_pitch * 4 * grain_direction, pos_sig + jitter_sig, 2, mul: overtone_2_vol * 0.5);
-    sig_r = sig_r + GrainBuf.ar(1, grain_trig, grain_size, buf_r, grain_pitch * 4 * grain_direction, pos_sig + jitter_sig, 2, mul: overtone_2_vol * 0.5);
+    sig_l = sig_l + GrainBuf.ar(1, grain_trig, grain_size, buf_l, grain_pitch * 2 * grain_direction, pos_sig + jitter_sig, 2, mul: overtone_1_vol);
+    sig_r = sig_r + GrainBuf.ar(1, grain_trig, grain_size, buf_r, grain_pitch * 2 * grain_direction, pos_sig + jitter_sig, 2, mul: overtone_1_vol);
+    sig_l = sig_l + GrainBuf.ar(1, grain_trig, grain_size, buf_l, grain_pitch * 4 * grain_direction, pos_sig + jitter_sig, 2, mul: overtone_2_vol);
+    sig_r = sig_r + GrainBuf.ar(1, grain_trig, grain_size, buf_r, grain_pitch * 4 * grain_direction, pos_sig + jitter_sig, 2, mul: overtone_2_vol);
 
     granular_sig = Balance2.ar(sig_l, sig_r, pan + pan_sig);
 
@@ -283,6 +283,7 @@ SynthDef(\synth, {
         this.addCommand("hpfrq", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\hpfrq, msg[2]); });
         
         this.addCommand("granular_gain", "if", { arg msg; var voice = msg[1] - 1; var gain = msg[2]; voices[voice].set(\granular_gain, gain); });
+        this.addCommand("density_mod_amt", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\density_mod_amt, msg[2]); });
         this.addCommand("density_mod_amt", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\density_mod_amt, msg[2]); });
         this.addCommand("subharmonics_1", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\subharmonics_1, msg[2]); });
         this.addCommand("subharmonics_2", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\subharmonics_2, msg[2]); });

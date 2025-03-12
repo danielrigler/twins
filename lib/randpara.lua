@@ -2,54 +2,115 @@ local function random_float(l, h)
     return l + math.random() * (h - l)
 end
 
-local function randomize_params()
+local function interpolate(start_val, end_val, factor)
+    return start_val + (end_val - start_val) * factor
+end
 
-    --DELAY
-    if math.random() <= 0.3 then params:set("delay_h", 0) else params:set("delay_h", math.random(15, 70)) end
-    params:set("delay_rate", random_float(0.2, 1))
-    params:set("delay_feedback", math.random(30, 90))
+local randomize_metro = metro.init() -- Initialize the metro here
+local targets = {}
+local interpolation_speed = 1 / 30 -- Metro time (30 FPS, same as in twins.lua)
 
-    --GREYHOLE      
-    params:set("greyhole_mix", random_float(0, 0.7))
-    params:set("time", random_float(2, 8))
-    params:set("size", random_float(2, 5))
-    params:set("mod_depth", random_float(0.2, 1))
-    params:set("mod_freq", random_float(0.1, 2))
-    params:set("diff", random_float(0.30, 0.95))
-    params:set("feedback", random_float(0.1, 0.6))
-    params:set("damp", random_float(0.05, 0.4))
-    
-    --FVERB
-    params:set("reverb_mix", math.random(0, 40))
-    params:set("reverb_predelay", math.random(0, 150))
-    params:set("reverb_lowpass_cutoff", math.random(2000, 11000))
-    params:set("reverb_highpass_cutoff", math.random(20, 300))
-    params:set("reverb_diffusion_1", math.random(50, 95))
-    params:set("reverb_diffusion_2", math.random(50, 95))
-    params:set("reverb_tail_density", math.random(40, 95))
-    params:set("reverb_decay", math.random(40, 90))
-    params:set("reverb_damping", math.random(2500, 8500))
-    params:set("reverb_modulator_frequency", random_float(0.1, 2.5))
-    params:set("reverb_modulator_depth", math.random(20, 100))
-    
-     --EXTRAS
-    if math.random() <= 0.5 then params:set("density_mod_amt", 0) else params:set("density_mod_amt", math.random(0, 50)) end
-    if math.random() <= 0.75 then params:set("subharmonics_1", 0) else params:set("subharmonics_1", random_float(0, 0.5)) end
-    if math.random() <= 0.75 then params:set("subharmonics_2", 0) else params:set("subharmonics_2", random_float(0, 0.5)) end   
-    if math.random() <= 0.75 then params:set("overtones_1", 0) else params:set("overtones_1", random_float(0, 0.5)) end
-    if math.random() <= 0.75 then params:set("overtones_2", 0) else params:set("overtones_2", random_float(0, 0.5)) end
-    if math.random() <= 0.4 then params:set("1direction_mod", 0) else params:set("1direction_mod", math.random(0, 30)) end
-    if math.random() <= 0.4 then params:set("2direction_mod", 0) else params:set("2direction_mod", math.random(0, 30)) end
-    if math.random() <= 0.5 then params:set("sine_wet", 0) else params:set("sine_wet", math.random(1, 25)) end
-    if math.random() <= 0.5 then params:set("sine_drive", 1) else params:set("sine_drive", random_float(0.5, 1.5)) end
-    if math.random() <= 0.8 then params:set("1granular_gain", 100) else params:set("1granular_gain", math.random(80, 100)) end
-    if math.random() <= 0.8 then params:set("2granular_gain", 100) else params:set("2granular_gain", math.random(80, 100)) end
-    if math.random() <= 0.75 then params:set("chew_wet", 0) else params:set("chew_wet", math.random(0, 25)) end
-    if math.random() <= 0.5 then params:set("chew_depth", 0.4) else params:set("chew_depth", random_float(0.2, 0.5)) end
-    if math.random() <= 0.5 then params:set("chew_freq", 0.4) else params:set("chew_freq", random_float(0.2, 0.5)) end
-    if math.random() <= 0.5 then params:set("chew_variance", 0.5) else params:set("chew_variance", random_float(0.4, 0.8)) end
-    if math.random() <= 0.4 then params:set("1size_variation", 0) else params:set("1size_variation", math.random(0, 30)) end  
-    if math.random() <= 0.4 then params:set("2size_variation", 0) else params:set("2size_variation", math.random(0, 30)) end
+local function randomize_params(steps, i)
+    -- Clear previous targets and stop any ongoing interpolation
+    targets = {}
+    if randomize_metro then
+        randomize_metro:stop() -- Stop the metro if it's running
+    end
+
+    -- Set target values for each parameter
+    -- DELAY (global parameters)
+    if math.random() <= 0.3 then targets["delay_h"] = 0 else targets["delay_h"] = math.random(15, 70) end
+    targets["delay_rate"] = random_float(0.2, 1)
+    targets["delay_feedback"] = math.random(30, 90)
+
+    -- GREYHOLE (global parameters)
+    targets["greyhole_mix"] = random_float(0, 0.7)
+    targets["time"] = random_float(2, 8)
+    targets["size"] = random_float(2, 5)
+    targets["mod_depth"] = random_float(0.2, 1)
+    targets["mod_freq"] = random_float(0.1, 2)
+    targets["diff"] = random_float(0.30, 0.95)
+    targets["feedback"] = random_float(0.1, 0.6)
+    targets["damp"] = random_float(0.05, 0.4)
+
+    -- FVERB (global parameters)
+    targets["reverb_mix"] = math.random(0, 40)
+    targets["reverb_predelay"] = math.random(0, 150)
+    targets["reverb_lowpass_cutoff"] = math.random(2000, 11000)
+    targets["reverb_highpass_cutoff"] = math.random(20, 300)
+    targets["reverb_diffusion_1"] = math.random(50, 95)
+    targets["reverb_diffusion_2"] = math.random(50, 95)
+    targets["reverb_tail_density"] = math.random(40, 95)
+    targets["reverb_decay"] = math.random(40, 90)
+    targets["reverb_damping"] = math.random(2500, 8500)
+    targets["reverb_modulator_frequency"] = random_float(0.1, 2.5)
+    targets["reverb_modulator_depth"] = math.random(20, 100)
+
+    -- TAPE (global parameters)
+    if math.random() <= 0.5 then targets["sine_wet"] = 0 else targets["sine_wet"] = math.random(1, 20) end
+    if math.random() <= 0.5 then targets["sine_drive"] = 1 else targets["sine_drive"] = random_float(0.5, 1.75) end
+    if math.random() <= 0.75 then targets["chew_wet"] = 0 else targets["chew_wet"] = math.random(0, 25) end
+    if math.random() <= 0.5 then targets["chew_depth"] = 0.4 else targets["chew_depth"] = random_float(0.2, 0.5) end
+    if math.random() <= 0.5 then targets["chew_freq"] = 0.4 else targets["chew_freq"] = random_float(0.2, 0.5) end
+    if math.random() <= 0.5 then targets["chew_variance"] = 0.5 else targets["chew_variance"] = random_float(0.4, 0.8) end
+
+    -- VOICE-SPECIFIC PARAMETERS
+    if i then
+        -- Only randomize parameters for the specified voice (i)
+        if math.random() <= 0.4 then targets[i .. "direction_mod"] = 0 else targets[i .. "direction_mod"] = math.random(0, 30) end
+        if math.random() <= 0.8 then targets[i .. "granular_gain"] = 100 else targets[i .. "granular_gain"] = math.random(80, 100) end
+        if math.random() <= 0.4 then targets[i .. "size_variation"] = 0 else targets[i .. "size_variation"] = math.random(0, 30) end
+
+        -- EXTRAS (voice-specific parameters)
+        if math.random() <= 0.5 then targets[i .. "density_mod_amt"] = 0 else targets[i .. "density_mod_amt"] = math.random(0, 40) end
+        if math.random() <= 0.5 then targets[i .. "subharmonics_1"] = 0 else targets[i .. "subharmonics_1"] = random_float(0, 0.4) end
+        if math.random() <= 0.5 then targets[i .. "subharmonics_2"] = 0 else targets[i .. "subharmonics_2"] = random_float(0, 0.4) end
+        if math.random() <= 0.75 then targets[i .. "overtones_1"] = 0 else targets[i .. "overtones_1"] = random_float(0, 0.4) end
+        if math.random() <= 0.75 then targets[i .. "overtones_2"] = 0 else targets[i .. "overtones_2"] = random_float(0, 0.4) end
+    else
+        -- Randomize parameters for both voices if no specific voice is provided
+        if math.random() <= 0.4 then targets["1direction_mod"] = 0 else targets["1direction_mod"] = math.random(0, 30) end
+        if math.random() <= 0.4 then targets["2direction_mod"] = 0 else targets["2direction_mod"] = math.random(0, 30) end
+        if math.random() <= 0.8 then targets["1granular_gain"] = 100 else targets["1granular_gain"] = math.random(80, 100) end
+        if math.random() <= 0.8 then targets["2granular_gain"] = 100 else targets["2granular_gain"] = math.random(80, 100) end
+        if math.random() <= 0.4 then targets["1size_variation"] = 0 else targets["1size_variation"] = math.random(0, 30) end
+        if math.random() <= 0.4 then targets["2size_variation"] = 0 else targets["2size_variation"] = math.random(0, 30) end
+
+        -- EXTRAS (voice-specific parameters for both voices)
+        if math.random() <= 0.5 then targets["1density_mod_amt"] = 0 else targets["1density_mod_amt"] = math.random(0, 40) end
+        if math.random() <= 0.5 then targets["2density_mod_amt"] = 0 else targets["2density_mod_amt"] = math.random(0, 40) end
+        if math.random() <= 0.5 then targets["1subharmonics_1"] = 0 else targets["1subharmonics_1"] = random_float(0, 0.4) end
+        if math.random() <= 0.5 then targets["2subharmonics_1"] = 0 else targets["2subharmonics_1"] = random_float(0, 0.4) end
+        if math.random() <= 0.5 then targets["1subharmonics_2"] = 0 else targets["1subharmonics_2"] = random_float(0, 0.4) end
+        if math.random() <= 0.5 then targets["2subharmonics_2"] = 0 else targets["2subharmonics_2"] = random_float(0, 0.4) end
+        if math.random() <= 0.75 then targets["1overtones_1"] = 0 else targets["1overtones_1"] = random_float(0, 0.4) end
+        if math.random() <= 0.75 then targets["2overtones_1"] = 0 else targets["2overtones_1"] = random_float(0, 0.4) end
+        if math.random() <= 0.75 then targets["1overtones_2"] = 0 else targets["1overtones_2"] = random_float(0, 0.4) end
+        if math.random() <= 0.75 then targets["2overtones_2"] = 0 else targets["2overtones_2"] = random_float(0, 0.4) end
+    end
+
+    -- Start the interpolation metro
+    randomize_metro.time = interpolation_speed
+    randomize_metro.count = -1
+    randomize_metro.event = function(count)
+        local factor = count / steps
+        local all_done = true
+
+        for param, target in pairs(targets) do
+            local current_value = params:get(param)
+            local new_value = interpolate(current_value, target, factor)
+            params:set(param, new_value)
+
+            if math.abs(new_value - target) > 0.01 then
+                all_done = false
+            end
+        end
+
+        if all_done then
+            randomize_metro:stop()
+        end
+    end
+    randomize_metro:start()
 end
 
 return {

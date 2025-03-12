@@ -6,7 +6,7 @@
 --           by: @dddstudio                       
 --
 --                          
---                            v0.13
+--                            v0.14
 -- E1: Master Volume
 -- K1+E2/E3: Volume 1/2
 -- K1+E1: Crossfade Volumes
@@ -145,7 +145,7 @@ local function setup_params()
     params:add_group("LFOs", 56)
     lfo.init()
 
-    params:add_group("Extras", 15)
+    params:add_group("Extras", 20)
     params:add_taper("1granular_gain", "Granular Mix 1", 0, 100, 100, 0, "%") params:set_action("1granular_gain", function(value) engine.granular_gain(1, value / 100) end)
     params:add_option("1pitch_mode", "Pitch Mode 1", {"match speed", "independent"}, 2) params:set_action("1pitch_mode", function(value) engine.pitch_mode(1, value - 1) end)
     params:add_control("1direction_mod", "Reverse 1", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("1direction_mod", function(value) engine.direction_mod(1, value / 100) end)
@@ -154,15 +154,28 @@ local function setup_params()
     params:add_option("2pitch_mode", "Pitch Mode 2", {"match speed", "independent"}, 2) params:set_action("2pitch_mode", function(value) engine.pitch_mode(2, value - 1) end)
     params:add_control("2direction_mod", "Reverse 2", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("2direction_mod", function(value) engine.direction_mod(2, value / 100) end)
     params:add_control("2size_variation", "Size Variation 2", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("2size_variation", function(value) engine.size_variation(2, value / 100) end)
-    params:add_taper("density_mod_amt", "Density Mod", 0, 100, 0, 0, "%") params:set_action("density_mod_amt", function(value) engine.density_mod_amt(1, value / 100) engine.density_mod_amt(2, value / 100) end)
-    params:add_control("subharmonics_2","Subharmonics -2oct",controlspec.new(0.00,1.00,"lin",0.01,0)) params:set_action("subharmonics_2",function(value) engine.subharmonics_2(1,value) engine.subharmonics_2(2,value) end)
-    params:add_control("subharmonics_1","Subharmonics -1oct",controlspec.new(0.00,1.00,"lin",0.01,0)) params:set_action("subharmonics_1",function(value) engine.subharmonics_1(1,value) engine.subharmonics_1(2,value) end)
-    params:add_control("overtones_1","Overtones +1oct",controlspec.new(0.00,1.00,"lin",0.01,0)) params:set_action("overtones_1",function(value) engine.overtones_1(1,value) engine.overtones_1(2,value) end)
-    params:add_control("overtones_2","Overtones +2oct",controlspec.new(0.00,1.00,"lin",0.01,0)) params:set_action("overtones_2",function(value) engine.overtones_2(1,value) engine.overtones_2(2,value) end)
+  
+  for i = 1, 2 do
+    params:add_taper(i .. "density_mod_amt", i .. " Density Mod", 0, 100, 0, 0, "%") 
+    params:set_action(i .. "density_mod_amt", function(value) engine.density_mod_amt(i, value / 100) end)
+
+    params:add_control(i .. "subharmonics_1", i .. " Subharmonics -1oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0)) 
+    params:set_action(i .. "subharmonics_1", function(value) engine.subharmonics_1(i, value) end)
+
+    params:add_control(i .. "subharmonics_2", i .. " Subharmonics -2oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0)) 
+    params:set_action(i .. "subharmonics_2", function(value) engine.subharmonics_2(i, value) end)
+
+    params:add_control(i .. "overtones_1", i .. " Overtones +1oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0)) 
+    params:set_action(i .. "overtones_1", function(value) engine.overtones_1(i, value) end)
+
+    params:add_control(i .. "overtones_2", i .. " Overtones +2oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0)) 
+    params:set_action(i .. "overtones_2", function(value) engine.overtones_2(i, value) end)
+end
+  
     params:add_control("volume_compensation", "Volume compensation", controlspec.new(0,1,"lin",0.01,0.1)) params:set_action("volume_compensation", function(value) engine.compensation_factor(1,value) engine.compensation_factor(2,value) end)
-    params:add_control("steps","Transition steps",controlspec.new(10,200000,"lin",5,1)) params:set_action("steps", function(value) steps = value end)
+    params:add_control("steps","Transition steps",controlspec.new(10,20000,"lin",1,500)) params:set_action("steps", function(value) steps = value end)
     
-    params:add_binary("randomize_params", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_params", function() randpara.randomize_params() end)
+    params:add_binary("randomize_params", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_params", function() randpara.randomize_params(steps) end)
     params:add_binary("randomize_lfos", "RaNd0m1ze LFOs", "trigger", 0) params:set_action("randomize_lfos", function() lfo.randomize_lfos() end)
     params:add_binary("ClearLFOs", "Clear All LFOs", "trigger", 0) params:set_action("ClearLFOs", function() lfo.clearLFOs() end)
 
@@ -237,62 +250,98 @@ local function randomize(n)
 
     -- Randomize non-pitch parameters
     if locks.jitter and not active_controlled_params[n .. "jitter"] then 
-        targets[n .. "jitter"] = random_float(params:get("min_jitter"), params:get("max_jitter")) 
+        local min_jitter = params:get("min_jitter")
+        local max_jitter = params:get("max_jitter")
+        if min_jitter < max_jitter then
+            local is_lfo_active, _ = is_lfo_active_for_param(n .. "jitter")
+            if not is_lfo_active then
+                targets[n .. "jitter"] = random_float(min_jitter, max_jitter)
+            end
+        end
     end
     if locks.size and not active_controlled_params[n .. "size"] then 
-        targets[n .. "size"] = random_float(params:get("min_size"), params:get("max_size")) 
+        local min_size = params:get("min_size")
+        local max_size = params:get("max_size")
+        if min_size < max_size then
+            local is_lfo_active, _ = is_lfo_active_for_param(n .. "size")
+            if not is_lfo_active then
+                targets[n .. "size"] = random_float(min_size, max_size)
+            end
+        end
     end
     if locks.density and not active_controlled_params[n .. "density"] then 
-        targets[n .. "density"] = random_float(params:get("min_density"), params:get("max_density")) 
+        local min_density = params:get("min_density")
+        local max_density = params:get("max_density")
+        if min_density < max_density then
+            local is_lfo_active, _ = is_lfo_active_for_param(n .. "density")
+            if not is_lfo_active then
+                targets[n .. "density"] = random_float(min_density, max_density)
+            end
+        end
     end
     if locks.spread and not active_controlled_params[n .. "spread"] then 
-        targets[n .. "spread"] = random_float(params:get("min_spread"), params:get("max_spread")) 
+        local min_spread = params:get("min_spread")
+        local max_spread = params:get("max_spread")
+        if min_spread < max_spread then
+            local is_lfo_active, _ = is_lfo_active_for_param(n .. "spread")
+            if not is_lfo_active then
+                targets[n .. "spread"] = random_float(min_spread, max_spread)
+            end
+        end
     end
 
-  if locks.pitch and not active_controlled_params[n .. "pitch"] then
-    local weighted_intervals = {
-        {interval = -12, weight = 2},
-        {interval = -7, weight = 1},
-        {interval = -5, weight = 1},
-        {interval = -3, weight = 1},
-        {interval = 0, weight = 3},
-        {interval = 3, weight = 1},
-        {interval = 5, weight = 1},
-        {interval = 7, weight = 1},
-        {interval = 12, weight = 2}
-    }
+    -- Randomize pitch parameter
+    if locks.pitch and not active_controlled_params[n .. "pitch"] then
+        local weighted_intervals = {
+            {interval = -12, weight = 2},
+            {interval = -7, weight = 1},
+            {interval = -5, weight = 1},
+            {interval = -3, weight = 1},
+            {interval = 0, weight = 3},
+            {interval = 3, weight = 1},
+            {interval = 5, weight = 1},
+            {interval = 7, weight = 1},
+            {interval = 12, weight = 2}
+        }
 
-      local current_pitch = params:get(n .. "pitch")
-      local min_pitch = math.max(params:get("min_pitch"), current_pitch - 7)
-      local max_pitch = math.min(params:get("max_pitch"), current_pitch + 7)  
+        local current_pitch = params:get(n .. "pitch")
+        local min_pitch = math.max(params:get("min_pitch"), current_pitch - 7)
+        local max_pitch = math.min(params:get("max_pitch"), current_pitch + 7)
 
-      if n == 1 then
-          local random_pitch = math.random(min_pitch, max_pitch)
-          params:set("1pitch", random_pitch)
-      else
-          local total_weight = 0
-          for _, v in ipairs(weighted_intervals) do
-              total_weight = total_weight + v.weight
-          end 
+        -- Ensure the interval is valid
+        if min_pitch < max_pitch then
+            local is_lfo_active, _ = is_lfo_active_for_param(n .. "pitch")
+            if not is_lfo_active then
+                if n == 1 then
+                    local random_pitch = math.random(min_pitch, max_pitch)
+                    params:set("1pitch", random_pitch)
+                else
+                    local total_weight = 0
+                    for _, v in ipairs(weighted_intervals) do
+                        total_weight = total_weight + v.weight
+                    end
 
-          local random_weight = math.random(total_weight)
-          local cumulative_weight = 0
-          local chosen_interval = 0
+                    local random_weight = math.random(total_weight)
+                    local cumulative_weight = 0
+                    local chosen_interval = 0
 
-          for _, v in ipairs(weighted_intervals) do
-              cumulative_weight = cumulative_weight + v.weight
-              if random_weight <= cumulative_weight then
-                  chosen_interval = v.interval
-                  break
-              end
-          end
+                    for _, v in ipairs(weighted_intervals) do
+                        cumulative_weight = cumulative_weight + v.weight
+                        if random_weight <= cumulative_weight then
+                            chosen_interval = v.interval
+                            break
+                        end
+                    end
 
-          local random_pitch = params:get("1pitch") + chosen_interval
-          random_pitch = math.max(min_pitch, math.min(max_pitch, random_pitch))
-          params:set("2pitch", random_pitch)
-      end
-  end
+                    local random_pitch = params:get("1pitch") + chosen_interval
+                    random_pitch = math.max(min_pitch, math.min(max_pitch, random_pitch))
+                    params:set("2pitch", random_pitch)
+                end
+            end
+        end
+    end
 
+    -- Start the interpolation metro
     randomize_metro[n].time = 1/30
     randomize_metro[n].event = function(count)
         local tolerance = 0.01
@@ -474,9 +523,11 @@ function key(n, z)
     if z == 1 then
         if key1_pressed and key2_pressed then
             randomize(1)
+            randpara.randomize_params(steps,1)
             return
         elseif key1_pressed and key3_pressed then
             randomize(2)
+            randpara.randomize_params(steps,2)
             return
         end
     end
