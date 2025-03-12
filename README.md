@@ -8,21 +8,21 @@ A randomized dual granular sample player for Monome Norns.
 Heavily influenced by @cfd90's Twine and contains inspiration and code from @infinitedigits, @justmat, @artfwo, @Nuno_Zimas. I would like to thank all norns community members for the warm welcome and lot of help I was getting on multiple channels. I'm completely new to programming and had a lot of fun hacking this together. I tried to create something which is highly playable and controllable without any external gadgets. Hope it will be useful for someone.
 
 **Some of the new features:**
-* Nice reverbs and delays
+* Reverbs and delays 
 * Flexible volume control
 * Tape effects
 * Increased parameter ranges
-* Smooth interpolation
-* 8 freely assignable LFOs with randomization
-* Navigation
-* Parameter locking
+* Smooth transition interpolation
+* Freely assignable LFOs with randomization
+* Navigation with parameter locking
 * High-pass and low-pass filters
 * Subharmonics / overtones
-* +Lots of other smaller tweaks and features
+
++lots of other tweaks and features. 
 
 ### Requirements
 
-norns
+norns / norns shield
 
 ### Documentation
 
