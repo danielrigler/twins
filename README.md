@@ -36,7 +36,7 @@ norns / norns shield
 **K1**+**K2** or **K1**+**K3**: Randomize 1/2
 ### Download
 
-**v0.12** **[github link](https://github.com/danielrigler/twins)**
+**v0.13** **[github link](https://github.com/danielrigler/twins)**
 
 or from Maiden:
 ```
