@@ -80,7 +80,8 @@ SynthDef(\synth, {
     compensation_factor=0.1,
     chew_wet=0, chew_depth=0.5, chew_freq=0.5, chew_variance=0.5,
     tascam=0,
-    direction_mod=0;
+    direction_mod=0,
+    size_variation=0; // Add this new parameter for random size variation
 
     var grain_trig;
     var jitter_sig;
@@ -107,10 +108,9 @@ SynthDef(\synth, {
     var lagPitchOffset = Lag.kr(pitch_offset, 0.5);
     var compensation = 1 / (1 + (lagPitchOffset.abs * compensation_factor));
     var grain_direction = Select.kr(pitch_mode, [1, Select.kr(speed < 0, [1, -1])]);
-    // Direction modulation: Randomly invert the direction of some grains based on direction_mod
     var direction_mod_sig = LFNoise1.kr(density).range(0, 1) < direction_mod;
-    // Density modulation
     var trig_rnd = LFNoise1.kr(density);
+    var grain_size;
 
     density_mod = density * (2**(trig_rnd * density_mod_amt));
     grain_trig = Impulse.kr(density_mod);
@@ -133,34 +133,29 @@ SynthDef(\synth, {
 
     pos_sig = Wrap.kr(Select.kr(freeze, [buf_pos, pos]));
 
-    // Dry signal (unchanged)
     dry_sig = [PlayBuf.ar(1, buf_l, lagSpeed, loop: 1), PlayBuf.ar(1, buf_r, lagSpeed, loop: 1)];
-
-    // Apply pan to the dry signal
     dry_sig = Balance2.ar(dry_sig[0], dry_sig[1], Lag.kr(pan));
 
-    // Calculate grain pitch based on pitch_mode
     grain_pitch = Select.kr(pitch_mode, [Lag.kr(speed) * lagPitchOffset, lagPitchOffset]);
 
-    // Granular signal (main grains)
-    sig_l = GrainBuf.ar(1, grain_trig, size, buf_l, grain_pitch * grain_direction, pos_sig + jitter_sig, 2, mul: main_vol);
-    sig_r = GrainBuf.ar(1, grain_trig, size, buf_r, grain_pitch * grain_direction, pos_sig + jitter_sig, 2, mul: main_vol);
+    // Apply random size variation to the grain size
+    grain_size = size * (1 + TRand.kr(trig: grain_trig, lo: -1 * size_variation, hi: size_variation));
 
-    // Subharmonics (pitched down)
-    sig_l = sig_l + GrainBuf.ar(1, grain_trig, size * 2, buf_l, grain_pitch / 2 * grain_direction, pos_sig + jitter_sig, 2, mul: subharmonic_1_vol);
-    sig_r = sig_r + GrainBuf.ar(1, grain_trig, size * 2, buf_r, grain_pitch / 2 * grain_direction, pos_sig + jitter_sig, 2, mul: subharmonic_1_vol);
-    sig_l = sig_l + GrainBuf.ar(1, grain_trig, size * 2, buf_l, grain_pitch / 4 * grain_direction, pos_sig + jitter_sig, 2, mul: subharmonic_2_vol);
-    sig_r = sig_r + GrainBuf.ar(1, grain_trig, size * 2, buf_r, grain_pitch / 4 * grain_direction, pos_sig + jitter_sig, 2, mul: subharmonic_2_vol);
+    sig_l = GrainBuf.ar(1, grain_trig, grain_size, buf_l, grain_pitch * grain_direction, pos_sig + jitter_sig, 2, mul: main_vol);
+    sig_r = GrainBuf.ar(1, grain_trig, grain_size, buf_r, grain_pitch * grain_direction, pos_sig + jitter_sig, 2, mul: main_vol);
 
-    // Overtones (pitched up)
-    sig_l = sig_l + GrainBuf.ar(1, grain_trig, size, buf_l, grain_pitch * 2 * grain_direction, pos_sig + jitter_sig, 2, mul: overtone_1_vol * 0.7);
-    sig_r = sig_r + GrainBuf.ar(1, grain_trig, size, buf_r, grain_pitch * 2 * grain_direction, pos_sig + jitter_sig, 2, mul: overtone_1_vol * 0.7);
-    sig_l = sig_l + GrainBuf.ar(1, grain_trig, size, buf_l, grain_pitch * 4 * grain_direction, pos_sig + jitter_sig, 2, mul: overtone_2_vol * 0.5);
-    sig_r = sig_r + GrainBuf.ar(1, grain_trig, size, buf_r, grain_pitch * 4 * grain_direction, pos_sig + jitter_sig, 2, mul: overtone_2_vol * 0.5);
+    sig_l = sig_l + GrainBuf.ar(1, grain_trig, grain_size * 2, buf_l, grain_pitch / 2 * grain_direction, pos_sig + jitter_sig, 2, mul: subharmonic_1_vol);
+    sig_r = sig_r + GrainBuf.ar(1, grain_trig, grain_size * 2, buf_r, grain_pitch / 2 * grain_direction, pos_sig + jitter_sig, 2, mul: subharmonic_1_vol);
+    sig_l = sig_l + GrainBuf.ar(1, grain_trig, grain_size * 2, buf_l, grain_pitch / 4 * grain_direction, pos_sig + jitter_sig, 2, mul: subharmonic_2_vol);
+    sig_r = sig_r + GrainBuf.ar(1, grain_trig, grain_size * 2, buf_r, grain_pitch / 4 * grain_direction, pos_sig + jitter_sig, 2, mul: subharmonic_2_vol);
+
+    sig_l = sig_l + GrainBuf.ar(1, grain_trig, grain_size, buf_l, grain_pitch * 2 * grain_direction, pos_sig + jitter_sig, 2, mul: overtone_1_vol * 0.7);
+    sig_r = sig_r + GrainBuf.ar(1, grain_trig, grain_size, buf_r, grain_pitch * 2 * grain_direction, pos_sig + jitter_sig, 2, mul: overtone_1_vol * 0.7);
+    sig_l = sig_l + GrainBuf.ar(1, grain_trig, grain_size, buf_l, grain_pitch * 4 * grain_direction, pos_sig + jitter_sig, 2, mul: overtone_2_vol * 0.5);
+    sig_r = sig_r + GrainBuf.ar(1, grain_trig, grain_size, buf_r, grain_pitch * 4 * grain_direction, pos_sig + jitter_sig, 2, mul: overtone_2_vol * 0.5);
 
     granular_sig = Balance2.ar(sig_l, sig_r, pan + pan_sig);
 
-    // Mix dry and granular signals
     granular_gain = granular_gain.clip(0, 1);
     sig_mix = (dry_sig * (1 - granular_gain)) + (granular_sig * granular_gain);
     sig_mix = BHiPass4.ar(sig_mix, Lag.kr(hpf), Lag.kr(hpfrq));
@@ -179,7 +174,6 @@ SynthDef(\synth, {
     env = EnvGen.kr(Env.asr(1, 1, 1), gate: gate, timeScale: envscale);
     level = env;
 
-    // Output the mixed signal
     Out.ar(out, sig_mix * level * Lag3.kr(gain));
     Out.kr(phase_out, pos_sig);
     Out.kr(level_out, level);
@@ -300,6 +294,7 @@ SynthDef(\synth, {
         this.addCommand("pitch_offset", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\pitch_offset, msg[2]); });
         this.addCommand("compensation_factor", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\compensation_factor, msg[2]); });
         this.addCommand("direction_mod", "if", { arg msg; var voice = msg[1] - 1; var mod = msg[2]; voices[voice].set(\direction_mod, mod); });
+        this.addCommand("size_variation", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\size_variation, msg[2]); });
 
         this.addCommand("read", "is", { arg msg; this.readBuf(msg[1] - 1, msg[2]); });
         this.addCommand("seek", "if", { arg msg; var voice = msg[1] - 1; var pos; seek_tasks[voice].stop; pos = msg[2]; voices[voice].set(\pos, pos); voices[voice].set(\t_reset_pos, 1); voices[voice].set(\freeze, 0);});

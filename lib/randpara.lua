@@ -38,8 +38,8 @@ local function randomize_params()
     if math.random() <= 0.75 then params:set("subharmonics_2", 0) else params:set("subharmonics_2", random_float(0, 0.5)) end   
     if math.random() <= 0.75 then params:set("overtones_1", 0) else params:set("overtones_1", random_float(0, 0.5)) end
     if math.random() <= 0.75 then params:set("overtones_2", 0) else params:set("overtones_2", random_float(0, 0.5)) end
-    if math.random() <= 0.5 then params:set("1direction_mod", 0) else params:set("1direction_mod", math.random(0, 30)) end
-    if math.random() <= 0.5 then params:set("2direction_mod", 0) else params:set("2direction_mod", math.random(0, 30)) end
+    if math.random() <= 0.4 then params:set("1direction_mod", 0) else params:set("1direction_mod", math.random(0, 30)) end
+    if math.random() <= 0.4 then params:set("2direction_mod", 0) else params:set("2direction_mod", math.random(0, 30)) end
     if math.random() <= 0.5 then params:set("sine_wet", 0) else params:set("sine_wet", math.random(1, 25)) end
     if math.random() <= 0.5 then params:set("sine_drive", 1) else params:set("sine_drive", random_float(0.5, 1.5)) end
     if math.random() <= 0.8 then params:set("1granular_gain", 100) else params:set("1granular_gain", math.random(80, 100)) end
@@ -48,6 +48,8 @@ local function randomize_params()
     if math.random() <= 0.5 then params:set("chew_depth", 0.4) else params:set("chew_depth", random_float(0.2, 0.5)) end
     if math.random() <= 0.5 then params:set("chew_freq", 0.4) else params:set("chew_freq", random_float(0.2, 0.5)) end
     if math.random() <= 0.5 then params:set("chew_variance", 0.5) else params:set("chew_variance", random_float(0.4, 0.8)) end
+    if math.random() <= 0.4 then params:set("1size_variation", 0) else params:set("1size_variation", math.random(0, 30)) end  
+    if math.random() <= 0.4 then params:set("2size_variation", 0) else params:set("2size_variation", math.random(0, 30)) end
 end
 
 return {
