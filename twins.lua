@@ -145,38 +145,33 @@ local function setup_params()
     params:add_group("LFOs", 56)
     lfo.init()
 
-    params:add_group("Extras", 20)
-    params:add_taper("1granular_gain", "Granular Mix 1", 0, 100, 100, 0, "%") params:set_action("1granular_gain", function(value) engine.granular_gain(1, value / 100) end)
-    params:add_option("1pitch_mode", "Pitch Mode 1", {"match speed", "independent"}, 2) params:set_action("1pitch_mode", function(value) engine.pitch_mode(1, value - 1) end)
-    params:add_control("1direction_mod", "Reverse 1", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("1direction_mod", function(value) engine.direction_mod(1, value / 100) end)
-    params:add_control("1size_variation", "Size Variation 1", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("1size_variation", function(value) engine.size_variation(1, value / 100) end)
-    params:add_taper("2granular_gain", "Granular Mix 2", 0, 100, 100, 0, "%") params:set_action("2granular_gain", function(value) engine.granular_gain(2, value / 100) end)
-    params:add_option("2pitch_mode", "Pitch Mode 2", {"match speed", "independent"}, 2) params:set_action("2pitch_mode", function(value) engine.pitch_mode(2, value - 1) end)
-    params:add_control("2direction_mod", "Reverse 2", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("2direction_mod", function(value) engine.direction_mod(2, value / 100) end)
-    params:add_control("2size_variation", "Size Variation 2", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("2size_variation", function(value) engine.size_variation(2, value / 100) end)
-  
-  for i = 1, 2 do
-    params:add_taper(i .. "density_mod_amt", i .. " Density Mod", 0, 100, 0, 0, "%") 
-    params:set_action(i .. "density_mod_amt", function(value) engine.density_mod_amt(i, value / 100) end)
-
-    params:add_control(i .. "subharmonics_1", i .. " Subharmonics -1oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0)) 
-    params:set_action(i .. "subharmonics_1", function(value) engine.subharmonics_1(i, value) end)
-
-    params:add_control(i .. "subharmonics_2", i .. " Subharmonics -2oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0)) 
-    params:set_action(i .. "subharmonics_2", function(value) engine.subharmonics_2(i, value) end)
-
-    params:add_control(i .. "overtones_1", i .. " Overtones +1oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0)) 
-    params:set_action(i .. "overtones_1", function(value) engine.overtones_1(i, value) end)
-
-    params:add_control(i .. "overtones_2", i .. " Overtones +2oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0)) 
-    params:set_action(i .. "overtones_2", function(value) engine.overtones_2(i, value) end)
-end
+    params:add_group("Extras", 19)
+    for i = 1, 2 do
+      params:add_taper(i .. "granular_gain", i .. " Granular Mix", 0, 100, 100, 0, "%")
+      params:set_action(i .. "granular_gain", function(value) engine.granular_gain(i, value / 100) end)
+      params:add_option(i .. "pitch_mode", i .. " Pitch Mode", {"match speed", "independent"}, 2)
+      params:set_action(i .. "pitch_mode", function(value) engine.pitch_mode(i, value - 1) end)
+      params:add_control(i .. "direction_mod", i .. " Reverse", controlspec.new(0, 100, "lin", 1, 0, "%"))
+      params:set_action(i .. "direction_mod", function(value) engine.direction_mod(i, value / 100) end)
+      params:add_control(i .. "size_variation", i .. " Size Variation", controlspec.new(0, 100, "lin", 1, 0, "%"))
+      params:set_action(i .. "size_variation", function(value) engine.size_variation(i, value / 100) end)
+      params:add_taper(i .. "density_mod_amt", i .. " Density Mod", 0, 100, 0, 0, "%")
+      params:set_action(i .. "density_mod_amt", function(value) engine.density_mod_amt(i, value / 100) end)
+      params:add_control(i .. "subharmonics_1", i .. " Subharmonics -1oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0))
+      params:set_action(i .. "subharmonics_1", function(value) engine.subharmonics_1(i, value) end)
+      params:add_control(i .. "subharmonics_2", i .. " Subharmonics -2oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0))
+      params:set_action(i .. "subharmonics_2", function(value) engine.subharmonics_2(i, value) end)
+      params:add_control(i .. "overtones_1", i .. " Overtones +1oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0))
+      params:set_action(i .. "overtones_1", function(value) engine.overtones_1(i, value) end)
+      params:add_control(i .. "overtones_2", i .. " Overtones +2oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0))
+      params:set_action(i .. "overtones_2", function(value) engine.overtones_2(i, value) end)
+    end
   
     params:add_control("volume_compensation", "Volume compensation", controlspec.new(0,1,"lin",0.01,0.1)) params:set_action("volume_compensation", function(value) engine.compensation_factor(1,value) engine.compensation_factor(2,value) end)
-    params:add_control("steps","Transition steps",controlspec.new(10,20000,"lin",1,500)) params:set_action("steps", function(value) steps = value end)
     
     params:add_binary("randomize_params", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_params", function() randpara.randomize_params(steps) end)
-    params:add_binary("randomize_lfos", "RaNd0m1ze LFOs", "trigger", 0) params:set_action("randomize_lfos", function() lfo.randomize_lfos() end)
+    params:add_binary("randomize_lfos", "RaNd0m1ze LFOs", "trigger", 0) params:set_action("randomize_lfos", function() lfo.randomize_lfos()if randomize_metro[1] then randomize_metro[1]:stop() end
+if randomize_metro[2] then randomize_metro[2]:stop() end end)
     params:add_binary("ClearLFOs", "Clear All LFOs", "trigger", 0) params:set_action("ClearLFOs", function() lfo.clearLFOs() end)
 
     for i = 1, 2 do
@@ -223,7 +218,9 @@ end
       params:add_option(i .. "lock_spread", i .. " lock spread", {"off", "on"}, 1)
       params:add_option(i .. "lock_pitch", i .. " lock pitch", {"off", "on"}, 1)
     end
-
+    
+    params:add_control("steps","Transition steps",controlspec.new(10,20000,"lin",1,500)) params:set_action("steps", function(value) steps = value end)
+    
     params:bang()
 end
 

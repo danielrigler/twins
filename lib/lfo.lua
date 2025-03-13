@@ -142,6 +142,7 @@ lfo.target_ranges = {
 }
 
 function lfo.randomize_lfos()
+
     local function is_locked(target)
         local track = string.sub(target, 1, 1)
         local param = string.sub(target, 2)

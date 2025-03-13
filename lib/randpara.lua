@@ -62,31 +62,31 @@ local function randomize_params(steps, i)
         if math.random() <= 0.4 then targets[i .. "size_variation"] = 0 else targets[i .. "size_variation"] = math.random(0, 30) end
 
         -- EXTRAS (voice-specific parameters)
-        if math.random() <= 0.5 then targets[i .. "density_mod_amt"] = 0 else targets[i .. "density_mod_amt"] = math.random(0, 40) end
-        if math.random() <= 0.5 then targets[i .. "subharmonics_1"] = 0 else targets[i .. "subharmonics_1"] = random_float(0, 0.4) end
-        if math.random() <= 0.5 then targets[i .. "subharmonics_2"] = 0 else targets[i .. "subharmonics_2"] = random_float(0, 0.4) end
-        if math.random() <= 0.75 then targets[i .. "overtones_1"] = 0 else targets[i .. "overtones_1"] = random_float(0, 0.4) end
-        if math.random() <= 0.75 then targets[i .. "overtones_2"] = 0 else targets[i .. "overtones_2"] = random_float(0, 0.4) end
+        if math.random() <= 0.7 then targets[i .. "density_mod_amt"] = 0 else targets[i .. "density_mod_amt"] = math.random(0, 40) end
+        if math.random() <= 0.7 then targets[i .. "subharmonics_1"] = 0 else targets[i .. "subharmonics_1"] = random_float(0, 0.4) end
+        if math.random() <= 0.7 then targets[i .. "subharmonics_2"] = 0 else targets[i .. "subharmonics_2"] = random_float(0, 0.4) end
+        if math.random() <= 0.7 then targets[i .. "overtones_1"] = 0 else targets[i .. "overtones_1"] = random_float(0, 0.4) end
+        if math.random() <= 0.7 then targets[i .. "overtones_2"] = 0 else targets[i .. "overtones_2"] = random_float(0, 0.4) end
     else
         -- Randomize parameters for both voices if no specific voice is provided
         if math.random() <= 0.4 then targets["1direction_mod"] = 0 else targets["1direction_mod"] = math.random(0, 30) end
         if math.random() <= 0.4 then targets["2direction_mod"] = 0 else targets["2direction_mod"] = math.random(0, 30) end
-        if math.random() <= 0.8 then targets["1granular_gain"] = 100 else targets["1granular_gain"] = math.random(80, 100) end
-        if math.random() <= 0.8 then targets["2granular_gain"] = 100 else targets["2granular_gain"] = math.random(80, 100) end
+        if math.random() <= 0.8 then targets["1granular_gain"] = 100 else targets["1granular_gain"] = math.random(85, 100) end
+        if math.random() <= 0.8 then targets["2granular_gain"] = 100 else targets["2granular_gain"] = math.random(85, 100) end
         if math.random() <= 0.4 then targets["1size_variation"] = 0 else targets["1size_variation"] = math.random(0, 30) end
         if math.random() <= 0.4 then targets["2size_variation"] = 0 else targets["2size_variation"] = math.random(0, 30) end
 
         -- EXTRAS (voice-specific parameters for both voices)
-        if math.random() <= 0.5 then targets["1density_mod_amt"] = 0 else targets["1density_mod_amt"] = math.random(0, 40) end
-        if math.random() <= 0.5 then targets["2density_mod_amt"] = 0 else targets["2density_mod_amt"] = math.random(0, 40) end
-        if math.random() <= 0.5 then targets["1subharmonics_1"] = 0 else targets["1subharmonics_1"] = random_float(0, 0.4) end
-        if math.random() <= 0.5 then targets["2subharmonics_1"] = 0 else targets["2subharmonics_1"] = random_float(0, 0.4) end
-        if math.random() <= 0.5 then targets["1subharmonics_2"] = 0 else targets["1subharmonics_2"] = random_float(0, 0.4) end
-        if math.random() <= 0.5 then targets["2subharmonics_2"] = 0 else targets["2subharmonics_2"] = random_float(0, 0.4) end
-        if math.random() <= 0.75 then targets["1overtones_1"] = 0 else targets["1overtones_1"] = random_float(0, 0.4) end
-        if math.random() <= 0.75 then targets["2overtones_1"] = 0 else targets["2overtones_1"] = random_float(0, 0.4) end
-        if math.random() <= 0.75 then targets["1overtones_2"] = 0 else targets["1overtones_2"] = random_float(0, 0.4) end
-        if math.random() <= 0.75 then targets["2overtones_2"] = 0 else targets["2overtones_2"] = random_float(0, 0.4) end
+        if math.random() <= 0.7 then targets["1density_mod_amt"] = 0 else targets["1density_mod_amt"] = math.random(0, 40) end
+        if math.random() <= 0.7 then targets["2density_mod_amt"] = 0 else targets["2density_mod_amt"] = math.random(0, 40) end
+        if math.random() <= 0.7 then targets["1subharmonics_1"] = 0 else targets["1subharmonics_1"] = random_float(0, 0.4) end
+        if math.random() <= 0.7 then targets["2subharmonics_1"] = 0 else targets["2subharmonics_1"] = random_float(0, 0.4) end
+        if math.random() <= 0.7 then targets["1subharmonics_2"] = 0 else targets["1subharmonics_2"] = random_float(0, 0.4) end
+        if math.random() <= 0.7 then targets["2subharmonics_2"] = 0 else targets["2subharmonics_2"] = random_float(0, 0.4) end
+        if math.random() <= 0.7 then targets["1overtones_1"] = 0 else targets["1overtones_1"] = random_float(0, 0.4) end
+        if math.random() <= 0.7 then targets["2overtones_1"] = 0 else targets["2overtones_1"] = random_float(0, 0.4) end
+        if math.random() <= 0.7 then targets["1overtones_2"] = 0 else targets["1overtones_2"] = random_float(0, 0.4) end
+        if math.random() <= 0.7 then targets["2overtones_2"] = 0 else targets["2overtones_2"] = random_float(0, 0.4) end
     end
 
     -- Start the interpolation metro
