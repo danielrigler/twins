@@ -219,7 +219,7 @@ if randomize_metro[2] then randomize_metro[2]:stop() end end)
       params:add_option(i .. "lock_pitch", i .. " lock pitch", {"off", "on"}, 1)
     end
     
-    params:add_control("steps","Transition steps",controlspec.new(10,20000,"lin",1,500)) params:set_action("steps", function(value) steps = value end)
+    params:add_control("steps","Transition steps",controlspec.new(10,1000,"lin",1,400)) params:set_action("steps", function(value) steps = value end)
     
     params:bang()
 end
