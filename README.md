@@ -20,14 +20,14 @@ Heavily influenced by @cfd90's Twine and contains inspiration and code from a lo
 ### Requirements
 norns / norns shield
 ### Documentation
-**E1**: Master Volume
-**K1**+**E2** or **K1**+**E3**: Volume 1/2
-**K1**+**E1**: Crossfade Volumes
-**K2**/**K3**: Navigate
-**E2**/**E3**: Adjust Parameters
-**K2**+**K3**: Lock Parameters
-**K2**+**K3**: HP/LP Filter toggle
-**K1**+**K2** or **K1**+**K3**: Randomize 1/2
+**E1**: Master Volume  
+**K1**+**E2** or **K1**+**E3**: Volume 1/2  
+**K1**+**E1**: Crossfade Volumes  
+**K2**/**K3**: Navigate  
+**E2**/**E3**: Adjust Parameters  
+**K2**+**K3**: Lock Parameters  
+**K2**+**K3**: HP/LP Filter toggle  
+**K1**+**K2** or **K1**+**K3**: Randomize 1/2  
 
 ### Download
 **v0.14** **[github link](https://github.com/danielrigler/twins)**
