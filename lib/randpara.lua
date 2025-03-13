@@ -3,25 +3,46 @@ local function random_float(l, h)
 end
 
 local function interpolate(start_val, end_val, factor)
-    return start_val + (end_val - start_val) * factor
+    -- Exponential interpolation to avoid slowdown near the end
+    local epsilon = 0.01  -- Small value to ensure we reach the target
+    if math.abs(start_val - end_val) < epsilon then
+        return end_val  -- If we're close enough, just return the target value
+    else
+        -- Exponential interpolation
+        return start_val + (end_val - start_val) * (1 - math.exp(-3 * factor))
+    end
 end
 
 local randomize_metro = metro.init() -- Initialize the metro here
-local targets = {}
+local targets = {} -- Stores target values for interpolation
+local active_interpolations = {} -- Tracks which parameters are being interpolated
 local interpolation_speed = 1 / 30 -- Metro time (30 FPS, same as in twins.lua)
+
+-- Function to stop interpolation for a specific parameter
+local function stop_interpolation_for_param(param)
+    targets[param] = nil -- Remove the parameter from the interpolation targets
+    active_interpolations[param] = nil -- Mark the parameter as no longer being interpolated
+end
+
+-- Function to handle manual parameter adjustments
+local function manual_adjust(param, value)
+    stop_interpolation_for_param(param) -- Stop interpolation for this parameter
+    params:set(param, value) -- Set the parameter to the new value
+end
 
 local function randomize_params(steps, i)
     -- Clear previous targets and stop any ongoing interpolation
     targets = {}
+    active_interpolations = {}
     if randomize_metro then
         randomize_metro:stop() -- Stop the metro if it's running
     end
 
     -- Set target values for each parameter
     -- DELAY (global parameters)
-    if math.random() <= 0.3 then targets["delay_h"] = 0 else targets["delay_h"] = math.random(15, 70) end
+    if math.random() <= 0.3 then targets["delay_h"] = 0 else targets["delay_h"] = math.random(15, 85) end
     targets["delay_rate"] = random_float(0.2, 1)
-    targets["delay_feedback"] = math.random(30, 90)
+    targets["delay_feedback"] = math.random(30, 80)
 
     -- GREYHOLE (global parameters)
     targets["greyhole_mix"] = random_float(0, 0.7)
@@ -89,20 +110,27 @@ local function randomize_params(steps, i)
         if math.random() <= 0.7 then targets["2overtones_2"] = 0 else targets["2overtones_2"] = random_float(0, 0.4) end
     end
 
+    -- Mark all parameters as being interpolated
+    for param, _ in pairs(targets) do
+        active_interpolations[param] = true
+    end
+
     -- Start the interpolation metro
     randomize_metro.time = interpolation_speed
     randomize_metro.count = -1
     randomize_metro.event = function(count)
-        local factor = count / steps
+        local factor = count / steps  -- Use the actual steps parameter here
         local all_done = true
 
         for param, target in pairs(targets) do
-            local current_value = params:get(param)
-            local new_value = interpolate(current_value, target, factor)
-            params:set(param, new_value)
+            if active_interpolations[param] then -- Only interpolate if the parameter is still marked as active
+                local current_value = params:get(param)
+                local new_value = interpolate(current_value, target, factor)
+                params:set(param, new_value)
 
-            if math.abs(new_value - target) > 0.01 then
-                all_done = false
+                if math.abs(new_value - target) > 0.01 then
+                    all_done = false
+                end
             end
         end
 
@@ -114,5 +142,7 @@ local function randomize_params(steps, i)
 end
 
 return {
-    randomize_params = randomize_params
+    randomize_params = randomize_params,
+    manual_adjust = manual_adjust, -- Expose the manual_adjust function for external use
+    stop_interpolation_for_param = stop_interpolation_for_param -- Expose this function for external use
 }

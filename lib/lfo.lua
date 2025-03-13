@@ -30,7 +30,21 @@ table.find = function(tbl, value)
     return nil
 end
 
+local function is_audio_loaded(track_num)
+    local file_path = params:get(track_num .. "sample")
+    return file_path and file_path ~= "" and file_path ~= "none" and file_path ~= "-"
+end
+
 function lfo.clearLFOs()
+
+  if is_audio_loaded(1) and is_audio_loaded(2) then
+    params:set("1pan", -15)
+    params:set("2pan", 15)
+  elseif is_audio_loaded(1) or is_audio_loaded(2) then
+    params:set("1pan", 0)
+    params:set("2pan", 0)
+  end  
+  
     local function is_locked(target)
         local track = string.sub(target, 1, 1)
         local param = string.sub(target, 2)
