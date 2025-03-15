@@ -129,19 +129,19 @@ local function setup_params()
     params:add_binary("randomize_bitcrusher", "RaNd0m1ze!", "trigger", 0)
     params:add_binary("clear_bitcrusher", "Clear!", "trigger", 0)
     params:add_separator("")
-    local default_bit_depth = 16
+    local default_bit_depth = 24
     local default_sample_rate = 48000
     params:set_action("randomize_bitcrusher", function()
     local random_choice = math.random(1, 3)
        if random_choice == 1 then
-           local random_bit_depth = math.random(7, 16)
+           local random_bit_depth = math.random(7, 24)
            params:set("1bit_depth", random_bit_depth)
            local random_sample_rate = math.random(1000, 10000)
            params:set("1sample_rate", random_sample_rate)
            params:set("2bit_depth", default_bit_depth)
            params:set("2sample_rate", default_sample_rate)
        elseif random_choice == 2 then
-            local random_bit_depth = math.random(7, 16)
+            local random_bit_depth = math.random(7, 24)
             params:set("2bit_depth", random_bit_depth)
             local random_sample_rate = math.random(1000, 10000)
             params:set("2sample_rate", random_sample_rate)
@@ -149,7 +149,7 @@ local function setup_params()
             params:set("1sample_rate", default_sample_rate)
        else
         for i = 1, 2 do
-          local random_bit_depth = math.random(7, 16)
+          local random_bit_depth = math.random(7, 24)
           params:set(i .. "bit_depth", random_bit_depth)
           local random_sample_rate = math.random(1000, 10000)
           params:set(i .. "sample_rate", random_sample_rate)
@@ -165,7 +165,7 @@ local function setup_params()
       end)
       
     for i = 1, 2 do
-      params:add_control(i .. "bit_depth", i .. " Bit Depth", controlspec.new(4, 16, "lin", 1, 16))
+      params:add_control(i .. "bit_depth", i .. " Bit Depth", controlspec.new(4, 24, "lin", 1, 24))
       params:set_action(i .. "bit_depth", function(value) engine.bit_depth(i, value) end)
       params:add_control(i .. "sample_rate", i .. " Sample Rate", controlspec.new(1000, 48000, 'exp', 100, 48000))
       params:set_action(i .. "sample_rate", function(value) engine.sample_rate(i, value) end)
