@@ -30,13 +30,14 @@ norns / norns shield
 **K1**+**K2** or **K1**+**K3**: Randomize 1/2  
 
 ### Download
-**v0.14** **[github link](https://github.com/danielrigler/twins)**
+**v0.15** **[github link](https://github.com/danielrigler/twins)**
 or from Maiden:
 ```
 ;install https://github.com/danielrigler/twins
 ```
 And after this do not forget to restart.
 ### Version history
+* **v0.15** - Added bit crusher, small tweaks.
 * **v0.14** - Randomization and interpolation overhaul.
 * **v0.13** - Added grain size randomization controls per voice.
 * **v0.12** - Volume fix, reverse direction mod
