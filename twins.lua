@@ -134,14 +134,14 @@ local function setup_params()
     params:set_action("randomize_bitcrusher", function()
     local random_choice = math.random(1, 3)
        if random_choice == 1 then
-           local random_bit_depth = math.random(7, 14)
+           local random_bit_depth = math.random(8, 14)
            params:set("1bit_depth", random_bit_depth)
            local random_sample_rate = math.random(1000, 10000)
            params:set("1sample_rate", random_sample_rate)
            params:set("2bit_depth", default_bit_depth)
            params:set("2sample_rate", default_sample_rate)
        elseif random_choice == 2 then
-            local random_bit_depth = math.random(7, 14)
+            local random_bit_depth = math.random(8, 14)
             params:set("2bit_depth", random_bit_depth)
             local random_sample_rate = math.random(1000, 10000)
             params:set("2sample_rate", random_sample_rate)
@@ -149,7 +149,7 @@ local function setup_params()
             params:set("1sample_rate", default_sample_rate)
        else
         for i = 1, 2 do
-          local random_bit_depth = math.random(7, 14)
+          local random_bit_depth = math.random(8, 14)
           params:set(i .. "bit_depth", random_bit_depth)
           local random_sample_rate = math.random(1000, 10000)
           params:set(i .. "sample_rate", random_sample_rate)
@@ -225,7 +225,7 @@ if randomize_metro[2] then randomize_metro[2]:stop() end end)
       params:add_taper(i .. "pan", i .. " pan", -100, 100, 0, 0, "%") params:set_action(i .. "pan", function(value) engine.pan(i, value / 100)  end)
       params:add_control(i .. "speed", i .. " speed", controlspec.new(-2, 2, "lin", 0.01, 0, "")) params:set_action(i .. "speed", function(value) engine.speed(i, value) end)
       params:add_taper(i .. "density", i .. " density", 1, 30, 20, 1) params:set_action(i .. "density", function(value) engine.density(i, value) end)
-      params:add_control(i .. "pitch", i .. " pitch", controlspec.new(-24, 24, "lin", 1, 0, "st")) params:set_action(i .. "pitch", function(value) engine.pitch_offset(i, math.pow(0.5, -value / 12)) end)
+      params:add_control(i .. "pitch", i .. " pitch", controlspec.new(-48, 48, "lin", 1, 0, "st")) params:set_action(i .. "pitch", function(value) engine.pitch_offset(i, math.pow(0.5, -value / 12)) end)
       params:add_taper(i .. "jitter", i .. " jitter", 0, 1999, 250, 5, "ms") params:set_action(i .. "jitter", function(value) engine.jitter(i, value / 1000) end)
       params:add_taper(i .. "size", i .. " size", 1, 999, 100, 5, "ms") params:set_action(i .. "size", function(value) engine.size(i, value / 1000) end)
       params:add_taper(i .. "spread", i .. " spread", 0, 100, 0, 0, "%") params:set_action(i .. "spread", function(value) engine.spread(i, value / 100) end)
@@ -253,8 +253,8 @@ if randomize_metro[2] then randomize_metro[2]:stop() end end)
     params:add_taper("max_density", "density (max)", 1, 30, 16, 5, "Hz")
     params:add_taper("min_spread", "spread (min)", 0, 100, 0, 0, "%")
     params:add_taper("max_spread", "spread (max)", 0, 100, 90, 0, "%")
-    params:add_control("min_pitch", "pitch (min)", controlspec.new(-24, 24, "lin", 1, -24, "st"))
-    params:add_control("max_pitch", "pitch (max)", controlspec.new(-24, 24, "lin", 1, 24, "st"))
+    params:add_control("min_pitch", "pitch (min)", controlspec.new(-48, 48, "lin", 1, -48, "st"))
+    params:add_control("max_pitch", "pitch (max)", controlspec.new(-48, 48, "lin", 1, 48, "st"))
 
     params:add_group("Locking", 10)
     for i = 1, 2 do
@@ -340,7 +340,7 @@ if locks.pitch and not active_controlled_params[n .. "pitch"] then
         {interval = -7, weight = 1},
         {interval = -5, weight = 1},
         {interval = -3, weight = 1},
-        {interval = 0, weight = 3},
+        {interval = 0, weight = 2},
         {interval = 3, weight = 1},
         {interval = 5, weight = 1},
         {interval = 7, weight = 1},
@@ -348,15 +348,41 @@ if locks.pitch and not active_controlled_params[n .. "pitch"] then
     }
 
     local current_pitch = params:get(n .. "pitch")
-    local min_pitch = math.max(params:get("min_pitch"), current_pitch - 12)
-    local max_pitch = math.min(params:get("max_pitch"), current_pitch + 12)
+    local min_pitch = math.max(params:get("min_pitch"), current_pitch - 48)
+    local max_pitch = math.min(params:get("max_pitch"), current_pitch + 48)
 
-    -- Ensure the interval is valid
-    if min_pitch < max_pitch then
-        local is_lfo_active, _ = is_lfo_active_for_param(n .. "pitch")
-        if not is_lfo_active then
+    if min_pitch < max_pitch and not is_lfo_active_for_param(n .. "pitch") then
+        local base_pitch = params:get(n == 1 and "2pitch" or "1pitch")
+
+        -- Function to check if a pitch is within bounds
+        local function is_pitch_valid(pitch)
+            return pitch >= min_pitch and pitch <= max_pitch
+        end
+
+        -- Try to find a valid interval from the weighted_intervals table
+        local valid_intervals = {}
+        for _, v in ipairs(weighted_intervals) do
+            local candidate_pitch = base_pitch + v.interval
+            if is_pitch_valid(candidate_pitch) then
+                table.insert(valid_intervals, v)
+            end
+        end
+
+        -- If no valid intervals are found, allow larger steps
+        if #valid_intervals == 0 then
+            -- Allow larger steps, but still prioritize musical intervals
+            local larger_intervals = {-24, -19, -17, -15, 15, 17, 19, 24}
+            for _, interval in ipairs(larger_intervals) do
+                local candidate_pitch = base_pitch + interval
+                if is_pitch_valid(candidate_pitch) then
+                    params:set(n .. "pitch", candidate_pitch)
+                    return -- Exit after setting the pitch
+                end
+            end
+        else
+            -- Choose a random interval from the valid_intervals table
             local total_weight = 0
-            for _, v in ipairs(weighted_intervals) do
+            for _, v in ipairs(valid_intervals) do
                 total_weight = total_weight + v.weight
             end
 
@@ -364,7 +390,7 @@ if locks.pitch and not active_controlled_params[n .. "pitch"] then
             local cumulative_weight = 0
             local chosen_interval = 0
 
-            for _, v in ipairs(weighted_intervals) do
+            for _, v in ipairs(valid_intervals) do
                 cumulative_weight = cumulative_weight + v.weight
                 if random_weight <= cumulative_weight then
                     chosen_interval = v.interval
@@ -372,19 +398,8 @@ if locks.pitch and not active_controlled_params[n .. "pitch"] then
                 end
             end
 
-            if n == 1 then
-                -- Randomize 1pitch based on 2pitch
-                local base_pitch = params:get("2pitch")
-                local random_pitch = base_pitch + chosen_interval
-                random_pitch = math.max(min_pitch, math.min(max_pitch, random_pitch))
-                params:set("1pitch", random_pitch)
-            else
-                -- Randomize 2pitch based on 1pitch
-                local base_pitch = params:get("1pitch")
-                local random_pitch = base_pitch + chosen_interval
-                random_pitch = math.max(min_pitch, math.min(max_pitch, random_pitch))
-                params:set("2pitch", random_pitch)
-            end
+            local random_pitch = base_pitch + chosen_interval
+            params:set(n .. "pitch", random_pitch)
         end
     end
 end
