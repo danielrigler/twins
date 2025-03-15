@@ -6,7 +6,7 @@
 --           by: @dddstudio                       
 --
 --                          
---                            v0.14
+--                            v0.15
 -- E1: Master Volume
 -- K1+E2/E3: Volume 1/2
 -- K1+E1: Crossfade Volumes
@@ -68,7 +68,7 @@ local function setup_ui_metro()
 end
 
 local function is_lfo_active_for_param(param_name)
-    for i = 1, 8 do
+    for i = 1, 16 do
         -- Get the target parameter name for the LFO
         local target_index = params:get(i .. "lfo_target")
         local target_param = lfo.lfo_targets[target_index]
@@ -96,6 +96,8 @@ local function setup_params()
     
     params:add_separator("Settings")
 
+    params:add_binary("randomize_params", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_params", function() randpara.randomize_params(steps) end)
+    
     params:add_group("Delay", 3)
     delay.init()
     
@@ -123,6 +125,52 @@ local function setup_params()
     params:add_taper("reverb_modulator_frequency", "Modulator frequency", 0, 10, 1, 0, "Hz") params:set_action("reverb_modulator_frequency", function(value) engine.reverb_modulator_frequency(value) end)
     params:add_taper("reverb_modulator_depth", "Modulator depth", 0, 100, 40, 0, "%") params:set_action("reverb_modulator_depth", function(value) engine.reverb_modulator_depth(value / 100) end)
 
+    params:add_group("Bit Crush", 7)
+    params:add_binary("randomize_bitcrusher", "RaNd0m1ze!", "trigger", 0)
+    params:add_binary("clear_bitcrusher", "Clear!", "trigger", 0)
+    params:add_separator("")
+    local default_bit_depth = 16
+    local default_sample_rate = 48000
+    params:set_action("randomize_bitcrusher", function()
+    local random_choice = math.random(1, 3)
+       if random_choice == 1 then
+           local random_bit_depth = math.random(7, 16)
+           params:set("1bit_depth", random_bit_depth)
+           local random_sample_rate = math.random(1000, 10000)
+           params:set("1sample_rate", random_sample_rate)
+           params:set("2bit_depth", default_bit_depth)
+           params:set("2sample_rate", default_sample_rate)
+       elseif random_choice == 2 then
+            local random_bit_depth = math.random(7, 16)
+            params:set("2bit_depth", random_bit_depth)
+            local random_sample_rate = math.random(1000, 10000)
+            params:set("2sample_rate", random_sample_rate)
+            params:set("1bit_depth", default_bit_depth)
+            params:set("1sample_rate", default_sample_rate)
+       else
+        for i = 1, 2 do
+          local random_bit_depth = math.random(7, 16)
+          params:set(i .. "bit_depth", random_bit_depth)
+          local random_sample_rate = math.random(1000, 10000)
+          params:set(i .. "sample_rate", random_sample_rate)
+        end
+       end
+    end)
+    
+      params:set_action("clear_bitcrusher", function()
+      for i=1,2 do
+        params:set(i.."sample_rate", default_sample_rate)
+        params:set(i.."bit_depth", default_bit_depth)
+      end
+      end)
+      
+    for i = 1, 2 do
+      params:add_control(i .. "bit_depth", i .. " Bit Depth", controlspec.new(4, 16, "lin", 1, 16))
+      params:set_action(i .. "bit_depth", function(value) engine.bit_depth(i, value) end)
+      params:add_control(i .. "sample_rate", i .. " Sample Rate", controlspec.new(1000, 48000, 'exp', 100, 48000))
+      params:set_action(i .. "sample_rate", function(value) engine.sample_rate(i, value) end)
+    end
+
     params:add_group("Filters", 8)
     params:add_control("1cutoff","1 LPF cutoff",controlspec.new(20,20000,"exp",0,20000,"Hz")) params:set_action("1cutoff",function(value) engine.cutoff(1,value) end)
     params:add_control("1q","1 LPF resonance",controlspec.new(0,4,"lin",0.01,0)) params:set_action("1q",function(value) engine.q(1,value) end)
@@ -134,7 +182,6 @@ local function setup_params()
     params:add_control("2hpfrq","2 HPF resonance",controlspec.new(0,1,"lin",0.01,1)) params:set_action("2hpfrq",function(value) engine.hpfrq(2,value) end)
     
     params:add_group("Tape", 6)
-    
     params:add_control("sine_wet", "Shaper Drive Mix", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("sine_wet", function(value) engine.sine_wet(1, value / 100) engine.sine_wet(2, value / 100) end)
     params:add_control("sine_drive", "Shaper Drive", controlspec.new(0, 5, "lin", 0.01, 1, "")) params:set_action("sine_drive", function(value) engine.sine_drive(1, value) engine.sine_drive(2, value) end)
     params:add{type = "control", id = "chew_wet", name = "Chew Mix", controlspec = controlspec.new(0, 100, "lin", 1, 0, "%"), action = function(value) engine.chew_wet(1, value /100) engine.chew_wet(2, value / 100) end}
@@ -142,7 +189,11 @@ local function setup_params()
     params:add{type = "control", id = "chew_freq", name = "Chew Freq", controlspec = controlspec.new(0, 1, "lin", 0.01, 0.5, ""), action = function(value) engine.chew_freq(1, value) engine.chew_freq(2, value) end}
     params:add{type = "control", id = "chew_variance", name = "Chew Variance", controlspec = controlspec.new(0, 1, "lin", 0.01, 0.5, ""), action = function(value) engine.chew_variance(1, value) engine.chew_variance(2, value) end}
 
-    params:add_group("LFOs", 56)
+    params:add_group("LFOs", 114)
+    params:add_binary("randomize_lfos", "RaNd0m1ze LFOs", "trigger", 0) params:set_action("randomize_lfos", function() lfo.randomize_lfos()if randomize_metro[1] then randomize_metro[1]:stop() end
+if randomize_metro[2] then randomize_metro[2]:stop() end end)
+    params:add_binary("ClearLFOs", "Clear All LFOs", "trigger", 0) params:set_action("ClearLFOs", function() lfo.clearLFOs() end)
+
     lfo.init()
 
     params:add_group("Extras", 19)
@@ -169,11 +220,6 @@ local function setup_params()
   
     params:add_control("volume_compensation", "Volume compensation", controlspec.new(0,1,"lin",0.01,0.1)) params:set_action("volume_compensation", function(value) engine.compensation_factor(1,value) engine.compensation_factor(2,value) end)
     
-    params:add_binary("randomize_params", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_params", function() randpara.randomize_params(steps) end)
-    params:add_binary("randomize_lfos", "RaNd0m1ze LFOs", "trigger", 0) params:set_action("randomize_lfos", function() lfo.randomize_lfos()if randomize_metro[1] then randomize_metro[1]:stop() end
-if randomize_metro[2] then randomize_metro[2]:stop() end end)
-    params:add_binary("ClearLFOs", "Clear All LFOs", "trigger", 0) params:set_action("ClearLFOs", function() lfo.clearLFOs() end)
-
     for i = 1, 2 do
       params:add_taper(i .. "volume", i .. " volume", -70, 20, 0, 0, "dB") params:set_action(i .. "volume", function(value) if value == -70 then engine.volume(i, 0) else engine.volume(i, math.pow(10, value / 20)) end end)
       params:add_taper(i .. "pan", i .. " pan", -100, 100, 0, 0, "%") params:set_action(i .. "pan", function(value) engine.pan(i, value / 100)  end)
@@ -198,7 +244,7 @@ if randomize_metro[2] then randomize_metro[2]:stop() end end)
       params:hide(i .. "volume")
     end
 
-    params:add_group("Randomizer", 10)
+    params:add_group("Limits", 10)
     params:add_taper("min_jitter", "jitter (min)", 0, 500, 0, 5, "ms")
     params:add_taper("max_jitter", "jitter (max)", 0, 1999, 1999, 5, "ms")
     params:add_taper("min_size", "size (min)", 1, 999, 100, 5, "ms")
@@ -219,7 +265,7 @@ if randomize_metro[2] then randomize_metro[2]:stop() end end)
       params:add_option(i .. "lock_pitch", i .. " lock pitch", {"off", "on"}, 1)
     end
     
-    params:add_control("steps","Transition steps",controlspec.new(10,1000,"lin",1,500)) params:set_action("steps", function(value) steps = value end)
+    params:add_control("steps","Transition steps",controlspec.new(10,2000,"lin",1,400)) params:set_action("steps", function(value) steps = value end)
     
     params:bang()
 end

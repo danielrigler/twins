@@ -80,7 +80,9 @@ SynthDef(\synth, {
     compensation_factor=0.1,
     chew_wet=0, chew_depth=0.5, chew_freq=0.5, chew_variance=0.5,
     direction_mod=0,
-    size_variation=0;
+    size_variation=0,
+    bit_depth=8,
+    sample_rate=10000;
 
     var grain_trig;
     var jitter_sig;
@@ -157,6 +159,9 @@ SynthDef(\synth, {
 
     granular_gain = granular_gain.clip(0, 1);
     sig_mix = (dry_sig * (1 - granular_gain)) + (granular_sig * granular_gain);
+
+    sig_mix = Decimator.ar(sig_mix, sample_rate, bit_depth);
+
     sig_mix = BHiPass4.ar(sig_mix, Lag.kr(hpf), Lag.kr(hpfrq));
     sig_mix = MoogFF.ar(sig_mix, Lag.kr(cutoff), Lag.kr(q));
 
@@ -313,6 +318,10 @@ SynthDef(\synth, {
         this.addCommand("chew_depth", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\chew_depth, msg[2]); });
         this.addCommand("chew_freq", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\chew_freq, msg[2]); });
         this.addCommand("chew_variance", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\chew_variance, msg[2]); });
+        
+        this.addCommand("bit_depth", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\bit_depth, msg[2]); });
+        this.addCommand("sample_rate", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\sample_rate, msg[2]); });
+        
         
         seek_tasks = Array.fill(nvoices, { arg i; Routine {} });
     }

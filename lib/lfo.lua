@@ -1,4 +1,4 @@
-local number_of_outputs = 8
+local number_of_outputs = 16
 local tau = math.pi * 2
 
 local options = {
@@ -10,14 +10,16 @@ local options = {
 }
 
 local lfo = {}
+local assigned_params = {} -- Table to track assigned parameters
+
 for i = 1, number_of_outputs do
   lfo[i] = {
-    freq = 0.01,
+    freq = 0.05,
     counter = 1,
     waveform = options.lfotypes[1],
     slope = 0,
-    depth = 15,
-    offset = .25
+    depth = 50,
+    offset = 0
   }
 end
 
@@ -36,15 +38,16 @@ local function is_audio_loaded(track_num)
 end
 
 function lfo.clearLFOs()
+    assigned_params = {} -- Clear the assigned parameters table
 
-  if is_audio_loaded(1) and is_audio_loaded(2) then
-    params:set("1pan", -15)
-    params:set("2pan", 15)
-  elseif is_audio_loaded(1) or is_audio_loaded(2) then
-    params:set("1pan", 0)
-    params:set("2pan", 0)
-  end  
-  
+    if is_audio_loaded(1) and is_audio_loaded(2) then
+        params:set("1pan", -15)
+        params:set("2pan", 15)
+    elseif is_audio_loaded(1) or is_audio_loaded(2) then
+        params:set("1pan", 0)
+        params:set("2pan", 0)
+    end  
+
     local function is_locked(target)
         local track = string.sub(target, 1, 1)
         local param = string.sub(target, 2)
@@ -59,7 +62,7 @@ function lfo.clearLFOs()
         end
     end
 
-    for i = 1, 8 do
+    for i = 1, 16 do
         local target_index = params:get(i .. "lfo_target")
         local target_param = lfo.lfo_targets[target_index]
 
@@ -72,14 +75,12 @@ function lfo.clearLFOs()
     end
 end
 
-
 lfo.lfo_targets = {
     "none", "1pan", "2pan", "1speed", "2speed", "1seek", "2seek", "1jitter", "2jitter", 
     "1spread", "2spread", "1size", "2size", "1density", "2density", "1volume", "2volume", 
     "1pitch", "2pitch", "1cutoff", "2cutoff", "time", "size", "damp", "diff", "feedback", 
-    "mod_depth", "mod_freq"
+    "mod_depth", "mod_freq", "1sample_rate", "2sample_rate", "1bit_depth", "2bit_depth"
 }
-
 
 -- Define individual ranges for each LFO target
 lfo.target_ranges = {
@@ -98,28 +99,28 @@ lfo.target_ranges = {
         chance = 0.8
     },
     ["1jitter"] = {
-        depth = { min = 2, max = 70 },
-        offset = { min = -0.5, max = 0.3 },
+        depth = { min = 5, max = 50 },
+        offset = { min = -0.75, max = 0.75 },
         frequency = { min = 0.01, max = 0.1 },
         waveform = { "sine" },
         chance = 0.6
     },
     ["2jitter"] = {
-        depth = { min = 2, max = 70 },
-        offset = { min = -0.5, max = 0.3 },
+        depth = { min = 5, max = 50 },
+        offset = { min = -0.75, max = 0.75 },
         frequency = { min = 0.01, max = 0.1 },
         waveform = { "sine" },
         chance = 0.6
     },
     ["1spread"] = {
-        depth = { min = 2, max = 60 },
+        depth = { min = 5, max = 60 },
         offset = { min = -0.5, max = 0.2 },
         frequency = { min = 0.01, max = 0.1 },
         waveform = { "sine" },
         chance = 0.6
     },
     ["2spread"] = {
-        depth = { min = 2, max = 60 },
+        depth = { min = 5, max = 60 },
         offset = { min = -0.5, max = 0.2 },
         frequency = { min = 0.01, max = 0.1 },
         waveform = { "sine" },
@@ -140,23 +141,51 @@ lfo.target_ranges = {
         chance = 0.6
     },
     ["1density"] = {
-        depth = { min = 2, max = 40 },
-        offset = { min = -0.75, max = 0.4 },
+        depth = { min = 5, max = 25 },
+        offset = { min = -0.5, max = 0.5 },
         frequency = { min = 0.01, max = 0.3 },
         waveform = { "sine" },
         chance = 0.6
     },
     ["2density"] = {
-        depth = { min = 2, max = 40 },
-        offset = { min = -0.75, max = 0.4 },
+        depth = { min = 5, max = 25 },
+        offset = { min = -0.5, max = 0.5 },
         frequency = { min = 0.01, max = 0.3 },
         waveform = { "sine" },
         chance = 0.6
+    },
+     ["1seek"] = {
+        depth = { min = 10, max = 100 },
+        offset = { min = -0.5, max = 0.5 },
+        frequency = { min = 0.01, max = 0.1 },
+        waveform = { "sine" },
+        chance = 0.2
+    },
+    ["2seek"] = {
+        depth = { min = 10, max = 100 },
+        offset = { min = -0.5, max = 0.5 },
+        frequency = { min = 0.01, max = 0.1 },
+        waveform = { "sine" },
+        chance = 0.2
+    },
+    ["1speed"] = {
+        depth = { min = 5, max = 20 },
+        offset = { min = 0.0, max = 0.25 },
+        frequency = { min = 0.01, max = 0.05 },
+        waveform = { "sine" },
+        chance = 0.4
+    },
+    ["2speed"] = {
+        depth = { min = 5, max = 20 },
+        offset = { min = 0.0, max = 0.25 },
+        frequency = { min = 0.01, max = 0.05 },
+        waveform = { "sine" },
+        chance = 0.4
     }
 }
 
 function lfo.randomize_lfos()
-
+  lfo.clearLFOs()
     local function is_locked(target)
         local track = string.sub(target, 1, 1)
         local param = string.sub(target, 2)
@@ -202,16 +231,17 @@ function lfo.randomize_lfos()
         end
 
         params:set(i .. "lfo", 2)
+        assigned_params[target] = true -- Mark the parameter as assigned
     end
 
     local available_targets = {}
     for target, ranges in pairs(lfo.target_ranges) do
-        if not is_locked(target) and math.random() < ranges.chance then
+        if not is_locked(target) and math.random() < ranges.chance and not assigned_params[target] then
             table.insert(available_targets, target)
         end
     end
 
-    for i = 1, 8 do
+    for i = 1, 16 do
         local target_index = params:get(i .. "lfo_target")
         local target_param = lfo.lfo_targets[target_index]
 
@@ -226,7 +256,7 @@ function lfo.randomize_lfos()
 end
 
 function lfo.process()
-  for i = 1, 8 do
+  for i = 1, 16 do
     local target = params:get(i .. "lfo_target")
     if params:get(i .. "lfo") == 2 then
       if target == 2 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, -100.00, 100.00)) --1pan
@@ -256,6 +286,10 @@ function lfo.process()
       elseif target == 26 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 0.00, 1.00)) --GH fdbck
       elseif target == 27 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 0.00, 1.00)) --GH mod dpth
       elseif target == 28 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 0.00, 10.00)) --GH mod frq
+      elseif target == 29 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 1000, 48000)) --1sample_rate
+      elseif target == 30 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 1000, 48000)) --2sample_rate
+      elseif target == 31 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 4, 16)) --1bit_depth
+      elseif target == 32 then params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, 4, 16)) --2bit_depth
       end
     end
   end
@@ -302,13 +336,13 @@ function lfo.init()
     params:add_option(i .. "lfo_shape", i .. " shape", options.lfotypes, 1)
     params:set_action(i .. "lfo_shape", function(value) lfo[i].waveform = options.lfotypes[value] end)
     -- lfo depth
-    params:add_number(i .. "lfo_depth", i .. " depth", 0, 100, 25)
+    params:add_number(i .. "lfo_depth", i .. " depth", 0, 100, 50)
     params:set_action(i .. "lfo_depth", function(value) lfo[i].depth = value end)
     -- lfo offset
-    params:add_control(i .."offset", i .. " offset", controlspec.new(-0.99, 1.99, "lin", 0.01, 0.15, ""))
+    params:add_control(i .."offset", i .. " offset", controlspec.new(-0.99, 0.99, "lin", 0.01, 0, ""))
     params:set_action(i .. "offset", function(value) lfo[i].offset = value end)
     -- lfo speed
-    params:add_control(i .. "lfo_freq", i .. " freq", controlspec.new(0.01, 10.00, "lin", 0.01, 0.1, ""))
+    params:add_control(i .. "lfo_freq", i .. " freq", controlspec.new(0.01, 2.00, "lin", 0.01, 0.05, ""))
     params:set_action(i .. "lfo_freq", function(value) lfo[i].freq = value end)
     -- lfo on/off
     params:add_option(i .. "lfo", i .. " LFO", {"off", "on"}, 1)
