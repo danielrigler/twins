@@ -6,7 +6,7 @@
 --           by: @dddstudio                       
 --
 --                          
---                            v0.15
+--                            v0.16
 -- E1: Master Volume
 -- K1+E2/E3: Volume 1/2
 -- K1+E1: Crossfade Volumes
@@ -26,9 +26,10 @@
 --
 --
 -- If you like this,
--- buy them a beer:
+-- buy them a beer :)
 -- @infinitedigits @cfdrake 
 -- @justmat @artfwo @nzimas
+-- @sonoCircuit
 
 local lfo = include("lib/lfo")
 local randpara = include("lib/randpara")
@@ -93,11 +94,15 @@ local function setup_params()
             end
         end)
     end 
+
+    params:add_separator("Actions")
+    
+    params:add_binary("randomize_params", "R a N d 0 m 1 z e", "trigger", 0) params:set_action("randomize_params", function() randpara.randomize_params(steps) end)
+    params:add_binary("randomize_lfos", "RaNd0m1ze LFOs", "trigger", 0) params:set_action("randomize_lfos", function() lfo.randomize_lfos()if randomize_metro[1] then randomize_metro[1]:stop() end if randomize_metro[2] then randomize_metro[2]:stop() end end)
+    params:add_binary("ClearLFOs", "Clear All LFOs", "trigger", 0) params:set_action("ClearLFOs", function() lfo.clearLFOs() end)
     
     params:add_separator("Settings")
 
-    params:add_binary("randomize_params", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_params", function() randpara.randomize_params(steps) end)
-    
     params:add_group("Delay", 3)
     delay.init()
     
@@ -124,8 +129,24 @@ local function setup_params()
     params:add_taper("reverb_damping", "Damping", 0, 20000, 6000, 0, "Hz") params:set_action("reverb_damping", function(value) engine.reverb_damping(value) end)
     params:add_taper("reverb_modulator_frequency", "Modulator frequency", 0, 10, 1, 0, "Hz") params:set_action("reverb_modulator_frequency", function(value) engine.reverb_modulator_frequency(value) end)
     params:add_taper("reverb_modulator_depth", "Modulator depth", 0, 100, 40, 0, "%") params:set_action("reverb_modulator_depth", function(value) engine.reverb_modulator_depth(value / 100) end)
+    
+    params:add_group("Shimmer+", 12)
+    for i = 1, 2 do
+      params:add_control(i .. "shimmer", i .. " Shimmer", controlspec.new(0, 100, "lin", 1, 0, "%"))
+      params:set_action(i.. "shimmer", function(value) engine.shimmer(i, value/100) end)
+      params:add_control(i .. "shimmerpitchdev", i .. " Warp", controlspec.new(0, 100, "lin", 1, 0, "%"))
+      params:set_action(i .. "shimmerpitchdev", function(value) engine.shimmerpitchdev(i, value/50) end)
+      params:add_control(i .. "subharmonics_2", i .. " Subharmonics -2oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0))
+      params:set_action(i .. "subharmonics_2", function(value) engine.subharmonics_2(i, value) end)
+      params:add_control(i .. "subharmonics_1", i .. " Subharmonics -1oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0))
+      params:set_action(i .. "subharmonics_1", function(value) engine.subharmonics_1(i, value) end)
+      params:add_control(i .. "overtones_1", i .. " Overtones +1oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0))
+      params:set_action(i .. "overtones_1", function(value) engine.overtones_1(i, value) end)
+      params:add_control(i .. "overtones_2", i .. " Overtones +2oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0))
+      params:set_action(i .. "overtones_2", function(value) engine.overtones_2(i, value) end)
+    end
 
-    params:add_group("Bit Crush", 7)
+    params:add_group("BitCrush", 7)
     params:add_binary("randomize_bitcrusher", "RaNd0m1ze!", "trigger", 0)
     params:add_binary("clear_bitcrusher", "Clear!", "trigger", 0)
     params:add_separator("")
@@ -189,14 +210,20 @@ local function setup_params()
     params:add{type = "control", id = "chew_freq", name = "Chew Freq", controlspec = controlspec.new(0, 1, "lin", 0.01, 0.5, ""), action = function(value) engine.chew_freq(1, value) engine.chew_freq(2, value) end}
     params:add{type = "control", id = "chew_variance", name = "Chew Variance", controlspec = controlspec.new(0, 1, "lin", 0.01, 0.5, ""), action = function(value) engine.chew_variance(1, value) engine.chew_variance(2, value) end}
 
-    params:add_group("LFOs", 114)
-    params:add_binary("randomize_lfos", "RaNd0m1ze LFOs", "trigger", 0) params:set_action("randomize_lfos", function() lfo.randomize_lfos()if randomize_metro[1] then randomize_metro[1]:stop() end
-if randomize_metro[2] then randomize_metro[2]:stop() end end)
-    params:add_binary("ClearLFOs", "Clear All LFOs", "trigger", 0) params:set_action("ClearLFOs", function() lfo.clearLFOs() end)
+    params:add_group("EQ", 4)
+    params:add_control("eq_low_gain_1", "1 Bass", controlspec.new(-1, 1, "lin", 0.01, 0, ""))
+    params:set_action("eq_low_gain_1", function(value) engine.eq_low_gain(1, value*30) end)
+    params:add_control("eq_high_gain_1", "1 Treble", controlspec.new(-1, 1, "lin", 0.01, 0, ""))
+    params:set_action("eq_high_gain_1", function(value) engine.eq_high_gain(1, value*30) end)
+    params:add_control("eq_low_gain_2", "2 Bass", controlspec.new(-1, 1, "lin", 0.01, 0, ""))
+    params:set_action("eq_low_gain_2", function(value) engine.eq_low_gain(2, value*30) end)
+    params:add_control("eq_high_gain_2", "2 Treble", controlspec.new(-1, 1, "lin", 0.01, 0, ""))
+    params:set_action("eq_high_gain_2", function(value) engine.eq_high_gain(2, value*30) end)
 
+    params:add_group("LFOs", 112)
     lfo.init()
 
-    params:add_group("Extras", 19)
+    params:add_group("Extras", 11)
     for i = 1, 2 do
       params:add_taper(i .. "granular_gain", i .. " Granular Mix", 0, 100, 100, 0, "%")
       params:set_action(i .. "granular_gain", function(value) engine.granular_gain(i, value / 100) end)
@@ -208,14 +235,6 @@ if randomize_metro[2] then randomize_metro[2]:stop() end end)
       params:set_action(i .. "size_variation", function(value) engine.size_variation(i, value / 100) end)
       params:add_taper(i .. "density_mod_amt", i .. " Density Mod", 0, 100, 0, 0, "%")
       params:set_action(i .. "density_mod_amt", function(value) engine.density_mod_amt(i, value / 100) end)
-      params:add_control(i .. "subharmonics_2", i .. " Subharmonics -2oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0))
-      params:set_action(i .. "subharmonics_2", function(value) engine.subharmonics_2(i, value) end)
-      params:add_control(i .. "subharmonics_1", i .. " Subharmonics -1oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0))
-      params:set_action(i .. "subharmonics_1", function(value) engine.subharmonics_1(i, value) end)
-      params:add_control(i .. "overtones_1", i .. " Overtones +1oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0))
-      params:set_action(i .. "overtones_1", function(value) engine.overtones_1(i, value) end)
-      params:add_control(i .. "overtones_2", i .. " Overtones +2oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0))
-      params:set_action(i .. "overtones_2", function(value) engine.overtones_2(i, value) end)
     end
   
     params:add_control("volume_compensation", "Volume compensation", controlspec.new(0,1,"lin",0.01,0.1)) params:set_action("volume_compensation", function(value) engine.compensation_factor(1,value) engine.compensation_factor(2,value) end)

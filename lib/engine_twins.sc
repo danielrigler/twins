@@ -82,7 +82,10 @@ SynthDef(\synth, {
     direction_mod=0,
     size_variation=0,
     bit_depth=8,
-    sample_rate=10000;
+    sample_rate=10000,
+    shimmer=0, shimmerpitchdev=0,
+    low_gain=0, high_gain=0;
+    
 
     var grain_trig;
     var jitter_sig;
@@ -112,6 +115,8 @@ SynthDef(\synth, {
     var direction_mod_sig = LFNoise1.kr(density).range(0, 1) < direction_mod;
     var trig_rnd = LFNoise1.kr(density);
     var grain_size;
+    var low, high;
+
 
     density_mod = density * (2**(trig_rnd * density_mod_amt));
     grain_trig = Impulse.kr(density_mod);
@@ -162,10 +167,18 @@ SynthDef(\synth, {
 
     sig_mix = Decimator.ar(sig_mix, sample_rate, bit_depth);
 
+  	sig_mix = sig_mix + PitchShift.ar(sig_mix, 0.17, 2,shimmerpitchdev,2,1 * shimmer);
+		sig_mix = sig_mix + PitchShift.ar(sig_mix, 0.11, 4,shimmerpitchdev*2,2,0.5 * shimmer);
+		sig_mix = sig_mix + PitchShift.ar(sig_mix, 0.11, 8,shimmerpitchdev*4,2,0.25 * shimmer);
+
     sig_mix = BHiPass4.ar(sig_mix, Lag.kr(hpf), Lag.kr(hpfrq));
     sig_mix = MoogFF.ar(sig_mix, Lag.kr(cutoff), Lag.kr(q));
 
-    sig_mix = sig_mix * compensation * 1.25;
+    low = BLowShelf.ar(sig_mix, 375, 5, low_gain);
+    high = BHiShelf.ar(sig_mix, 3600, 5, high_gain);
+    sig_mix = low + high;
+
+    sig_mix = sig_mix * compensation;
 
     shaped = Shaper.ar(bufSine, sig_mix * sine_drive);
     sig_mix = SelectX.ar(Lag.kr(sine_wet), [sig_mix, shaped]);
@@ -182,7 +195,6 @@ SynthDef(\synth, {
     Out.kr(phase_out, pos_sig);
     Out.kr(level_out, level);
 }).add;
-
 
         // Define the Greyhole effect SynthDef
         SynthDef(\greyhole, {
@@ -322,7 +334,12 @@ SynthDef(\synth, {
         this.addCommand("bit_depth", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\bit_depth, msg[2]); });
         this.addCommand("sample_rate", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\sample_rate, msg[2]); });
         
+        this.addCommand("eq_low_gain", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\low_gain, msg[2]); });
+        this.addCommand("eq_high_gain", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\high_gain, msg[2]); });
         
+        this.addCommand("shimmer", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\shimmer, msg[2]); });
+        this.addCommand("shimmerpitchdev", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\shimmerpitchdev, msg[2]); });
+
         seek_tasks = Array.fill(nvoices, { arg i; Routine {} });
     }
 
