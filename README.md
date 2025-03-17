@@ -9,17 +9,20 @@ Heavily influenced by @cfd90's Twine and contains inspiration and code from a lo
 **Some of the new features:**
 * Reverbs and delays
 * Flexible volume control
-* Tape effects
+* Tape effects, shimmer, EQ
 * Increased parameter ranges
 * Smooth transition interpolation
 * Freely assignable LFOs with randomization
 * Navigation with parameter locking
 * High-pass and low-pass filters
-* Subharmonics / overtones
 +lots of other tweaks and features.
+
 ### Requirements
+
 norns / norns shield
+
 ### Documentation
+
 **E1**: Master Volume  
 **K1**+**E2** or **K1**+**E3**: Volume 1/2  
 **K1**+**E1**: Crossfade Volumes  
@@ -30,14 +33,18 @@ norns / norns shield
 **K1**+**K2** or **K1**+**K3**: Randomize 1/2  
 
 ### Download
-**v0.15** **[github link](https://github.com/danielrigler/twins)**
+
+**v0.16** **[github link](https://github.com/danielrigler/twins)**
 or from Maiden:
 ```
 ;install https://github.com/danielrigler/twins
 ```
 And after this do not forget to restart.
+
 ### Version history
-* **v0.15** - Added bit crusher. Small tweaks. 
+
+* **v0.16** - Added Shimmer and EQ. LFO tweaks. 
+* **v0.15** - Added BitCrusher, small tweaks. 
 * **v0.14** - Randomization and interpolation overhaul.
 * **v0.13** - Added grain size randomization controls per voice.
 * **v0.12** - Volume fix, reverse direction mod
