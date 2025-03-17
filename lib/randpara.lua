@@ -81,10 +81,10 @@ local function randomize_params(steps, i)
         if math.random() <= 0.7 then targets[i .. "subharmonics_2"] = 0 else targets[i .. "subharmonics_2"] = random_float(0, 0.4) end
         if math.random() <= 0.7 then targets[i .. "overtones_1"] = 0 else targets[i .. "overtones_1"] = random_float(0, 0.4) end
         if math.random() <= 0.7 then targets[i .. "overtones_2"] = 0 else targets[i .. "overtones_2"] = random_float(0, 0.4) end
-        if math.random() <= 0.6 then targets[i .. "shimmer"] = 0 else targets[i .. "shimmer"] = math.random(20, 50) end
-        if math.random() <= 0.6 then targets[i .. "shimmer"] = 0 else targets[i .. "shimmer"] = math.random(20, 50) end
-        if math.random() <= 0.9 then targets[i .. "shimmerpitchdev"] = 0 else targets[i .. "shimmerpitchdev"] = math.random(1, 15) end
-        if math.random() <= 0.9 then targets[i .. "shimmerpitchdev"] = 0 else targets[i .. "shimmerpitchdev"] = math.random(1, 15) end
+        if math.random() <= 0.6 then targets[i .. "shimmer"] = 0 else targets[i .. "shimmer"] = math.random(10, 35) end
+        if math.random() <= 0.6 then targets[i .. "shimmer"] = 0 else targets[i .. "shimmer"] = math.random(10, 35) end
+        if math.random() <= 0.9 then targets[i .. "shimmerpitchdev"] = 0 else targets[i .. "shimmerpitchdev"] = math.random(1, 5) end
+        if math.random() <= 0.9 then targets[i .. "shimmerpitchdev"] = 0 else targets[i .. "shimmerpitchdev"] = math.random(1, 5) end
         if math.random() <= 0.5 then targets["eq_low_gain_" .. i] = 0 else targets["eq_low_gain_" .. i] = random_float(0, 0.1) end
         if math.random() <= 0.5 then targets["eq_high_gain_" .. i] = 0 else targets["eq_high_gain_" .. i] = random_float(-0.1, 0.6) end
         else 
