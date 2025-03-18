@@ -7,7 +7,7 @@ local function interpolate(start_val, end_val, factor)
     if math.abs(start_val - end_val) < epsilon then
         return end_val
     else
-        return start_val + (end_val - start_val) * (1 - math.exp(-3 * factor))
+        return start_val + (end_val - start_val) * (1 - math.exp(-4 * factor))
     end
 end
 
