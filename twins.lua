@@ -155,14 +155,14 @@ local function setup_params()
     params:set_action("randomize_bitcrusher", function()
     local random_choice = math.random(1, 3)
        if random_choice == 1 then
-           local random_bit_depth = math.random(8, 14)
+           local random_bit_depth = random_float(4.5, 12)
            params:set("1bit_depth", random_bit_depth)
            local random_sample_rate = math.random(1000, 10000)
            params:set("1sample_rate", random_sample_rate)
            params:set("2bit_depth", default_bit_depth)
            params:set("2sample_rate", default_sample_rate)
        elseif random_choice == 2 then
-            local random_bit_depth = math.random(8, 14)
+            local random_bit_depth = random_float(4.5, 12)
             params:set("2bit_depth", random_bit_depth)
             local random_sample_rate = math.random(1000, 10000)
             params:set("2sample_rate", random_sample_rate)
@@ -170,7 +170,7 @@ local function setup_params()
             params:set("1sample_rate", default_sample_rate)
        else
         for i = 1, 2 do
-          local random_bit_depth = math.random(8, 14)
+          local random_bit_depth = random_float(4.5, 12)
           params:set(i .. "bit_depth", random_bit_depth)
           local random_sample_rate = math.random(1000, 10000)
           params:set(i .. "sample_rate", random_sample_rate)
@@ -186,9 +186,9 @@ local function setup_params()
       end)
       
     for i = 1, 2 do
-      params:add_control(i .. "bit_depth", i .. " Bit Depth", controlspec.new(4, 24, "lin", 1, 24))
+      params:add_control(i .. "bit_depth", i .. " Bit Depth", controlspec.new(4.0, 24.0, "lin", 0.1, 24.0))
       params:set_action(i .. "bit_depth", function(value) engine.bit_depth(i, value) end)
-      params:add_control(i .. "sample_rate", i .. " Sample Rate", controlspec.new(1000, 48000, 'exp', 100, 48000))
+      params:add_control(i .. "sample_rate", i .. " Sample Rate", controlspec.new(1000, 48000, 'exp', 1, 48000, "Hz"))
       params:set_action(i .. "sample_rate", function(value) engine.sample_rate(i, value) end)
     end
 
@@ -220,7 +220,9 @@ local function setup_params()
     params:add_control("eq_high_gain_2", "2 Treble", controlspec.new(-1, 1, "lin", 0.01, 0, ""))
     params:set_action("eq_high_gain_2", function(value) engine.eq_high_gain(2, value*30) end)
 
-    params:add_group("LFOs", 112)
+    params:add_group("LFOs", 113)
+    params:add_control("global_lfo_freq_scale", "Freq Scale", controlspec.new(0.1, 10, "exp", 0.01, 1.0, "x")) 
+    params:set_action("global_lfo_freq_scale", function(value) for i = 1, 16 do lfo[i].freq = lfo[i].base_freq * value end end)
     lfo.init()
 
     params:add_group("Extras", 11)
@@ -264,11 +266,11 @@ local function setup_params()
     end
 
     params:add_group("Limits", 10)
-    params:add_taper("min_jitter", "jitter (min)", 0, 500, 0, 5, "ms")
+    params:add_taper("min_jitter", "jitter (min)", 0, 1999, 100, 5, "ms")
     params:add_taper("max_jitter", "jitter (max)", 0, 1999, 1999, 5, "ms")
     params:add_taper("min_size", "size (min)", 1, 999, 100, 5, "ms")
-    params:add_taper("max_size", "size (max)", 1, 999, 500, 5, "ms")
-    params:add_taper("min_density", "density (min)", 1, 30, 2, 5, "Hz")
+    params:add_taper("max_size", "size (max)", 1, 999, 599, 5, "ms")
+    params:add_taper("min_density", "density (min)", 1, 30, 1, 5, "Hz")
     params:add_taper("max_density", "density (max)", 1, 30, 16, 5, "Hz")
     params:add_taper("min_spread", "spread (min)", 0, 100, 0, 0, "%")
     params:add_taper("max_spread", "spread (max)", 0, 100, 90, 0, "%")
@@ -355,15 +357,15 @@ local function randomize(n)
 -- Randomize pitch parameter
 if locks.pitch and not active_controlled_params[n .. "pitch"] then
     local weighted_intervals = {
-        {interval = -12, weight = 2},
-        {interval = -7, weight = 1},
-        {interval = -5, weight = 1},
+        {interval = -12, weight = 3},
+        {interval = -7, weight = 2},
+        {interval = -5, weight = 2},
         {interval = -3, weight = 1},
         {interval = 0, weight = 2},
         {interval = 3, weight = 1},
-        {interval = 5, weight = 1},
-        {interval = 7, weight = 1},
-        {interval = 12, weight = 2},
+        {interval = 5, weight = 2},
+        {interval = 7, weight = 2},
+        {interval = 12, weight = 3}
     }
 
     local current_pitch = params:get(n .. "pitch")
@@ -511,7 +513,7 @@ function enc(n, d)
                 end
 
                 -- Adjust the parameter
-                if current_mode == "speed" then params:delta("1speed", d)
+                if current_mode == "speed" then params:delta("1speed", 0.5 * d)
                 elseif current_mode == "seek" then local current_seek = params:get("1seek")
                     local new_seek = wrap_value(current_seek + d, 0, 100)
                     params:set("1seek", new_seek)
@@ -519,9 +521,9 @@ function enc(n, d)
                 elseif current_mode == "pan" then params:delta("1pan", d * 5)
                 elseif current_mode == "lpf" or current_mode == "hpf" then
                     if current_filter_mode == "lpf" then
-                        params:delta("1cutoff", d)  -- Adjust LPF cutoff
+                        params:delta("1cutoff", d)
                     else
-                        params:delta("1hpf", d)     -- Adjust HPF cutoff
+                        params:delta("1hpf", d)
                     end
                 elseif current_mode == "jitter" then params:delta("1jitter", d * 2)
                 elseif current_mode == "size" then params:delta("1size", d * 2)
@@ -540,11 +542,10 @@ function enc(n, d)
                 elseif current_mode == "seek" then param_name = "2seek"
                 elseif current_mode == "pan" then param_name = "2pan"
                 elseif current_mode == "lpf" or current_mode == "hpf" then
-                    -- Use current_filter_mode to decide whether to adjust LPF or HPF
                     if current_filter_mode == "lpf" then
-                        param_name = "2cutoff"  -- Adjust LPF cutoff
+                        param_name = "2cutoff"
                     else
-                        param_name = "2hpf"     -- Adjust HPF cutoff
+                        param_name = "2hpf"
                     end
                 elseif current_mode == "jitter" then param_name = "2jitter"
                 elseif current_mode == "size" then param_name = "2size"
@@ -563,19 +564,17 @@ function enc(n, d)
                 end
 
                 -- Adjust the parameter
-                if current_mode == "speed" then
-                    params:delta("2speed", d) 
-                elseif current_mode == "seek" then
-                    local current_seek = params:get("2seek")
+                if current_mode == "speed" then params:delta("2speed", 0.5 * d) 
+                elseif current_mode == "seek" then local current_seek = params:get("2seek")
                     local new_seek = wrap_value(current_seek + d, 0, 100)
                     params:set("2seek", new_seek)
                     engine.seek(2, new_seek / 100)
                 elseif current_mode == "pan" then params:delta("2pan", d * 5)
                 elseif current_mode == "lpf" or current_mode == "hpf" then
                     if current_filter_mode == "lpf" then
-                        params:delta("2cutoff", d)  -- Adjust LPF cutoff
+                        params:delta("2cutoff", d)
                     else
-                        params:delta("2hpf", d)     -- Adjust HPF cutoff
+                        params:delta("2hpf", d)
                     end
                 elseif current_mode == "jitter" then params:delta("2jitter", d * 2) 
                 elseif current_mode == "size" then params:delta("2size", d * 2)
@@ -873,7 +872,7 @@ function redraw()
     local lfo_assigned_to_pan1 = false
     local lfo_assigned_to_pan2 = false
 
-    for i = 1, 8 do
+    for i = 1, 16 do
         if params:get(i .. "lfo_target") == 2 then -- 2 corresponds to "1pan"
             lfo_assigned_to_pan1 = true
         end

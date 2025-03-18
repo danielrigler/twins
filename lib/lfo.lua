@@ -9,7 +9,15 @@ local lfo = {}
 local assigned_params = {}
 
 for i = 1, number_of_outputs do
-  lfo[i] = { freq = 0.05, counter = 1, waveform = options.lfotypes[1], slope = 0, depth = 50, offset = 0 }
+  lfo[i] = { 
+    freq = 0.05, 
+    base_freq = 0.05, 
+    counter = 1, 
+    waveform = options.lfotypes[1], 
+    slope = 0, 
+    depth = 50, 
+    offset = 0 
+  }
 end
 
 -- Helper functions for waveform generation
@@ -67,6 +75,7 @@ function lfo.clearLFOs()
       params:set(i .. "lfo_target", 1)
     end
   end
+  params:set("global_lfo_freq_scale", 1.0)
 end
 
 lfo.lfo_targets = {
@@ -77,18 +86,18 @@ lfo.lfo_targets = {
 }
 
 lfo.target_ranges = {
-  ["1pan"] = { depth = { 25, 70 }, offset = { 0, 0 }, frequency = { 0.02, 0.5 }, waveform = { "sine" }, chance = 0.8 },
-  ["2pan"] = { depth = { 25, 70 }, offset = { 0, 0 }, frequency = { 0.02, 0.5 }, waveform = { "sine" }, chance = 0.8 },
-  ["1jitter"] = { depth = { 5, 1999 }, offset = { -1, 1 }, frequency = { 0.01, 0.2 }, waveform = { "sine" }, chance = 0.7 },
-  ["2jitter"] = { depth = { 5, 1999 }, offset = { -1, 1 }, frequency = { 0.01, 0.2 }, waveform = { "sine" }, chance = 0.7 },
-  ["1spread"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.01, 0.2 }, waveform = { "sine" }, chance = 0.7 },
-  ["2spread"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.01, 0.2 }, waveform = { "sine" }, chance = 0.7 },
-  ["1size"] = { depth = { 5, 599 }, offset = { -1, 1 }, frequency = { 0.01, 0.2 }, waveform = { "sine" }, chance = 0.7 },
-  ["2size"] = { depth = { 5, 599 }, offset = { -1, 1 }, frequency = { 0.01, 0.2 }, waveform = { "sine" }, chance = 0.7 },
-  ["1density"] = { depth = { 0, 100 }, offset = { -1, 1 }, frequency = { 0.01, 0.3 }, waveform = { "sine" }, chance = 0.7 },
-  ["2density"] = { depth = { 0, 100 }, offset = { -1, 1 }, frequency = { 0.01, 0.3 }, waveform = { "sine" }, chance = 0.7 },
-  ["1seek"] = { depth = { 75, 100 }, offset = { 0, 1 }, frequency = { 0.01, 1 }, waveform = { "sine", "random" }, chance = 0.4 },
-  ["2seek"] = { depth = { 75, 100 }, offset = { 0, 1 }, frequency = { 0.01, 1 }, waveform = { "sine", "random" }, chance = 0.4 }
+  ["1pan"] = { depth = { 25, 80 }, offset = { 0, 0 }, frequency = { 0.05, 0.6 }, waveform = { "sine" }, chance = 0.8 },
+  ["2pan"] = { depth = { 25, 80 }, offset = { 0, 0 }, frequency = { 0.05, 0.6 }, waveform = { "sine" }, chance = 0.8 },
+  ["1jitter"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.01, 0.3 }, waveform = { "sine" }, chance = 0.7 },
+  ["2jitter"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.01, 0.3 }, waveform = { "sine" }, chance = 0.7 },
+  ["1spread"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.01, 0.3 }, waveform = { "sine" }, chance = 0.7 },
+  ["2spread"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.01, 0.3 }, waveform = { "sine" }, chance = 0.7},
+  ["1size"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.01, 0.3 }, waveform = { "sine" }, chance = 0.7 },
+  ["2size"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.01, 0.3 }, waveform = { "sine" }, chance = 0.7 },
+  ["1density"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.01, 0.3 }, waveform = { "sine" }, chance = 0.7 },
+  ["2density"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.01, 0.3 }, waveform = { "sine" }, chance = 0.7 },
+  ["1seek"] = { depth = { 100, 100 }, offset = { 0, 0 }, frequency = { 0.1, 0.6 }, waveform = { "random" }, chance = 0.3 },
+  ["2seek"] = { depth = { 100, 100 }, offset = { 0, 0 }, frequency = { 0.1, 0.6 }, waveform = { "random" }, chance = 0.3 }
 }
 
 function lfo.get_parameter_range(param_name)
@@ -96,9 +105,9 @@ function lfo.get_parameter_range(param_name)
     ["1pan"] = { -100, 100 }, ["2pan"] = { -100, 100 },
     ["1seek"] = { 0, 100 }, ["2seek"] = { 0, 100 },
     ["1jitter"] = { 1, 1999 }, ["2jitter"] = { 1, 1999 },
-    ["1spread"] = { 0, 90 }, ["2spread"] = { 0, 90 },
-    ["1size"] = { 1, 599 }, ["2size"] = { 1, 599 },
-    ["1density"] = { 1, 25 }, ["2density"] = { 1, 25 },
+    ["1spread"] = { 0, 80 }, ["2spread"] = { 0, 80 },
+    ["1size"] = { 0, 999 }, ["2size"] = { 0, 999 },
+    ["1density"] = { 0, 16 }, ["2density"] = { 0, 16 },
     ["1volume"] = { -100, 100 }, ["2volume"] = { -100, 100 },
     ["1pitch"] = { -12, 12 }, ["2pitch"] = { -12, 12 },
     ["1cutoff"] = { 20, 20000 }, ["2cutoff"] = { 20, 20000 }
@@ -106,7 +115,7 @@ function lfo.get_parameter_range(param_name)
   return param_ranges[param_name][1], param_ranges[param_name][2]
 end
 
-local function randomize_lfo(i, target)
+function randomize_lfo(i, target)
   if assigned_params[target] then return end
 
   local ranges = lfo.target_ranges[target]
@@ -117,43 +126,35 @@ local function randomize_lfo(i, target)
 
   params:set(i .. "lfo_target", target_index)
 
-  local is_exception = (target == "1seek" or target == "2seek")
-  local current_value = params:get(target)
   local min_param_value, max_param_value = lfo.get_parameter_range(target)
+  local current_value = params:get(target)
 
-  -- Ensure offset is zero for pan parameters
-  if target == "1pan" or target == "2pan" then
+  -- Ensure the offset is within the parameter's valid range
+  if target == "1pan" or target == "2pan" or target == "1seek" or target == "2seek" then
     lfo[i].offset = 0
-    params:set(i .. "offset", lfo[i].offset)
-  elseif is_exception then
-    lfo[i].offset = math.random(-100, 100) / 100
-    params:set(i .. "offset", lfo[i].offset)
   else
-    local scaled_value = lfo.scale(current_value, min_param_value, max_param_value, -1, 1)
-    lfo[i].offset = scaled_value
-    params:set(i .. "offset", lfo[i].offset)
+    lfo[i].offset = lfo.scale(current_value, min_param_value, max_param_value, -1, 1)
   end
+  params:set(i .. "offset", lfo[i].offset)
 
-  -- Bypass depth limiting logic for "random" waveform
-  if target == "1pan" or target == "2pan" then
+  -- Calculate the maximum allowed depth based on the parameter's range
+  local max_allowed_depth = math.min(
+    math.abs(max_param_value - current_value), 
+    math.abs(current_value - min_param_value)
+  )
+  local scaled_max_depth = lfo.scale(max_allowed_depth, 0, max_param_value - min_param_value, 0, 100)
+
+  -- Ensure the depth is within the allowed range
+  lfo[i].depth = math.random(math.floor(ranges.depth[1]), math.floor(ranges.depth[2]))
+  if lfo[i].depth > scaled_max_depth then
+    lfo[i].depth = math.floor(scaled_max_depth)
+  end
+  if lfo[i].depth == 0 then
     lfo[i].depth = math.random(math.floor(ranges.depth[1]), math.floor(ranges.depth[2]))
-  else
-    if lfo[i].waveform == "random" then
-      lfo[i].depth = math.random(math.floor(ranges.depth[1]), math.floor(ranges.depth[2]))
-    else
-      local max_allowed_depth = math.min(math.abs(max_param_value - current_value), math.abs(current_value - min_param_value))
-      local scaled_max_depth = lfo.scale(max_allowed_depth, 0, max_param_value - min_param_value, 0, 100)
-      lfo[i].depth = math.random(math.floor(ranges.depth[1]), math.floor(ranges.depth[2]))
-      if lfo[i].depth > scaled_max_depth then lfo[i].depth = math.floor(scaled_max_depth) end
-      -- Ensure depth is never zero
-      if lfo[i].depth == 0 then
-        lfo[i].depth = math.random(math.floor(ranges.depth[1]), math.floor(ranges.depth[2]))
-      end
-    end
   end
-
   params:set(i .. "lfo_depth", lfo[i].depth)
 
+  -- Set the frequency and waveform
   if ranges.frequency then
     local min_freq = math.floor(ranges.frequency[1] * 100)
     local max_freq = math.floor(ranges.frequency[2] * 100)
@@ -213,8 +214,16 @@ function lfo.process()
         slope = make_sh(i)
       end
       lfo[i].slope = math.max(-1.0, math.min(1.0, slope)) * (lfo[i].depth * 0.01) + lfo[i].offset
+
+      -- Calculate the modulated value and clamp it to the parameter's valid range
+      local min_param_value, max_param_value = lfo.get_parameter_range(lfo.lfo_targets[target])
+      local modulated_value = lfo.scale(lfo[i].slope, -1.0, 1.0, min_param_value, max_param_value)
+      modulated_value = math.max(min_param_value, math.min(max_param_value, modulated_value))
+
+      -- Update the parameter
+      params:set(lfo.lfo_targets[target], modulated_value)
+
       lfo[i].counter = lfo[i].counter + lfo[i].freq
-      params:set(lfo.lfo_targets[target], lfo.scale(lfo[i].slope, -1.0, 1.0, lfo.get_parameter_range(lfo.lfo_targets[target])))
     end
   end
 end
@@ -237,7 +246,10 @@ function lfo.init()
     params:add_control(i .. "offset", i .. " offset", controlspec.new(-0.99, 0.99, "lin", 0.01, 0, ""))
     params:set_action(i .. "offset", function(value) lfo[i].offset = value end)
     params:add_control(i .. "lfo_freq", i .. " freq", controlspec.new(0.01, 2.00, "lin", 0.01, 0.05, ""))
-    params:set_action(i .. "lfo_freq", function(value) lfo[i].freq = value end)
+    params:set_action(i .. "lfo_freq", function(value)
+      lfo[i].base_freq = value
+      lfo[i].freq = value * (params:get("global_lfo_freq_scale") or 1.0)
+    end)
     params:add_option(i .. "lfo", i .. " LFO", { "off", "on" }, 1)
   end
 
