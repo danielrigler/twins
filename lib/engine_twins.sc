@@ -11,7 +11,7 @@ Engine_twins : CroneEngine {
     var <phases;
     var <levels;
     var <seek_tasks;
-    var bufSine; // Buffer for sine wave
+    var bufSine;
 
     *new { arg context, doneCallback;
         ^super.new(context, doneCallback);
@@ -73,19 +73,15 @@ SynthDef(\synth, {
     subharmonics_2=0,
     overtones_1=0, 
     overtones_2=0, 
-    cutoff=20000, 
-    q=1,
-    hpf=20, hpfrq=1,
+    cutoff=20000, q=1, hpf=20, hpfrq=1,
     sine_drive=1, sine_wet=0,
     compensation_factor=0.1,
     chew_wet=0, chew_depth=0.5, chew_freq=0.5, chew_variance=0.5,
     direction_mod=0,
     size_variation=0,
-    bit_depth=8,
-    sample_rate=10000,
-    shimmer=0, shimmerpitchdev=0,
+    shimmer=0,
     low_gain=0, high_gain=0;
-    
+ 
 
     var grain_trig;
     var jitter_sig;
@@ -116,7 +112,6 @@ SynthDef(\synth, {
     var trig_rnd = LFNoise1.kr(density);
     var grain_size;
     var low, high;
-
 
     density_mod = density * (2**(trig_rnd * density_mod_amt));
     grain_trig = Impulse.kr(density_mod);
@@ -165,14 +160,9 @@ SynthDef(\synth, {
     granular_gain = granular_gain.clip(0, 1);
     sig_mix = (dry_sig * (1 - granular_gain)) + (granular_sig * granular_gain);
 
-    sig_mix = Decimator.ar(sig_mix, sample_rate, bit_depth);
-
-  	sig_mix = sig_mix + PitchShift.ar(sig_mix, 0.17, 2,shimmerpitchdev,2,1 * shimmer);
-		sig_mix = sig_mix + PitchShift.ar(sig_mix, 0.11, 4,shimmerpitchdev*2,2,0.5 * shimmer);
-		sig_mix = sig_mix + PitchShift.ar(sig_mix, 0.11, 8,shimmerpitchdev*4,2,0.25 * shimmer);
-
-    sig_mix = BHiPass4.ar(sig_mix, Lag.kr(hpf), Lag.kr(hpfrq));
-    sig_mix = MoogFF.ar(sig_mix, Lag.kr(cutoff), Lag.kr(q));
+    sig_mix = sig_mix + PitchShift.ar(sig_mix, 0.17, 2, 0, 1, 1.0 * shimmer);
+    sig_mix = sig_mix + PitchShift.ar(sig_mix, 0.11, 4, 0, 1, 0.5 * shimmer);
+    sig_mix = sig_mix + PitchShift.ar(sig_mix, 0.11, 8, 0, 1, 0.25 * shimmer);
 
     low = BLowShelf.ar(sig_mix, 375, 5, low_gain);
     high = BHiShelf.ar(sig_mix, 3600, 5, high_gain);
@@ -187,6 +177,11 @@ SynthDef(\synth, {
         sig_mix,
         AnalogChew.ar(sig_mix, chew_depth, chew_freq, chew_variance)
     ]);
+
+    sig_mix = BHiPass4.ar(sig_mix, Lag.kr(hpf), Lag.kr(hpfrq));
+    sig_mix = MoogFF.ar(sig_mix, Lag.kr(cutoff), Lag.kr(q));
+    
+    sig_mix = Compander.ar(sig_mix,sig_mix,0.25)/2;
 
     env = EnvGen.kr(Env.asr(1, 1, 1), gate: gate, timeScale: envscale);
     level = env;
@@ -331,15 +326,11 @@ SynthDef(\synth, {
         this.addCommand("chew_freq", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\chew_freq, msg[2]); });
         this.addCommand("chew_variance", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\chew_variance, msg[2]); });
         
-        this.addCommand("bit_depth", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\bit_depth, msg[2]); });
-        this.addCommand("sample_rate", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\sample_rate, msg[2]); });
-        
         this.addCommand("eq_low_gain", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\low_gain, msg[2]); });
         this.addCommand("eq_high_gain", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\high_gain, msg[2]); });
         
         this.addCommand("shimmer", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\shimmer, msg[2]); });
-        this.addCommand("shimmerpitchdev", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\shimmerpitchdev, msg[2]); });
-
+       
         seek_tasks = Array.fill(nvoices, { arg i; Routine {} });
     }
 

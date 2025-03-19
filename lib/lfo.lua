@@ -6,7 +6,7 @@ local options = {
 }
 
 local lfo = {}
-local assigned_params = {}
+local assigned_params = {} -- Tracks which parameters are currently assigned to LFOs
 
 local function is_locked(target)
   local track, param = string.match(target, "(%d)(%a+)")
@@ -101,14 +101,14 @@ lfo.lfo_targets = {
 lfo.target_ranges = {
   ["1pan"] = { depth = { 25, 80 }, offset = { 0, 0 }, frequency = { 0.05, 0.6 }, waveform = { "sine" }, chance = 0.8 },
   ["2pan"] = { depth = { 25, 80 }, offset = { 0, 0 }, frequency = { 0.05, 0.6 }, waveform = { "sine" }, chance = 0.8 },
-  ["1jitter"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.01, 0.3 }, waveform = { "sine" }, chance = 0.5 },
-  ["2jitter"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.01, 0.3 }, waveform = { "sine" }, chance = 0.5 },
-  ["1spread"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.01, 0.3 }, waveform = { "sine" }, chance = 0.5 },
-  ["2spread"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.01, 0.3 }, waveform = { "sine" }, chance = 0.5},
-  ["1size"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.01, 0.3 }, waveform = { "sine" }, chance = 0.5 },
-  ["2size"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.01, 0.3 }, waveform = { "sine" }, chance = 0.5 },
-  ["1density"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.01, 0.3 }, waveform = { "sine" }, chance = 0.5 },
-  ["2density"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.01, 0.3 }, waveform = { "sine" }, chance = 0.5 },
+  ["1jitter"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
+  ["2jitter"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
+  ["1spread"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
+  ["2spread"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5},
+  ["1size"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
+  ["2size"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
+  ["1density"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
+  ["2density"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
   ["1seek"] = { depth = { 100, 100 }, offset = { 0, 0 }, frequency = { 0.1, 0.6 }, waveform = { "random" }, chance = 0.3 },
   ["2seek"] = { depth = { 100, 100 }, offset = { 0, 0 }, frequency = { 0.1, 0.6 }, waveform = { "random" }, chance = 0.3 }
 }
@@ -118,7 +118,7 @@ function lfo.get_parameter_range(param_name)
     ["1pan"] = { -100, 100 }, ["2pan"] = { -100, 100 },
     ["1seek"] = { 0, 100 }, ["2seek"] = { 0, 100 },
     ["1jitter"] = { 1, 1999 }, ["2jitter"] = { 1, 1999 },
-    ["1spread"] = { 0, 80 }, ["2spread"] = { 0, 80 },
+    ["1spread"] = { 0, 100 }, ["2spread"] = { 0, 100 },
     ["1size"] = { 0, 999 }, ["2size"] = { 0, 999 },
     ["1density"] = { 0, 16 }, ["2density"] = { 0, 16 },
     ["1volume"] = { -100, 100 }, ["2volume"] = { -100, 100 },
@@ -131,7 +131,20 @@ end
 function randomize_lfo(i, target)
     -- Check if the target parameter is already assigned to another LFO
     if assigned_params[target] then
+        print("Parameter " .. target .. " is already assigned to another LFO. Skipping assignment.")
         return -- Exit if the parameter is already assigned
+    end
+
+    -- Double-check all LFOs to ensure no duplicate assignments
+    for j = 1, number_of_outputs do
+        if j ~= i then -- Skip the current LFO
+            local target_index = params:get(j .. "lfo_target")
+            local target_param = lfo.lfo_targets[target_index]
+            if target_param == target and params:get(j .. "lfo") == 2 then
+                print("Parameter " .. target .. " is already assigned to LFO " .. j .. ". Skipping assignment.")
+                return -- Exit if the parameter is already assigned to another LFO
+            end
+        end
     end
 
     local ranges = lfo.target_ranges[target]
@@ -190,10 +203,17 @@ function randomize_lfo(i, target)
 end
 
 function lfo.randomize_lfos()
-    -- Clear only unlocked parameters from assigned_params
-    for target, _ in pairs(assigned_params) do
-        if not is_locked(target) then
-            assigned_params[target] = nil
+    -- Clear all non-locked LFOs before randomization
+    for i = 1, number_of_outputs do
+        local target_index = params:get(i .. "lfo_target")
+        local target_param = lfo.lfo_targets[target_index]
+
+        -- Check if the target parameter is locked
+        if not is_locked(target_param) then
+            -- Clear the LFO if the parameter is not locked
+            params:set(i .. "lfo", 1) -- Turn off the LFO
+            params:set(i .. "lfo_target", 1) -- Reset the target to "none"
+            assigned_params[target_param] = nil -- Remove the parameter from the assigned_params table
         end
     end
 
@@ -222,10 +242,23 @@ function lfo.randomize_lfos()
         if #free_slots > 0 then
             -- Get the next free slot
             local slot_index = table.remove(free_slots, 1)
-            randomize_lfo(slot_index, target)
-        else
-            -- If no free slots are left, log a warning (optional)
-            print("No free LFO slot found for target: " .. target)
+
+            -- Double-check that the target is not already assigned to another LFO
+            local is_already_assigned = false
+            for j = 1, 16 do
+                if j ~= slot_index then
+                    local target_index = params:get(j .. "lfo_target")
+                    local target_param = lfo.lfo_targets[target_index]
+                    if target_param == target and params:get(j .. "lfo") == 2 then
+                        is_already_assigned = true
+                        break
+                    end
+                end
+            end
+
+            if not is_already_assigned then
+                randomize_lfo(slot_index, target)
+            end
         end
     end
 end

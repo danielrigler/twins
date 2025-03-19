@@ -6,7 +6,7 @@
 --           by: @dddstudio                       
 --
 --                          
---                            v0.16
+--                            v0.17
 -- E1: Master Volume
 -- K1+E2/E3: Volume 1/2
 -- K1+E1: Crossfade Volumes
@@ -129,12 +129,10 @@ local function setup_params()
     params:add_taper("reverb_modulator_frequency", "Modulator frequency", 0, 10, 1, 0, "Hz") params:set_action("reverb_modulator_frequency", function(value) engine.reverb_modulator_frequency(value) end)
     params:add_taper("reverb_modulator_depth", "Modulator depth", 0, 100, 40, 0, "%") params:set_action("reverb_modulator_depth", function(value) engine.reverb_modulator_depth(value / 100) end)
     
-    params:add_group("Shimmer+", 12)
+    params:add_group("Shimmer+", 10)
     for i = 1, 2 do
       params:add_control(i .. "shimmer", i .. " Shimmer", controlspec.new(0, 100, "lin", 1, 0, "%"))
       params:set_action(i.. "shimmer", function(value) engine.shimmer(i, value/50) end)
-      params:add_control(i .. "shimmerpitchdev", i .. " Warp", controlspec.new(0, 100, "lin", 1, 0, "%"))
-      params:set_action(i .. "shimmerpitchdev", function(value) engine.shimmerpitchdev(i, value/100) end)
       params:add_control(i .. "subharmonics_2", i .. " Subharmonics -2oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0))
       params:set_action(i .. "subharmonics_2", function(value) engine.subharmonics_2(i, value) end)
       params:add_control(i .. "subharmonics_1", i .. " Subharmonics -1oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0))
@@ -143,52 +141,6 @@ local function setup_params()
       params:set_action(i .. "overtones_1", function(value) engine.overtones_1(i, value) end)
       params:add_control(i .. "overtones_2", i .. " Overtones +2oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0))
       params:set_action(i .. "overtones_2", function(value) engine.overtones_2(i, value) end)
-    end
-
-    params:add_group("BitCrush", 7)
-    params:add_binary("randomize_bitcrusher", "RaNd0m1ze!", "trigger", 0)
-    params:add_binary("clear_bitcrusher", "Clear!", "trigger", 0)
-    params:add_separator("")
-    local default_bit_depth = 24
-    local default_sample_rate = 48000
-    params:set_action("randomize_bitcrusher", function()
-    local random_choice = math.random(1, 3)
-       if random_choice == 1 then
-           local random_bit_depth = random_float(4.5, 12)
-           params:set("1bit_depth", random_bit_depth)
-           local random_sample_rate = math.random(1000, 10000)
-           params:set("1sample_rate", random_sample_rate)
-           params:set("2bit_depth", default_bit_depth)
-           params:set("2sample_rate", default_sample_rate)
-       elseif random_choice == 2 then
-            local random_bit_depth = random_float(4.5, 12)
-            params:set("2bit_depth", random_bit_depth)
-            local random_sample_rate = math.random(1000, 10000)
-            params:set("2sample_rate", random_sample_rate)
-            params:set("1bit_depth", default_bit_depth)
-            params:set("1sample_rate", default_sample_rate)
-       else
-        for i = 1, 2 do
-          local random_bit_depth = random_float(4.5, 12)
-          params:set(i .. "bit_depth", random_bit_depth)
-          local random_sample_rate = math.random(1000, 10000)
-          params:set(i .. "sample_rate", random_sample_rate)
-        end
-       end
-    end)
-    
-      params:set_action("clear_bitcrusher", function()
-      for i=1,2 do
-        params:set(i.."sample_rate", default_sample_rate)
-        params:set(i.."bit_depth", default_bit_depth)
-      end
-      end)
-      
-    for i = 1, 2 do
-      params:add_control(i .. "bit_depth", i .. " Bit Depth", controlspec.new(4.0, 24.0, "lin", 0.1, 24.0))
-      params:set_action(i .. "bit_depth", function(value) engine.bit_depth(i, value) end)
-      params:add_control(i .. "sample_rate", i .. " Sample Rate", controlspec.new(1000, 48000, 'exp', 1, 48000, "Hz"))
-      params:set_action(i .. "sample_rate", function(value) engine.sample_rate(i, value) end)
     end
 
     params:add_group("Filters", 8)
