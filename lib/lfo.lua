@@ -8,6 +8,18 @@ local options = {
 local lfo = {}
 local assigned_params = {}
 
+local function is_locked(target)
+  local track, param = string.match(target, "(%d)(%a+)")
+  local lockable_params = { "jitter", "size", "density", "spread", "pitch", "pan" }
+  
+  if table.find(lockable_params, param) then
+    local lock = params:get(track .. "lock_" .. param) == 2
+    return lock -- Check if the specific parameter is locked
+  end
+  
+  return false
+end
+
 for i = 1, number_of_outputs do
   lfo[i] = { 
     freq = 0.05, 
@@ -49,33 +61,34 @@ local function is_audio_loaded(track_num)
 end
 
 function lfo.clearLFOs()
-  assigned_params = {}
-  if is_audio_loaded(1) and is_audio_loaded(2) then
-    params:set("1pan", -15)
-    params:set("2pan", 15)
-  elseif is_audio_loaded(1) or is_audio_loaded(2) then
-    params:set("1pan", 0)
-    params:set("2pan", 0)
-  end
-
-  local function is_locked(target)
-    local track, param = string.sub(target, 1, 1), string.sub(target, 2)
-    local lockable_params = { "jitter", "size", "density", "spread", "pitch" }
-    if table.find(lockable_params, param) then
-      return params:get(track .. "lock_" .. param) == 2
+    -- Clear only unlocked parameters from assigned_params
+    for target, _ in pairs(assigned_params) do
+        if not is_locked(target) then
+            assigned_params[target] = nil
+        end
     end
-    return false
-  end
 
-  for i = 1, 16 do
-    local target_index = params:get(i .. "lfo_target")
-    local target_param = lfo.lfo_targets[target_index]
-    if not is_locked(target_param) then
-      if params:get(i .. "lfo") == 2 then params:set(i .. "lfo", 1) end
-      params:set(i .. "lfo_target", 1)
+    -- Clear LFOs for unlocked parameters
+    for i = 1, 16 do
+        local target_index = params:get(i .. "lfo_target")
+        local target_param = lfo.lfo_targets[target_index]
+        
+        if not is_locked(target_param) then
+            if params:get(i .. "lfo") == 2 then 
+                params:set(i .. "lfo", 1) 
+            end
+            params:set(i .. "lfo_target", 1) -- Reset target only for unlocked params
+        end
     end
-  end
-  params:set("global_lfo_freq_scale", 1.0)
+
+    -- Reset pan positions based on audio loading
+    if is_audio_loaded(1) and is_audio_loaded(2) then
+        params:set("1pan", -15)
+        params:set("2pan", 15)
+    elseif is_audio_loaded(1) or is_audio_loaded(2) then
+        params:set("1pan", 0)
+        params:set("2pan", 0)
+    end
 end
 
 lfo.lfo_targets = {
@@ -88,14 +101,14 @@ lfo.lfo_targets = {
 lfo.target_ranges = {
   ["1pan"] = { depth = { 25, 80 }, offset = { 0, 0 }, frequency = { 0.05, 0.6 }, waveform = { "sine" }, chance = 0.8 },
   ["2pan"] = { depth = { 25, 80 }, offset = { 0, 0 }, frequency = { 0.05, 0.6 }, waveform = { "sine" }, chance = 0.8 },
-  ["1jitter"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.01, 0.3 }, waveform = { "sine" }, chance = 0.7 },
-  ["2jitter"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.01, 0.3 }, waveform = { "sine" }, chance = 0.7 },
-  ["1spread"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.01, 0.3 }, waveform = { "sine" }, chance = 0.7 },
-  ["2spread"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.01, 0.3 }, waveform = { "sine" }, chance = 0.7},
-  ["1size"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.01, 0.3 }, waveform = { "sine" }, chance = 0.7 },
-  ["2size"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.01, 0.3 }, waveform = { "sine" }, chance = 0.7 },
-  ["1density"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.01, 0.3 }, waveform = { "sine" }, chance = 0.7 },
-  ["2density"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.01, 0.3 }, waveform = { "sine" }, chance = 0.7 },
+  ["1jitter"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.01, 0.3 }, waveform = { "sine" }, chance = 0.5 },
+  ["2jitter"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.01, 0.3 }, waveform = { "sine" }, chance = 0.5 },
+  ["1spread"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.01, 0.3 }, waveform = { "sine" }, chance = 0.5 },
+  ["2spread"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.01, 0.3 }, waveform = { "sine" }, chance = 0.5},
+  ["1size"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.01, 0.3 }, waveform = { "sine" }, chance = 0.5 },
+  ["2size"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.01, 0.3 }, waveform = { "sine" }, chance = 0.5 },
+  ["1density"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.01, 0.3 }, waveform = { "sine" }, chance = 0.5 },
+  ["2density"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.01, 0.3 }, waveform = { "sine" }, chance = 0.5 },
   ["1seek"] = { depth = { 100, 100 }, offset = { 0, 0 }, frequency = { 0.1, 0.6 }, waveform = { "random" }, chance = 0.3 },
   ["2seek"] = { depth = { 100, 100 }, offset = { 0, 0 }, frequency = { 0.1, 0.6 }, waveform = { "random" }, chance = 0.3 }
 }
@@ -116,89 +129,105 @@ function lfo.get_parameter_range(param_name)
 end
 
 function randomize_lfo(i, target)
-  if assigned_params[target] then return end
+    -- Check if the target parameter is already assigned to another LFO
+    if assigned_params[target] then
+        return -- Exit if the parameter is already assigned
+    end
 
-  local ranges = lfo.target_ranges[target]
-  if not ranges then return end
+    local ranges = lfo.target_ranges[target]
+    if not ranges then return end
 
-  local target_index = table.find(lfo.lfo_targets, target)
-  if not target_index then return end
+    local target_index = table.find(lfo.lfo_targets, target)
+    if not target_index then return end
 
-  params:set(i .. "lfo_target", target_index)
+    params:set(i .. "lfo_target", target_index)
 
-  local min_param_value, max_param_value = lfo.get_parameter_range(target)
-  local current_value = params:get(target)
+    local min_param_value, max_param_value = lfo.get_parameter_range(target)
+    local current_value = params:get(target)
 
-  -- Ensure the offset is within the parameter's valid range
-  if target == "1pan" or target == "2pan" or target == "1seek" or target == "2seek" then
-    lfo[i].offset = 0
-  else
-    lfo[i].offset = lfo.scale(current_value, min_param_value, max_param_value, -1, 1)
-  end
-  params:set(i .. "offset", lfo[i].offset)
+    -- Ensure the offset is within the parameter's valid range
+    if target == "1pan" or target == "2pan" or target == "1seek" or target == "2seek" then
+        lfo[i].offset = 0
+    else
+        lfo[i].offset = lfo.scale(current_value, min_param_value, max_param_value, -1, 1)
+    end
+    params:set(i .. "offset", lfo[i].offset)
 
-  -- Calculate the maximum allowed depth based on the parameter's range
-  local max_allowed_depth = math.min(
-    math.abs(max_param_value - current_value), 
-    math.abs(current_value - min_param_value)
-  )
-  local scaled_max_depth = lfo.scale(max_allowed_depth, 0, max_param_value - min_param_value, 0, 100)
+    -- Calculate the maximum allowed depth based on the parameter's range
+    local max_allowed_depth = math.min(
+        math.abs(max_param_value - current_value), 
+        math.abs(current_value - min_param_value)
+    )
+    local scaled_max_depth = lfo.scale(max_allowed_depth, 0, max_param_value - min_param_value, 0, 100)
 
-  -- Ensure the depth is within the allowed range
-  lfo[i].depth = math.random(math.floor(ranges.depth[1]), math.floor(ranges.depth[2]))
-  if lfo[i].depth > scaled_max_depth then
-    lfo[i].depth = math.floor(scaled_max_depth)
-  end
-  if lfo[i].depth == 0 then
+    -- Ensure the depth is within the allowed range
     lfo[i].depth = math.random(math.floor(ranges.depth[1]), math.floor(ranges.depth[2]))
-  end
-  params:set(i .. "lfo_depth", lfo[i].depth)
+    if lfo[i].depth > scaled_max_depth then
+        lfo[i].depth = math.floor(scaled_max_depth)
+    end
+    if lfo[i].depth == 0 then
+        lfo[i].depth = math.random(math.floor(ranges.depth[1]), math.floor(ranges.depth[2]))
+    end
+    params:set(i .. "lfo_depth", lfo[i].depth)
 
-  -- Set the frequency and waveform
-  if ranges.frequency then
-    local min_freq = math.floor(ranges.frequency[1] * 100)
-    local max_freq = math.floor(ranges.frequency[2] * 100)
-    if min_freq > max_freq then return end
-    lfo[i].freq = math.random(min_freq, max_freq) / 100
-    params:set(i .. "lfo_freq", lfo[i].freq)
-  end
+    -- Set the frequency and waveform
+    if ranges.frequency then
+        local min_freq = math.floor(ranges.frequency[1] * 100)
+        local max_freq = math.floor(ranges.frequency[2] * 100)
+        if min_freq > max_freq then return end
+        lfo[i].freq = math.random(min_freq, max_freq) / 100
+        params:set(i .. "lfo_freq", lfo[i].freq)
+    end
 
-  if ranges.waveform then
-    local waveform_index = math.random(1, #ranges.waveform)
-    lfo[i].waveform = ranges.waveform[waveform_index]
-    params:set(i .. "lfo_shape", waveform_index)
-  end
+    if ranges.waveform then
+        local waveform_index = math.random(1, #ranges.waveform)
+        lfo[i].waveform = ranges.waveform[waveform_index]
+        params:set(i .. "lfo_shape", waveform_index)
+    end
 
-  params:set(i .. "lfo", 2)
-  assigned_params[target] = true
+    params:set(i .. "lfo", 2)
+    assigned_params[target] = true -- Mark the parameter as assigned
 end
 
 function lfo.randomize_lfos()
-  lfo.clearLFOs()
-  local function is_locked(target)
-    local track, param = string.sub(target, 1, 1), string.sub(target, 2)
-    local lockable_params = { "jitter", "size", "density", "spread", "pitch" }
-    if table.find(lockable_params, param) then
-      return params:get(track .. "lock_" .. param) == 2
+    -- Clear only unlocked parameters from assigned_params
+    for target, _ in pairs(assigned_params) do
+        if not is_locked(target) then
+            assigned_params[target] = nil
+        end
     end
-    return false
-  end
 
-  local available_targets = {}
-  for target, ranges in pairs(lfo.target_ranges) do
-    if not is_locked(target) and math.random() < ranges.chance and not assigned_params[target] then
-      table.insert(available_targets, target)
+    -- Randomize LFOs for unlocked parameters
+    local available_targets = {}
+    for target, ranges in pairs(lfo.target_ranges) do
+        if not is_locked(target) and math.random() < ranges.chance then
+            table.insert(available_targets, target)
+        end
     end
-  end
 
-  for i = 1, 16 do
-    if #available_targets > 0 then
-      local index = math.random(1, #available_targets)
-      local selected_target = available_targets[index]
-      table.remove(available_targets, index)
-      randomize_lfo(i, selected_target)
+    -- Build a list of free LFO slots (slots not assigned to locked parameters)
+    local free_slots = {}
+    for j = 1, 16 do
+        local target_index = params:get(j .. "lfo_target")
+        local target_param = lfo.lfo_targets[target_index]
+        
+        -- If the LFO slot is free or assigned to an unlocked parameter, add it to free_slots
+        if not is_locked(target_param) then
+            table.insert(free_slots, j)
+        end
     end
-  end
+
+    -- Assign LFOs to available targets using free slots
+    for _, target in ipairs(available_targets) do
+        if #free_slots > 0 then
+            -- Get the next free slot
+            local slot_index = table.remove(free_slots, 1)
+            randomize_lfo(slot_index, target)
+        else
+            -- If no free slots are left, log a warning (optional)
+            print("No free LFO slot found for target: " .. target)
+        end
+    end
 end
 
 function lfo.process()

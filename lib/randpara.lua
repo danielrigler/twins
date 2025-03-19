@@ -85,8 +85,8 @@ local function randomize_params(steps, i)
         if math.random() <= 0.7 then targets[i .. "shimmer"] = 0 else targets[i .. "shimmer"] = math.random(1, 10) end
         if math.random() <= 0.9 then targets[i .. "shimmerpitchdev"] = 0 else targets[i .. "shimmerpitchdev"] = math.random(1, 3) end
         if math.random() <= 0.9 then targets[i .. "shimmerpitchdev"] = 0 else targets[i .. "shimmerpitchdev"] = math.random(1, 3) end
-        if math.random() <= 0.5 then targets["eq_low_gain_" .. i] = 0 else targets["eq_low_gain_" .. i] = random_float(0, 0.5) end
-        if math.random() <= 0.5 then targets["eq_high_gain_" .. i] = 0 else targets["eq_high_gain_" .. i] = random_float(0, 0.6) end
+        if math.random() <= 0.5 then targets["eq_low_gain_" .. i] = 0 else targets["eq_low_gain_" .. i] = random_float(0, 0.4) end
+        if math.random() <= 0.5 then targets["eq_high_gain_" .. i] = 0 else targets["eq_high_gain_" .. i] = random_float(0, 0.5) end
         else 
         for i=1,2 do
         if math.random() <= 0.9 then targets[i .. "granular_gain"] = 100 else targets[i .. "granular_gain"] = math.random(80, 100) end
@@ -100,8 +100,8 @@ local function randomize_params(steps, i)
         if math.random() <= 0.7 then targets[i .. "shimmer"] = 0 else targets[i .. "shimmer"] = math.random(1, 10) end
         if math.random() <= 0.9 then targets[i .. "shimmerpitchdev"] = 0 else targets[i .. "shimmerpitchdev"] = math.random(1, 3) end
         if math.random() <= 0.9 then targets[i .. "shimmerpitchdev"] = 0 else targets[i .. "shimmerpitchdev"] = math.random(1, 3) end
-        if math.random() <= 0.5 then targets["eq_low_gain_" .. i] = 0 else targets["eq_low_gain_" .. i] = random_float(0, 0.5) end
-        if math.random() <= 0.5 then targets["eq_high_gain_" .. i] = 0 else targets["eq_high_gain_" .. i] = random_float(0, 0.6) end
+        if math.random() <= 0.5 then targets["eq_low_gain_" .. i] = 0 else targets["eq_low_gain_" .. i] = random_float(0, 0.4) end
+        if math.random() <= 0.5 then targets["eq_high_gain_" .. i] = 0 else targets["eq_high_gain_" .. i] = random_float(0, 0.5) end
         end
     end
     

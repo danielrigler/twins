@@ -19,7 +19,6 @@
 --
 --
 --
---
 --              
 --
 --
@@ -98,7 +97,7 @@ local function setup_params()
     params:add_separator("Actions")
     
     params:add_binary("randomize_params", "R a N d 0 m 1 z e", "trigger", 0) params:set_action("randomize_params", function() randpara.randomize_params(steps) end)
-    params:add_binary("randomize_lfos", "RaNd0m1ze LFOs", "trigger", 0) params:set_action("randomize_lfos", function() lfo.randomize_lfos()if randomize_metro[1] then randomize_metro[1]:stop() end if randomize_metro[2] then randomize_metro[2]:stop() end end)
+    params:add_binary("randomize_lfos", "RaNd0m1ze LFOs", "trigger", 0) params:set_action("randomize_lfos", function() lfo.randomize_lfos() if randomize_metro[1] then randomize_metro[1]:stop() end if randomize_metro[2] then randomize_metro[2]:stop() end end)
     params:add_binary("ClearLFOs", "Clear All LFOs", "trigger", 0) params:set_action("ClearLFOs", function() lfo.clearLFOs() end)
     
     params:add_separator("Settings")
@@ -212,13 +211,13 @@ local function setup_params()
 
     params:add_group("EQ", 4)
     params:add_control("eq_low_gain_1", "1 Bass", controlspec.new(-1, 1, "lin", 0.01, 0, ""))
-    params:set_action("eq_low_gain_1", function(value) engine.eq_low_gain(1, value*30) end)
+    params:set_action("eq_low_gain_1", function(value) engine.eq_low_gain(1, value*35) end)
     params:add_control("eq_high_gain_1", "1 Treble", controlspec.new(-1, 1, "lin", 0.01, 0, ""))
-    params:set_action("eq_high_gain_1", function(value) engine.eq_high_gain(1, value*30) end)
+    params:set_action("eq_high_gain_1", function(value) engine.eq_high_gain(1, value*35) end)
     params:add_control("eq_low_gain_2", "2 Bass", controlspec.new(-1, 1, "lin", 0.01, 0, ""))
-    params:set_action("eq_low_gain_2", function(value) engine.eq_low_gain(2, value*30) end)
+    params:set_action("eq_low_gain_2", function(value) engine.eq_low_gain(2, value*35) end)
     params:add_control("eq_high_gain_2", "2 Treble", controlspec.new(-1, 1, "lin", 0.01, 0, ""))
-    params:set_action("eq_high_gain_2", function(value) engine.eq_high_gain(2, value*30) end)
+    params:set_action("eq_high_gain_2", function(value) engine.eq_high_gain(2, value*35) end)
 
     params:add_group("LFOs", 113)
     params:add_control("global_lfo_freq_scale", "Freq Scale", controlspec.new(0.1, 10, "exp", 0.01, 1.0, "x")) 
@@ -244,7 +243,7 @@ local function setup_params()
     for i = 1, 2 do
       params:add_taper(i .. "volume", i .. " volume", -70, 20, 0, 0, "dB") params:set_action(i .. "volume", function(value) if value == -70 then engine.volume(i, 0) else engine.volume(i, math.pow(10, value / 20)) end end)
       params:add_taper(i .. "pan", i .. " pan", -100, 100, 0, 0, "%") params:set_action(i .. "pan", function(value) engine.pan(i, value / 100)  end)
-      params:add_control(i .. "speed", i .. " speed", controlspec.new(-2, 2, "lin", 0.01, 0, "")) params:set_action(i .. "speed", function(value) engine.speed(i, value) end)
+      params:add_control(i .. "speed", i .. " speed", controlspec.new(-2, 2, "lin", 0.01, 0.1, "")) params:set_action(i .. "speed", function(value) engine.speed(i, value) end)
       params:add_taper(i .. "density", i .. " density", 1, 30, 20, 1) params:set_action(i .. "density", function(value) engine.density(i, value) end)
       params:add_control(i .. "pitch", i .. " pitch", controlspec.new(-48, 48, "lin", 1, 0, "st")) params:set_action(i .. "pitch", function(value) engine.pitch_offset(i, math.pow(0.5, -value / 12)) end)
       params:add_taper(i .. "jitter", i .. " jitter", 0, 1999, 250, 5, "ms") params:set_action(i .. "jitter", function(value) engine.jitter(i, value / 1000) end)
@@ -277,13 +276,14 @@ local function setup_params()
     params:add_control("min_pitch", "pitch (min)", controlspec.new(-48, 48, "lin", 1, -48, "st"))
     params:add_control("max_pitch", "pitch (max)", controlspec.new(-48, 48, "lin", 1, 48, "st"))
 
-    params:add_group("Locking", 10)
+    params:add_group("Locking", 12)
     for i = 1, 2 do
       params:add_option(i .. "lock_jitter", i .. " lock jitter", {"off", "on"}, 1)
       params:add_option(i .. "lock_size", i .. " lock size", {"off", "on"}, 1)
       params:add_option(i .. "lock_density", i .. " lock density", {"off", "on"}, 1)
       params:add_option(i .. "lock_spread", i .. " lock spread", {"off", "on"}, 1)
       params:add_option(i .. "lock_pitch", i .. " lock pitch", {"off", "on"}, 1)
+      params:add_option(i .. "lock_pan", i .. " lock pan", {"off", "on"}, 1)
     end
     
     params:add_control("steps","Transition steps",controlspec.new(10,2000,"lin",1,400)) params:set_action("steps", function(value) steps = value end)
@@ -604,11 +604,11 @@ function key(n, z)
     if z == 1 then
         if key1_pressed and key2_pressed then
             randomize(1)
-            randpara.randomize_params(steps,1)
+            randpara.randomize_params(steps, 1)
             return
         elseif key1_pressed and key3_pressed then
             randomize(2)
-            randpara.randomize_params(steps,2)
+            randpara.randomize_params(steps, 2)
             return
         end
     end
@@ -652,13 +652,24 @@ function key(n, z)
             redraw()
         else
             -- Only toggle lock state for parameters that have lock parameters
-            local lockable_params = {"jitter", "size", "density", "spread", "pitch"}
+            local lockable_params = {"jitter", "size", "density", "spread", "pitch", "pan"}
             local param_name = string.match(current_mode, "%a+") -- Extract the parameter name (e.g., "jitter" from "jitter:")
 
             if param_name and table.find(lockable_params, param_name) then
-                -- Toggle lock state for both tracks
-                params:set("1lock_" .. param_name, params:get("1lock_" .. param_name) == 1 and 2 or 1)
-                params:set("2lock_" .. param_name, params:get("2lock_" .. param_name) == 1 and 2 or 1)
+                -- Check if only one parameter is locked
+                local is_locked1 = params:get("1lock_" .. param_name) == 2
+                local is_locked2 = params:get("2lock_" .. param_name) == 2
+
+                if is_locked1 ~= is_locked2 then
+                    -- If only one parameter is locked, unlock both
+                    params:set("1lock_" .. param_name, 1)
+                    params:set("2lock_" .. param_name, 1)
+                else
+                    -- If both are locked or both are unlocked, toggle both
+                    local new_state = is_locked1 and 1 or 2
+                    params:set("1lock_" .. param_name, new_state)
+                    params:set("2lock_" .. param_name, new_state)
+                end
                 redraw()
             end
         end
@@ -707,36 +718,51 @@ local function is_param_locked(track_num, param)
     return params:get(track_num .. "lock_" .. param) == 2
 end
 
+local function draw_l_shape(x, y, is_locked)
+    if is_locked then
+        local pulse_level = math.floor(util.linlin(-1, 1, 1, 8, math.sin(util.time() * 4)))
+        screen.level(pulse_level)
+        screen.move(x - 4, y)
+        screen.line_rel(2, 0)
+        screen.move(x - 3, y)
+        screen.line_rel(0, -3)
+        screen.stroke()
+    end
+end
+
+local function get_lfo_modulation(param_name)
+    for i = 1, 16 do
+        local target_index = params:get(i .. "lfo_target")
+        local target_param = lfo.lfo_targets[target_index]
+        if target_param == param_name and params:get(i .. "lfo") == 2 then
+            -- Return the actual modulated value from the LFO
+            local min_param_value, max_param_value = lfo.get_parameter_range(param_name)
+            local modulated_value = lfo.scale(lfo[i].slope, -1.0, 1.0, min_param_value, max_param_value)
+            return modulated_value
+        end
+    end
+    return nil
+end
+
 local function draw_param_row(y, label, param1, param2, is_density, is_pitch, is_highlighted)
     local param_name = string.match(label, "%a+")
     local is_locked1 = is_param_locked(1, param_name)
     local is_locked2 = is_param_locked(2, param_name)
 
+    -- Draw the label
     screen.move(5, y)
     screen.level(15)  -- Always use level 15 for the label
     screen.text(label)
 
-    -- Draw a small L-shaped letter for locked parameters
-    local function draw_l_shape(x, y, is_locked)
-        if is_locked then
-            screen.level(1)  -- Locked state is displayed with level 1
-            screen.move(x - 4, y)  -- Move 3 pixels left and 1 pixel up
-            screen.line_rel(2, 0)      -- Draw a horizontal line (2 pixels to the right)
-            screen.move(x - 3, y)  -- Move back to the starting point
-            screen.line_rel(0, -3)      -- Draw a vertical line (2 pixels downward)
-            screen.stroke()            -- Stroke the lines
-        end
-    end
-
     -- Track 1 value
     if is_locked1 then
-        draw_l_shape(50, y, is_locked1)  -- Draw L-shape before the value
+        draw_l_shape(51, y, is_locked1)  -- Draw pulsing "L" shape for locked parameter
     end
-    screen.move(50, y)  -- Keep the parameter value in its original position
+    screen.move(51, y)
     if is_highlighted then
         screen.level(15)  -- Highlighted row is always level 15
     else
-        screen.level(1)  -- All non-highlighted rows are level 1
+        screen.level(1)  -- Non-highlighted rows are level 1
     end
     if is_density then
         screen.text(format_density(params:get(param1)))
@@ -750,13 +776,13 @@ local function draw_param_row(y, label, param1, param2, is_density, is_pitch, is
 
     -- Track 2 value
     if is_locked2 then
-        draw_l_shape(93, y, is_locked2)  -- Draw L-shape before the value
+        draw_l_shape(92, y, is_locked2)  -- Draw pulsing "L" shape for locked parameter
     end
-    screen.move(93, y)  -- Keep the parameter value in its original position
+    screen.move(92, y)
     if is_highlighted then
         screen.level(15)  -- Highlighted row is always level 15
     else
-        screen.level(1)  -- All non-highlighted rows are level 1
+        screen.level(1)  -- Non-highlighted rows are level 1
     end
     if is_density then
         screen.text(format_density(params:get(param2)))
@@ -767,11 +793,102 @@ local function draw_param_row(y, label, param1, param2, is_density, is_pitch, is
     else
         screen.text(params:string(param2))
     end
+
+    -- Draw LFO visualization bars
+    local lfo_mod1 = get_lfo_modulation(param1)
+    local lfo_mod2 = get_lfo_modulation(param2)
+
+    if lfo_mod1 then
+        local bar_width = 30
+        local bar_x = 51
+        local bar_y = y + 1  -- Position the bar 1 pixel below the parameter value
+        local bar_height = 1
+        local min_param_value, max_param_value = lfo.get_parameter_range(param1)
+        -- Map the modulated value to the bar width
+        local bar_value = util.linlin(min_param_value, max_param_value, 0, bar_width, lfo_mod1)
+        screen.level(1)
+        screen.rect(bar_x, bar_y, bar_value, bar_height)
+        screen.fill()
+    end
+
+    if lfo_mod2 then
+        local bar_width = 30
+        local bar_x = 92
+        local bar_y = y + 1  -- Position the bar 1 pixel below the parameter value
+        local bar_height = 1
+        local min_param_value, max_param_value = lfo.get_parameter_range(param2)
+        -- Map the modulated value to the bar width
+        local bar_value = util.linlin(min_param_value, max_param_value, 0, bar_width, lfo_mod2)
+        screen.level(1)
+        screen.rect(bar_x, bar_y, bar_value, bar_height)
+        screen.fill()
+    end
+end
+
+local function draw_progress_bar(x, y, width, value, min, max, center, is_log)
+    local bar_width = width
+    local center_pos = x + (width / 2)
+    local value_pos
+    if is_log then
+      -- Logarithmic scaling for LPF and HPF
+        value_pos = util.linlin(math.log(min), math.log(max), x, x + width, math.log(value))
+    else
+        if center then
+            -- For centered progress bars (e.g., speed, pan)
+            value_pos = util.linlin(min, max, x, x + width, value)
+        else
+            -- For non-centered progress bars (e.g., seek)
+            value_pos = util.linlin(min, max, x, x + width, value)
+        end
+    end
+
+    screen.level(3)
+    if center then
+        -- Draw from the center to the value position
+        if value_pos > center_pos then
+            screen.rect(center_pos, y, value_pos - center_pos, 1)
+        else
+            screen.rect(value_pos, y, center_pos - value_pos, 1)
+        end
+    else
+        -- Draw from the start to the value position
+        screen.rect(x, y, value_pos - x, 1)
+    end
+    screen.fill()
+end
+
+local function format_speed(speed)
+    if math.abs(speed) < 1 then
+        -- Remove leading zero for speeds between 0 and 1
+        if speed < 0 then
+            -- Include negative sign for negative speeds
+            return string.format("-.%02dx", math.floor(math.abs(speed) * 100))
+        else
+            -- No negative sign for positive speeds
+            return string.format(".%02dx", math.floor(math.abs(speed) * 100))
+        end
+    else
+        -- Display full value for speeds >= 1
+        return string.format("%.2fx", speed)
+    end
 end
 
 function redraw()
     if not installer:ready() then installer:redraw() do return end end
     screen.clear()
+    
+    if current_mode == "seek" then
+        draw_progress_bar(51, 62, 30, params:get("1seek"), 0, 100, false, false)
+        draw_progress_bar(92, 62, 30, params:get("2seek"), 0, 100, false, false)
+    elseif current_mode == "lpf" or current_mode == "hpf" then
+        if current_filter_mode == "lpf" then
+            draw_progress_bar(51, 62, 30, params:get("1cutoff"), 20, 20000, false, true)
+            draw_progress_bar(92, 62, 30, params:get("2cutoff"), 20, 20000, false, true)
+        else
+            draw_progress_bar(51, 62, 30, params:get("1hpf"), 20, 20000, false, true)
+            draw_progress_bar(92, 62, 30, params:get("2hpf"), 20, 20000, false, true)
+        end
+    end
 
     -- Draw vertical volume bars for channel 1 (left) and channel 2 (right)
     local volume1 = params:get("1volume") 
@@ -812,7 +929,7 @@ function redraw()
     end
 
     -- Display track 1 value (always bright if it's the active mode)
-    screen.move(50, 60)
+    screen.move(51, 60)
     if current_mode == "seek" or current_mode == "lpf" or current_mode == "hpf" or current_mode == "speed" or current_mode == "pan" then
         screen.level(15) -- Highlighted row is always level 15
     else
@@ -821,7 +938,12 @@ function redraw()
     if current_mode == "seek" then
         screen.text(format_seek(params:get("1seek"))) -- Display seek for track 1
     elseif current_mode == "pan" then
+       local pan1 = params:get("1pan")
+       if pan1 == 0 then
+            screen.text(string.format("0%%"))
+       else
         screen.text(string.format("%.0f%%", params:get("1pan"))) -- Display pan for track 1
+        end
     elseif current_mode == "lpf" or current_mode == "hpf" then
         -- Display LPF or HPF cutoff based on current_filter_mode
         if current_filter_mode == "lpf" then
@@ -831,11 +953,11 @@ function redraw()
         end
     else
         local speed1 = params:get("1speed")
-        screen.text(string.format("%.2fx", speed1))  -- Display speed for track 1
+        screen.text(format_speed(speed1))
     end
 
     -- Display track 2 value (always bright if it's the active mode)
-    screen.move(93, 60)
+    screen.move(92, 60)
     if current_mode == "seek" or current_mode == "lpf" or current_mode == "hpf" or current_mode == "speed" or current_mode == "pan" then
         screen.level(15) -- Highlighted row is always level 15
     else
@@ -844,7 +966,12 @@ function redraw()
     if current_mode == "seek" then
         screen.text(format_seek(params:get("2seek"))) -- Display seek for track 2
     elseif current_mode == "pan" then
+      local pan2 = params:get("2pan")
+      if pan2 == 0 then
+            screen.text(string.format("0%%"))
+      else
         screen.text(string.format("%.0f%%", params:get("2pan"))) -- Display pan for track 2
+      end
     elseif current_mode == "lpf" or current_mode == "hpf" then
         if current_filter_mode == "lpf" then
             screen.text(string.format("%.0f", params:get("2cutoff"))) -- Display LPF for track 2
@@ -853,7 +980,20 @@ function redraw()
         end
     else
         local speed2 = params:get("2speed")
-        screen.text(string.format("%.2fx", speed2))  -- Display speed for track 2
+        screen.text(format_speed(speed2))
+    end
+
+    -- Draw L-shape for locked pan parameters in the bottom row
+    if current_mode == "pan" then
+        local is_locked1 = is_param_locked(1, "pan")
+        local is_locked2 = is_param_locked(2, "pan")
+
+        if is_locked1 then
+            draw_l_shape(51, 60, is_locked1)  -- Draw L-shape for track 1 pan
+        end
+        if is_locked2 then
+            draw_l_shape(92, 60, is_locked2)  -- Draw L-shape for track 2 pan
+        end
     end
 
     screen.level(3)
@@ -868,31 +1008,18 @@ function redraw()
         screen.fill()
     end
 
-    -- Check if an LFO is assigned to the panning parameters
-    local lfo_assigned_to_pan1 = false
-    local lfo_assigned_to_pan2 = false
-
-    for i = 1, 16 do
-        if params:get(i .. "lfo_target") == 2 then -- 2 corresponds to "1pan"
-            lfo_assigned_to_pan1 = true
-        end
-        if params:get(i .. "lfo_target") == 3 then -- 3 corresponds to "2pan"
-            lfo_assigned_to_pan2 = true
-        end
-    end
-
-    if is_audio_loaded(1) and lfo_assigned_to_pan1 then
-        local center_start = 51
-        local center_end = 76
+    if is_audio_loaded(1) then
+        local center_start = 52
+        local center_end = 77
         local pan1 = params:get("1pan")
         local pan1_pos = util.linlin(-100, 100, center_start, center_end, pan1)
         screen.rect(pan1_pos - 1, 0, 4, 1)
         screen.fill()
     end
 
-    if is_audio_loaded(2) and lfo_assigned_to_pan2 then
-        local center_start = 94
-        local center_end = 119
+    if is_audio_loaded(2) then
+        local center_start = 93
+        local center_end = 118
         local pan2 = params:get("2pan")
         local pan2_pos = util.linlin(-100, 100, center_start, center_end, pan2)
         screen.rect(pan2_pos - 1, 0, 4, 1)
