@@ -17,7 +17,6 @@ Engine_twins : CroneEngine {
         ^super.new(context, doneCallback);
     }
 
-    // Disk read method
     readBuf { arg i, path;
         if(buffersL[i].notNil && buffersR[i].notNil, {
             if (File.exists(path), {
@@ -48,7 +47,6 @@ Engine_twins : CroneEngine {
     }
 
     alloc {
-        // Allocate buffers for left and right channels
         buffersL = Array.fill(nvoices, { arg i;
             Buffer.alloc(context.server, context.server.sampleRate * 1);
         });
@@ -57,15 +55,14 @@ Engine_twins : CroneEngine {
             Buffer.alloc(context.server, context.server.sampleRate * 1);
         });
 
-        // Allocate buffer for sine wave
         bufSine = Buffer.alloc(context.server, 1024 * 16, 1);
         bufSine.sine2([2], [0.5], false);
         context.server.sync;
 
 SynthDef(\synth, {
     arg out, phase_out, level_out, buf_l, buf_r,
-    gate=1, pos=0, speed=1, jitter=0,
-    size=0.1, density=20, density_mod_amt=0, pitch_offset=0, pan=0, spread=0, gain=1, envscale=1,
+    pos=0, speed=1, jitter=0,
+    size=0.1, density=20, density_mod_amt=0, pitch_offset=0, pan=0, spread=0, gain=1,
     freeze=0, t_reset_pos=0,
     granular_gain=1,
     pitch_mode=0,
@@ -75,14 +72,11 @@ SynthDef(\synth, {
     overtones_2=0, 
     cutoff=20000, q=1, hpf=20, hpfrq=1,
     sine_drive=1, sine_wet=0,
-    compensation_factor=0.1,
     chew_wet=0, chew_depth=0.5, chew_freq=0.5, chew_variance=0.5,
     direction_mod=0,
     size_variation=0,
-    shimmer=0,
     low_gain=0, high_gain=0;
  
-
     var grain_trig;
     var jitter_sig;
     var buf_dur;
@@ -95,18 +89,15 @@ SynthDef(\synth, {
     var density_mod;
     var dry_sig;
     var granular_sig;
-    var env;
-    var level;
     var grain_pitch;
     var shaped;
-    var main_vol = 1.0 / (1.0 + subharmonics_1 + subharmonics_2 + overtones_1 + overtones_2);
-    var subharmonic_1_vol = subharmonics_1 / (1.0 + subharmonics_1 + subharmonics_2 + overtones_1 + overtones_2) * 2;
-    var subharmonic_2_vol = subharmonics_2 / (1.0 + subharmonics_1 + subharmonics_2 + overtones_1 + overtones_2) * 2;
-    var overtone_1_vol = overtones_1 / (1.0 + subharmonics_1 + subharmonics_2 + overtones_1 + overtones_2);
-    var overtone_2_vol = overtones_2 / (1.0 + subharmonics_1 + subharmonics_2 + overtones_1 + overtones_2);
+    var main_vol = 1 / (1 + subharmonics_1 + subharmonics_2 + overtones_1 + overtones_2);
+    var subharmonic_1_vol = subharmonics_1 / (1 + subharmonics_1 + subharmonics_2 + overtones_1 + overtones_2) * 2;
+    var subharmonic_2_vol = subharmonics_2 / (1 + subharmonics_1 + subharmonics_2 + overtones_1 + overtones_2) * 2;
+    var overtone_1_vol = overtones_1 / (1 + subharmonics_1 + subharmonics_2 + overtones_1 + overtones_2);
+    var overtone_2_vol = overtones_2 / (1 + subharmonics_1 + subharmonics_2 + overtones_1 + overtones_2);
     var lagSpeed = Lag.kr(speed);
     var lagPitchOffset = Lag.kr(pitch_offset, 0.5);
-    var compensation = 1 / (1 + (lagPitchOffset.abs * compensation_factor));
     var grain_direction = Select.kr(pitch_mode, [1, Select.kr(speed < 0, [1, -1])]);
     var direction_mod_sig = LFNoise1.kr(density).range(0, 1) < direction_mod;
     var trig_rnd = LFNoise1.kr(density);
@@ -139,7 +130,6 @@ SynthDef(\synth, {
 
     grain_pitch = Select.kr(pitch_mode, [Lag.kr(speed) * lagPitchOffset, lagPitchOffset]);
 
-    // Apply random size variation to the grain size
     grain_size = size * (1 + TRand.kr(trig: grain_trig, lo: -1 * size_variation, hi: size_variation));
 
     sig_l = GrainBuf.ar(1, grain_trig, grain_size, buf_l, grain_pitch * grain_direction, pos_sig + jitter_sig, 2, mul: main_vol);
@@ -160,35 +150,22 @@ SynthDef(\synth, {
     granular_gain = granular_gain.clip(0, 1);
     sig_mix = (dry_sig * (1 - granular_gain)) + (granular_sig * granular_gain);
 
-    sig_mix = sig_mix + PitchShift.ar(sig_mix, 0.13, 2, 0, 1, 1.0 * shimmer);
-    sig_mix = sig_mix + PitchShift.ar(sig_mix, 0.1, 4, 0, 1, 0.5 * shimmer);
-    sig_mix = sig_mix + PitchShift.ar(sig_mix, 0.1, 8, 0, 1, 0.25 * shimmer);
-
     low = BLowShelf.ar(sig_mix, 375, 5, low_gain);
     high = BHiShelf.ar(sig_mix, 3600, 5, high_gain);
     sig_mix = low + high;
 
-    sig_mix = sig_mix * compensation;
-
     shaped = Shaper.ar(bufSine, sig_mix * sine_drive);
     sig_mix = SelectX.ar(Lag.kr(sine_wet), [sig_mix, shaped]);
 
-    sig_mix = SelectX.ar(Lag.kr(chew_wet), [
-        sig_mix,
-        AnalogChew.ar(sig_mix, chew_depth, chew_freq, chew_variance)
-    ]);
+    sig_mix = SelectX.ar(Lag.kr(chew_wet), [sig_mix, AnalogChew.ar(sig_mix, chew_depth, chew_freq, chew_variance)]);
 
     sig_mix = BHiPass4.ar(sig_mix, Lag.kr(hpf), Lag.kr(hpfrq));
     sig_mix = MoogFF.ar(sig_mix, Lag.kr(cutoff), Lag.kr(q));
     
     sig_mix = Compander.ar(sig_mix,sig_mix,0.25)/2;
+    
+    Out.ar(out, sig_mix * gain);
 
-    env = EnvGen.kr(Env.asr(1, 1, 1), gate: gate, timeScale: envscale);
-    level = env;
-
-    Out.ar(out, sig_mix * level * Lag3.kr(gain));
-    Out.kr(phase_out, pos_sig);
-    Out.kr(level_out, level);
 }).add;
 
         // Define the Greyhole effect SynthDef
@@ -296,20 +273,17 @@ SynthDef(\synth, {
         
         this.addCommand("granular_gain", "if", { arg msg; var voice = msg[1] - 1; var gain = msg[2]; voices[voice].set(\granular_gain, gain); });
         this.addCommand("density_mod_amt", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\density_mod_amt, msg[2]); });
-        this.addCommand("density_mod_amt", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\density_mod_amt, msg[2]); });
         this.addCommand("subharmonics_1", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\subharmonics_1, msg[2]); });
         this.addCommand("subharmonics_2", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\subharmonics_2, msg[2]); });
         this.addCommand("overtones_1", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\overtones_1, msg[2]); });
         this.addCommand("overtones_2", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\overtones_2, msg[2]); });
         this.addCommand("pitch_mode", "ii", { arg msg; var voice = msg[1] - 1; var mode = msg[2]; voices[voice].set(\pitch_mode, mode); });
         this.addCommand("pitch_offset", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\pitch_offset, msg[2]); });
-        this.addCommand("compensation_factor", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\compensation_factor, msg[2]); });
         this.addCommand("direction_mod", "if", { arg msg; var voice = msg[1] - 1; var mod = msg[2]; voices[voice].set(\direction_mod, mod); });
         this.addCommand("size_variation", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\size_variation, msg[2]); });
 
         this.addCommand("read", "is", { arg msg; this.readBuf(msg[1] - 1, msg[2]); });
         this.addCommand("seek", "if", { arg msg; var voice = msg[1] - 1; var pos; seek_tasks[voice].stop; pos = msg[2]; voices[voice].set(\pos, pos); voices[voice].set(\t_reset_pos, 1); voices[voice].set(\freeze, 0);});
-        this.addCommand("gate", "ii", { arg msg; var voice = msg[1] - 1; voices[voice].set(\gate, msg[2]); });
         this.addCommand("speed", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\speed, msg[2]); });
         this.addCommand("jitter", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\jitter, msg[2]); });
         this.addCommand("size", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\size, msg[2]); });
@@ -317,8 +291,7 @@ SynthDef(\synth, {
         this.addCommand("pan", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\pan, msg[2]); });
         this.addCommand("spread", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\spread, msg[2]); });
         this.addCommand("volume", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\gain, msg[2]); });
-        this.addCommand("envscale", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\envscale, msg[2]); });
-        
+
         this.addCommand("sine_drive", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\sine_drive, msg[2]); });
         this.addCommand("sine_wet", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\sine_wet, msg[2]); });
         this.addCommand("chew_wet", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\chew_wet, msg[2]); });
@@ -328,9 +301,7 @@ SynthDef(\synth, {
         
         this.addCommand("eq_low_gain", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\low_gain, msg[2]); });
         this.addCommand("eq_high_gain", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\high_gain, msg[2]); });
-        
-        this.addCommand("shimmer", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\shimmer, msg[2]); });
-       
+
         seek_tasks = Array.fill(nvoices, { arg i; Routine {} });
     }
 

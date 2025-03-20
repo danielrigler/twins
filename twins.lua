@@ -6,7 +6,7 @@
 --           by: @dddstudio                       
 --
 --                          
---                           v0.171
+--                           v0.172
 -- E1: Master Volume
 -- K1+E2/E3: Volume 1/2
 -- K1+E1: Crossfade Volumes
@@ -129,10 +129,8 @@ local function setup_params()
     params:add_taper("reverb_modulator_frequency", "Modulator frequency", 0, 10, 1, 0, "Hz") params:set_action("reverb_modulator_frequency", function(value) engine.reverb_modulator_frequency(value) end)
     params:add_taper("reverb_modulator_depth", "Modulator depth", 0, 100, 40, 0, "%") params:set_action("reverb_modulator_depth", function(value) engine.reverb_modulator_depth(value / 100) end)
     
-    params:add_group("Shimmer+", 10)
+    params:add_group("Pitch", 8)
     for i = 1, 2 do
-      params:add_control(i .. "shimmer", i .. " Shimmer", controlspec.new(0, 100, "lin", 1, 0, "%"))
-      params:set_action(i.. "shimmer", function(value) engine.shimmer(i, value/50) end)
       params:add_control(i .. "subharmonics_2", i .. " Subharmonics -2oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0))
       params:set_action(i .. "subharmonics_2", function(value) engine.subharmonics_2(i, value) end)
       params:add_control(i .. "subharmonics_1", i .. " Subharmonics -1oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0))
@@ -154,8 +152,8 @@ local function setup_params()
     params:add_control("2hpfrq","2 HPF resonance",controlspec.new(0,1,"lin",0.01,1)) params:set_action("2hpfrq",function(value) engine.hpfrq(2,value) end)
     
     params:add_group("Tape", 6)
-    params:add_control("sine_wet", "Shaper Drive Mix", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("sine_wet", function(value) engine.sine_wet(1, value / 100) engine.sine_wet(2, value / 100) end)
-    params:add_control("sine_drive", "Shaper Drive", controlspec.new(0, 5, "lin", 0.01, 1, "")) params:set_action("sine_drive", function(value) engine.sine_drive(1, value) engine.sine_drive(2, value) end)
+    params:add_control("sine_wet", "Drive Mix", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("sine_wet", function(value) engine.sine_wet(1, value / 100) engine.sine_wet(2, value / 100) end)
+    params:add_control("sine_drive", "Drive", controlspec.new(0, 5, "lin", 0.01, 1, "")) params:set_action("sine_drive", function(value) engine.sine_drive(1, value) engine.sine_drive(2, value) end)
     params:add{type = "control", id = "chew_wet", name = "Chew Mix", controlspec = controlspec.new(0, 100, "lin", 1, 0, "%"), action = function(value) engine.chew_wet(1, value /100) engine.chew_wet(2, value / 100) end}
     params:add{type = "control", id = "chew_depth", name = "Chew Depth", controlspec = controlspec.new(0, 1, "lin", 0.01, 0.5, ""), action = function(value) engine.chew_depth(1, value) engine.chew_depth(2, value) end}
     params:add{type = "control", id = "chew_freq", name = "Chew Freq", controlspec = controlspec.new(0, 1, "lin", 0.01, 0.5, ""), action = function(value) engine.chew_freq(1, value) engine.chew_freq(2, value) end}
@@ -190,8 +188,6 @@ local function setup_params()
       params:set_action(i .. "density_mod_amt", function(value) engine.density_mod_amt(i, value / 100) end)
     end
   
-    params:add_control("volume_compensation", "Volume compensation", controlspec.new(0,1,"lin",0.01,0.1)) params:set_action("volume_compensation", function(value) engine.compensation_factor(1,value) engine.compensation_factor(2,value) end)
-    
     for i = 1, 2 do
       params:add_taper(i .. "volume", i .. " volume", -70, 20, 0, 0, "dB") params:set_action(i .. "volume", function(value) if value == -70 then engine.volume(i, 0) else engine.volume(i, math.pow(10, value / 20)) end end)
       params:add_taper(i .. "pan", i .. " pan", -100, 100, 0, 0, "%") params:set_action(i .. "pan", function(value) engine.pan(i, value / 100)  end)
@@ -202,7 +198,6 @@ local function setup_params()
       params:add_taper(i .. "size", i .. " size", 1, 999, 100, 5, "ms") params:set_action(i .. "size", function(value) engine.size(i, value / 1000) end)
       params:add_taper(i .. "spread", i .. " spread", 0, 100, 0, 0, "%") params:set_action(i .. "spread", function(value) engine.spread(i, value / 100) end)
       params:add_control(i .. "seek", i .. " seek", controlspec.new(0, 100, "lin", 0.01, 0, "%")) params:set_action(i .. "seek", function(value) engine.seek(i, value) end)
-      params:add_taper(i .."fade", i .." att / dec", 1, 9000, 1000, 3, "ms") params:set_action(i .."fade", function(value) engine.envscale(i, value / 1000) end)
 
       params:hide(i .. "speed")
       params:hide(i .. "jitter")
@@ -210,7 +205,6 @@ local function setup_params()
       params:hide(i .. "density")
       params:hide(i .. "pitch")
       params:hide(i .. "spread")
-      params:hide(i .. "fade")
       params:hide(i .. "seek")
       params:hide(i .. "pan")
       params:hide(i .. "volume")
@@ -399,6 +393,7 @@ end
 
 local function setup_engine()
     randomize(1)
+    params:set("1pitch", 0)
     randomize(2)
     audio.level_adc(0)
 end
