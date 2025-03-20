@@ -160,9 +160,9 @@ SynthDef(\synth, {
     granular_gain = granular_gain.clip(0, 1);
     sig_mix = (dry_sig * (1 - granular_gain)) + (granular_sig * granular_gain);
 
-    sig_mix = sig_mix + PitchShift.ar(sig_mix, 0.17, 2, 0, 1, 1.0 * shimmer);
-    sig_mix = sig_mix + PitchShift.ar(sig_mix, 0.11, 4, 0, 1, 0.5 * shimmer);
-    sig_mix = sig_mix + PitchShift.ar(sig_mix, 0.11, 8, 0, 1, 0.25 * shimmer);
+    sig_mix = sig_mix + PitchShift.ar(sig_mix, 0.13, 2, 0, 1, 1.0 * shimmer);
+    sig_mix = sig_mix + PitchShift.ar(sig_mix, 0.1, 4, 0, 1, 0.5 * shimmer);
+    sig_mix = sig_mix + PitchShift.ar(sig_mix, 0.1, 8, 0, 1, 0.25 * shimmer);
 
     low = BLowShelf.ar(sig_mix, 375, 5, low_gain);
     high = BHiShelf.ar(sig_mix, 3600, 5, high_gain);
