@@ -39,6 +39,7 @@ or from Maiden:
 And after this do not forget to restart.
 
 ### Version history
+* **v0.171** - Slightly changed the engine to make it less resource hungry.
 * **v0.17** - GUI changes. Lots of LFO, randomization and locking tweaks. Removed bitcrusher. 
 * **v0.16** - Added Shimmer and EQ. LFO tweaks. 
 * **v0.15** - Added bitcrusher, small tweaks. 
