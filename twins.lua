@@ -890,19 +890,19 @@ function redraw()
     if current_mode == "seek" then
         screen.text(format_seek(params:get("1seek"))) -- Display seek for track 1
     elseif current_mode == "pan" then
-       local pan1 = params:get("1pan")
-       if pan1 == 0 then
-            screen.text(string.format("0%%"))
-       else
-        screen.text(string.format("%.0f%%", params:get("1pan"))) -- Display pan for track 1
+        local pan1 = params:get("1pan")
+        if pan1 == 0 then
+            screen.text(string.format("0%%")) -- Display 0% without a minus sign
+        else
+            screen.text(string.format("%.0f%%", pan1)) -- Display pan for track 1
         end
     elseif current_mode == "lpf" or current_mode == "hpf" then
-        -- Display LPF or HPF cutoff based on current_filter_mode
-        if current_filter_mode == "lpf" then
-            screen.text(string.format("%.0f", params:get("1cutoff"))) -- Display LPF for track 1
-        else
-            screen.text(string.format("%.0f", params:get("1hpf"))) -- Display HPF for track 1
-        end
+    -- Display LPF or HPF cutoff based on current_filter_mode
+    if current_filter_mode == "lpf" then
+        screen.text(string.format("%.0f", params:get("1cutoff"))) -- Display LPF for track 1
+    else
+        screen.text(string.format("%.0f", params:get("1hpf"))) -- Display HPF for track 1
+    end
     else
         local speed1 = params:get("1speed")
         screen.text(format_speed(speed1))
@@ -918,12 +918,12 @@ function redraw()
     if current_mode == "seek" then
         screen.text(format_seek(params:get("2seek"))) -- Display seek for track 2
     elseif current_mode == "pan" then
-      local pan2 = params:get("2pan")
-      if pan2 == 0 then
-            screen.text(string.format("0%%"))
-      else
-        screen.text(string.format("%.0f%%", params:get("2pan"))) -- Display pan for track 2
-      end
+        local pan2 = params:get("2pan")
+        if pan2 == 0 then
+            screen.text(string.format("0%%")) -- Display 0% without a minus sign
+        else
+            screen.text(string.format("%.0f%%", pan2)) -- Display pan for track 2
+        end
     elseif current_mode == "lpf" or current_mode == "hpf" then
         if current_filter_mode == "lpf" then
             screen.text(string.format("%.0f", params:get("2cutoff"))) -- Display LPF for track 2
@@ -931,9 +931,9 @@ function redraw()
             screen.text(string.format("%.0f", params:get("2hpf"))) -- Display HPF for track 2
         end
     else
-        local speed2 = params:get("2speed")
-        screen.text(format_speed(speed2))
-    end
+    local speed2 = params:get("2speed")
+    screen.text(format_speed(speed2))
+end
 
     -- Draw L-shape for locked pan parameters in the bottom row
     if current_mode == "pan" then
