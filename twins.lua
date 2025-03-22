@@ -6,7 +6,7 @@
 --           by: @dddstudio                       
 --
 --                          
---                           v0.172
+--                            v0.18
 -- E1: Master Volume
 -- K1+E2/E3: Volume 1/2
 -- K1+E1: Crossfade Volumes
@@ -24,17 +24,20 @@
 --
 --
 --
--- If you like this,
--- buy them a beer :)
+--
+-- Thanks to:
 -- @infinitedigits @cfdrake 
 -- @justmat @artfwo @nzimas
--- @sonoCircuit
+-- @sonoCircuit @graymazes
+--
+-- If you like this,
+-- buy them a beer :)
 
 local lfo = include("lib/lfo")
 local randpara = include("lib/randpara")
 delay = include("lib/delay")
 installer_ = include("lib/scinstaller/scinstaller")
-installer = installer_:new{requirements = {"Fverb","AnalogChew"}, 
+installer = installer_:new{requirements = {"Fverb2","AnalogChew"}, 
   zip = "https://github.com/schollz/portedplugins/releases/download/v0.4.6/PortedPlugins-RaspberryPi.zip"}
 engine.name = installer:ready() and 'twins' or nil
 
@@ -102,21 +105,21 @@ local function setup_params()
     
     params:add_separator("Settings")
 
-    params:add_group("Delay", 3)
+    params:add_group("Delay", 4)
     delay.init()
-    
+
     params:add_group("Greyhole", 8)
-    params:add_control("greyhole_mix", "Mix", controlspec.new(0.0, 1.0, "lin", 0.01, 0.5, "")) params:set_action("greyhole_mix", function(value) engine.greyhole_mix(value) end)
+    params:add_control("greyhole_mix", "Mix", controlspec.new(0.0, 1.0, "lin", 0.01, 0.0, "")) params:set_action("greyhole_mix", function(value) engine.greyhole_mix(value) end)
     params:add_control("time", "Time", controlspec.new(0.00, 10.00, "lin", 0.01, 3, "")) params:set_action("time", function(value) engine.greyhole_delay_time(value) end)
     params:add_control("size", "Size", controlspec.new(0.5, 5.0, "lin", 0.01, 4.00, "")) params:set_action("size", function(value) engine.greyhole_size(value) end)
     params:add_control("damp", "Damping", controlspec.new(0.0, 1.0, "lin", 0.01, 0.1, "")) params:set_action("damp", function(value) engine.greyhole_damp(value) end)
     params:add_control("diff", "Diffusion", controlspec.new(0.0, 1.0, "lin", 0.01, 0.5, "")) params:set_action("diff", function(value) engine.greyhole_diff(value) end)
     params:add_control("feedback", "Feedback", controlspec.new(0.00, 1.0, "lin", 0.01, 0.22, "")) params:set_action("feedback", function(value) engine.greyhole_feedback(value) end)
     params:add_control("mod_depth", "Mod depth", controlspec.new(0.0, 1.0, "lin", 0.01, 0.85, "")) params:set_action("mod_depth", function(value) engine.greyhole_mod_depth(value) end)
-    params:add_control("mod_freq", "Mod freq", controlspec.new(0.0, 10.0, "lin", 0.01, 0.7, "Hz")) params:set_action("mod_freq", function(value) engine.greyhole_mod_freq(value) end)
+    params:add_control("mod_freq", "Mod freq", controlspec.new(0.0, 10.0, "lin", 0.01, 0.7, "Hz")) params:set_action("mod_freq", function(value) engine.greyhole_mod_freq(value) end)   
     
-    params:add_group("Fverb", 12)
-    params:add_taper("reverb_mix", "Mix", 0, 100, 17.5, 0, "%") params:set_action("reverb_mix", function(value) engine.reverb_mix(value / 100) end)
+    params:add_group("Fverb2", 12)
+    params:add_taper("reverb_mix", "Mix", 0, 100, 0.0, 0, "%") params:set_action("reverb_mix", function(value) engine.reverb_mix(value / 100) end)
     params:add_taper("reverb_predelay", "Predelay", 0, 250, 20, 0, "ms") params:set_action("reverb_predelay", function(value) engine.reverb_predelay(value) end)
     params:add_taper("reverb_input_amount", "Input amount", 0, 100, 100, 0, "%") params:set_action("reverb_input_amount", function(value) engine.reverb_input_amount(value) end)
     params:add_taper("reverb_lowpass_cutoff", "Lowpass cutoff", 0, 20000, 8000, 0, "Hz") params:set_action("reverb_lowpass_cutoff", function(value) engine.reverb_lowpass_cutoff(value) end)
@@ -129,8 +132,10 @@ local function setup_params()
     params:add_taper("reverb_modulator_frequency", "Modulator frequency", 0, 10, 1, 0, "Hz") params:set_action("reverb_modulator_frequency", function(value) engine.reverb_modulator_frequency(value) end)
     params:add_taper("reverb_modulator_depth", "Modulator depth", 0, 100, 40, 0, "%") params:set_action("reverb_modulator_depth", function(value) engine.reverb_modulator_depth(value / 100) end)
     
-    params:add_group("Pitch", 8)
+    params:add_group("Shimmer+", 10)
     for i = 1, 2 do
+      params:add_control(i .. "shimmer", i .. " Shimmer", controlspec.new(0, 100, "lin", 1, 0, "%"))
+      params:set_action(i.. "shimmer", function(value) engine.shimmer(i, value/50) end)
       params:add_control(i .. "subharmonics_2", i .. " Subharmonics -2oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0))
       params:set_action(i .. "subharmonics_2", function(value) engine.subharmonics_2(i, value) end)
       params:add_control(i .. "subharmonics_1", i .. " Subharmonics -1oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0))
@@ -393,7 +398,6 @@ end
 
 local function setup_engine()
     randomize(1)
-    params:set("1pitch", 0)
     randomize(2)
     audio.level_adc(0)
 end

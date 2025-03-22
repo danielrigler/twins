@@ -34,6 +34,21 @@ function sc.init()
   end
 
 params:add{
+    id = "tap_tempo",
+    name = "Tap Tempo",
+    type = "trigger",
+    action = function()
+        local current_time = util.time()
+        if last_tap_time then
+            local tempo = 60 / (current_time - last_tap_time)
+            local delay_time = 60 / tempo
+            params:set("delay_rate", delay_time)
+        end
+        last_tap_time = current_time
+    end
+}
+
+params:add{
   id = "delay_h",
   name = "Mix",
   type = "control",
@@ -50,7 +65,7 @@ params:add{
   id = "delay_rate",
   name = "Rate",
   type = "control",
-  controlspec = controlspec.new(0.25, 4, 'exp', 0, 0.5, "s"),
+  controlspec = controlspec.new(0.15, 4, 'exp', 0, 0.5, "s"),
   formatter = function(param)
     local x = param:get()
     return string.format("%.2f s", x)

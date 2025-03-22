@@ -36,12 +36,11 @@ local function randomize_params(steps, i)
     end
 
     -- DELAY (global parameters)
-    if math.random() <= 0.4 then targets["delay_h"] = 0 else targets["delay_h"] = math.random(25, 80) end
-    targets["delay_rate"] = random_float(0.2, 1)
-    targets["delay_feedback"] = math.random(30, 75)
+    if math.random() <= 0.3 then targets["delay_h"] = 0 else targets["delay_h"] = math.random(25, 80) end
+    if math.random() <= 0.25 then targets["delay_rate"] = random_float(0.2, 1) end
+    targets["delay_feedback"] = math.random(30, 85)
 
     -- GREYHOLE (global parameters)
-    targets["greyhole_mix"] = random_float(0, 0.6)
     targets["time"] = random_float(3, 7)
     targets["size"] = random_float(3, 5)
     targets["mod_depth"] = random_float(0.1, 1)
@@ -51,17 +50,18 @@ local function randomize_params(steps, i)
     targets["damp"] = random_float(0.05, 0.5)
 
     -- FVERB (global parameters)
-    targets["reverb_mix"] = math.random(0, 40)
+    targets["reverb_input_amount"] = math.random(50, 100)
     targets["reverb_predelay"] = math.random(0, 250)
-    targets["reverb_lowpass_cutoff"] = math.random(2500, 9000)
+    targets["reverb_lowpass_cutoff"] = math.random(4000, 9000)
     targets["reverb_highpass_cutoff"] = math.random(20, 300)
-    targets["reverb_diffusion_1"] = math.random(40, 90)
-    targets["reverb_diffusion_2"] = math.random(40, 90)
-    targets["reverb_tail_density"] = math.random(30, 90)
-    targets["reverb_decay"] = math.random(50, 90)
-    targets["reverb_damping"] = math.random(1000, 7500)
+    targets["reverb_diffusion_1"] = math.random(50, 85)
+    targets["reverb_diffusion_2"] = math.random(50, 85)
+    targets["reverb_tail_density"] = math.random(60, 90)
+    targets["reverb_decay"] = math.random(60, 85)
+    targets["reverb_damping"] = math.random(1000, 4500)
     targets["reverb_modulator_frequency"] = random_float(0.1, 2.5)
     targets["reverb_modulator_depth"] = math.random(20, 100)
+
 
     -- TAPE (global parameters)
     if math.random() <= 0.6 then targets["sine_wet"] = 0 else targets["sine_wet"] = math.random(1, 10) end
@@ -83,6 +83,7 @@ local function randomize_params(steps, i)
         if math.random() <= 0.5 then targets[i .. "overtones_2"] = 0 else targets[i .. "overtones_2"] = random_float(0, 0.5) end
         if math.random() <= 0.5 then targets["eq_low_gain_" .. i] = 0 else targets["eq_low_gain_" .. i] = random_float(0, 0.4) end
         if math.random() <= 0.5 then targets["eq_high_gain_" .. i] = 0 else targets["eq_high_gain_" .. i] = random_float(0, 0.5) end
+        if math.random() <= 0.5 then targets[i .. "shimmer"] = 0 else targets[i .. "shimmer"] = math.random(0, 30) end
         else 
         for i=1,2 do
         if math.random() <= 0.4 then targets[i .. "direction_mod"] = 0 else targets[i .. "direction_mod"] = math.random(0, 35) end
@@ -95,6 +96,7 @@ local function randomize_params(steps, i)
         if math.random() <= 0.5 then targets[i .. "overtones_2"] = 0 else targets[i .. "overtones_2"] = random_float(0, 0.5) end
         if math.random() <= 0.5 then targets["eq_low_gain_" .. i] = 0 else targets["eq_low_gain_" .. i] = random_float(0, 0.4) end
         if math.random() <= 0.5 then targets["eq_high_gain_" .. i] = 0 else targets["eq_high_gain_" .. i] = random_float(0, 0.5) end
+        if math.random() <= 0.5 then targets[i .. "shimmer"] = 0 else targets[i .. "shimmer"] = math.random(0, 30) end
         end
     end
     
