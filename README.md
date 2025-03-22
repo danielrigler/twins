@@ -18,7 +18,7 @@ Heavily influenced by @cfd90's Twine and contains inspiration and code from a lo
 +lots of other tweaks and features.
 
 ### Requirements
-norns / norns shield
+norns / norns shield  
 _some features might require a pi4 based unit._
 
 ### Documentation
