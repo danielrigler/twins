@@ -19,6 +19,7 @@ Heavily influenced by @cfd90's Twine and contains inspiration and code from a lo
 
 ### Requirements
 norns / norns shield
+_some features might require a pi4 based unit._
 
 ### Documentation
 **E1**: Master Volume  
