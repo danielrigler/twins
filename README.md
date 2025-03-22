@@ -9,7 +9,7 @@ Heavily influenced by @cfd90's Twine and contains inspiration and code from a lo
 **Some of the new features:**
 * Reverbs and delays
 * Flexible volume control
-* Tape effects, EQ
+* Tape effects, shimmer, EQ
 * Increased parameter ranges
 * Smooth transition interpolation
 * Freely assignable LFOs with randomization
@@ -31,7 +31,7 @@ norns / norns shield
 **K1**+**K2** or **K1**+**K3**: Randomize 1/2  
 
 ### Download
-**v0.172** **[github link](https://github.com/danielrigler/twins)**
+**v0.18** **[github link](https://github.com/danielrigler/twins)**
 or from Maiden:
 ```
 ;install https://github.com/danielrigler/twins
@@ -39,8 +39,7 @@ or from Maiden:
 And after this do not forget to restart.
 
 ### Version history
-* **v0.172** - Removed shimmer. 
-* **v0.171** - Slightly changed the engine to make it less resource hungry.
+* **v0.18** - Tap tempo for delay, engine tweaks. 
 * **v0.17** - GUI changes. Lots of LFO, randomization and locking tweaks. Removed bitcrusher. 
 * **v0.16** - Added Shimmer and EQ. LFO tweaks. 
 * **v0.15** - Added bitcrusher, small tweaks. 
