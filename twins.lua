@@ -6,7 +6,7 @@
 --           by: @dddstudio                       
 --
 --                          
---                            v0.18
+--                            v0.19
 -- E1: Master Volume
 -- K1+E2/E3: Volume 1/2
 -- K1+E1: Crossfade Volumes
@@ -179,18 +179,13 @@ local function setup_params()
     params:set_action("global_lfo_freq_scale", function(value) for i = 1, 16 do lfo[i].freq = lfo[i].base_freq * value end end)
     lfo.init()
 
-    params:add_group("Extras", 11)
+    params:add_group("Granular", 11)
     for i = 1, 2 do
-      params:add_taper(i .. "granular_gain", i .. " Granular Mix", 0, 100, 100, 0, "%")
-      params:set_action(i .. "granular_gain", function(value) engine.granular_gain(i, value / 100) end)
-      params:add_option(i .. "pitch_mode", i .. " Pitch Mode", {"match speed", "independent"}, 2)
-      params:set_action(i .. "pitch_mode", function(value) engine.pitch_mode(i, value - 1) end)
-      params:add_control(i .. "direction_mod", i .. " Reverse", controlspec.new(0, 100, "lin", 1, 0, "%"))
-      params:set_action(i .. "direction_mod", function(value) engine.direction_mod(i, value / 100) end)
-      params:add_control(i .. "size_variation", i .. " Size Variation", controlspec.new(0, 100, "lin", 1, 0, "%"))
-      params:set_action(i .. "size_variation", function(value) engine.size_variation(i, value / 100) end)
-      params:add_taper(i .. "density_mod_amt", i .. " Density Mod", 0, 100, 0, 0, "%")
-      params:set_action(i .. "density_mod_amt", function(value) engine.density_mod_amt(i, value / 100) end)
+      params:add_taper(i .. "granular_gain", i .. " Mix", 0, 100, 100, 0, "%") params:set_action(i .. "granular_gain", function(value) engine.granular_gain(i, value / 100) end)
+      params:add_control(i .. "size_variation", i .. " Size Variation", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i .. "size_variation", function(value) engine.size_variation(i, value / 100) end)
+      params:add_option(i .. "pitch_mode", i .. " Pitch Mode", {"match speed", "independent"}, 2) params:set_action(i .. "pitch_mode", function(value) engine.pitch_mode(i, value - 1) end)
+      params:add_taper(i .. "density_mod_amt", i .. " Density Mod", 0, 100, 0, 0, "%") params:set_action(i .. "density_mod_amt", function(value) engine.density_mod_amt(i, value / 100) end)
+      params:add_control(i .. "direction_mod", i .. " Reverse", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i .. "direction_mod", function(value) engine.direction_mod(i, value / 100) end)
     end
   
     for i = 1, 2 do
