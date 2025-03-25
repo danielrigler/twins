@@ -31,6 +31,8 @@ _some features might require a pi4 based unit._
 **K2**+**K3**: HP/LP Filter toggle  
 **K1**+**K2** or **K1**+**K3**: Randomize 1/2  
 
+### Discussion
+**[FORUM](https://llllllll.co/t/twins/71052)**
 ### Download
 **v0.18** **[github link](https://github.com/danielrigler/twins)**
 or from Maiden:
@@ -40,6 +42,7 @@ or from Maiden:
 And after this do not forget to restart.
 
 ### Version history
+* **v0.19** - Added grain pitch variance.
 * **v0.18** - Tap tempo for delay, engine tweaks. 
 * **v0.17** - GUI changes. Lots of LFO, randomization and locking tweaks. Removed bitcrusher. 
 * **v0.16** - Added Shimmer and EQ. LFO tweaks. 
