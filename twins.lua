@@ -132,6 +132,17 @@ local function setup_params()
     params:add_taper("reverb_modulator_frequency", "Modulator frequency", 0, 10, 1, 0, "Hz") params:set_action("reverb_modulator_frequency", function(value) engine.reverb_modulator_frequency(value) end)
     params:add_taper("reverb_modulator_depth", "Modulator depth", 0, 100, 40, 0, "%") params:set_action("reverb_modulator_depth", function(value) engine.reverb_modulator_depth(value / 100) end)
     
+    params:add_group("Granular", 14)
+    for i = 1, 2 do
+      params:add_control(i .. "granular_gain", i .. " Mix", controlspec.new(0, 100, "lin", 1, 100, "%")) params:set_action(i .. "granular_gain", function(value) engine.granular_gain(i, value / 100) end)
+      params:add_control(i .. "size_variation", i .. " Size Variation", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i .. "size_variation", function(value) engine.size_variation(i, value / 100) end)
+      params:add_control(i .. "pitch_random_plus", i .. " Pitch Variation +", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i .. "pitch_random_plus", function(value) engine.pitch_random_plus(i, value / 100) end)
+      params:add_control(i .. "pitch_random_minus", i .. " Pitch Variation -", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i .. "pitch_random_minus", function(value) engine.pitch_random_minus(i, value / 100) end)
+      params:add_option(i .. "pitch_mode", i .. " Pitch Mode", {"match speed", "independent"}, 2) params:set_action(i .. "pitch_mode", function(value) engine.pitch_mode(i, value - 1) end)
+      params:add_control(i .. "density_mod_amt", i .. " Density Mod", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i .. "density_mod_amt", function(value) engine.density_mod_amt(i, value / 100) end)
+      params:add_control(i .. "direction_mod", i .. " Reverse", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i .. "direction_mod", function(value) engine.direction_mod(i, value / 100) end)
+    end
+    
     params:add_group("Shimmer+", 10)
     for i = 1, 2 do
       params:add_control(i .. "shimmer", i .. " Shimmer", controlspec.new(0, 100, "lin", 1, 0, "%"))
@@ -179,15 +190,6 @@ local function setup_params()
     params:set_action("global_lfo_freq_scale", function(value) for i = 1, 16 do lfo[i].freq = lfo[i].base_freq * value end end)
     lfo.init()
 
-    params:add_group("Granular", 11)
-    for i = 1, 2 do
-      params:add_taper(i .. "granular_gain", i .. " Mix", 0, 100, 100, 0, "%") params:set_action(i .. "granular_gain", function(value) engine.granular_gain(i, value / 100) end)
-      params:add_control(i .. "size_variation", i .. " Size Variation", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i .. "size_variation", function(value) engine.size_variation(i, value / 100) end)
-      params:add_option(i .. "pitch_mode", i .. " Pitch Mode", {"match speed", "independent"}, 2) params:set_action(i .. "pitch_mode", function(value) engine.pitch_mode(i, value - 1) end)
-      params:add_taper(i .. "density_mod_amt", i .. " Density Mod", 0, 100, 0, 0, "%") params:set_action(i .. "density_mod_amt", function(value) engine.density_mod_amt(i, value / 100) end)
-      params:add_control(i .. "direction_mod", i .. " Reverse", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i .. "direction_mod", function(value) engine.direction_mod(i, value / 100) end)
-    end
-  
     for i = 1, 2 do
       params:add_taper(i .. "volume", i .. " volume", -70, 20, 0, 0, "dB") params:set_action(i .. "volume", function(value) if value == -70 then engine.volume(i, 0) else engine.volume(i, math.pow(10, value / 20)) end end)
       params:add_taper(i .. "pan", i .. " pan", -100, 100, 0, 0, "%") params:set_action(i .. "pan", function(value) engine.pan(i, value / 100)  end)
@@ -645,7 +647,7 @@ function key(n, z)
 end
 
 local function format_density(value)
-    return string.format("%.0f Hz", value)
+    return string.format("%.1f Hz", value)
 end
 
 local function format_pitch(value)

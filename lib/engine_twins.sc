@@ -58,7 +58,6 @@ Engine_twins : CroneEngine {
         
         context.server.sync;
         
-
         SynthDef(\synth, {
             arg out, buf_l, buf_r,
             pos=0, speed=1, jitter=0,
@@ -76,7 +75,8 @@ Engine_twins : CroneEngine {
             direction_mod=0,
             size_variation=0,
             low_gain=0, high_gain=0,
-            shimmer=0;
+            shimmer=0,
+            pitch_random_plus=0, pitch_random_minus=0;
  
             var grain_trig;
             var jitter_sig;
@@ -90,6 +90,7 @@ Engine_twins : CroneEngine {
             var density_mod;
             var dry_sig;
             var granular_sig;
+            var base_pitch;
             var grain_pitch;
             var shaped;
             var main_vol = 1 / (1 + subharmonics_1 + subharmonics_2 + overtones_1 + overtones_2);
@@ -98,38 +99,37 @@ Engine_twins : CroneEngine {
             var overtone_1_vol = overtones_1 / (1 + subharmonics_1 + subharmonics_2 + overtones_1 + overtones_2);
             var overtone_2_vol = overtones_2 / (1 + subharmonics_1 + subharmonics_2 + overtones_1 + overtones_2);
             var lagSpeed = Lag.kr(speed);
-            var lagPitchOffset = Lag.kr(pitch_offset, 1.5);
+            var lagPitchOffset = Lag.kr(pitch_offset, 1);
             var grain_direction = Select.kr(pitch_mode, [1, Select.kr(speed < 0, [1, -1])]);
             var direction_mod_sig = LFNoise1.kr(density).range(0, 1) < direction_mod;
             var trig_rnd = LFNoise1.kr(density);
             var grain_size;
             var low, high;
+            var positive_intervals = [0, 0, 0, 3, 5, 7, 12], negative_intervals = [0, 0, 0, -3, -5, -7, -12];
+            var rand_val, do_plus, interval_plus, do_minus, interval_minus, final_interval;
             
             density_mod = density * (2**(trig_rnd * density_mod_amt));
             grain_trig = Impulse.kr(density_mod);
 
             grain_direction = grain_direction * Select.kr(direction_mod_sig, [1, -1]);
 
+            pan_sig = Lag.kr(TRand.kr(trig: grain_trig, lo: spread.neg, hi: spread), 0.2);
+
             buf_dur = BufDur.kr(buf_l);
-
-            pan_sig = Lag.kr(TRand.kr(trig: grain_trig,
-                lo: spread.neg,
-                hi: spread),0.2);
-
-            jitter_sig = TRand.kr(trig: grain_trig,
-                lo: buf_dur.reciprocal.neg * jitter,
-                hi: buf_dur.reciprocal * jitter);
-
-            buf_pos = Phasor.kr(trig: t_reset_pos,
-                rate: buf_dur.reciprocal / ControlRate.ir * lagSpeed,
-                resetPos: pos);
-
+            jitter_sig = TRand.kr(trig: grain_trig, lo: buf_dur.reciprocal.neg * jitter, hi: buf_dur.reciprocal * jitter);
+            buf_pos = Phasor.kr(trig: t_reset_pos, rate: buf_dur.reciprocal / ControlRate.ir * lagSpeed, resetPos: pos);
             pos_sig = Wrap.kr(Select.kr(freeze, [buf_pos, pos]));
-
             dry_sig = [PlayBuf.ar(1, buf_l, lagSpeed, loop: 1), PlayBuf.ar(1, buf_r, lagSpeed, loop: 1)];
             dry_sig = Balance2.ar(dry_sig[0], dry_sig[1], pan);
 
-            grain_pitch = Select.kr(pitch_mode, [lagSpeed * lagPitchOffset, lagPitchOffset]);
+            rand_val = LFNoise1.kr(density).range(0,1);
+            base_pitch = Select.kr(pitch_mode, [lagSpeed * lagPitchOffset, lagPitchOffset]);
+            do_plus = rand_val < pitch_random_plus;
+            interval_plus = TChoose.kr(grain_trig * do_plus, positive_intervals);
+            do_minus = rand_val < pitch_random_minus;
+            interval_minus = TChoose.kr(grain_trig * do_minus, negative_intervals);
+            final_interval = (interval_plus * do_plus) + (interval_minus * do_minus);
+            grain_pitch = base_pitch * (2 ** (final_interval/12));
 
             grain_size = size * (1 + TRand.kr(trig: grain_trig, lo: -1 * size_variation, hi: size_variation));
 
@@ -167,7 +167,6 @@ Engine_twins : CroneEngine {
             sig_mix = Compander.ar(sig_mix,sig_mix,0.25)/2;
             
             Out.ar(out, sig_mix * gain);
-
         }).add;
 
         context.server.sync;
@@ -183,10 +182,6 @@ Engine_twins : CroneEngine {
             );
         });
  
-        context.server.sync;
-
-
-        // Define the Greyhole effect SynthDef
         SynthDef(\greyhole, {
             arg in, out, delayTime=2.0, damp=0.1, size=3.0, diff=0.7, feedback=0.2, modDepth=0.0, modFreq=0.1, mix=0.5;
             var dry = In.ar(in, 2);
@@ -195,10 +190,6 @@ Engine_twins : CroneEngine {
             Out.ar(out, sig);
         }).add;
         
-        context.server.sync;
-
-
-        // Define the Fverb effect SynthDef
         SynthDef(\fverb, {
             arg in, out, mix=0.5, predelay=0, input_amount=100, input_lowpass_cutoff=10000, input_highpass_cutoff=100, input_diffusion_1=75, input_diffusion_2=62.5, tail_density=70, decay=50, damping=5500, modulator_frequency=1, modulator_depth=0.5;
             var dry = In.ar(in, 2); 
@@ -207,9 +198,6 @@ Engine_twins : CroneEngine {
             Out.ar(out, sig);
         }).add;
 
-        context.server.sync;
-
-        // Define the Direct Out SynthDef
         SynthDef(\directOut, {
             arg in, out;
             var sig = In.ar(in, 2);
@@ -248,24 +236,16 @@ Engine_twins : CroneEngine {
             \modulator_depth, 0.5
         ], context.xg);
 
-        context.server.sync;
-
-        // Create the Direct Out Synth
         directOut = Synth.new(\directOut, [
             \in, mixBus.index,
             \out, context.out_b.index
         ], context.xg);
         
-        context.server.sync;
-
         this.addCommand("greyhole_mix", "f", { arg msg; 
             var mix = msg[1];
             if (mix == 0) { greyholeEffect.run(false) } { greyholeEffect.run(true) };
-            greyholeEffect.set(\mix, mix); // Set the mix value first
-
-            // Retrieve mix values asynchronously
+            greyholeEffect.set(\mix, mix);
             greyholeEffect.get(\mix, { |greyholeMix|
-                // Activate/deactivate directOut based on condition
                 if (greyholeMix == 0) {
                     directOut.run(true);
                 } {
@@ -277,11 +257,8 @@ Engine_twins : CroneEngine {
         this.addCommand("reverb_mix", "f", { arg msg; 
             var mix = msg[1];
             if (mix == 0) { fverbEffect.run(false) } { fverbEffect.run(true) };
-            fverbEffect.set(\mix, mix); // Set the mix value first
-
-            // Retrieve mix values asynchronously
+            fverbEffect.set(\mix, mix);
             fverbEffect.get(\mix, { |fverbMix|
-                // Activate/deactivate directOut based on condition
                 if (fverbMix == 0) {
                     directOut.run(true);
                 } {
@@ -326,6 +303,16 @@ Engine_twins : CroneEngine {
         this.addCommand("pitch_offset", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\pitch_offset, msg[2]); });
         this.addCommand("direction_mod", "if", { arg msg; var voice = msg[1] - 1; var mod = msg[2]; voices[voice].set(\direction_mod, mod); });
         this.addCommand("size_variation", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\size_variation, msg[2]); });
+      
+        this.addCommand("pitch_random_plus", "if", { arg msg; 
+    var voice = msg[1] - 1; 
+    voices[voice].set(\pitch_random_plus, msg[2]); 
+});
+
+this.addCommand("pitch_random_minus", "if", { arg msg; 
+    var voice = msg[1] - 1; 
+    voices[voice].set(\pitch_random_minus, msg[2]); 
+});
       
         this.addCommand("read", "is", { arg msg; this.readBuf(msg[1] - 1, msg[2]); });
         this.addCommand("seek", "if", { arg msg; var voice = msg[1] - 1; var pos; seek_tasks[voice].stop; pos = msg[2]; voices[voice].set(\pos, pos); voices[voice].set(\t_reset_pos, 1); voices[voice].set(\freeze, 0);});
