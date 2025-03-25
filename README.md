@@ -34,8 +34,8 @@ _some features might require a pi4 based unit._
 ### Discussion
 **[FORUM](https://llllllll.co/t/twins/71052)**
 ### Download
-**v0.18** **[github link](https://github.com/danielrigler/twins)**
-or from Maiden:
+**v0.19**
+install from Maiden:
 ```
 ;install https://github.com/danielrigler/twins
 ```
