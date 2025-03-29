@@ -57,7 +57,7 @@ Engine_twins : CroneEngine {
         bufSine.sine2([2], [0.5], false);
         
         context.server.sync;
-        
+      
         SynthDef(\synth, {
             arg out, buf_l, buf_r,
             pos=0, speed=1, jitter=0,
@@ -75,7 +75,6 @@ Engine_twins : CroneEngine {
             direction_mod=0,
             size_variation=0,
             low_gain=0, high_gain=0,
-            shimmer=0,
             pitch_random_plus=0, pitch_random_minus=0;
  
             var grain_trig;
@@ -153,9 +152,6 @@ Engine_twins : CroneEngine {
             sig_mix = SelectX.ar(Lag.kr(sine_wet), [sig_mix, shaped]);
 
             sig_mix = SelectX.ar(Lag.kr(chew_wet), [sig_mix, AnalogChew.ar(sig_mix, chew_depth, chew_freq, chew_variance)]);
-
-            sig_mix = sig_mix + DelayN.ar(PitchShift.ar(sig_mix, 0.13, 2,0,1,1*shimmer/2), 0.03, 0.03);
-            sig_mix = sig_mix + DelayN.ar(PitchShift.ar(sig_mix, 0.1, 4,0,1,0.5*shimmer/2), 0.03, 0.03);
 
             sig_mix = BHiPass4.ar(sig_mix, Lag.kr(hpf), Lag.kr(hpfrq));
             sig_mix = MoogFF.ar(sig_mix, Lag.kr(cutoff), Lag.kr(q));
@@ -235,12 +231,15 @@ Engine_twins : CroneEngine {
             \modulator_frequency, 1,
             \modulator_depth, 0.5
         ], context.xg);
+        
 
         directOut = Synth.new(\directOut, [
             \in, mixBus.index,
             \out, context.out_b.index
         ], context.xg);
         
+        
+      
         this.addCommand("greyhole_mix", "f", { arg msg; 
             var mix = msg[1];
             if (mix == 0) { greyholeEffect.run(false) } { greyholeEffect.run(true) };
@@ -266,6 +265,7 @@ Engine_twins : CroneEngine {
                 };
             });
         });
+
 
         this.addCommand("greyhole_delay_time", "f", { arg msg; greyholeEffect.set(\delayTime, msg[1]); });
         this.addCommand("greyhole_damp", "f", { arg msg; greyholeEffect.set(\damp, msg[1]); });
@@ -294,7 +294,6 @@ Engine_twins : CroneEngine {
         
         this.addCommand("granular_gain", "if", { arg msg; var voice = msg[1] - 1; var gain = msg[2]; voices[voice].set(\granular_gain, gain); });
         this.addCommand("density_mod_amt", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\density_mod_amt, msg[2]); });
-        this.addCommand("shimmer", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\shimmer, msg[2]); });
         this.addCommand("subharmonics_1", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\subharmonics_1, msg[2]); });
         this.addCommand("subharmonics_2", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\subharmonics_2, msg[2]); });
         this.addCommand("overtones_1", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\overtones_1, msg[2]); });

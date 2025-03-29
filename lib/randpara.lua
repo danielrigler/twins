@@ -51,25 +51,27 @@ local function randomize_params(steps, i)
 
     -- FVERB (global parameters)
     targets["reverb_input_amount"] = math.random(50, 100)
-    targets["reverb_predelay"] = math.random(0, 250)
+    targets["reverb_predelay"] = math.random(0, 150)
     targets["reverb_lowpass_cutoff"] = math.random(4000, 9000)
     targets["reverb_highpass_cutoff"] = math.random(20, 300)
-    targets["reverb_diffusion_1"] = math.random(50, 85)
-    targets["reverb_diffusion_2"] = math.random(50, 85)
-    targets["reverb_tail_density"] = math.random(60, 90)
-    targets["reverb_decay"] = math.random(60, 85)
+    targets["reverb_diffusion_1"] = math.random(65, 85)
+    targets["reverb_diffusion_2"] = math.random(65, 85)
+    targets["reverb_tail_density"] = math.random(70, 90)
+    targets["reverb_decay"] = math.random(70, 90)
     targets["reverb_damping"] = math.random(1000, 4500)
     targets["reverb_modulator_frequency"] = random_float(0.1, 2.5)
     targets["reverb_modulator_depth"] = math.random(20, 100)
 
-
     -- TAPE (global parameters)
     if math.random() <= 0.6 then targets["sine_wet"] = 0 else targets["sine_wet"] = math.random(1, 10) end
     if math.random() <= 0.6 then targets["sine_drive"] = 0.75 else targets["sine_drive"] = random_float(0.5, 1.25) end
-    if math.random() <= 0.75 then targets["chew_wet"] = 0 else targets["chew_wet"] = math.random(0, 30) end
+    if math.random() <= 0.75 then targets["chew_wet"] = 0 else targets["chew_wet"] = math.random(0, 40) end
     if math.random() <= 0.75 then targets["chew_depth"] = 0.3 else targets["chew_depth"] = random_float(0.2, 0.5) end
-    if math.random() <= 0.75 then targets["chew_freq"] = 0.3 else targets["chew_freq"] = random_float(0.2, 0.5) end
-    if math.random() <= 0.75 then targets["chew_variance"] = 0.5 else targets["chew_variance"] = random_float(0.4, 0.8) end
+    if math.random() <= 0.75 then targets["chew_freq"] = 0.3 else targets["chew_freq"] = random_float(0.2, 0.7) end
+    if math.random() <= 0.75 then targets["chew_variance"] = 0.5 else targets["chew_variance"] = random_float(0.2, 0.8) end
+
+    -- LFO scale (global parameter)
+    if math.random() <= 0.5 then params:set("global_lfo_freq_scale", 1) else params:set("global_lfo_freq_scale", random_float(0.25, 3)) end
 
     -- VOICE-SPECIFIC PARAMETERS
     if i then
@@ -81,9 +83,8 @@ local function randomize_params(steps, i)
         if math.random() <= 0.5 then targets[i .. "subharmonics_2"] = 0 else targets[i .. "subharmonics_2"] = random_float(0, 0.4) end
         if math.random() <= 0.6 then targets[i .. "overtones_1"] = 0 else targets[i .. "overtones_1"] = random_float(0, 0.5) end
         if math.random() <= 0.5 then targets[i .. "overtones_2"] = 0 else targets[i .. "overtones_2"] = random_float(0, 0.5) end
-        if math.random() <= 0.5 then targets["eq_low_gain_" .. i] = 0 else targets["eq_low_gain_" .. i] = random_float(0, 0.4) end
+        if math.random() <= 0.6 then targets["eq_low_gain_" .. i] = 0 else targets["eq_low_gain_" .. i] = random_float(0, 0.4) end
         if math.random() <= 0.5 then targets["eq_high_gain_" .. i] = 0 else targets["eq_high_gain_" .. i] = random_float(0, 0.5) end
-        if math.random() <= 0.5 then targets[i .. "shimmer"] = 0 else targets[i .. "shimmer"] = math.random(0, 30) end
         if math.random() <= 0.8 then targets[i .. "pitch_random_plus"] = 0 else targets[i .. "pitch_random_plus"] = math.random(0, 100) end
         if math.random() <= 0.8 then targets[i .. "pitch_random_minus"] = 0 else targets[i .. "pitch_random_minus"] = math.random(0, 100) end  
         else 
@@ -96,9 +97,8 @@ local function randomize_params(steps, i)
         if math.random() <= 0.5 then targets[i .. "subharmonics_2"] = 0 else targets[i .. "subharmonics_2"] = random_float(0, 0.4) end
         if math.random() <= 0.6 then targets[i .. "overtones_1"] = 0 else targets[i .. "overtones_1"] = random_float(0, 0.5) end
         if math.random() <= 0.5 then targets[i .. "overtones_2"] = 0 else targets[i .. "overtones_2"] = random_float(0, 0.5) end
-        if math.random() <= 0.5 then targets["eq_low_gain_" .. i] = 0 else targets["eq_low_gain_" .. i] = random_float(0, 0.4) end
+        if math.random() <= 0.6 then targets["eq_low_gain_" .. i] = 0 else targets["eq_low_gain_" .. i] = random_float(0, 0.4) end
         if math.random() <= 0.5 then targets["eq_high_gain_" .. i] = 0 else targets["eq_high_gain_" .. i] = random_float(0, 0.5) end
-        if math.random() <= 0.5 then targets[i .. "shimmer"] = 0 else targets[i .. "shimmer"] = math.random(0, 30) end
         if math.random() <= 0.8 then targets[i .. "pitch_random_plus"] = 0 else targets[i .. "pitch_random_plus"] = math.random(0, 100) end
         if math.random() <= 0.8 then targets[i .. "pitch_random_minus"] = 0 else targets[i .. "pitch_random_minus"] = math.random(0, 100) end  
         end

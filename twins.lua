@@ -6,7 +6,7 @@
 --           by: @dddstudio                       
 --
 --                          
---                            v0.19
+--                           v0.20
 -- E1: Master Volume
 -- K1+E2/E3: Volume 1/2
 -- K1+E1: Crossfade Volumes
@@ -100,53 +100,20 @@ local function setup_params()
     params:add_separator("Actions")
     
     params:add_binary("randomize_params", "R a N d 0 m 1 z e", "trigger", 0) params:set_action("randomize_params", function() randpara.randomize_params(steps) end)
-    params:add_binary("randomize_lfos", "RaNd0m1ze LFOs", "trigger", 0) params:set_action("randomize_lfos", function() lfo.randomize_lfos() if randomize_metro[1] then randomize_metro[1]:stop() end if randomize_metro[2] then randomize_metro[2]:stop() end end)
-    params:add_binary("ClearLFOs", "Clear All LFOs", "trigger", 0) params:set_action("ClearLFOs", function() lfo.clearLFOs() end)
+    params:add_binary("randomize_lfos", "RaNd0m1ze LFOs", "trigger", 0) 
+    params:set_action("randomize_lfos", function() lfo.randomize_lfos("1") lfo.randomize_lfos("2") if randomize_metro[1] then randomize_metro[1]:stop() end if randomize_metro[2] then randomize_metro[2]:stop() end end)
+    params:add_binary("ClearLFOs", "Clear All LFOs", "trigger", 0) 
+    params:set_action("ClearLFOs", function() lfo.clearLFOs() end)
     
     params:add_separator("Settings")
 
-    params:add_group("Delay", 4)
-    delay.init()
-
-    params:add_group("Greyhole", 8)
-    params:add_control("greyhole_mix", "Mix", controlspec.new(0.0, 1.0, "lin", 0.01, 0.0, "")) params:set_action("greyhole_mix", function(value) engine.greyhole_mix(value) end)
-    params:add_control("time", "Time", controlspec.new(0.00, 10.00, "lin", 0.01, 3, "")) params:set_action("time", function(value) engine.greyhole_delay_time(value) end)
-    params:add_control("size", "Size", controlspec.new(0.5, 5.0, "lin", 0.01, 4.00, "")) params:set_action("size", function(value) engine.greyhole_size(value) end)
-    params:add_control("damp", "Damping", controlspec.new(0.0, 1.0, "lin", 0.01, 0.1, "")) params:set_action("damp", function(value) engine.greyhole_damp(value) end)
-    params:add_control("diff", "Diffusion", controlspec.new(0.0, 1.0, "lin", 0.01, 0.5, "")) params:set_action("diff", function(value) engine.greyhole_diff(value) end)
-    params:add_control("feedback", "Feedback", controlspec.new(0.00, 1.0, "lin", 0.01, 0.22, "")) params:set_action("feedback", function(value) engine.greyhole_feedback(value) end)
-    params:add_control("mod_depth", "Mod depth", controlspec.new(0.0, 1.0, "lin", 0.01, 0.85, "")) params:set_action("mod_depth", function(value) engine.greyhole_mod_depth(value) end)
-    params:add_control("mod_freq", "Mod freq", controlspec.new(0.0, 10.0, "lin", 0.01, 0.7, "Hz")) params:set_action("mod_freq", function(value) engine.greyhole_mod_freq(value) end)   
-    
-    params:add_group("Fverb2", 12)
-    params:add_taper("reverb_mix", "Mix", 0, 100, 0.0, 0, "%") params:set_action("reverb_mix", function(value) engine.reverb_mix(value / 100) end)
-    params:add_taper("reverb_predelay", "Predelay", 0, 250, 20, 0, "ms") params:set_action("reverb_predelay", function(value) engine.reverb_predelay(value) end)
-    params:add_taper("reverb_input_amount", "Input amount", 0, 100, 100, 0, "%") params:set_action("reverb_input_amount", function(value) engine.reverb_input_amount(value) end)
-    params:add_taper("reverb_lowpass_cutoff", "Lowpass cutoff", 0, 20000, 8000, 0, "Hz") params:set_action("reverb_lowpass_cutoff", function(value) engine.reverb_lowpass_cutoff(value) end)
-    params:add_taper("reverb_highpass_cutoff", "Highpass cutoff", 0, 20000, 75, 0, "Hz") params:set_action("reverb_highpass_cutoff", function(value) engine.reverb_highpass_cutoff(value) end)
-    params:add_taper("reverb_diffusion_1", "Diffusion 1", 0, 100, 85, 0, "%") params:set_action("reverb_diffusion_1", function(value) engine.reverb_diffusion_1(value) end)
-    params:add_taper("reverb_diffusion_2", "Diffusion 2", 0, 100, 85, 0, "%") params:set_action("reverb_diffusion_2", function(value) engine.reverb_diffusion_2(value) end)
-    params:add_taper("reverb_tail_density", "Tail density", 0, 100, 75, 0, "%") params:set_action("reverb_tail_density", function(value) engine.reverb_tail_density(value) end)
-    params:add_taper("reverb_decay", "Decay", 0, 100, 80, 0, "%") params:set_action("reverb_decay", function(value) engine.reverb_decay(value) end)
-    params:add_taper("reverb_damping", "Damping", 0, 20000, 6000, 0, "Hz") params:set_action("reverb_damping", function(value) engine.reverb_damping(value) end)
-    params:add_taper("reverb_modulator_frequency", "Modulator frequency", 0, 10, 1, 0, "Hz") params:set_action("reverb_modulator_frequency", function(value) engine.reverb_modulator_frequency(value) end)
-    params:add_taper("reverb_modulator_depth", "Modulator depth", 0, 100, 40, 0, "%") params:set_action("reverb_modulator_depth", function(value) engine.reverb_modulator_depth(value / 100) end)
-    
-    params:add_group("Granular", 14)
+    params:add_group("Grains", 24)
     for i = 1, 2 do
+      params:add_separator("Sample " ..i)
       params:add_control(i .. "granular_gain", i .. " Mix", controlspec.new(0, 100, "lin", 1, 100, "%")) params:set_action(i .. "granular_gain", function(value) engine.granular_gain(i, value / 100) end)
       params:add_control(i .. "size_variation", i .. " Size Variation", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i .. "size_variation", function(value) engine.size_variation(i, value / 100) end)
       params:add_control(i .. "pitch_random_plus", i .. " Pitch Variation +", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i .. "pitch_random_plus", function(value) engine.pitch_random_plus(i, value / 100) end)
       params:add_control(i .. "pitch_random_minus", i .. " Pitch Variation -", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i .. "pitch_random_minus", function(value) engine.pitch_random_minus(i, value / 100) end)
-      params:add_option(i .. "pitch_mode", i .. " Pitch Mode", {"match speed", "independent"}, 2) params:set_action(i .. "pitch_mode", function(value) engine.pitch_mode(i, value - 1) end)
-      params:add_control(i .. "density_mod_amt", i .. " Density Mod", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i .. "density_mod_amt", function(value) engine.density_mod_amt(i, value / 100) end)
-      params:add_control(i .. "direction_mod", i .. " Reverse", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i .. "direction_mod", function(value) engine.direction_mod(i, value / 100) end)
-    end
-    
-    params:add_group("Shimmer+", 10)
-    for i = 1, 2 do
-      params:add_control(i .. "shimmer", i .. " Shimmer", controlspec.new(0, 100, "lin", 1, 0, "%"))
-      params:set_action(i.. "shimmer", function(value) engine.shimmer(i, value/50) end)
       params:add_control(i .. "subharmonics_2", i .. " Subharmonics -2oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0))
       params:set_action(i .. "subharmonics_2", function(value) engine.subharmonics_2(i, value) end)
       params:add_control(i .. "subharmonics_1", i .. " Subharmonics -1oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0))
@@ -155,17 +122,49 @@ local function setup_params()
       params:set_action(i .. "overtones_1", function(value) engine.overtones_1(i, value) end)
       params:add_control(i .. "overtones_2", i .. " Overtones +2oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0))
       params:set_action(i .. "overtones_2", function(value) engine.overtones_2(i, value) end)
+      params:add_option(i .. "pitch_mode", i .. " Pitch Mode", {"match speed", "independent"}, 2) params:set_action(i .. "pitch_mode", function(value) engine.pitch_mode(i, value - 1) end)
+      params:add_control(i .. "density_mod_amt", i .. " Density Mod", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i .. "density_mod_amt", function(value) engine.density_mod_amt(i, value / 100) end)
+      params:add_control(i .. "direction_mod", i .. " Reverse", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i .. "direction_mod", function(value) engine.direction_mod(i, value / 100) end)
     end
 
-    params:add_group("Filters", 8)
-    params:add_control("1cutoff","1 LPF cutoff",controlspec.new(20,20000,"exp",0,20000,"Hz")) params:set_action("1cutoff",function(value) engine.cutoff(1,value) end)
-    params:add_control("1q","1 LPF resonance",controlspec.new(0,4,"lin",0.01,0)) params:set_action("1q",function(value) engine.q(1,value) end)
-    params:add_control("2cutoff","2 LPF cutoff",controlspec.new(20,20000,"exp",0,20000,"Hz")) params:set_action("2cutoff",function(value) engine.cutoff(2,value) end)
-    params:add_control("2q","2 LPF resonance",controlspec.new(0,4,"lin",0.01,0)) params:set_action("2q",function(value) engine.q(2,value) end)
-    params:add_control("1hpf", "1 HPF cutoff", controlspec.new(20, 20000, "exp", 0, 20, "Hz")) params:set_action("1hpf", function(value) engine.hpf(1, value) end)
-    params:add_control("1hpfrq","1 HPF resonance",controlspec.new(0,1,"lin",0.01,1)) params:set_action("1hpfrq",function(value) engine.hpfrq(1,value) end)
-    params:add_control("2hpf", "2 HPF cutoff", controlspec.new(20, 20000, "exp", 0, 20, "Hz")) params:set_action("2hpf", function(value) engine.hpf(2, value) end)
-    params:add_control("2hpfrq","2 HPF resonance",controlspec.new(0,1,"lin",0.01,1)) params:set_action("2hpfrq",function(value) engine.hpfrq(2,value) end)
+    params:add_group("Delay", 4)
+    delay.init()
+
+    params:add_group("Reverbs", 22)
+    params:add_separator("Fverb2")
+    params:add_taper("reverb_mix", "Mix", 0, 100, 0.0, 0, "%") params:set_action("reverb_mix", function(value) engine.reverb_mix(value / 100) end)
+    params:add_taper("reverb_predelay", "Predelay", 0, 250, 20, 0, "ms") params:set_action("reverb_predelay", function(value) engine.reverb_predelay(value) end)
+    params:add_taper("reverb_input_amount", "Input Amount", 0, 100, 100, 0, "%") params:set_action("reverb_input_amount", function(value) engine.reverb_input_amount(value) end)
+    params:add_taper("reverb_lowpass_cutoff", "Lowpass", 0, 20000, 8000, 0, "Hz") params:set_action("reverb_lowpass_cutoff", function(value) engine.reverb_lowpass_cutoff(value) end)
+    params:add_taper("reverb_highpass_cutoff", "Highpass", 0, 20000, 75, 0, "Hz") params:set_action("reverb_highpass_cutoff", function(value) engine.reverb_highpass_cutoff(value) end)
+    params:add_taper("reverb_diffusion_1", "Diffusion 1", 0, 100, 85, 0, "%") params:set_action("reverb_diffusion_1", function(value) engine.reverb_diffusion_1(value) end)
+    params:add_taper("reverb_diffusion_2", "Diffusion 2", 0, 100, 85, 0, "%") params:set_action("reverb_diffusion_2", function(value) engine.reverb_diffusion_2(value) end)
+    params:add_taper("reverb_tail_density", "Tail Density", 0, 100, 75, 0, "%") params:set_action("reverb_tail_density", function(value) engine.reverb_tail_density(value) end)
+    params:add_taper("reverb_decay", "Decay", 0, 100, 80, 0, "%") params:set_action("reverb_decay", function(value) engine.reverb_decay(value) end)
+    params:add_taper("reverb_damping", "Damping", 0, 20000, 6000, 0, "Hz") params:set_action("reverb_damping", function(value) engine.reverb_damping(value) end)
+    params:add_taper("reverb_modulator_depth", "Mod Depth", 0, 100, 40, 0, "%") params:set_action("reverb_modulator_depth", function(value) engine.reverb_modulator_depth(value / 100) end)
+    params:add_taper("reverb_modulator_frequency", "Mod Freq", 0, 10, 1, 0, "Hz") params:set_action("reverb_modulator_frequency", function(value) engine.reverb_modulator_frequency(value) end)
+    params:add_separator("Greyhole")
+    params:add_control("greyhole_mix", "Mix", controlspec.new(0.0, 1.0, "lin", 0.01, 0.0, "")) params:set_action("greyhole_mix", function(value) engine.greyhole_mix(value) end)
+    params:add_control("time", "Time", controlspec.new(0.00, 10.00, "lin", 0.01, 3, "")) params:set_action("time", function(value) engine.greyhole_delay_time(value) end)
+    params:add_control("size", "Size", controlspec.new(0.5, 5.0, "lin", 0.01, 4.00, "")) params:set_action("size", function(value) engine.greyhole_size(value) end)
+    params:add_control("damp", "Damping", controlspec.new(0.0, 1.0, "lin", 0.01, 0.1, "")) params:set_action("damp", function(value) engine.greyhole_damp(value) end)
+    params:add_control("diff", "Diffusion", controlspec.new(0.0, 1.0, "lin", 0.01, 0.5, "")) params:set_action("diff", function(value) engine.greyhole_diff(value) end)
+    params:add_control("feedback", "Feedback", controlspec.new(0.00, 1.0, "lin", 0.01, 0.22, "")) params:set_action("feedback", function(value) engine.greyhole_feedback(value) end)
+    params:add_control("mod_depth", "Mod Depth", controlspec.new(0.0, 1.0, "lin", 0.01, 0.85, "")) params:set_action("mod_depth", function(value) engine.greyhole_mod_depth(value) end)
+    params:add_control("mod_freq", "Mod Freq", controlspec.new(0.0, 10.0, "lin", 0.01, 0.7, "Hz")) params:set_action("mod_freq", function(value) engine.greyhole_mod_freq(value) end)   
+
+    params:add_group("Filters", 10)
+    params:add_separator("LPF")
+    params:add_control("1cutoff","1 Cutoff",controlspec.new(20,20000,"exp",0,20000,"Hz")) params:set_action("1cutoff",function(value) engine.cutoff(1,value) end)
+    params:add_control("1q","1 Resonance",controlspec.new(0,4,"lin",0.01,0)) params:set_action("1q",function(value) engine.q(1,value) end)
+    params:add_control("2cutoff","2 Cutoff",controlspec.new(20,20000,"exp",0,20000,"Hz")) params:set_action("2cutoff",function(value) engine.cutoff(2,value) end)
+    params:add_control("2q","2 Resonance",controlspec.new(0,4,"lin",0.01,0)) params:set_action("2q",function(value) engine.q(2,value) end)
+    params:add_separator("HPF")
+    params:add_control("1hpf", "1 Cutoff", controlspec.new(20, 20000, "exp", 0, 20, "Hz")) params:set_action("1hpf", function(value) engine.hpf(1, value) end)
+    params:add_control("1hpfrq","1 Resonance",controlspec.new(0,1,"lin",0.01,1)) params:set_action("1hpfrq",function(value) engine.hpfrq(1,value) end)
+    params:add_control("2hpf", "2 Cutoff", controlspec.new(20, 20000, "exp", 0, 20, "Hz")) params:set_action("2hpf", function(value) engine.hpf(2, value) end)
+    params:add_control("2hpfrq","2 Resonance",controlspec.new(0,1,"lin",0.01,1)) params:set_action("2hpfrq",function(value) engine.hpfrq(2,value) end)
     
     params:add_group("Tape", 6)
     params:add_control("sine_wet", "Drive Mix", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("sine_wet", function(value) engine.sine_wet(1, value / 100) engine.sine_wet(2, value / 100) end)
@@ -187,7 +186,13 @@ local function setup_params()
 
     params:add_group("LFOs", 113)
     params:add_control("global_lfo_freq_scale", "Freq Scale", controlspec.new(0.1, 10, "exp", 0.01, 1.0, "x")) 
-    params:set_action("global_lfo_freq_scale", function(value) for i = 1, 16 do lfo[i].freq = lfo[i].base_freq * value end end)
+    params:set_action("global_lfo_freq_scale", function(value) 
+  for i = 1, 16 do 
+    lfo[i].base_freq = params:get(i .. "lfo_freq")  -- Store the base frequency
+    lfo[i].freq = lfo[i].base_freq * value  -- Apply scaling
+    -- Phase remains unchanged!
+  end 
+end)
     lfo.init()
 
     for i = 1, 2 do
@@ -221,10 +226,10 @@ local function setup_params()
     params:add_taper("max_density", "density (max)", 1, 30, 16, 5, "Hz")
     params:add_taper("min_spread", "spread (min)", 0, 100, 0, 0, "%")
     params:add_taper("max_spread", "spread (max)", 0, 100, 90, 0, "%")
-    params:add_control("min_pitch", "pitch (min)", controlspec.new(-48, 48, "lin", 1, -48, "st"))
-    params:add_control("max_pitch", "pitch (max)", controlspec.new(-48, 48, "lin", 1, 48, "st"))
+    params:add_control("min_pitch", "pitch (min)", controlspec.new(-48, 48, "lin", 1, -36, "st"))
+    params:add_control("max_pitch", "pitch (max)", controlspec.new(-48, 48, "lin", 1, 36, "st"))
 
-    params:add_group("Locking", 12)
+    params:add_group("Locking", 14)
     for i = 1, 2 do
       params:add_option(i .. "lock_jitter", i .. " lock jitter", {"off", "on"}, 1)
       params:add_option(i .. "lock_size", i .. " lock size", {"off", "on"}, 1)
@@ -232,6 +237,7 @@ local function setup_params()
       params:add_option(i .. "lock_spread", i .. " lock spread", {"off", "on"}, 1)
       params:add_option(i .. "lock_pitch", i .. " lock pitch", {"off", "on"}, 1)
       params:add_option(i .. "lock_pan", i .. " lock pan", {"off", "on"}, 1)
+      params:add_option(i .. "lock_seek", i .. " lock seek", {"off", "on"}, 1) -- Add this line
     end
     
     params:add_control("steps","Transition steps",controlspec.new(10,2000,"lin",1,400)) params:set_action("steps", function(value) steps = value end)
@@ -252,13 +258,14 @@ local function randomize(n)
     active_controlled_params = {}
 
     local targets = {}
-    local locks = {
-        jitter = params:get(n .. "lock_jitter") == 1,
-        size = params:get(n .. "lock_size") == 1,
-        density = params:get(n .. "lock_density") == 1,
-        spread = params:get(n .. "lock_spread") == 1,
-        pitch = params:get(n .. "lock_pitch") == 1
-    }
+local locks = {
+    jitter = params:get(n .. "lock_jitter") == 1,
+    size = params:get(n .. "lock_size") == 1,
+    density = params:get(n .. "lock_density") == 1,
+    spread = params:get(n .. "lock_spread") == 1,
+    pitch = params:get(n .. "lock_pitch") == 1,
+    seek = params:get(n .. "lock_seek") == 1 -- Add this line
+}
 
     -- Randomize non-pitch parameters
     if locks.jitter and not active_controlled_params[n .. "jitter"] then 
@@ -301,6 +308,7 @@ local function randomize(n)
             end
         end
     end
+    
 
 -- Randomize pitch parameter
 if locks.pitch and not active_controlled_params[n .. "pitch"] then
@@ -553,10 +561,12 @@ function key(n, z)
         if key1_pressed and key2_pressed then
             randomize(1)
             randpara.randomize_params(steps, 1)
+            lfo.randomize_lfos("1")  -- Only randomize track 1 LFOs
             return
         elseif key1_pressed and key3_pressed then
             randomize(2)
             randpara.randomize_params(steps, 2)
+            lfo.randomize_lfos("2")  -- Only randomize track 2 LFOs
             return
         end
     end
@@ -588,40 +598,40 @@ function key(n, z)
         end
     end
 
-    -- Handle single press of key2 + key3 to toggle lock state of the active row
-    if key2_pressed and key3_pressed then
-        if current_mode == "lpf" or current_mode == "hpf" then
-            -- Toggle between LPF and HPF modes
-            if current_filter_mode == "lpf" then
-                current_filter_mode = "hpf"
+-- Handle single press of key2 + key3 to toggle lock state of the active row
+if key2_pressed and key3_pressed then
+    if current_mode == "lpf" or current_mode == "hpf" then
+        -- Toggle between LPF and HPF modes
+        if current_filter_mode == "lpf" then
+            current_filter_mode = "hpf"
+        else
+            current_filter_mode = "lpf"
+        end
+        redraw()
+    else
+        -- Only toggle lock state for parameters that have lock parameters
+        local lockable_params = {"jitter", "size", "density", "spread", "pitch", "pan", "seek"} -- Add "seek" to this list
+        local param_name = string.match(current_mode, "%a+") -- Extract the parameter name (e.g., "jitter" from "jitter:")
+
+        if param_name and table.find(lockable_params, param_name) then
+            -- Check if only one parameter is locked
+            local is_locked1 = params:get("1lock_" .. param_name) == 2
+            local is_locked2 = params:get("2lock_" .. param_name) == 2
+
+            if is_locked1 ~= is_locked2 then
+                -- If only one parameter is locked, unlock both
+                params:set("1lock_" .. param_name, 1)
+                params:set("2lock_" .. param_name, 1)
             else
-                current_filter_mode = "lpf"
+                -- If both are locked or both are unlocked, toggle both
+                local new_state = is_locked1 and 1 or 2
+                params:set("1lock_" .. param_name, new_state)
+                params:set("2lock_" .. param_name, new_state)
             end
             redraw()
-        else
-            -- Only toggle lock state for parameters that have lock parameters
-            local lockable_params = {"jitter", "size", "density", "spread", "pitch", "pan"}
-            local param_name = string.match(current_mode, "%a+") -- Extract the parameter name (e.g., "jitter" from "jitter:")
-
-            if param_name and table.find(lockable_params, param_name) then
-                -- Check if only one parameter is locked
-                local is_locked1 = params:get("1lock_" .. param_name) == 2
-                local is_locked2 = params:get("2lock_" .. param_name) == 2
-
-                if is_locked1 ~= is_locked2 then
-                    -- If only one parameter is locked, unlock both
-                    params:set("1lock_" .. param_name, 1)
-                    params:set("2lock_" .. param_name, 1)
-                else
-                    -- If both are locked or both are unlocked, toggle both
-                    local new_state = is_locked1 and 1 or 2
-                    params:set("1lock_" .. param_name, new_state)
-                    params:set("2lock_" .. param_name, new_state)
-                end
-                redraw()
-            end
         end
     end
+end
 
     -- Handle double press of key2 or key3 while holding key1 to stop randomization
     if key1_pressed then
@@ -943,6 +953,19 @@ end
             draw_l_shape(92, 60, is_locked2)  -- Draw L-shape for track 2 pan
         end
     end
+
+-- Draw L-shape for locked seek parameters in the bottom row
+if current_mode == "seek" then
+    local is_locked1 = is_param_locked(1, "seek")
+    local is_locked2 = is_param_locked(2, "seek")
+
+    if is_locked1 then
+        draw_l_shape(51, 60, is_locked1)  -- Draw L-shape for track 1 seek
+    end
+    if is_locked2 then
+        draw_l_shape(92, 60, is_locked2)  -- Draw L-shape for track 2 seek
+    end
+end
 
     screen.level(3)
 

@@ -63,7 +63,7 @@ params:add{
   
 params:add{
   id = "delay_rate",
-  name = "Rate",
+  name = "Time",
   type = "control",
   controlspec = controlspec.new(0.15, 4, 'exp', 0, 0.5, "s"),
   formatter = function(param)

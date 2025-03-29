@@ -10,7 +10,7 @@ local assigned_params = {}
 
 local function is_locked(target)
   local track, param = string.match(target, "(%d)(%a+)")
-  local lockable_params = { "jitter", "size", "density", "spread", "pitch", "pan" }
+  local lockable_params = { "jitter", "size", "density", "spread", "pitch", "pan", "seek" }
   
   if table.find(lockable_params, param) then
     return params:get(track .. "lock_" .. param) == 2
@@ -23,11 +23,13 @@ for i = 1, number_of_outputs do
   lfo[i] = { 
     freq = 0.05, 
     base_freq = 0.05, 
-    counter = 1, 
+    phase = 0,  -- Track phase separately (0 to 1)
     waveform = options.lfotypes[1], 
     slope = 0, 
     depth = 50, 
-    offset = 0 
+    offset = 0,
+    prev = 0,  -- Initialize prev for random waveform
+    prev_polarity = 1  -- Initialize for sample & hold
   }
 end
 
@@ -68,8 +70,7 @@ function lfo.clearLFOs()
     for i = 1, 16 do
         local target_index = params:get(i .. "lfo_target")
         local target_param = lfo.lfo_targets[target_index]
-        
-        if not is_locked(target_param) then
+         if not is_locked(target_param) then
             if params:get(i .. "lfo") == 2 then 
                 params:set(i .. "lfo", 1) 
             end
@@ -89,22 +90,22 @@ end
 lfo.lfo_targets = {
   "none", "1pan", "2pan", "1seek", "2seek", "1jitter", "2jitter", 
   "1spread", "2spread", "1size", "2size", "1density", "2density", "1volume", "2volume", 
-  "1pitch", "2pitch", "1cutoff", "2cutoff"
+  "1pitch", "2pitch", "1cutoff", "2cutoff", "1hpf", "2hpf"
 }
 
 lfo.target_ranges = {
   ["1pan"] = { depth = { 25, 80 }, offset = { 0, 0 }, frequency = { 0.05, 0.6 }, waveform = { "sine" }, chance = 0.8 },
   ["2pan"] = { depth = { 25, 80 }, offset = { 0, 0 }, frequency = { 0.05, 0.6 }, waveform = { "sine" }, chance = 0.8 },
-  ["1jitter"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.6 },
-  ["2jitter"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.6 },
-  ["1spread"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.6 },
-  ["2spread"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.6},
-  ["1size"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.6 },
-  ["2size"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.6 },
-  ["1density"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.6 },
-  ["2density"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.6 },
-  ["1seek"] = { depth = { 100, 100 }, offset = { 0, 0 }, frequency = { 0.1, 0.6 }, waveform = { "random" }, chance = 0.3 },
-  ["2seek"] = { depth = { 100, 100 }, offset = { 0, 0 }, frequency = { 0.1, 0.6 }, waveform = { "random" }, chance = 0.3 }
+  ["1jitter"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
+  ["2jitter"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
+  ["1spread"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
+  ["2spread"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5},
+  ["1size"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
+  ["2size"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
+  ["1density"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
+  ["2density"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
+  ["1seek"] = { depth = { 100, 100 }, offset = { 0, 0 }, frequency = { 0.1, 0.4 }, waveform = { "random" }, chance = 0.3 },
+  ["2seek"] = { depth = { 100, 100 }, offset = { 0, 0 }, frequency = { 0.1, 0.4 }, waveform = { "random" }, chance = 0.3 }
 }
 
 function lfo.get_parameter_range(param_name)
@@ -117,7 +118,8 @@ function lfo.get_parameter_range(param_name)
     ["1density"] = { 0, 16 }, ["2density"] = { 0, 16 },
     ["1volume"] = { -100, 100 }, ["2volume"] = { -100, 100 },
     ["1pitch"] = { -12, 12 }, ["2pitch"] = { -12, 12 },
-    ["1cutoff"] = { 20, 20000 }, ["2cutoff"] = { 20, 20000 }
+    ["1cutoff"] = { 20, 20000 }, ["2cutoff"] = { 20, 20000 },
+    ["1hpf"] = { 20, 20000 }, ["2hpf"] = { 20, 20000 }
   }
   return param_ranges[param_name][1], param_ranges[param_name][2]
 end
@@ -186,54 +188,47 @@ function randomize_lfo(i, target)
     assigned_params[target] = true
 end
 
-function lfo.randomize_lfos()
+function lfo.randomize_lfos(track)
+    -- Only clear LFOs that target the specified track
     for i = 1, number_of_outputs do
         local target_index = params:get(i .. "lfo_target")
         local target_param = lfo.lfo_targets[target_index]
-
-        if not is_locked(target_param) then
+        
+        -- Only clear if it targets our track and isn't locked
+        if target_param and string.match(target_param, "^"..track) and not is_locked(target_param) then
             params:set(i .. "lfo", 1)
             params:set(i .. "lfo_target", 1)
             assigned_params[target_param] = nil
         end
     end
 
+    -- Get available targets only for our track
     local available_targets = {}
     for target, ranges in pairs(lfo.target_ranges) do
-        if not is_locked(target) and math.random() < ranges.chance then
+        if string.match(target, "^"..track) and not is_locked(target) and math.random() < ranges.chance then
             table.insert(available_targets, target)
         end
     end
 
+    -- Find free slots that aren't currently affecting the other track
     local free_slots = {}
     for j = 1, 16 do
         local target_index = params:get(j .. "lfo_target")
         local target_param = lfo.lfo_targets[target_index]
         
-        if not is_locked(target_param) then
+        -- Slot is free if it's not targeting the other track and not locked
+        local other_track = track == "1" and "2" or "1"
+        if (not target_param or not string.match(target_param, "^"..other_track)) and 
+           not is_locked(target_param) then
             table.insert(free_slots, j)
         end
     end
 
+    -- Assign new LFOs only to our track
     for _, target in ipairs(available_targets) do
         if #free_slots > 0 then
             local slot_index = table.remove(free_slots, 1)
-
-            local is_already_assigned = false
-            for j = 1, 16 do
-                if j ~= slot_index then
-                    local target_index = params:get(j .. "lfo_target")
-                    local target_param = lfo.lfo_targets[target_index]
-                    if target_param == target and params:get(j .. "lfo") == 2 then
-                        is_already_assigned = true
-                        break
-                    end
-                end
-            end
-
-            if not is_already_assigned then
-                randomize_lfo(slot_index, target)
-            end
+            randomize_lfo(slot_index, target)
         end
     end
 end
@@ -241,24 +236,34 @@ end
 function lfo.process()
   for i = 1, 16 do
     if params:get(i .. "lfo") == 2 then
-      local target = params:get(i .. "lfo_target")
+
+      -- Update phase (wrapping at 1.0)
+      lfo[i].phase = (lfo[i].phase + lfo[i].freq * (1/30)) % 1.0  -- 1/30 assumes 30Hz metro
+      
       local slope
       if lfo[i].waveform == "sine" then
-        slope = make_sine(i)
+        slope = math.sin(lfo[i].phase * math.pi * 2)  -- 0-1 phase to 0-2π radians
       elseif lfo[i].waveform == "square" then
-        slope = make_square(i)
-      elseif lfo[i].waveform == "random" then
-        slope = make_sh(i)
-      end
+        slope = lfo[i].phase < 0.5 and 1 or -1
+ elseif lfo[i].waveform == "random" then
+  local phase_increment = lfo[i].freq * (1/30)
+  if (lfo[i].phase - phase_increment) % 1.0 > lfo[i].phase then
+    -- Only change value when phase wraps around
+    lfo[i].prev = math.random() * (math.random(0, 1) == 0 and 1 or -1)
+  end
+  -- Ensure we have a valid value (initialize if nil)
+  lfo[i].prev = lfo[i].prev or 0
+  slope = lfo[i].prev
+end
+      
       lfo[i].slope = math.max(-1.0, math.min(1.0, slope)) * (lfo[i].depth * 0.01) + lfo[i].offset
-
+      
+      local target = params:get(i .. "lfo_target")
       local min_param_value, max_param_value = lfo.get_parameter_range(lfo.lfo_targets[target])
       local modulated_value = lfo.scale(lfo[i].slope, -1.0, 1.0, min_param_value, max_param_value)
       modulated_value = math.max(min_param_value, math.min(max_param_value, modulated_value))
-
+      
       params:set(lfo.lfo_targets[target], modulated_value)
-
-      lfo[i].counter = lfo[i].counter + lfo[i].freq
     end
   end
 end
