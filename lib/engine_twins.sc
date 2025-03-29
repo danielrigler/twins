@@ -104,7 +104,7 @@ Engine_twins : CroneEngine {
             var trig_rnd = LFNoise1.kr(density);
             var grain_size;
             var low, high;
-            var positive_intervals = [0, 0, 0, 3, 5, 7, 12], negative_intervals = [0, 0, 0, -3, -5, -7, -12];
+            var positive_intervals = [12, 24], negative_intervals = [-12, -24];
             var rand_val, do_plus, interval_plus, do_minus, interval_minus, final_interval;
             
             density_mod = density * (2**(trig_rnd * density_mod_amt));
