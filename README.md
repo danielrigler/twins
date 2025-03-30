@@ -34,7 +34,7 @@ _some features might require a pi4 based unit._
 ### Discussion
 **[FORUM](https://llllllll.co/t/twins/71052)**
 ### Download
-**v0.19**
+**v0.20**
 install from Maiden:
 ```
 ;install https://github.com/danielrigler/twins
@@ -42,7 +42,8 @@ install from Maiden:
 And after this do not forget to restart.
 
 ### Version history
-* **v0.19** - Added grain pitch variance.
+* **v0.20** - Added a deeper subharmonic, LFO tweaks.
+* **v0.19** - Added grain octave variance.
 * **v0.18** - Tap tempo for delay, engine tweaks. 
 * **v0.17** - GUI changes. Lots of LFO, randomization and locking tweaks. Removed bitcrusher. 
 * **v0.16** - Added Shimmer and EQ. LFO tweaks. 
