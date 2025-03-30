@@ -98,34 +98,14 @@ local function setup_params()
     end 
 
     params:add_separator("Actions")
-    
-    params:add_binary("randomize_params", "R a N d 0 m 1 z e", "trigger", 0) params:set_action("randomize_params", function() randpara.randomize_params(steps) end)
+    params:add_binary("randomize_params", "R a N d 0 m 1 z e", "trigger", 0) 
+    params:set_action("randomize_params", function() randpara.randomize_params(steps) end)
     params:add_binary("randomize_lfos", "RaNd0m1ze LFOs", "trigger", 0) 
     params:set_action("randomize_lfos", function() lfo.randomize_lfos("1") lfo.randomize_lfos("2") if randomize_metro[1] then randomize_metro[1]:stop() end if randomize_metro[2] then randomize_metro[2]:stop() end end)
     params:add_binary("ClearLFOs", "Clear All LFOs", "trigger", 0) 
     params:set_action("ClearLFOs", function() lfo.clearLFOs() end)
     
     params:add_separator("Settings")
-
-    params:add_group("Grains", 24)
-    for i = 1, 2 do
-      params:add_separator("Sample " ..i)
-      params:add_control(i .. "granular_gain", i .. " Mix", controlspec.new(0, 100, "lin", 1, 100, "%")) params:set_action(i .. "granular_gain", function(value) engine.granular_gain(i, value / 100) end)
-      params:add_control(i .. "size_variation", i .. " Size Variation", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i .. "size_variation", function(value) engine.size_variation(i, value / 100) end)
-      params:add_control(i .. "pitch_random_plus", i .. " Pitch Variation +", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i .. "pitch_random_plus", function(value) engine.pitch_random_plus(i, value / 100) end)
-      params:add_control(i .. "pitch_random_minus", i .. " Pitch Variation -", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i .. "pitch_random_minus", function(value) engine.pitch_random_minus(i, value / 100) end)
-      params:add_control(i .. "subharmonics_2", i .. " Subharmonics -2oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0))
-      params:set_action(i .. "subharmonics_2", function(value) engine.subharmonics_2(i, value) end)
-      params:add_control(i .. "subharmonics_1", i .. " Subharmonics -1oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0))
-      params:set_action(i .. "subharmonics_1", function(value) engine.subharmonics_1(i, value) end)
-      params:add_control(i .. "overtones_1", i .. " Overtones +1oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0))
-      params:set_action(i .. "overtones_1", function(value) engine.overtones_1(i, value) end)
-      params:add_control(i .. "overtones_2", i .. " Overtones +2oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0))
-      params:set_action(i .. "overtones_2", function(value) engine.overtones_2(i, value) end)
-      params:add_option(i .. "pitch_mode", i .. " Pitch Mode", {"match speed", "independent"}, 2) params:set_action(i .. "pitch_mode", function(value) engine.pitch_mode(i, value - 1) end)
-      params:add_control(i .. "density_mod_amt", i .. " Density Mod", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i .. "density_mod_amt", function(value) engine.density_mod_amt(i, value / 100) end)
-      params:add_control(i .. "direction_mod", i .. " Reverse", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i .. "direction_mod", function(value) engine.direction_mod(i, value / 100) end)
-    end
 
     params:add_group("Delay", 4)
     delay.init()
@@ -153,6 +133,28 @@ local function setup_params()
     params:add_control("feedback", "Feedback", controlspec.new(0.00, 1.0, "lin", 0.01, 0.22, "")) params:set_action("feedback", function(value) engine.greyhole_feedback(value) end)
     params:add_control("mod_depth", "Mod Depth", controlspec.new(0.0, 1.0, "lin", 0.01, 0.85, "")) params:set_action("mod_depth", function(value) engine.greyhole_mod_depth(value) end)
     params:add_control("mod_freq", "Mod Freq", controlspec.new(0.0, 10.0, "lin", 0.01, 0.7, "Hz")) params:set_action("mod_freq", function(value) engine.greyhole_mod_freq(value) end)   
+
+    params:add_group("Grains", 26)
+    for i = 1, 2 do
+      params:add_separator("Sample " ..i)
+      params:add_control(i .. "granular_gain", i .. " Mix", controlspec.new(0, 100, "lin", 1, 100, "%")) params:set_action(i .. "granular_gain", function(value) engine.granular_gain(i, value / 100) end)
+      params:add_control(i .. "size_variation", i .. " Size Variation", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i .. "size_variation", function(value) engine.size_variation(i, value / 100) end)
+      params:add_control(i .. "pitch_random_plus", i .. " Octave Variation +", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i .. "pitch_random_plus", function(value) engine.pitch_random_plus(i, value / 100) end)
+      params:add_control(i .. "pitch_random_minus", i .. " Octave Variation -", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i .. "pitch_random_minus", function(value) engine.pitch_random_minus(i, value / 100) end)
+      params:add_control(i .. "subharmonics_3", i .. " Subharmonics -3oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0))
+      params:set_action(i .. "subharmonics_3", function(value) engine.subharmonics_3(i, value) end)
+      params:add_control(i .. "subharmonics_2", i .. " Subharmonics -2oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0))
+      params:set_action(i .. "subharmonics_2", function(value) engine.subharmonics_2(i, value) end)
+      params:add_control(i .. "subharmonics_1", i .. " Subharmonics -1oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0))
+      params:set_action(i .. "subharmonics_1", function(value) engine.subharmonics_1(i, value) end)
+      params:add_control(i .. "overtones_1", i .. " Overtones +1oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0))
+      params:set_action(i .. "overtones_1", function(value) engine.overtones_1(i, value) end)
+      params:add_control(i .. "overtones_2", i .. " Overtones +2oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0))
+      params:set_action(i .. "overtones_2", function(value) engine.overtones_2(i, value) end)
+      params:add_option(i .. "pitch_mode", i .. " Pitch Mode", {"match speed", "independent"}, 2) params:set_action(i .. "pitch_mode", function(value) engine.pitch_mode(i, value - 1) end)
+      params:add_control(i .. "density_mod_amt", i .. " Density Mod", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i .. "density_mod_amt", function(value) engine.density_mod_amt(i, value / 100) end)
+      params:add_control(i .. "direction_mod", i .. " Reverse", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i .. "direction_mod", function(value) engine.direction_mod(i, value / 100) end)
+    end
 
     params:add_group("Filters", 10)
     params:add_separator("LPF")
@@ -184,7 +186,8 @@ local function setup_params()
     params:add_control("eq_high_gain_2", "2 Treble", controlspec.new(-1, 1, "lin", 0.01, 0, ""))
     params:set_action("eq_high_gain_2", function(value) engine.eq_high_gain(2, value*35) end)
 
-    params:add_group("LFOs", 113)
+    params:add_group("LFOs", 114)
+    params:add_option("allow_volume_lfos", "Allow Volume LFOs", {"no", "yes"}, 2)
     params:add_control("global_lfo_freq_scale", "Freq Scale", controlspec.new(0.1, 10, "exp", 0.01, 1.0, "x")) 
     params:set_action("global_lfo_freq_scale", function(value) 
   for i = 1, 16 do 
@@ -226,8 +229,8 @@ end)
     params:add_taper("max_density", "density (max)", 1, 30, 16, 5, "Hz")
     params:add_taper("min_spread", "spread (min)", 0, 100, 0, 0, "%")
     params:add_taper("max_spread", "spread (max)", 0, 100, 90, 0, "%")
-    params:add_control("min_pitch", "pitch (min)", controlspec.new(-48, 48, "lin", 1, -36, "st"))
-    params:add_control("max_pitch", "pitch (max)", controlspec.new(-48, 48, "lin", 1, 36, "st"))
+    params:add_control("min_pitch", "pitch (min)", controlspec.new(-48, 48, "lin", 1, -31, "st"))
+    params:add_control("max_pitch", "pitch (max)", controlspec.new(-48, 48, "lin", 1, 31, "st"))
 
     params:add_group("Locking", 14)
     for i = 1, 2 do
@@ -428,18 +431,59 @@ function enc(n, d)
 
     local enc_actions = {
         [1] = function()
+            local is_active1, lfo_index1 = is_lfo_active_for_param("1volume")
+            local is_active2, lfo_index2 = is_lfo_active_for_param("2volume")
+            
             if key1_pressed then
-                -- Adjust volumes in opposite directions
-                params:delta("1volume", 3*d)    
-                params:delta("2volume", -3*d)    
+                -- Crossfade mode - special handling
+                if is_active1 or is_active2 then
+                    -- At least one volume has LFO active
+                    if is_active1 and is_active2 then
+                        -- Both have LFOs - adjust both offsets in opposite directions
+                        params:delta(lfo_index1 .. "offset", 0.75 * d)
+                        params:delta(lfo_index2 .. "offset", -0.75 * d)
+                    elseif is_active1 then
+                        -- Only track 1 has LFO - adjust its offset and track 2 volume directly
+                        params:delta(lfo_index1 .. "offset", 0.75 * d)
+                        params:delta("2volume", -3 * d)
+                    else
+                        -- Only track 2 has LFO - adjust its offset and track 1 volume directly
+                        params:delta(lfo_index2 .. "offset", -0.75 * d)
+                        params:delta("1volume", 3 * d)
+                    end
+                else
+                    -- No LFOs active - normal crossfade behavior
+                    params:delta("1volume", 3 * d)    
+                    params:delta("2volume", -3 * d)    
+                end
             else
-                -- Normal behavior: adjust both volumes in the same direction
-                params:delta("1volume", 3*d)    
-                params:delta("2volume", 3*d)    
+                -- Normal volume control mode
+                if is_active1 or is_active2 then
+                    -- At least one volume has LFO active
+                    if is_active1 and is_active2 then
+                        -- Both have LFOs - adjust both offsets
+                        params:delta(lfo_index1 .. "offset", 0.75 * d)
+                        params:delta(lfo_index2 .. "offset", 0.75 * d)
+                    elseif is_active1 then
+                        -- Only track 1 has LFO - adjust its offset and track 2 volume directly
+                        params:delta(lfo_index1 .. "offset", 0.75 * d)
+                        params:delta("2volume", 3 * d)
+                    else
+                        -- Only track 2 has LFO - adjust its offset and track 1 volume directly
+                        params:delta(lfo_index2 .. "offset", 0.75 * d)
+                        params:delta("1volume", 3 * d)
+                    end
+                else
+                    -- No LFOs active - normal volume behavior
+                    params:delta("1volume", 3 * d)    
+                    params:delta("2volume", 3 * d)    
+                end
             end
         end,
         [2] = function()
             if key1_pressed then 
+                local is_active1, lfo_index1 = is_lfo_active_for_param("1volume")
+                if is_active1 then params:set(lfo_index1 .. "lfo", 1) end
                 params:delta("1volume", 3*d) 
             else
                 local param_name
@@ -491,6 +535,8 @@ function enc(n, d)
         end,
         [3] = function()
             if key1_pressed then 
+                local is_active2, lfo_index2 = is_lfo_active_for_param("2volume")
+                if is_active2 then params:set(lfo_index2 .. "lfo", 1) end
                 params:delta("2volume", 3*d) 
             else
                 local param_name
@@ -561,12 +607,14 @@ function key(n, z)
         if key1_pressed and key2_pressed then
             randomize(1)
             randpara.randomize_params(steps, 1)
-            lfo.randomize_lfos("1")  -- Only randomize track 1 LFOs
+            lfo.clearLFOs("1")
+            lfo.randomize_lfos("1", params:get("allow_volume_lfos") == 2)  -- Pass the setting
             return
         elseif key1_pressed and key3_pressed then
             randomize(2)
             randpara.randomize_params(steps, 2)
-            lfo.randomize_lfos("2")  -- Only randomize track 2 LFOs
+            lfo.clearLFOs("2")
+            lfo.randomize_lfos("2", params:get("allow_volume_lfos") == 2)  -- Pass the setting
             return
         end
     end

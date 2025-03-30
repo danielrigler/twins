@@ -67,6 +67,7 @@ Engine_twins : CroneEngine {
             pitch_mode=0,
             subharmonics_1=0, 
             subharmonics_2=0,
+            subharmonics_3=0,
             overtones_1=0, 
             overtones_2=0, 
             cutoff=20000, q=1, hpf=20, hpfrq=1,
@@ -93,10 +94,11 @@ Engine_twins : CroneEngine {
             var grain_pitch;
             var shaped;
             var main_vol = 1 / (1 + subharmonics_1 + subharmonics_2 + overtones_1 + overtones_2);
-            var subharmonic_1_vol = subharmonics_1 / (1 + subharmonics_1 + subharmonics_2 + overtones_1 + overtones_2) * 2;
-            var subharmonic_2_vol = subharmonics_2 / (1 + subharmonics_1 + subharmonics_2 + overtones_1 + overtones_2) * 2;
-            var overtone_1_vol = overtones_1 / (1 + subharmonics_1 + subharmonics_2 + overtones_1 + overtones_2);
-            var overtone_2_vol = overtones_2 / (1 + subharmonics_1 + subharmonics_2 + overtones_1 + overtones_2);
+            var subharmonic_1_vol = subharmonics_1 / (1 + subharmonics_1 + subharmonics_2 + subharmonics_3 + overtones_1 + overtones_2) * 2;
+            var subharmonic_2_vol = subharmonics_2 / (1 + subharmonics_1 + subharmonics_2 + subharmonics_3 + overtones_1 + overtones_2) * 2;
+            var subharmonic_3_vol = subharmonics_3 / (1 + subharmonics_1 + subharmonics_2 + subharmonics_3 + overtones_1 + overtones_2) * 2;
+            var overtone_1_vol = overtones_1 / (1 + subharmonics_1 + subharmonics_2 + subharmonics_3 + overtones_1 + overtones_2);
+            var overtone_2_vol = overtones_2 / (1 + subharmonics_1 + subharmonics_2 + subharmonics_3 + overtones_1 + overtones_2);
             var lagSpeed = Lag.kr(speed);
             var lagPitchOffset = Lag.kr(pitch_offset, 1);
             var grain_direction = Select.kr(pitch_mode, [1, Select.kr(speed < 0, [1, -1])]);
@@ -139,6 +141,8 @@ Engine_twins : CroneEngine {
             sig_r = sig_r + ~grainBufFunc.(buf_r, grain_pitch / 2, grain_size * 2, subharmonic_1_vol);
             sig_l = sig_l + ~grainBufFunc.(buf_l, grain_pitch / 4, grain_size * 2, subharmonic_2_vol);
             sig_r = sig_r + ~grainBufFunc.(buf_r, grain_pitch / 4, grain_size * 2, subharmonic_2_vol);
+            sig_l = sig_l + ~grainBufFunc.(buf_l, grain_pitch / 8, grain_size * 2, subharmonic_3_vol);
+            sig_r = sig_r + ~grainBufFunc.(buf_r, grain_pitch / 8, grain_size * 2, subharmonic_3_vol);
             sig_l = sig_l + ~grainBufFunc.(buf_l, grain_pitch * 2, grain_size, overtone_1_vol);
             sig_r = sig_r + ~grainBufFunc.(buf_r, grain_pitch * 2, grain_size, overtone_1_vol);
             sig_l = sig_l + ~grainBufFunc.(buf_l, grain_pitch * 4, grain_size, overtone_2_vol);
@@ -232,14 +236,11 @@ Engine_twins : CroneEngine {
             \modulator_depth, 0.5
         ], context.xg);
         
-
         directOut = Synth.new(\directOut, [
             \in, mixBus.index,
             \out, context.out_b.index
         ], context.xg);
         
-        
-      
         this.addCommand("greyhole_mix", "f", { arg msg; 
             var mix = msg[1];
             if (mix == 0) { greyholeEffect.run(false) } { greyholeEffect.run(true) };
@@ -296,6 +297,7 @@ Engine_twins : CroneEngine {
         this.addCommand("density_mod_amt", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\density_mod_amt, msg[2]); });
         this.addCommand("subharmonics_1", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\subharmonics_1, msg[2]); });
         this.addCommand("subharmonics_2", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\subharmonics_2, msg[2]); });
+        this.addCommand("subharmonics_3", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\subharmonics_3, msg[2]); });
         this.addCommand("overtones_1", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\overtones_1, msg[2]); });
         this.addCommand("overtones_2", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\overtones_2, msg[2]); });
         this.addCommand("pitch_mode", "ii", { arg msg; var voice = msg[1] - 1; var mode = msg[2]; voices[voice].set(\pitch_mode, mode); });
