@@ -101,7 +101,7 @@ local function setup_params()
     params:add_binary("randomize_params", "R a N d 0 m 1 z e", "trigger", 0) 
     params:set_action("randomize_params", function() randpara.randomize_params(steps) end)
     params:add_binary("randomize_lfos", "RaNd0m1ze LFOs", "trigger", 0) 
-    params:set_action("randomize_lfos", function() lfo.randomize_lfos("1") lfo.randomize_lfos("2") if randomize_metro[1] then randomize_metro[1]:stop() end if randomize_metro[2] then randomize_metro[2]:stop() end end)
+    params:set_action("randomize_lfos", function() lfo.clearLFOs("1") lfo.clearLFOs("2") lfo.randomize_lfos("1", params:get("allow_volume_lfos") == 2)  lfo.randomize_lfos("2", params:get("allow_volume_lfos") == 2) if randomize_metro[1] then randomize_metro[1]:stop() end if randomize_metro[2] then randomize_metro[2]:stop() end end)
     params:add_binary("ClearLFOs", "Clear All LFOs", "trigger", 0) 
     params:set_action("ClearLFOs", function() lfo.clearLFOs() end)
     

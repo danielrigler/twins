@@ -123,10 +123,10 @@ lfo.target_ranges = {
   ["2size"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
   ["1density"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
   ["2density"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
-  ["1volume"] = { depth = { 2, 3 }, offset = { -1, 1 }, frequency = { 0.1, 0.6 }, waveform = { "sine" }, chance = 1.0 },
-  ["2volume"] = { depth = { 2, 3 }, offset = { -1, 1 }, frequency = { 0.1, 0.6 }, waveform = { "sine" }, chance = 1.0 },
-  ["1seek"] = { depth = { 100, 100 }, offset = { 0, 0 }, frequency = { 0.1, 0.4 }, waveform = { "sine", "random" }, chance = 0.3 },
-  ["2seek"] = { depth = { 100, 100 }, offset = { 0, 0 }, frequency = { 0.1, 0.4 }, waveform = { "sine", "random" }, chance = 0.3 }
+  ["1volume"] = { depth = { 2, 3 }, offset = { -1, 1 }, frequency = { 0.1, 0.5 }, waveform = { "sine" }, chance = 1.0 },
+  ["2volume"] = { depth = { 2, 3 }, offset = { -1, 1 }, frequency = { 0.1, 0.5 }, waveform = { "sine" }, chance = 1.0 },
+  ["1seek"] = { depth = { 30, 60 }, offset = { 0, 0 }, frequency = { 0.05, 0.3 }, waveform = { "sine", "random" }, chance = 0.35 },
+  ["2seek"] = { depth = { 30, 60 }, offset = { 0, 0 }, frequency = { 0.05, 0.3 }, waveform = { "sine", "random" }, chance = 0.35 }
 }
 
 function lfo.get_parameter_range(param_name)
@@ -173,8 +173,15 @@ function randomize_lfo(i, target)
     params:set(i .. "lfo_target", target_index)
 
     -- Calculate offset (special case for pan/seek)
-    local is_pan_or_seek = target:match("pan$") or target:match("seek$")
-    lfo[i].offset = is_pan_or_seek and 0 or lfo.scale(current_value, min_param_value, max_param_value, -1, 1)
+    local is_pan = target:match("pan$")
+    local is_seek = target:match("seek$")
+    if is_pan then
+        lfo[i].offset = 0
+    elseif is_seek then
+        lfo[i].offset = math.random() * 1.0 - 0.5  -- Random value between -0.5 and 0.5
+    else
+        lfo[i].offset = lfo.scale(current_value, min_param_value, max_param_value, -1, 1)
+    end
     params:set(i .. "offset", lfo[i].offset)
 
     -- Calculate max allowed depth (clamped to avoid exceeding parameter range)
