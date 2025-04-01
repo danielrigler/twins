@@ -46,7 +46,7 @@ local function start_interpolation(steps)
                 local new_value = interpolate(current_value, target, factor)
                 params:set(param, new_value)
 
-                if math.abs(new_value - target) > 0.01 then
+                if math.abs(new_value - target) > 0.00 then
                     all_done = false
                 else
                     -- Remove from active interpolations when target is reached
@@ -102,7 +102,6 @@ local function randomize_greyhole_params(steps)
     start_interpolation(steps)
 end
 
--- Helper function to randomize parameters for a single voice
 local function randomize_voice_params(i)
   safe_metro_stop(randomize_metro)
     -- VOICE-SPECIFIC PARAMETERS

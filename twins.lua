@@ -243,8 +243,8 @@ local function setup_params()
     params:add_group("Other", 5)
     params:add_separator("Stereo Width")
     for i = 1, 2 do
-    params:add_control(i .. "Width", i .. " width", controlspec.new(0.00, 2.00, "lin", 0.01, 1))
-    params:set_action(i .. "Width", function(value) engine.width(i, value) end)
+    params:add_control(i .. "Width", i .. " Width", controlspec.new(0, 200, "lin", 0.01, 100, "%"))
+    params:set_action(i .. "Width", function(value) engine.width(i, value / 100) end)
     end  
     params:add_separator("Transition Steps")
     params:add_control("steps","Steps",controlspec.new(10,2000,"lin",1,400)) params:set_action("steps", function(value) steps = value end)
@@ -782,7 +782,7 @@ function redraw()
             screen.text(format_seek(params:get(track.."seek")))
         elseif current_mode == "pan" then
             local pan = params:get(track.."pan")
-            screen.text(pan == 0 and "0%" or string.format("%.0f%%", pan))
+            screen.text(math.abs(pan) < 0.5 and "0%" or string.format("%.0f%%", pan))
         elseif current_mode == "lpf" or current_mode == "hpf" then
             local param = current_filter_mode == "lpf" and track.."cutoff" or track.."hpf"
             screen.text(string.format("%.0f", params:get(param)))

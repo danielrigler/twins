@@ -34,21 +34,6 @@ function sc.init()
   end
 
 params:add{
-    id = "tap_tempo",
-    name = "Tap Tempo",
-    type = "trigger",
-    action = function()
-        local current_time = util.time()
-        if last_tap_time then
-            local tempo = 60 / (current_time - last_tap_time)
-            local delay_time = 60 / tempo
-            params:set("delay_rate", delay_time)
-        end
-        last_tap_time = current_time
-    end
-}
-
-params:add{
   id = "delay_h",
   name = "Mix",
   type = "control",
@@ -88,6 +73,21 @@ params:add{
     softcut.pre_level(1, level * math.random(90, 110) / 100)
     softcut.pre_level(2, level * math.random(90, 110) / 100)
   end
+}
+
+params:add{
+    id = "tap_tempo",
+    name = "Tap Tempo",
+    type = "trigger",
+    action = function()
+        local current_time = util.time()
+        if last_tap_time then
+            local tempo = 60 / (current_time - last_tap_time)
+            local delay_time = 60 / tempo
+            params:set("delay_rate", delay_time)
+        end
+        last_tap_time = current_time
+    end
 }
 
 end
