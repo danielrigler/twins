@@ -6,7 +6,7 @@
 --           by: @dddstudio                       
 --
 --                          
---                           v0.20
+--                           v0.21
 -- E1: Master Volume
 -- K1+E2/E3: Volume 1/2
 -- K1+E1: Crossfade Volumes
@@ -107,8 +107,9 @@ local function setup_params()
     params:add_group("Delay", 4)
     delay.init()
 
-    params:add_group("Reverbs", 22)
+    params:add_group("Reverbs", 24)
     params:add_separator("Fverb2")
+    params:add_binary("randomize_fverb", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_fverb", function() randpara.randomize_fverb_params(steps) end)
     params:add_taper("reverb_mix", "Mix", 0, 100, 0.0, 0, "%") params:set_action("reverb_mix", function(value) engine.reverb_mix(value / 100) end)
     params:add_taper("reverb_predelay", "Predelay", 0, 250, 20, 0, "ms") params:set_action("reverb_predelay", function(value) engine.reverb_predelay(value) end)
     params:add_taper("reverb_input_amount", "Input Amount", 0, 100, 100, 0, "%") params:set_action("reverb_input_amount", function(value) engine.reverb_input_amount(value) end)
@@ -122,7 +123,8 @@ local function setup_params()
     params:add_taper("reverb_modulator_depth", "Mod Depth", 0, 100, 40, 0, "%") params:set_action("reverb_modulator_depth", function(value) engine.reverb_modulator_depth(value / 100) end)
     params:add_taper("reverb_modulator_frequency", "Mod Freq", 0, 10, 1, 0, "Hz") params:set_action("reverb_modulator_frequency", function(value) engine.reverb_modulator_frequency(value) end)
     params:add_separator("Greyhole")
-    params:add_control("greyhole_mix", "Mix", controlspec.new(0.0, 1.0, "lin", 0.01, 0.0, "")) params:set_action("greyhole_mix", function(value) engine.greyhole_mix(value) end)
+    params:add_binary("randomize_greyhole", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_greyhole", function() randpara.randomize_greyhole_params(steps) end)
+    params:add_taper("greyhole_mix", "Mix", 0, 100, 0.0, 0, "%") params:set_action("greyhole_mix", function(value) engine.greyhole_mix(value / 100) end)
     params:add_control("time", "Time", controlspec.new(0.00, 10.00, "lin", 0.01, 3, "")) params:set_action("time", function(value) engine.greyhole_delay_time(value) end)
     params:add_control("size", "Size", controlspec.new(0.5, 5.0, "lin", 0.01, 4.00, "")) params:set_action("size", function(value) engine.greyhole_size(value) end)
     params:add_control("damp", "Damping", controlspec.new(0.0, 1.0, "lin", 0.01, 0.1, "")) params:set_action("damp", function(value) engine.greyhole_damp(value) end)
@@ -198,7 +200,7 @@ local function setup_params()
       params:add_taper(i .. "volume", i .. " volume", -70, 20, 0, 0, "dB") params:set_action(i .. "volume", function(value) if value == -70 then engine.volume(i, 0) else engine.volume(i, math.pow(10, value / 20)) end end)
       params:add_taper(i .. "pan", i .. " pan", -100, 100, 0, 0, "%") params:set_action(i .. "pan", function(value) engine.pan(i, value / 100)  end)
       params:add_control(i .. "speed", i .. " speed", controlspec.new(-2, 2, "lin", 0.01, 0.1, "")) params:set_action(i .. "speed", function(value) engine.speed(i, value) end)
-      params:add_taper(i .. "density", i .. " density", 1, 20, 10, 1) params:set_action(i .. "density", function(value) engine.density(i, value) end)
+      params:add_taper(i .. "density", i .. " density", 0.1, 20, 10, 1) params:set_action(i .. "density", function(value) engine.density(i, value) end)
       params:add_control(i .. "pitch", i .. " pitch", controlspec.new(-48, 48, "lin", 1, 0, "st")) params:set_action(i .. "pitch", function(value) engine.pitch_offset(i, math.pow(0.5, -value / 12)) end)
       params:add_taper(i .. "jitter", i .. " jitter", 0, 1999, 250, 5, "ms") params:set_action(i .. "jitter", function(value) engine.jitter(i, value / 1000) end)
       params:add_taper(i .. "size", i .. " size", 1, 999, 100, 5, "ms") params:set_action(i .. "size", function(value) engine.size(i, value / 1000) end)
@@ -220,8 +222,8 @@ local function setup_params()
     params:add_taper("max_jitter", "jitter (max)", 0, 1999, 1999, 5, "ms")
     params:add_taper("min_size", "size (min)", 1, 999, 100, 5, "ms")
     params:add_taper("max_size", "size (max)", 1, 999, 599, 5, "ms")
-    params:add_taper("min_density", "density (min)", 1, 30, 1, 5, "Hz")
-    params:add_taper("max_density", "density (max)", 1, 30, 16, 5, "Hz")
+    params:add_taper("min_density", "density (min)", 0.1, 30, 1, 5, "Hz")
+    params:add_taper("max_density", "density (max)", 0.1, 30, 16, 5, "Hz")
     params:add_taper("min_spread", "spread (min)", 0, 100, 0, 0, "%")
     params:add_taper("max_spread", "spread (max)", 0, 100, 90, 0, "%")
     params:add_control("min_pitch", "pitch (min)", controlspec.new(-48, 48, "lin", 1, -31, "st"))
@@ -237,8 +239,15 @@ local function setup_params()
       params:add_option(i .. "lock_pan", i .. " lock pan", {"off", "on"}, 1)
       params:add_option(i .. "lock_seek", i .. " lock seek", {"off", "on"}, 1) -- Add this line
     end
-    
-    params:add_control("steps","Transition steps",controlspec.new(10,2000,"lin",1,400)) params:set_action("steps", function(value) steps = value end)
+
+    params:add_group("Other", 5)
+    params:add_separator("Stereo Width")
+    for i = 1, 2 do
+    params:add_control(i .. "Width", i .. " width", controlspec.new(0.00, 2.00, "lin", 0.01, 1))
+    params:set_action(i .. "Width", function(value) engine.width(i, value) end)
+    end  
+    params:add_separator("Transition Steps")
+    params:add_control("steps","Steps",controlspec.new(10,2000,"lin",1,400)) params:set_action("steps", function(value) steps = value end)
     
     params:bang()
 end
@@ -516,16 +525,16 @@ function key(n, z)
         -- Handle key combinations for randomization
         if key1_pressed then
             if n == 2 then
+                lfo.clearLFOs(1)
+                lfo.randomize_lfos("1", params:get("allow_volume_lfos") == 2)
                 randomize(1)
                 randpara.randomize_params(steps, 1)
-                lfo.clearLFOs("1")
-                lfo.randomize_lfos("1", params:get("allow_volume_lfos") == 2)
                 return
             elseif n == 3 then
+                lfo.clearLFOs(2)
+                lfo.randomize_lfos("2", params:get("allow_volume_lfos") == 2)
                 randomize(2)
                 randpara.randomize_params(steps, 2)
-                lfo.clearLFOs("2")
-                lfo.randomize_lfos("2", params:get("allow_volume_lfos") == 2)
                 return
             end
         end
@@ -830,8 +839,9 @@ function redraw()
 end
 
 function cleanup()
-    if ui_metro then ui_metro:stop() end
-    for i = 1, 2 do
-        if randomize_metro[i] then randomize_metro[i]:stop() end
-    end
+  if ui_metro then ui_metro:stop() end
+  for i = 1, 2 do
+    if randomize_metro[i] then randomize_metro[i]:stop() end
+  end
+  lfo.cleanup()
 end

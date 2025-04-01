@@ -76,6 +76,7 @@ Engine_twins : CroneEngine {
             direction_mod=0,
             size_variation=0,
             low_gain=0, high_gain=0,
+            width=1,
             pitch_random_plus=0, pitch_random_minus=0;
  
             var grain_trig;
@@ -97,8 +98,8 @@ Engine_twins : CroneEngine {
             var subharmonic_1_vol = subharmonics_1 / (1 + subharmonics_1 + subharmonics_2 + subharmonics_3 + overtones_1 + overtones_2) * 2;
             var subharmonic_2_vol = subharmonics_2 / (1 + subharmonics_1 + subharmonics_2 + subharmonics_3 + overtones_1 + overtones_2) * 2;
             var subharmonic_3_vol = subharmonics_3 / (1 + subharmonics_1 + subharmonics_2 + subharmonics_3 + overtones_1 + overtones_2) * 2;
-            var overtone_1_vol = overtones_1 / (1 + subharmonics_1 + subharmonics_2 + subharmonics_3 + overtones_1 + overtones_2);
-            var overtone_2_vol = overtones_2 / (1 + subharmonics_1 + subharmonics_2 + subharmonics_3 + overtones_1 + overtones_2);
+            var overtone_1_vol = overtones_1 / (1 + subharmonics_1 + subharmonics_2 + subharmonics_3 + overtones_1 + overtones_2) * 2;
+            var overtone_2_vol = overtones_2 / (1 + subharmonics_1 + subharmonics_2 + subharmonics_3 + overtones_1 + overtones_2) * 2;
             var lagSpeed = Lag.kr(speed);
             var lagPitchOffset = Lag.kr(pitch_offset, 1);
             var grain_direction = Select.kr(pitch_mode, [1, Select.kr(speed < 0, [1, -1])]);
@@ -108,7 +109,8 @@ Engine_twins : CroneEngine {
             var low, high;
             var positive_intervals = [12, 24], negative_intervals = [-12, -24];
             var rand_val, do_plus, interval_plus, do_minus, interval_minus, final_interval;
-            
+            var mid, side, widthCtrl;
+
             density_mod = density * (2**(trig_rnd * density_mod_amt));
             grain_trig = Impulse.kr(density_mod);
 
@@ -121,7 +123,6 @@ Engine_twins : CroneEngine {
             buf_pos = Phasor.kr(trig: t_reset_pos, rate: buf_dur.reciprocal / ControlRate.ir * lagSpeed, resetPos: pos);
             pos_sig = Wrap.kr(Select.kr(freeze, [buf_pos, pos]));
             dry_sig = [PlayBuf.ar(1, buf_l, lagSpeed, loop: 1), PlayBuf.ar(1, buf_r, lagSpeed, loop: 1)];
-            dry_sig = Balance2.ar(dry_sig[0], dry_sig[1], pan);
 
             rand_val = LFNoise1.kr(density).range(0,1);
             base_pitch = Select.kr(pitch_mode, [lagSpeed * lagPitchOffset, lagPitchOffset]);
@@ -148,7 +149,7 @@ Engine_twins : CroneEngine {
             sig_l = sig_l + ~grainBufFunc.(buf_l, grain_pitch * 4, grain_size, overtone_2_vol);
             sig_r = sig_r + ~grainBufFunc.(buf_r, grain_pitch * 4, grain_size, overtone_2_vol);
 
-            granular_sig = Balance2.ar(sig_l, sig_r, pan + pan_sig);
+            granular_sig = Balance2.ar(sig_l, sig_r, pan_sig);
 
             sig_mix = (dry_sig * (1 - granular_gain)) + (granular_sig * granular_gain);
 
@@ -166,6 +167,13 @@ Engine_twins : CroneEngine {
             
             sig_mix = Compander.ar(sig_mix,sig_mix,0.25)/2;
             
+            widthCtrl = width.clip(0, 2);
+            mid = (sig_mix[0] + sig_mix[1]) * 0.5;
+            side = (sig_mix[0] - sig_mix[1]) * 0.5 * widthCtrl;
+            sig_mix = [mid + side, mid - side];
+
+            sig_mix = Balance2.ar(sig_mix[0], sig_mix[1], pan);
+
             Out.ar(out, sig_mix * gain);
         }).add;
 
@@ -326,6 +334,8 @@ Engine_twins : CroneEngine {
         
         this.addCommand("eq_low_gain", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\low_gain, msg[2]); });
         this.addCommand("eq_high_gain", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\high_gain, msg[2]); });
+        
+        this.addCommand("width", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\width, msg[2]); });
 
         seek_tasks = Array.fill(nvoices, { arg i; Routine {} });
     }

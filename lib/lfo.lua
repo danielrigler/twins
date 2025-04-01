@@ -61,19 +61,38 @@ local function is_audio_loaded(track_num)
 end
 
 function lfo.clearLFOs(track)
-    local function clearSingleLFO(i)
-        local target_index = params:get(i .. "lfo_target")
-        local target_param = lfo.lfo_targets[target_index]
-        if target_param and (not track or string.match(target_param, "^"..track)) and not is_locked(target_param) then
-            assigned_params[target_param] = nil
-            if params:get(i .. "lfo") == 2 then 
-                params:set(i .. "lfo", 1) 
+    if track then
+        for i = 1, 16 do
+            local target_index = params:get(i .. "lfo_target")
+            local target_param = lfo.lfo_targets[target_index]
+            if target_param and string.match(target_param, "^"..track) then
+                if not is_locked(target_param) then
+                    assigned_params[target_param] = nil
+                    if params:get(i .. "lfo") == 2 then 
+                        params:set(i .. "lfo", 1) 
+                    end
+                    params:set(i .. "lfo_target", 1)
+                end
             end
-            params:set(i .. "lfo_target", 1)
         end
-    end
+    else
+        for target, _ in pairs(assigned_params) do
+            if not is_locked(target) then
+                assigned_params[target] = nil
+            end
+        end
 
-    local function setPans()
+        for i = 1, 16 do
+            local target_index = params:get(i .. "lfo_target")
+            local target_param = lfo.lfo_targets[target_index]
+            if target_param and not is_locked(target_param) then
+                if params:get(i .. "lfo") == 2 then 
+                    params:set(i .. "lfo", 1) 
+                end
+                params:set(i .. "lfo_target", 1)
+            end
+        end
+
         local loaded1, loaded2 = is_audio_loaded(1), is_audio_loaded(2)
         if loaded1 and loaded2 then
             params:set("1pan", -15)
@@ -81,27 +100,6 @@ function lfo.clearLFOs(track)
         elseif loaded1 or loaded2 then
             params:set("1pan", 0)
             params:set("2pan", 0)
-        end
-    end
-
-    if not track then
-        -- Clear all non-locked params
-        for target, _ in pairs(assigned_params) do
-            if not is_locked(target) then
-                assigned_params[target] = nil
-            end
-        end
-
-        -- Clear all LFOs
-        for i = 1, 16 do
-            clearSingleLFO(i)
-        end
-
-        setPans()
-    else
-        -- Clear only LFOs targeting the specified track
-        for i = 1, 16 do
-            clearSingleLFO(i)
         end
     end
 end
@@ -336,6 +334,12 @@ function lfo.init()
   lfo_metro.count = -1
   lfo_metro.event = lfo.process
   lfo_metro:start()
+end
+
+function lfo.cleanup()
+  if lfo_metro then
+    lfo_metro:stop()
+  end
 end
 
 return lfo
