@@ -9,7 +9,7 @@ Heavily influenced by @cfd90's Twine and contains inspiration and code from a lo
 **Some of the new features:**
 * Reverbs and delays
 * Flexible volume control
-* Tape effects, shimmer, EQ
+* Tape effects, EQ
 * Increased parameter ranges
 * Smooth transition interpolation
 * Freely assignable LFOs with randomization
