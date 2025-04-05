@@ -6,7 +6,7 @@
 --           by: @dddstudio                       
 --
 --                          
---                           v0.21
+--                           v0.22
 -- E1: Master Volume
 -- K1+E2/E3: Volume 1/2
 -- K1+E1: Crossfade Volumes
@@ -79,6 +79,26 @@ local function is_lfo_active_for_param(param_name)
     return false, nil
 end
 
+local function load_random_tape_file(track_num)
+    local tape_dir = _path.tape
+    local files = util.scandir(tape_dir)
+    local audio_files = {}
+    for _, file in ipairs(files) do
+        local ext = string.lower(string.match(file, "%.(.+)$")) or ""
+        if (ext == "wav") or (ext == "aif") or (ext == "aiff") or (ext == "flac") then
+            table.insert(audio_files, tape_dir .. file)
+        end
+    end
+    if #audio_files > 0 then
+        local random_index = math.random(1, #audio_files)
+        params:set(track_num .. "sample", audio_files[random_index])
+        return true
+    else
+        print("No audio files found in tape directory")
+        return false
+    end
+end
+
 local function setup_params()
     params:add_separator("Samples")
     for i = 1, 2 do
@@ -92,13 +112,11 @@ local function setup_params()
                 end
             end
         end)
-    end 
+    end
 
     params:add_separator("Actions")
-    params:add_binary("randomize_params", "R a N d 0 m 1 z e", "trigger", 0) 
-    params:set_action("randomize_params", function() randpara.randomize_params(steps) end)
-    params:add_binary("randomize_lfos", "RaNd0m1ze LFOs", "trigger", 0) 
-    params:set_action("randomize_lfos", function() lfo.clearLFOs("1") lfo.clearLFOs("2") lfo.randomize_lfos("1", params:get("allow_volume_lfos") == 2)  lfo.randomize_lfos("2", params:get("allow_volume_lfos") == 2) if randomize_metro[1] then randomize_metro[1]:stop() end if randomize_metro[2] then randomize_metro[2]:stop() end end)
+    params:add_binary("randomize_params", "RaNd0m1ze!", "trigger", 0) 
+    params:set_action("randomize_params", function() load_random_tape_file(1) load_random_tape_file(2) randpara.randomize_params(steps) lfo.clearLFOs("1") lfo.clearLFOs("2") lfo.randomize_lfos("1", params:get("allow_volume_lfos") == 2)  lfo.randomize_lfos("2", params:get("allow_volume_lfos") == 2) if randomize_metro[1] then randomize_metro[1]:stop() end if randomize_metro[2] then randomize_metro[2]:stop() end end)
     params:add_binary("ClearLFOs", "Clear All LFOs", "trigger", 0) 
     params:set_action("ClearLFOs", function() lfo.clearLFOs() end)
     
@@ -136,7 +154,8 @@ local function setup_params()
     params:add_group("Grains", 26)
     for i = 1, 2 do
       params:add_separator("Sample " ..i)
-      params:add_control(i .. "granular_gain", i .. " Mix", controlspec.new(0, 100, "lin", 1, 100, "%")) params:set_action(i .. "granular_gain", function(value) engine.granular_gain(i, value / 100) end)
+      params:add_control(i .. "granular_gain", i .. " Mix", controlspec.new(0, 100, "lin", 1, 100, "%")) 
+      params:set_action(i .. "granular_gain", function(value) engine.granular_gain(i, value / 100) if value < 100 then lfo.clearLFOs(i, "seek") end end)
       params:add_control(i .. "pitch_random_plus", i .. " Octave Variation +", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i .. "pitch_random_plus", function(value) engine.pitch_random_plus(i, value / 100) end)
       params:add_control(i .. "pitch_random_minus", i .. " Octave Variation -", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i .. "pitch_random_minus", function(value) engine.pitch_random_minus(i, value / 100) end)
       params:add_control(i .. "subharmonics_3", i .. " Subharmonics -3oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0))
@@ -185,7 +204,9 @@ local function setup_params()
     params:add_control("eq_high_gain_2", "2 Treble", controlspec.new(-1, 1, "lin", 0.01, 0, ""))
     params:set_action("eq_high_gain_2", function(value) engine.eq_high_gain(2, value*35) end)
 
-    params:add_group("LFOs", 114)
+    params:add_group("LFOs", 115)
+    params:add_binary("randomize_lfos", "RaNd0m1ze LFOs", "trigger", 0) 
+    params:set_action("randomize_lfos", function() lfo.clearLFOs("1") lfo.clearLFOs("2") lfo.randomize_lfos("1", params:get("allow_volume_lfos") == 2)  lfo.randomize_lfos("2", params:get("allow_volume_lfos") == 2) if randomize_metro[1] then randomize_metro[1]:stop() end if randomize_metro[2] then randomize_metro[2]:stop() end end)
     params:add_option("allow_volume_lfos", "Allow Volume LFOs", {"no", "yes"}, 2)
     params:add_control("global_lfo_freq_scale", "Freq Scale", controlspec.new(0.1, 10, "exp", 0.01, 1.0, "x")) 
     params:set_action("global_lfo_freq_scale", function(value) 
@@ -516,6 +537,7 @@ function key(n, z)
 
     -- Update key states
     if n == 1 then key1_pressed = z == 1
+       shift = z == 1 and true or false
     elseif n == 2 then key2_pressed = z == 1
     elseif n == 3 then key3_pressed = z == 1
     end
@@ -676,7 +698,7 @@ local function draw_param_row(y, label, param1, param2, is_density, is_pitch, is
             local min_val, max_val = lfo.get_parameter_range(param)
             local bar_value = util.linlin(min_val, max_val, 0, bar_width, lfo_mod)
             
-            screen.level(1)
+            screen.level(shift and 6 or 1)
             screen.rect(x, y + 1, bar_value, bar_height)
             screen.fill()
         end
@@ -731,7 +753,7 @@ end
 function redraw()
     if not installer:ready() then installer:redraw() do return end end
     screen.clear()
-    
+
     -- Draw parameter rows with highlighting
     local param_rows = {
         {y = 10, label = "jitter:    ", mode = "jitter", param1 = "1jitter", param2 = "2jitter", hz = false, st = false},
@@ -817,9 +839,9 @@ function redraw()
         end
     end
 
-    screen.level(3)
+    screen.level(shift and 6 or 3)
     draw_volume_bar(0, 1)
-    draw_volume_bar(128 - 1, 2)
+    draw_volume_bar(127, 2)
 
     -- Draw pan indicators
     local function draw_pan_indicator(track, center_start)
@@ -831,7 +853,7 @@ function redraw()
             screen.fill()
         end
     end
-
+    screen.level(shift and 6 or 1)
     draw_pan_indicator(1, 52)
     draw_pan_indicator(2, 93)
 

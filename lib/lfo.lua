@@ -60,47 +60,54 @@ local function is_audio_loaded(track_num)
   return file_path and file_path ~= "" and file_path ~= "none" and file_path ~= "-"
 end
 
-function lfo.clearLFOs(track)
-    if track then
-        for i = 1, 16 do
-            local target_index = params:get(i .. "lfo_target")
-            local target_param = lfo.lfo_targets[target_index]
-            if target_param and string.match(target_param, "^"..track) then
-                if not is_locked(target_param) then
-                    assigned_params[target_param] = nil
-                    if params:get(i .. "lfo") == 2 then 
-                        params:set(i .. "lfo", 1) 
-                    end
-                    params:set(i .. "lfo_target", 1)
-                end
-            end
-        end
-    else
+function lfo.clearLFOs(track, param_type)
+    local function clear_targets(target_filter)
         for target, _ in pairs(assigned_params) do
-            if not is_locked(target) then
+            if target_filter(target) and not is_locked(target) then
                 assigned_params[target] = nil
             end
         end
-
         for i = 1, 16 do
             local target_index = params:get(i .. "lfo_target")
             local target_param = lfo.lfo_targets[target_index]
-            if target_param and not is_locked(target_param) then
-                if params:get(i .. "lfo") == 2 then 
-                    params:set(i .. "lfo", 1) 
-                end
+            if target_param and target_filter(target_param) and not is_locked(target_param) then
+                params:set(i .. "lfo", 1)
                 params:set(i .. "lfo_target", 1)
             end
         end
+    end
 
-        local loaded1, loaded2 = is_audio_loaded(1), is_audio_loaded(2)
-        if loaded1 and loaded2 then
+    local function reset_pan()
+        local track1_loaded = is_audio_loaded("1")
+        local track2_loaded = is_audio_loaded("2")
+        
+        if track1_loaded and track2_loaded then
             params:set("1pan", -15)
             params:set("2pan", 15)
-        elseif loaded1 or loaded2 then
+        else
             params:set("1pan", 0)
             params:set("2pan", 0)
         end
+    end
+
+    if track and param_type then
+        -- Clear specific parameter type for specific track
+        clear_targets(function(target) 
+            return string.match(target, "^"..track..param_type.."$")
+        end)
+    elseif track then
+        -- Clear all parameters for specific track
+        clear_targets(function(target) 
+            return string.match(target, "^"..track) 
+        end)
+    else
+        -- Clear all LFOs
+        clear_targets(function() return true end)
+    end
+
+    -- Only reset pan if we're clearing all LFOs or all LFOs for a track
+    if not param_type then
+        reset_pan()
     end
 end
 
@@ -147,6 +154,14 @@ function randomize_lfo(i, target)
     -- Early exit if target is already assigned or invalid
     if assigned_params[target] or not lfo.target_ranges[target] then 
         return 
+    end
+
+    -- Check if target is seek and granular gain is less than 100%
+    if target:match("seek$") then
+        local track_num = string.match(target, "(%d)seek")
+        if params:get(track_num .. "granular_gain") < 100 then
+            return
+        end
     end
 
     -- Check if another LFO is already modulating this target
@@ -241,10 +256,19 @@ function lfo.randomize_lfos(track, allow_volume_lfos)
     for target, ranges in pairs(lfo.target_ranges) do
         -- Skip volume targets if not allowed
         if (not target:match("volume$") or allow_volume_lfos) then
+            -- Skip seek targets if granular gain is less than 100%
+            if target:match("seek$") then
+                local track_num = string.match(target, "(%d)seek")
+                if params:get(track_num .. "granular_gain") < 100 then
+                    goto continue
+                end
+            end
+            
             if string.match(target, "^"..track) and not is_locked(target) and math.random() < ranges.chance then
                 table.insert(available_targets, target)
             end
         end
+        ::continue::
     end
 
     -- Find free slots (not affecting the other track and not locked)

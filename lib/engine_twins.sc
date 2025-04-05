@@ -15,34 +15,35 @@ Engine_twins : CroneEngine {
         ^super.new(context, doneCallback);
     }
 
-    readBuf { arg i, path;
-        if(buffersL[i].notNil && buffersR[i].notNil, {
-            if (File.exists(path), {
-                var numChannels;
-                var newbuf;
+ readBuf { arg i, path;
+    if(buffersL[i].notNil && buffersR[i].notNil, {
+        if (File.exists(path), {
+            var numChannels;
+            var newbuf;
 
-                numChannels = SoundFile.use(path.asString(), { |f| f.numChannels });
+            numChannels = SoundFile.use(path.asString(), { |f| f.numChannels });
 
-                newbuf = Buffer.readChannel(context.server, path, 0, -1, [0], { |b|
-                    voices[i].set(\buf_l, b);
-                    buffersL[i].free;
-                    buffersL[i] = b;
-                });
+            newbuf = Buffer.readChannel(context.server, path, 0, -1, [0], { |b|
+                voices[i].set(\buf_l, b);
+                buffersL[i].free;
+                buffersL[i] = b;
+                voices[i].set(\pos, 0, \t_reset_pos, 1, \freeze, 0);
+            });
 
-                if (numChannels > 1, {
-                    newbuf = Buffer.readChannel(context.server, path, 0, -1, [1], { |b|
-                        voices[i].set(\buf_r, b);
-                        buffersR[i].free;
-                        buffersR[i] = b;
-                    });
-                }, {
-                    voices[i].set(\buf_r, newbuf);
+            if (numChannels > 1, {
+                newbuf = Buffer.readChannel(context.server, path, 0, -1, [1], { |b|
+                    voices[i].set(\buf_r, b);
                     buffersR[i].free;
-                    buffersR[i] = newbuf;
+                    buffersR[i] = b;
                 });
+            }, {
+                voices[i].set(\buf_r, newbuf);
+                buffersR[i].free;
+                buffersR[i] = newbuf;
             });
         });
-    }
+    });
+}
 
     alloc {
         buffersL = Array.fill(nvoices, { arg i;
@@ -122,8 +123,8 @@ Engine_twins : CroneEngine {
             jitter_sig = TRand.kr(trig: grain_trig, lo: buf_dur.reciprocal.neg * jitter, hi: buf_dur.reciprocal * jitter);
             buf_pos = Phasor.kr(trig: t_reset_pos, rate: buf_dur.reciprocal / ControlRate.ir * lagSpeed, resetPos: pos);
             pos_sig = Wrap.kr(Select.kr(freeze, [buf_pos, pos]));
-            dry_sig = [PlayBuf.ar(1, buf_l, lagSpeed, loop: 1), PlayBuf.ar(1, buf_r, lagSpeed, loop: 1)];
-
+            dry_sig = [PlayBuf.ar(1, buf_l, lagSpeed, startPos: pos * BufFrames.kr(buf_l), trigger: t_reset_pos, loop: 1), PlayBuf.ar(1, buf_r, lagSpeed, startPos: pos * BufFrames.kr(buf_r), trigger: t_reset_pos, loop: 1)];
+            
             rand_val = LFNoise1.kr(density).range(0,1);
             base_pitch = Select.kr(pitch_mode, [lagSpeed * lagPitchOffset, lagPitchOffset]);
             do_plus = rand_val < pitch_random_plus;
@@ -316,7 +317,7 @@ Engine_twins : CroneEngine {
         this.addCommand("pitch_random_minus", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\pitch_random_minus, msg[2]); });
 
         this.addCommand("read", "is", { arg msg; this.readBuf(msg[1] - 1, msg[2]); });
-        this.addCommand("seek", "if", { arg msg; var voice = msg[1] - 1; var pos; seek_tasks[voice].stop; pos = msg[2]; voices[voice].set(\pos, pos); voices[voice].set(\t_reset_pos, 1); voices[voice].set(\freeze, 0);});
+        this.addCommand("seek", "if", { arg msg; var voice = msg[1] - 1; var pos = msg[2]; seek_tasks[voice].stop; voices[voice].set(\pos, pos); voices[voice].set(\t_reset_pos, 1); voices[voice].set(\freeze, 0); });
         this.addCommand("speed", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\speed, msg[2]); });
         this.addCommand("jitter", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\jitter, msg[2]); });
         this.addCommand("size", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\size, msg[2]); });
