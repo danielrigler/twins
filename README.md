@@ -34,7 +34,7 @@ _some features might require a pi4 based unit._
 ### Discussion
 **[FORUM](https://llllllll.co/t/twins/71052)**
 ### Download
-**v0.21**
+**v0.22**
 install from Maiden:
 ```
 ;install https://github.com/danielrigler/twins
@@ -42,7 +42,8 @@ install from Maiden:
 And after this do not forget to restart.
 
 ### Version history
-* **v0.21** - LFO bugfix, stereo width
+* **v0.22** - Seek tweak, shift vis, random tapes.
+* **v0.21** - LFO bugfix, stereo width.
 * **v0.20** - Added a deeper subharmonic, LFO tweaks.
 * **v0.19** - Added grain octave variance.
 * **v0.18** - Tap tempo for delay, engine tweaks. 
