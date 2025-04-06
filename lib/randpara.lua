@@ -117,7 +117,14 @@ local function randomize_voice_params(i)
     if math.random() <= 0.6 then targets["eq_low_gain_" .. i] = 0 else targets["eq_low_gain_" .. i] = random_float(0, 0.3) end
     if math.random() <= 0.4 then targets["eq_high_gain_" .. i] = 0 else targets["eq_high_gain_" .. i] = random_float(0, 0.5) end
     if math.random() <= 0.8 then targets[i .. "pitch_random_plus"] = 0 else targets[i .. "pitch_random_plus"] = math.random(0, 100) end
-    if math.random() <= 0.8 then targets[i .. "pitch_random_minus"] = 0 else targets[i .. "pitch_random_minus"] = math.random(0, 100) end  
+    if math.random() <= 0.8 then targets[i .. "pitch_random_minus"] = 0 else targets[i .. "pitch_random_minus"] = math.random(0, 100) end
+    -- VOICE SPECIFIC TAPE
+    if math.random() <= 0.9 then targets[i .. "chew_wet"] = 0 else targets[i .. "chew_wet"] = math.random(0, 85) end      
+
+    for param, _ in pairs(targets) do
+        active_interpolations[param] = true
+    end
+    start_interpolation(steps)
 end
 
 local function randomize_global_params()
@@ -126,15 +133,14 @@ local function randomize_global_params()
     if math.random() <= 0.3 then targets["delay_h"] = 0 else targets["delay_h"] = math.random(25, 80) end
     if math.random() <= 0.25 then targets["delay_rate"] = random_float(0.2, 1) end
     targets["delay_feedback"] = math.random(30, 85)
-    -- TAPE (global parameters)
+    -- TAPE
     if math.random() <= 0.6 then targets["sine_wet"] = 0 else targets["sine_wet"] = math.random(1, 10) end
     if math.random() <= 0.6 then targets["sine_drive"] = 0.75 else targets["sine_drive"] = random_float(0.5, 1.25) end
-    if math.random() <= 0.75 then targets["chew_wet"] = 0 else targets["chew_wet"] = math.random(0, 40) end
-    if math.random() <= 0.5 then targets["chew_depth"] = 0.3 else targets["chew_depth"] = random_float(0.2, 0.5) end
-    if math.random() <= 0.5 then targets["chew_freq"] = 0.3 else targets["chew_freq"] = random_float(0.2, 0.7) end
+    if math.random() <= 0.5 then targets["chew_depth"] = 0.3 else targets["chew_depth"] = random_float(0.2, 0.75) end
+    if math.random() <= 0.5 then targets["chew_freq"] = 0.4 else targets["chew_freq"] = random_float(0.2, 0.8) end
     if math.random() <= 0.5 then targets["chew_variance"] = 0.5 else targets["chew_variance"] = random_float(0.2, 0.8) end
     -- LFO scale (global parameter)
-    if math.random() <= 0.5 then params:set("global_lfo_freq_scale", 1) else params:set("global_lfo_freq_scale", random_float(0.2, 1.6)) end
+    if math.random() <= 0.5 then params:set("global_lfo_freq_scale", 1) else params:set("global_lfo_freq_scale", random_float(0.2, 2)) end
 end
 
 local function randomize_params(steps, track_num)
@@ -167,5 +173,6 @@ return {
     manual_adjust = manual_adjust,
     stop_interpolation_for_param = stop_interpolation_for_param,
     randomize_fverb_params = randomize_fverb_params,
+    randomize_voice_params = randomize_voice_params,
     randomize_greyhole_params = randomize_greyhole_params
 }
