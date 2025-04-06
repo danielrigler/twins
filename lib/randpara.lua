@@ -76,7 +76,7 @@ local function randomize_fverb_params(steps)
     targets["reverb_tail_density"] = math.random(70, 90)
     targets["reverb_decay"] = math.random(65, 90)
     targets["reverb_damping"] = math.random(1000, 4500)
-    targets["reverb_modulator_frequency"] = random_float(0.1, 2.5)
+    targets["reverb_modulator_frequency"] = random_float(0.3, 2)
     targets["reverb_modulator_depth"] = math.random(30, 100)
 
     for param, _ in pairs(targets) do
@@ -91,7 +91,7 @@ local function randomize_greyhole_params(steps)
     targets["time"] = random_float(3, 8)
     targets["size"] = random_float(3, 5)
     targets["mod_depth"] = random_float(0.3, 1)
-    targets["mod_freq"] = random_float(0.1, 2.5)
+    targets["mod_freq"] = random_float(0.3, 2)
     targets["diff"] = random_float(0.10, 0.95)
     targets["feedback"] = random_float(0.1, 0.7)
     targets["damp"] = random_float(0.05, 0.7)
@@ -105,21 +105,21 @@ end
 local function randomize_voice_params(i)
   safe_metro_stop(randomize_metro)
     -- VOICE-SPECIFIC PARAMETERS
-    if math.random() <= 0.9 then targets[i .. "granular_gain"] = 100 else targets[i .. "granular_gain"] = math.random(75, 100) end
+    --if math.random() <= 0.9 then targets[i .. "granular_gain"] = 100 else targets[i .. "granular_gain"] = math.random(85, 100) end
     if math.random() <= 0.4 then targets[i .. "direction_mod"] = 0 else targets[i .. "direction_mod"] = math.random(0, 35) end
     if math.random() <= 0.5 then targets[i .. "size_variation"] = 0 else targets[i .. "size_variation"] = math.random(0, 40) end
-    if math.random() <= 0.6 then targets[i .. "density_mod_amt"] = 0 else targets[i .. "density_mod_amt"] = math.random(0, 45) end
-    if math.random() <= 0.5 then targets[i .. "subharmonics_1"] = 0 else targets[i .. "subharmonics_1"] = random_float(0, 0.4) end
+    if math.random() <= 0.5 then targets[i .. "density_mod_amt"] = 0 else targets[i .. "density_mod_amt"] = math.random(0, 75) end
+    if math.random() <= 0.4 then targets[i .. "subharmonics_1"] = 0 else targets[i .. "subharmonics_1"] = random_float(0, 0.4) end
     if math.random() <= 0.4 then targets[i .. "subharmonics_2"] = 0 else targets[i .. "subharmonics_2"] = random_float(0, 0.4) end
     if math.random() <= 0.4 then targets[i .. "subharmonics_3"] = 0 else targets[i .. "subharmonics_3"] = random_float(0, 0.4) end
-    if math.random() <= 0.5 then targets[i .. "overtones_1"] = 0 else targets[i .. "overtones_1"] = random_float(0, 0.5) end
+    if math.random() <= 0.4 then targets[i .. "overtones_1"] = 0 else targets[i .. "overtones_1"] = random_float(0, 0.5) end
     if math.random() <= 0.4 then targets[i .. "overtones_2"] = 0 else targets[i .. "overtones_2"] = random_float(0, 0.5) end
-    if math.random() <= 0.6 then targets["eq_low_gain_" .. i] = 0 else targets["eq_low_gain_" .. i] = random_float(0, 0.3) end
+    if math.random() <= 0.6 then targets["eq_low_gain_" .. i] = 0 else targets["eq_low_gain_" .. i] = random_float(-0.2, 0.3) end
     if math.random() <= 0.4 then targets["eq_high_gain_" .. i] = 0 else targets["eq_high_gain_" .. i] = random_float(0, 0.5) end
-    if math.random() <= 0.8 then targets[i .. "pitch_random_plus"] = 0 else targets[i .. "pitch_random_plus"] = math.random(0, 100) end
-    if math.random() <= 0.8 then targets[i .. "pitch_random_minus"] = 0 else targets[i .. "pitch_random_minus"] = math.random(0, 100) end
+    if math.random() <= 0.7 then targets[i .. "pitch_random_plus"] = 0 else targets[i .. "pitch_random_plus"] = math.random(0, 100) end
+    if math.random() <= 0.7 then targets[i .. "pitch_random_minus"] = 0 else targets[i .. "pitch_random_minus"] = math.random(0, 100) end
     -- VOICE SPECIFIC TAPE
-    if math.random() <= 0.9 then targets[i .. "chew_wet"] = 0 else targets[i .. "chew_wet"] = math.random(0, 85) end      
+    if math.random() <= 0.8 then targets[i .. "chew_wet"] = 0 else targets[i .. "chew_wet"] = math.random(0, 70) end      
 
     for param, _ in pairs(targets) do
         active_interpolations[param] = true
@@ -130,17 +130,17 @@ end
 local function randomize_global_params()
   safe_metro_stop(randomize_metro)
     -- DELAY (global parameters)
-    if math.random() <= 0.3 then targets["delay_h"] = 0 else targets["delay_h"] = math.random(25, 80) end
-    if math.random() <= 0.25 then targets["delay_rate"] = random_float(0.2, 1) end
+    if math.random() <= 0.3 then targets["delay_h"] = 0 else targets["delay_h"] = math.random(30, 85) end
+    if math.random() <= 0.6 then targets["delay_rate"] = random_float(0.2, 1) end
     targets["delay_feedback"] = math.random(30, 85)
     -- TAPE
-    if math.random() <= 0.6 then targets["sine_wet"] = 0 else targets["sine_wet"] = math.random(1, 10) end
-    if math.random() <= 0.6 then targets["sine_drive"] = 0.75 else targets["sine_drive"] = random_float(0.5, 1.25) end
+    if math.random() <= 0.5 then targets["sine_wet"] = 0 else targets["sine_wet"] = math.random(3, 10) end
+    if math.random() <= 0.6 then targets["sine_drive"] = 0.75 else targets["sine_drive"] = random_float(0.7, 1.3) end
     if math.random() <= 0.5 then targets["chew_depth"] = 0.3 else targets["chew_depth"] = random_float(0.2, 0.75) end
     if math.random() <= 0.5 then targets["chew_freq"] = 0.4 else targets["chew_freq"] = random_float(0.2, 0.8) end
     if math.random() <= 0.5 then targets["chew_variance"] = 0.5 else targets["chew_variance"] = random_float(0.2, 0.8) end
     -- LFO scale (global parameter)
-    if math.random() <= 0.5 then params:set("global_lfo_freq_scale", 1) else params:set("global_lfo_freq_scale", random_float(0.2, 2)) end
+    if math.random() <= 0.3 then params:set("global_lfo_freq_scale", 1) else params:set("global_lfo_freq_scale", random_float(0.2, 1.6)) end
 end
 
 local function randomize_params(steps, track_num)

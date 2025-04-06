@@ -78,6 +78,7 @@ Engine_twins : CroneEngine {
             size_variation=0,
             low_gain=0, high_gain=0,
             width=1,
+            grain_chance=1.0,
             pitch_random_plus=0, pitch_random_minus=0;
  
             var grain_trig;

@@ -113,12 +113,8 @@ local function setup_params()
             end
         end)
     end
-
-    params:add_separator("Actions")
-    params:add_binary("randomize_params", "RaNd0m1ze!", "trigger", 0) 
+    params:add_binary("randomize_params", "Random Tapes", "trigger", 0) 
     params:set_action("randomize_params", function() load_random_tape_file(1) load_random_tape_file(2) randpara.randomize_params(steps) lfo.clearLFOs("1") lfo.clearLFOs("2") lfo.randomize_lfos("1", params:get("allow_volume_lfos") == 2)  lfo.randomize_lfos("2", params:get("allow_volume_lfos") == 2) if randomize_metro[1] then randomize_metro[1]:stop() end if randomize_metro[2] then randomize_metro[2]:stop() end end)
-    params:add_binary("ClearLFOs", "Clear All LFOs", "trigger", 0) 
-    params:set_action("ClearLFOs", function() lfo.clearLFOs() end)
     
     params:add_separator("Settings")
 
@@ -206,9 +202,11 @@ local function setup_params()
     params:add_control("eq_high_gain_2", "2 Treble", controlspec.new(-1, 1, "lin", 0.01, 0, ""))
     params:set_action("eq_high_gain_2", function(value) engine.eq_high_gain(2, value*35) end)
 
-    params:add_group("LFOs", 115)
+    params:add_group("LFOs", 116)
     params:add_binary("randomize_lfos", "RaNd0m1ze LFOs", "trigger", 0) 
     params:set_action("randomize_lfos", function() lfo.clearLFOs("1") lfo.clearLFOs("2") lfo.randomize_lfos("1", params:get("allow_volume_lfos") == 2)  lfo.randomize_lfos("2", params:get("allow_volume_lfos") == 2) if randomize_metro[1] then randomize_metro[1]:stop() end if randomize_metro[2] then randomize_metro[2]:stop() end end)
+    params:add_binary("ClearLFOs", "Clear All LFOs", "trigger", 0) 
+    params:set_action("ClearLFOs", function() lfo.clearLFOs() end)
     params:add_option("allow_volume_lfos", "Allow Volume LFOs", {"no", "yes"}, 2)
     params:add_control("global_lfo_freq_scale", "Freq Scale", controlspec.new(0.1, 10, "exp", 0.01, 1.0, "x")) 
     params:set_action("global_lfo_freq_scale", function(value) 
