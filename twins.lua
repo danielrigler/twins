@@ -537,9 +537,8 @@ function key(n, z)
 
     -- Update key states
     if n == 1 then key1_pressed = z == 1
-       shift = z == 1 and true or false
-    elseif n == 2 then key2_pressed = z == 1
-    elseif n == 3 then key3_pressed = z == 1
+      elseif n == 2 then key2_pressed = z == 1
+      elseif n == 3 then key3_pressed = z == 1
     end
 
     -- Key press handlers (z == 1 only)
@@ -698,7 +697,7 @@ local function draw_param_row(y, label, param1, param2, is_density, is_pitch, is
             local min_val, max_val = lfo.get_parameter_range(param)
             local bar_value = util.linlin(min_val, max_val, 0, bar_width, lfo_mod)
             
-            screen.level(shift and 6 or 1)
+            screen.level(key1_pressed and 6 or 1)
             screen.rect(x, y + 1, bar_value, bar_height)
             screen.fill()
         end
@@ -839,7 +838,7 @@ function redraw()
         end
     end
 
-    screen.level(shift and 6 or 3)
+    screen.level(key1_pressed and 6 or 3)
     draw_volume_bar(0, 1)
     draw_volume_bar(127, 2)
 
@@ -853,7 +852,7 @@ function redraw()
             screen.fill()
         end
     end
-    screen.level(shift and 6 or 1)
+    screen.level(key1_pressed and 6 or 1)
     draw_pan_indicator(1, 52)
     draw_pan_indicator(2, 93)
 
