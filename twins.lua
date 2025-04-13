@@ -69,10 +69,8 @@ end
 
 local function is_lfo_active_for_param(param_name)
     for i = 1, 16 do
-        -- Get the target parameter name for the LFO
         local target_index = params:get(i .. "lfo_target")
-        local target_param = lfo.lfo_targets[target_index]
-        if target_param == param_name and params:get(i .. "lfo") == 2 then
+        if lfo.lfo_targets[target_index] == param_name and params:get(i .. "lfo") == 2 then
             return true, i
         end
     end
@@ -642,12 +640,9 @@ end
 local function get_lfo_modulation(param_name)
     for i = 1, 16 do
         local target_index = params:get(i .. "lfo_target")
-        local target_param = lfo.lfo_targets[target_index]
-        if target_param == param_name and params:get(i .. "lfo") == 2 then
-            -- Return the actual modulated value from the LFO
-            local min_param_value, max_param_value = lfo.get_parameter_range(param_name)
-            local modulated_value = lfo.scale(lfo[i].slope, -1.0, 1.0, min_param_value, max_param_value)
-            return modulated_value
+        if lfo.lfo_targets[target_index] == param_name and params:get(i .. "lfo") == 2 then
+            local min_val, max_val = lfo.get_parameter_range(param_name)
+            return min_val + (lfo[i].slope + 1) * 0.5 * (max_val - min_val)
         end
     end
     return nil

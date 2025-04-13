@@ -101,11 +101,9 @@ function lfo.clearLFOs(track, param_type)
             return string.match(target, "^"..track) 
         end)
     else
-        -- Clear all LFOs
         clear_targets(function() return true end)
     end
 
-    -- Only reset pan if we're clearing all LFOs or all LFOs for a track
     if not param_type then
         reset_pan()
     end
