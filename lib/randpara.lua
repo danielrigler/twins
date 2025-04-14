@@ -116,8 +116,8 @@ local function randomize_voice_params(i)
     if math.random() <= 0.4 then targets[i .. "overtones_2"] = 0 else targets[i .. "overtones_2"] = random_float(0, 0.5) end
     if math.random() <= 0.6 then targets["eq_low_gain_" .. i] = 0 else targets["eq_low_gain_" .. i] = random_float(-0.2, 0.3) end
     if math.random() <= 0.4 then targets["eq_high_gain_" .. i] = 0 else targets["eq_high_gain_" .. i] = random_float(0, 0.5) end
-    if math.random() <= 0.7 then targets[i .. "pitch_random_plus"] = 0 else targets[i .. "pitch_random_plus"] = math.random(0, 100) end
-    if math.random() <= 0.7 then targets[i .. "pitch_random_minus"] = 0 else targets[i .. "pitch_random_minus"] = math.random(0, 100) end
+    --if math.random() <= 0.7 then targets[i .. "pitch_random_plus"] = 0 else targets[i .. "pitch_random_plus"] = math.random(0, 100) end
+    --if math.random() <= 0.7 then targets[i .. "pitch_random_minus"] = 0 else targets[i .. "pitch_random_minus"] = math.random(0, 100) end
     -- VOICE SPECIFIC TAPE
     if math.random() <= 0.8 then targets[i .. "chew_wet"] = 0 else targets[i .. "chew_wet"] = math.random(0, 70) end      
 
