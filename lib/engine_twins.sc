@@ -3,6 +3,7 @@ Engine_twins : CroneEngine {
 
     var greyholeEffect;
     var fverbEffect;
+    var shimmerEffect;
     var directOut;
     var <buffersL;
     var <buffersR;
@@ -207,6 +208,16 @@ Engine_twins : CroneEngine {
             var sig = (wet * mix) + (dry * (1 - mix)); 
             Out.ar(out, sig);
         }).add;
+        
+        SynthDef(\shimmer, {
+            arg in, out, mix=0.5;
+            var snd;
+            snd = In.ar(in, 2);
+            snd = snd + DelayN.ar(PitchShift.ar(snd, 0.13, 2,0,1,1*mix), 0.03, 0.03);
+            snd = snd + DelayN.ar(PitchShift.ar(snd, 0.1, 4,0,1,0.5*mix/2), 0.03, 0.03);
+            snd = snd + DelayN.ar(PitchShift.ar(snd, 0.1, 8,0,1,0.25*mix/4), 0.03, 0.03);
+            Out.ar(out, snd);
+        }).add;
 
         SynthDef(\directOut, {
             arg in, out;
@@ -246,6 +257,12 @@ Engine_twins : CroneEngine {
             \modulator_depth, 0.5
         ], context.xg);
         
+        shimmerEffect = Synth.new(\shimmer, [
+            \in, mixBus.index,
+            \out, context.out_b.index,
+            \mix, 0.0,
+        ], context.xg);
+        
         directOut = Synth.new(\directOut, [
             \in, mixBus.index,
             \out, context.out_b.index
@@ -277,6 +294,17 @@ Engine_twins : CroneEngine {
             });
         });
 
+        this.addCommand("shimmer_mix", "f", { arg msg;
+            var mix = msg[1];
+            if (mix == 0) { 
+                shimmerEffect.run(false);
+                directOut.run(true);
+            } { 
+                shimmerEffect.run(true); 
+                directOut.run(false);
+            };
+            shimmerEffect.set(\mix, mix);
+        });
 
         this.addCommand("greyhole_delay_time", "f", { arg msg; greyholeEffect.set(\delayTime, msg[1]); });
         this.addCommand("greyhole_damp", "f", { arg msg; greyholeEffect.set(\damp, msg[1]); });
@@ -348,6 +376,7 @@ Engine_twins : CroneEngine {
         buffersR.do({ arg b; b.free; });
         greyholeEffect.free;
         fverbEffect.free;
+        shimmerEffect.free;
         directOut.free;
         mixBus.free;
         bufSine.free;

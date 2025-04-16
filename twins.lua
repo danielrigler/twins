@@ -6,7 +6,7 @@
 --           by: @dddstudio                       
 --
 --                          
---                           v0.22
+--                           v0.23
 -- E1: Master Volume
 -- K1+E2/E3: Volume 1/2
 -- K1+E1: Crossfade Volumes
@@ -259,12 +259,15 @@ local function setup_params()
       params:add_option(i .. "lock_seek", i .. " lock seek", {"off", "on"}, 1) -- Add this line
     end
 
-    params:add_group("Other", 5)
+    params:add_group("Other", 7)
     params:add_separator("Stereo Width")
     for i = 1, 2 do
     params:add_control(i .. "Width", i .. " Width", controlspec.new(0, 200, "lin", 0.01, 100, "%"))
     params:set_action(i .. "Width", function(value) engine.width(i, value / 100) end)
     end  
+    params:add_separator("Shimmer")
+    params:add_taper("shimmer_mix", "Shimmer", 0, 100, 0, 0, "%")
+    params:set_action("shimmer_mix", function(x) engine.shimmer_mix(x/20) end)
     params:add_separator("Transition Steps")
     params:add_control("steps","Steps",controlspec.new(10,2000,"lin",1,400)) params:set_action("steps", function(value) steps = value end)
     
