@@ -277,8 +277,6 @@ local function interpolate(start_val, end_val, factor)
     return start_val + (end_val - start_val) * factor
 end
 
-local active_controlled_params = {} -- Track which parameters are being controlled by encoders
-
 local function randomize(n)
     if not randomize_metro[n] then 
         randomize_metro[n] = metro.init() 
@@ -319,7 +317,6 @@ local function randomize(n)
         end
     end
 
-    -- Randomize pitch parameter with optimized logic
     if param_config.pitch.lock and not active_controlled_params[param_config.pitch.param_name] then
         if min_pitch < max_pitch and not is_lfo_active_for_param(param_config.pitch.param_name) then
             local weighted_intervals = {
@@ -330,7 +327,6 @@ local function randomize(n)
                 {interval = 12, weight = 3}
             }
 
-            -- Filter valid intervals first
             local valid_intervals = {}
             for _, v in ipairs(weighted_intervals) do
                 local candidate_pitch = base_pitch + v.interval
@@ -340,13 +336,11 @@ local function randomize(n)
             end
 
             if #valid_intervals > 0 then
-                -- Calculate total weight once
                 local total_weight = 0
                 for _, v in ipairs(valid_intervals) do
                     total_weight = total_weight + v.weight
                 end
 
-                -- Select weighted random interval
                 local random_weight = math.random(total_weight)
                 local cumulative_weight = 0
 
@@ -358,7 +352,6 @@ local function randomize(n)
                     end
                 end
             else
-                -- Fallback to larger intervals if no valid ones found
                 local larger_intervals = {-24, -19, -17, -15, 15, 17, 19, 24}
                 for _, interval in ipairs(larger_intervals) do
                     local candidate_pitch = base_pitch + interval
@@ -371,13 +364,11 @@ local function randomize(n)
         end
     end
 
-    -- Start the interpolation metro with optimized logic
     randomize_metro[n].time = 1/30
     randomize_metro[n].event = function(count)
         local tolerance = 0.01
         local factor = count / steps
         local all_done = true
-
         for param, target in pairs(targets) do
             if not active_controlled_params[param] then
                 local current_value = params:get(param)
@@ -386,12 +377,10 @@ local function randomize(n)
                 all_done = all_done and (math.abs(new_value - target) < tolerance)
             end
         end
-
         if all_done then 
             randomize_metro[n]:stop() 
         end
     end
-    
     randomize_metro[n]:start()
 end
 
@@ -419,7 +408,20 @@ end
 
 function enc(n, d)
     if not installer:ready() then return end
-
+                
+    local param_modes = {
+      speed = {param = "speed", delta = 0.5},
+      seek = {param = "seek", delta = 1, wrap = {0, 100}, engine = true},
+      pan = {param = "pan", delta = 5},
+      lpf = {param = "cutoff", delta = 1},
+      hpf = {param = "hpf", delta = 1},
+      jitter = {param = "jitter", delta = 2},
+      size = {param = "size", delta = 2},
+      density = {param = "density", delta = 2},
+      spread = {param = "spread", delta = 2},
+      pitch = {param = "pitch", delta = 1}
+    }
+                
     local enc_actions = {
         [1] = function()
             local is_active1, lfo_index1 = is_lfo_active_for_param("1volume")
@@ -452,28 +454,12 @@ function enc(n, d)
                 if is_active then params:set(lfo_index .. "lfo", 1) end
                 params:delta("1volume", 3*d)
             else
-                local param_modes = {
-                    speed = {param = "speed", delta = 0.5},
-                    seek = {param = "seek", delta = 1, wrap = {0, 100}, engine = true},
-                    pan = {param = "pan", delta = 5},
-                    lpf = {param = "cutoff", delta = 1},
-                    hpf = {param = "hpf", delta = 1},
-                    jitter = {param = "jitter", delta = 2},
-                    size = {param = "size", delta = 2},
-                    density = {param = "density", delta = 2},
-                    spread = {param = "spread", delta = 2},
-                    pitch = {param = "pitch", delta = 1}
-                }
-                
                 local mode = (current_mode == "lpf" or current_mode == "hpf") and current_filter_mode or current_mode
                 local config = param_modes[mode]
                 local param_name = track .. config.param
-                
                 active_controlled_params[param_name] = true
-                
                 local is_active, lfo_index = is_lfo_active_for_param(param_name)
                 if is_active then params:set(lfo_index .. "lfo", 1) end
-                
                 if config.wrap then
                     local current_val = params:get(param_name)
                     local new_val = wrap_value(current_val + d, config.wrap[1], config.wrap[2])
@@ -492,28 +478,12 @@ function enc(n, d)
                 if is_active then params:set(lfo_index .. "lfo", 1) end
                 params:delta("2volume", 3*d)
             else
-                local param_modes = {
-                    speed = {param = "speed", delta = 0.5},
-                    seek = {param = "seek", delta = 1, wrap = {0, 100}, engine = true},
-                    pan = {param = "pan", delta = 5},
-                    lpf = {param = "cutoff", delta = 1},
-                    hpf = {param = "hpf", delta = 1},
-                    jitter = {param = "jitter", delta = 2},
-                    size = {param = "size", delta = 2},
-                    density = {param = "density", delta = 2},
-                    spread = {param = "spread", delta = 2},
-                    pitch = {param = "pitch", delta = 1}
-                }
-                
                 local mode = (current_mode == "lpf" or current_mode == "hpf") and current_filter_mode or current_mode
                 local config = param_modes[mode]
                 local param_name = track .. config.param
-                
                 active_controlled_params[param_name] = true
-                
                 local is_active, lfo_index = is_lfo_active_for_param(param_name)
                 if is_active then params:set(lfo_index .. "lfo", 1) end
-                
                 if config.wrap then
                     local current_val = params:get(param_name)
                     local new_val = wrap_value(current_val + d, config.wrap[1], config.wrap[2])
@@ -525,7 +495,6 @@ function enc(n, d)
             end
         end
     }
-    
     if enc_actions[n] then enc_actions[n]() end
 end
 
@@ -535,15 +504,12 @@ function key(n, z)
         return 
     end
 
-    -- Update key states
     if n == 1 then key1_pressed = z == 1
       elseif n == 2 then key2_pressed = z == 1
       elseif n == 3 then key3_pressed = z == 1
     end
 
-    -- Key press handlers (z == 1 only)
     if z == 1 then
-        -- Handle key combinations for randomization
         if key1_pressed then
             if n == 2 then
                 lfo.clearLFOs(1)
@@ -560,7 +526,6 @@ function key(n, z)
             end
         end
 
-        -- Handle single key presses for mode switching
         if not key1_pressed then
             if n == 2 then
                 local modes = {"pitch", "spread", "density", "size", "jitter", "lpf", "pan", "seek", "speed"}
@@ -576,7 +541,6 @@ function key(n, z)
         end
     end
 
-    -- Handle key2 + key3 combination (works on both press and release)
     if key2_pressed and key3_pressed then
         if current_mode == "lpf" or current_mode == "hpf" then
             -- Toggle between LPF and HPF modes
@@ -656,20 +620,16 @@ local function draw_param_row(y, label, param1, param2, is_density, is_pitch, is
     local is_locked2 = is_param_locked(2, param_name)
     local text_level = is_highlighted and 15 or 1
 
-    -- Draw the label (always level 15)
     screen.level(15)
     screen.move(5, y)
     screen.text(label)
 
-    -- Helper function to draw parameter value with common logic
     local function draw_param_value(x, param, is_locked)
         if is_locked then
-            draw_l_shape(x, y, true)  -- Draw pulsing "L" shape for locked parameter
+            draw_l_shape(x, y, true)  
         end
-        
         screen.move(x, y)
         screen.level(text_level)
-        
         if is_density then
             screen.text(format_density(params:get(param)))
         elseif is_pitch then
@@ -681,11 +641,9 @@ local function draw_param_row(y, label, param1, param2, is_density, is_pitch, is
         end
     end
 
-    -- Draw both parameter values
     draw_param_value(51, param1, is_locked1)
     draw_param_value(92, param2, is_locked2)
 
-    -- Helper function to draw LFO visualization bars
     local function draw_lfo_bar(x, param)
         local lfo_mod = get_lfo_modulation(param)
         if lfo_mod then
@@ -693,14 +651,12 @@ local function draw_param_row(y, label, param1, param2, is_density, is_pitch, is
             local bar_height = 1
             local min_val, max_val = lfo.get_parameter_range(param)
             local bar_value = util.linlin(min_val, max_val, 0, bar_width, lfo_mod)
-            
             screen.level(key1_pressed and 6 or 1)
             screen.rect(x, y + 1, bar_value, bar_height)
             screen.fill()
         end
     end
 
-    -- Draw both LFO bars
     draw_lfo_bar(51, param1)
     draw_lfo_bar(92, param2)
 end
@@ -732,16 +688,12 @@ end
 
 local function format_speed(speed)
     if math.abs(speed) < 1 then
-        -- Remove leading zero for speeds between 0 and 1
         if speed < 0 then
-            -- Include negative sign for negative speeds
             return string.format("-.%02dx", math.floor(math.abs(speed) * 100))
         else
-            -- No negative sign for positive speeds
             return string.format(".%02dx", math.floor(math.abs(speed) * 100))
         end
     else
-        -- Display full value for speeds >= 1
         return string.format("%.2fx", speed)
     end
 end
@@ -750,7 +702,6 @@ function redraw()
     if not installer:ready() then installer:redraw() do return end end
     screen.clear()
 
-    -- Draw parameter rows with highlighting
     local param_rows = {
         {y = 10, label = "jitter:    ", mode = "jitter", param1 = "1jitter", param2 = "2jitter", hz = false, st = false},
         {y = 20, label = "size:     ", mode = "size", param1 = "1size", param2 = "2size", hz = false, st = false},
@@ -763,7 +714,6 @@ function redraw()
         draw_param_row(row.y, row.label, row.param1, row.param2, row.hz, row.st, current_mode == row.mode)
     end
 
-    -- Handle bottom row display
     local bottom_row = {
         x = 5, y = 60,
         labels = {
