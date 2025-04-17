@@ -210,12 +210,12 @@ Engine_twins : CroneEngine {
         }).add;
         
         SynthDef(\shimmer, {
-            arg in, out, mix=0.5;
+            arg in, out, mix=0.0;
             var snd;
             snd = In.ar(in, 2);
-            snd = snd + DelayN.ar(PitchShift.ar(snd, 0.13, 2,0,1,1*mix), 0.03, 0.03);
-            snd = snd + DelayN.ar(PitchShift.ar(snd, 0.1, 4,0,1,0.5*mix/2), 0.03, 0.03);
-            snd = snd + DelayN.ar(PitchShift.ar(snd, 0.1, 8,0,1,0.25*mix/4), 0.03, 0.03);
+            snd = snd + PitchShift.ar(snd, 0.13, 2,0,1,1*mix);
+            snd = snd + PitchShift.ar(snd, 0.1, 4,0,1,0.5*mix/2);
+            snd = snd + PitchShift.ar(snd, 0.1, 8,0,1,0.25*mix/4);
             Out.ar(out, snd);
         }).add;
 
@@ -260,7 +260,7 @@ Engine_twins : CroneEngine {
         shimmerEffect = Synth.new(\shimmer, [
             \in, mixBus.index,
             \out, context.out_b.index,
-            \mix, 0.0,
+            \mix, 0.0
         ], context.xg);
         
         directOut = Synth.new(\directOut, [

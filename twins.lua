@@ -145,8 +145,10 @@ local function setup_params()
     params:add_control("mod_depth", "Mod Depth", controlspec.new(0.0, 1.0, "lin", 0.01, 0.85, "")) params:set_action("mod_depth", function(value) engine.greyhole_mod_depth(value) end)
     params:add_control("mod_freq", "Mod Freq", controlspec.new(0.0, 10.0, "lin", 0.01, 0.7, "Hz")) params:set_action("mod_freq", function(value) engine.greyhole_mod_freq(value) end)   
 
-    params:add_group("Grains", 27)
+    params:add_group("Grains", 28)
     params:add_binary("randomize_voices", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_voices", function() randpara.randomize_voice_params(1) randpara.randomize_voice_params(2) end)
+    params:add_control("shimmer_mix", "Shimmer", controlspec.new(0, 100, "lin", 1, 0, "%"))
+    params:set_action("shimmer_mix", function(x) engine.shimmer_mix(x/30) end)
     for i = 1, 2 do
       params:add_separator("Sample " ..i)
       params:add_control(i .. "granular_gain", i .. " Mix", controlspec.new(0, 100, "lin", 1, 100, "%")) 
@@ -259,15 +261,12 @@ local function setup_params()
       params:add_option(i .. "lock_seek", i .. " lock seek", {"off", "on"}, 1) -- Add this line
     end
 
-    params:add_group("Other", 7)
+    params:add_group("Other", 5)
     params:add_separator("Stereo Width")
     for i = 1, 2 do
     params:add_control(i .. "Width", i .. " Width", controlspec.new(0, 200, "lin", 0.01, 100, "%"))
     params:set_action(i .. "Width", function(value) engine.width(i, value / 100) end)
     end  
-    params:add_separator("Shimmer")
-    params:add_taper("shimmer_mix", "Shimmer", 0, 100, 0, 0, "%")
-    params:set_action("shimmer_mix", function(x) engine.shimmer_mix(x/20) end)
     params:add_separator("Transition Steps")
     params:add_control("steps","Steps",controlspec.new(10,2000,"lin",1,400)) params:set_action("steps", function(value) steps = value end)
     

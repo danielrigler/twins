@@ -116,8 +116,11 @@ local function randomize_voice_params(i)
     if math.random() <= 0.4 then targets[i .. "overtones_2"] = 0 else targets[i .. "overtones_2"] = random_float(0, 0.5) end
     if math.random() <= 0.6 then targets["eq_low_gain_" .. i] = 0 else targets["eq_low_gain_" .. i] = random_float(-0.2, 0.3) end
     if math.random() <= 0.4 then targets["eq_high_gain_" .. i] = 0 else targets["eq_high_gain_" .. i] = random_float(0, 0.5) end
-    --if math.random() <= 0.7 then targets[i .. "pitch_random_plus"] = 0 else targets[i .. "pitch_random_plus"] = math.random(0, 100) end
-    --if math.random() <= 0.7 then targets[i .. "pitch_random_minus"] = 0 else targets[i .. "pitch_random_minus"] = math.random(0, 100) end
+    -- STEREO WIDTH
+    if math.random() <= 0.75 then targets[i.."Width"] = 100 else targets[i.."Width"] = math.random(100, 200) end
+    -- OCTAVE VARIATION
+    if math.random() <= 0.5 then targets[i .. "pitch_random_plus"] = 0 end
+    if math.random() <= 0.5 then targets[i .. "pitch_random_minus"] = 0 end
     -- VOICE SPECIFIC TAPE
     if math.random() <= 0.8 then targets[i .. "chew_wet"] = 0 else targets[i .. "chew_wet"] = math.random(0, 70) end      
 
@@ -133,6 +136,8 @@ local function randomize_global_params()
     if math.random() <= 0.3 then targets["delay_h"] = 0 else targets["delay_h"] = math.random(30, 85) end
     if math.random() <= 0.6 then targets["delay_rate"] = random_float(0.2, 1) end
     targets["delay_feedback"] = math.random(30, 85)
+    -- SHIMMER
+    if math.random() <= 0.5 then targets["shimmer_mix"] = 0.0 end
     -- TAPE
     if math.random() <= 0.5 then targets["sine_wet"] = 0 else targets["sine_wet"] = math.random(3, 10) end
     if math.random() <= 0.6 then targets["sine_drive"] = 0.75 else targets["sine_drive"] = random_float(0.7, 1.3) end
