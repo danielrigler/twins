@@ -9,13 +9,14 @@ Heavily influenced by @cfd90's Twine and contains inspiration and code from a lo
 **Some of the new features:**
 * Reverbs and delays
 * Flexible volume control
-* Tape effects, EQ
+* Tape effects, shimmer, EQ
+* Lots of granular parameters
 * Increased parameter ranges
 * Smooth transition interpolation
 * Freely assignable LFOs with randomization
 * Navigation with parameter locking
 * High-pass and low-pass filters
-+lots of other tweaks and features.
++lots of other usability tweaks and features.
 
 ### Requirements
 norns / norns shield  
@@ -34,7 +35,7 @@ _some features might require a pi4 based unit._
 ### Discussion
 **[FORUM](https://llllllll.co/t/twins/71052)**
 ### Download
-**v0.22**
+**v0.23**
 install from Maiden:
 ```
 ;install https://github.com/danielrigler/twins
@@ -42,6 +43,7 @@ install from Maiden:
 And after this do not forget to restart.
 
 ### Version history
+* **v0.23** - Added shimmer again. 0 mix is bypass to save resources. 
 * **v0.22** - Seek tweak, shift vis, random tapes.
 * **v0.21** - LFO bugfix, stereo width.
 * **v0.20** - Added a deeper subharmonic, LFO tweaks.
