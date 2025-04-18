@@ -10,7 +10,7 @@ Heavily influenced by @cfd90's Twine and contains inspiration and code from a lo
 * Reverbs and delays
 * Flexible volume control
 * Tape effects, shimmer, EQ
-* Lots of granular parameters
+* Lots of extra granular parameters
 * Increased parameter ranges
 * Smooth transition interpolation
 * Freely assignable LFOs with randomization
@@ -35,7 +35,7 @@ _some features might require a pi4 based unit._
 ### Discussion
 **[FORUM](https://llllllll.co/t/twins/71052)**
 ### Download
-**v0.23**
+**v0.24**
 install from Maiden:
 ```
 ;install https://github.com/danielrigler/twins
@@ -43,6 +43,7 @@ install from Maiden:
 And after this do not forget to restart.
 
 ### Version history
+* **v0.24** - Added tape wobble. 
 * **v0.23** - Added shimmer again. 0 mix is bypass to save resources. 
 * **v0.22** - Seek tweak, shift vis, random tapes.
 * **v0.21** - LFO bugfix, stereo width.
@@ -56,4 +57,4 @@ And after this do not forget to restart.
 * **v0.13** - Added grain size randomization controls per voice.
 * **v0.12** - Volume fix, reverse direction mod
 * **v0.11** - Minor tweaks and optimizations. Increased grain size range. Locking enhancements.
-* **v0.1** - First release.
+* **v0.10** - First release.
