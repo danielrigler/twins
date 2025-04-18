@@ -11,6 +11,7 @@ Engine_twins : CroneEngine {
     var mixBus;
     var <seek_tasks;
     var bufSine;
+    var <wobbleBuffers;
 
     *new { arg context, doneCallback;
         ^super.new(context, doneCallback);
@@ -57,7 +58,7 @@ Engine_twins : CroneEngine {
 
         bufSine = Buffer.alloc(context.server, 1024 * 16, 1);
         bufSine.sine2([2], [0.5], false);
-        
+        wobbleBuffers = Array.fill(nvoices, {Buffer.alloc(context.server, 48000 * 1, 2) });
         context.server.sync;
       
         SynthDef(\synth, {
@@ -80,7 +81,14 @@ Engine_twins : CroneEngine {
             low_gain=0, high_gain=0,
             width=1,
             grain_chance=1.0,
-            pitch_random_plus=0, pitch_random_minus=0;
+            pitch_random_plus=0, pitch_random_minus=0,
+            wobble_wet=0,
+            wobble_amp=0.05,
+            wobble_rpm=33,
+            flutter_amp=0.03,
+            flutter_freq=6,
+            flutter_var=2,
+            wobble_bufnum;
  
             var grain_trig;
             var jitter_sig;
@@ -113,6 +121,10 @@ Engine_twins : CroneEngine {
             var positive_intervals = [12, 24], negative_intervals = [-12, -24];
             var rand_val, do_plus, interval_plus, do_minus, interval_minus, final_interval;
             var mid, side, widthCtrl;
+            var wow = wobble_amp * SinOsc.kr(wobble_rpm/60, mul:0.2); // wow and flutter from Stefaan Himpe https://sccode.org/1-5bP & Zackary Scholl
+            var flutter = flutter_amp * SinOsc.kr(flutter_freq + LFNoise2.kr(flutter_var), mul:0.1);
+            var rate = 1 + (wobble_wet * (wow + flutter));
+            var pw, pr;
 
             density_mod = density * (2**(trig_rnd * density_mod_amt));
             grain_trig = Impulse.kr(density_mod);
@@ -159,6 +171,12 @@ Engine_twins : CroneEngine {
             shaped = Shaper.ar(bufSine, sig_mix * sine_drive);
             sig_mix = SelectX.ar(Lag.kr(sine_wet), [sig_mix, shaped]);
 
+            // wow and flutter from Stefaan Himpe https://sccode.org/1-5bP & Zackary Scholl
+            pw = Phasor.ar(0, BufRateScale.kr(wobble_bufnum), 0, BufFrames.kr(wobble_bufnum));
+            BufWr.ar(sig_mix, wobble_bufnum, pw);
+            pr = DelayL.ar(Phasor.ar(0, BufRateScale.kr(wobble_bufnum)*rate, 0, BufFrames.kr(wobble_bufnum)), 0.2, 0.2);
+            sig_mix = BufRd.ar(2, wobble_bufnum, pr, interpolation:4);
+
             sig_mix = SelectX.ar(Lag.kr(chew_wet), [sig_mix, AnalogChew.ar(sig_mix, chew_depth, chew_freq, chew_variance)]);
 
             sig_mix = BHiPass4.ar(sig_mix, Lag.kr(hpf), Lag.kr(hpfrq));
@@ -167,7 +185,7 @@ Engine_twins : CroneEngine {
             low = BLowShelf.ar(sig_mix, 375, 5, low_gain);
             high = BHiShelf.ar(sig_mix, 3600, 5, high_gain);
             sig_mix = low + high;
-            
+
             sig_mix = Compander.ar(sig_mix,sig_mix,0.25)/2;
             
             widthCtrl = width.clip(0, 2);
@@ -189,10 +207,10 @@ Engine_twins : CroneEngine {
                 \out, mixBus.index, 
                 \buf_l, buffersL[i],
                 \buf_r, buffersR[i],
-            ], 
-            );
+                \wobble_bufnum, wobbleBuffers[i]  // Add this line
+            ]);
         });
- 
+
         SynthDef(\greyhole, {
             arg in, out, delayTime=2.0, damp=0.1, size=3.0, diff=0.7, feedback=0.2, modDepth=0.0, modFreq=0.1, mix=0.5;
             var dry = In.ar(in, 2);
@@ -361,11 +379,19 @@ Engine_twins : CroneEngine {
         this.addCommand("chew_depth", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\chew_depth, msg[2]); });
         this.addCommand("chew_freq", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\chew_freq, msg[2]); });
         this.addCommand("chew_variance", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\chew_variance, msg[2]); });
+        this.addCommand("wobble_wet", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\wobble_wet, msg[2]); });
+        this.addCommand("wobble_amp", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\wobble_amp, msg[2]); });
+        this.addCommand("wobble_rpm", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\wobble_rpm, msg[2]); });
+        this.addCommand("flutter_amp", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\flutter_amp, msg[2]); });
+        this.addCommand("flutter_freq", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\flutter_freq, msg[2]); });
+        this.addCommand("flutter_var", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\flutter_var, msg[2]); });
         
         this.addCommand("eq_low_gain", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\low_gain, msg[2]); });
         this.addCommand("eq_high_gain", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\high_gain, msg[2]); });
         
         this.addCommand("width", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\width, msg[2]); });
+
+
 
         seek_tasks = Array.fill(nvoices, { arg i; Routine {} });
     }
@@ -374,6 +400,7 @@ Engine_twins : CroneEngine {
         voices.do({ arg voice; voice.free; });
         buffersL.do({ arg b; b.free; });
         buffersR.do({ arg b; b.free; });
+        wobbleBuffers.do({ arg b; b.free; });
         greyholeEffect.free;
         fverbEffect.free;
         shimmerEffect.free;

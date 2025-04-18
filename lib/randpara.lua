@@ -121,8 +121,6 @@ local function randomize_voice_params(i)
     -- OCTAVE VARIATION
     if math.random() <= 0.5 then targets[i .. "pitch_random_plus"] = 0 end
     if math.random() <= 0.5 then targets[i .. "pitch_random_minus"] = 0 end
-    -- VOICE SPECIFIC TAPE
-    if math.random() <= 0.8 then targets[i .. "chew_wet"] = 0 else targets[i .. "chew_wet"] = math.random(0, 70) end      
 
     for param, _ in pairs(targets) do
         active_interpolations[param] = true
@@ -139,11 +137,9 @@ local function randomize_global_params()
     -- SHIMMER
     if math.random() <= 0.5 then targets["shimmer_mix"] = 0.0 end
     -- TAPE
-    if math.random() <= 0.5 then targets["sine_wet"] = 0 else targets["sine_wet"] = math.random(3, 10) end
-    if math.random() <= 0.6 then targets["sine_drive"] = 0.75 else targets["sine_drive"] = random_float(0.7, 1.3) end
-    if math.random() <= 0.5 then targets["chew_depth"] = 0.3 else targets["chew_depth"] = random_float(0.2, 0.75) end
-    if math.random() <= 0.5 then targets["chew_freq"] = 0.4 else targets["chew_freq"] = random_float(0.2, 0.8) end
-    if math.random() <= 0.5 then targets["chew_variance"] = 0.5 else targets["chew_variance"] = random_float(0.2, 0.8) end
+
+
+
     -- LFO scale (global parameter)
     if math.random() <= 0.3 then params:set("global_lfo_freq_scale", 1) else params:set("global_lfo_freq_scale", random_float(0.2, 1.5)) end
 end
@@ -156,8 +152,9 @@ local function randomize_params(steps, track_num)
 
     -- Set up new randomizations
     randomize_global_params()
-    randomize_fverb_params(steps)
-    randomize_greyhole_params(steps)
+  --  randomize_fverb_params(steps)
+  --  randomize_greyhole_params(steps)
+  --  randomize_tape_params(steps)
     
     if track_num then
         randomize_voice_params(track_num)
@@ -179,5 +176,6 @@ return {
     stop_interpolation_for_param = stop_interpolation_for_param,
     randomize_fverb_params = randomize_fverb_params,
     randomize_voice_params = randomize_voice_params,
-    randomize_greyhole_params = randomize_greyhole_params
+    randomize_greyhole_params = randomize_greyhole_params,
+    randomize_tape_params = randomize_tape_params
 }
