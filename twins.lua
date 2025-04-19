@@ -119,8 +119,7 @@ local function setup_params()
     params:add_group("Delay", 4)
     delay.init()
 
-    params:add_group("Reverbs", 24)
-    params:add_separator("Fverb2")
+    params:add_group("Reverb", 13)
     params:add_binary("randomize_fverb", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_fverb", function() randpara.randomize_fverb_params(steps) end)
     params:add_taper("reverb_mix", "Mix", 0, 100, 0.0, 0, "%") params:set_action("reverb_mix", function(value) engine.reverb_mix(value / 100) end)
     params:add_taper("reverb_predelay", "Predelay", 0, 250, 20, 0, "ms") params:set_action("reverb_predelay", function(value) engine.reverb_predelay(value) end)
@@ -134,21 +133,11 @@ local function setup_params()
     params:add_taper("reverb_damping", "Damping", 0, 20000, 6000, 0, "Hz") params:set_action("reverb_damping", function(value) engine.reverb_damping(value) end)
     params:add_taper("reverb_modulator_depth", "Mod Depth", 0, 100, 40, 0, "%") params:set_action("reverb_modulator_depth", function(value) engine.reverb_modulator_depth(value / 100) end)
     params:add_taper("reverb_modulator_frequency", "Mod Freq", 0, 10, 1, 0, "Hz") params:set_action("reverb_modulator_frequency", function(value) engine.reverb_modulator_frequency(value) end)
-    params:add_separator("Greyhole")
-    params:add_binary("randomize_greyhole", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_greyhole", function() randpara.randomize_greyhole_params(steps) end)
-    params:add_taper("greyhole_mix", "Mix", 0, 100, 0.0, 0, "%") params:set_action("greyhole_mix", function(value) engine.greyhole_mix(value / 100) end)
-    params:add_control("time", "Time", controlspec.new(0.00, 10.00, "lin", 0.01, 3, "")) params:set_action("time", function(value) engine.greyhole_delay_time(value) end)
-    params:add_control("size", "Size", controlspec.new(0.5, 5.0, "lin", 0.01, 4.00, "")) params:set_action("size", function(value) engine.greyhole_size(value) end)
-    params:add_control("damp", "Damping", controlspec.new(0.0, 1.0, "lin", 0.01, 0.1, "")) params:set_action("damp", function(value) engine.greyhole_damp(value) end)
-    params:add_control("diff", "Diffusion", controlspec.new(0.0, 1.0, "lin", 0.01, 0.5, "")) params:set_action("diff", function(value) engine.greyhole_diff(value) end)
-    params:add_control("feedback", "Feedback", controlspec.new(0.00, 1.0, "lin", 0.01, 0.22, "")) params:set_action("feedback", function(value) engine.greyhole_feedback(value) end)
-    params:add_control("mod_depth", "Mod Depth", controlspec.new(0.0, 1.0, "lin", 0.01, 0.85, "")) params:set_action("mod_depth", function(value) engine.greyhole_mod_depth(value) end)
-    params:add_control("mod_freq", "Mod Freq", controlspec.new(0.0, 10.0, "lin", 0.01, 0.7, "Hz")) params:set_action("mod_freq", function(value) engine.greyhole_mod_freq(value) end)   
-
-    params:add_group("Grains", 28)
+    
+    params:add_group("Granular", 28)
     params:add_binary("randomize_voices", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_voices", function() randpara.randomize_voice_params(1) randpara.randomize_voice_params(2) end)
     params:add_control("shimmer_mix", "Shimmer", controlspec.new(0, 100, "lin", 1, 0, "%"))
-    params:set_action("shimmer_mix", function(x) engine.shimmer_mix(x/30) end)
+    params:set_action("shimmer_mix", function(x) engine.shimmer_mix(x/35) end)
     for i = 1, 2 do
       params:add_separator("Sample " ..i)
       params:add_control(i .. "granular_gain", i .. " Mix", controlspec.new(0, 100, "lin", 1, 100, "%")) 
@@ -199,13 +188,13 @@ local function setup_params()
 
     params:add_group("EQ", 4)
     params:add_control("eq_low_gain_1", "1 Bass", controlspec.new(-1, 1, "lin", 0.01, 0, ""))
-    params:set_action("eq_low_gain_1", function(value) engine.eq_low_gain(1, value*35) end)
+    params:set_action("eq_low_gain_1", function(value) engine.eq_low_gain(1, value*45) end)
     params:add_control("eq_high_gain_1", "1 Treble", controlspec.new(-1, 1, "lin", 0.01, 0, ""))
-    params:set_action("eq_high_gain_1", function(value) engine.eq_high_gain(1, value*35) end)
+    params:set_action("eq_high_gain_1", function(value) engine.eq_high_gain(1, value*45) end)
     params:add_control("eq_low_gain_2", "2 Bass", controlspec.new(-1, 1, "lin", 0.01, 0, ""))
-    params:set_action("eq_low_gain_2", function(value) engine.eq_low_gain(2, value*35) end)
+    params:set_action("eq_low_gain_2", function(value) engine.eq_low_gain(2, value*45) end)
     params:add_control("eq_high_gain_2", "2 Treble", controlspec.new(-1, 1, "lin", 0.01, 0, ""))
-    params:set_action("eq_high_gain_2", function(value) engine.eq_high_gain(2, value*35) end)
+    params:set_action("eq_high_gain_2", function(value) engine.eq_high_gain(2, value*45) end)
 
     params:add_group("LFOs", 116)
     params:add_binary("randomize_lfos", "RaNd0m1ze LFOs", "trigger", 0) 
@@ -216,8 +205,8 @@ local function setup_params()
     params:add_control("global_lfo_freq_scale", "Freq Scale", controlspec.new(0.1, 10, "exp", 0.01, 1.0, "x")) 
     params:set_action("global_lfo_freq_scale", function(value) 
     for i = 1, 16 do 
-      lfo[i].base_freq = params:get(i .. "lfo_freq")  -- Store the base frequency
-      lfo[i].freq = lfo[i].base_freq * value  -- Apply scaling
+      lfo[i].base_freq = params:get(i .. "lfo_freq")
+      lfo[i].freq = lfo[i].base_freq * value
     end 
     end)
     lfo.init()
@@ -287,10 +276,8 @@ local function randomize(n)
         randomize_metro[n] = metro.init() 
     end
 
-    -- Clear active_controlled_params more efficiently
     active_controlled_params = {}
 
-    -- Consolidated parameter configuration with all properties
     local param_config = {
     jitter = { min = "min_jitter", max = "max_jitter", lock = params:get(n.."lock_jitter")==1, param_name = n.."jitter" },
     size = { min = "min_size", max = "max_size", lock = params:get(n.."lock_size")==1, param_name = n.."size" },
@@ -302,13 +289,11 @@ local function randomize(n)
     
     local targets = {}
 
-    -- Pre-calculate values to avoid repeated calls
     local current_pitch = params:get(n .. "pitch")
     local min_pitch = math.max(params:get("min_pitch"), current_pitch - 48)
     local max_pitch = math.min(params:get("max_pitch"), current_pitch + 48)
     local base_pitch = params:get(n == 1 and "2pitch" or "1pitch")
 
-    -- Randomize parameters using the config table
     for param, config in pairs(param_config) do
         if param ~= "pitch" and param ~= "seek" then
             if config.lock and not active_controlled_params[config.param_name] then
@@ -548,11 +533,9 @@ function key(n, z)
 
     if key2_pressed and key3_pressed then
         if current_mode == "lpf" or current_mode == "hpf" then
-            -- Toggle between LPF and HPF modes
             current_filter_mode = current_filter_mode == "lpf" and "hpf" or "lpf"
             redraw()
         else
-            -- Handle parameter locking
             local lockable_params = {"jitter", "size", "density", "spread", "pitch", "pan", "seek"}
             local param_name = string.match(current_mode, "%a+")
             
@@ -561,11 +544,9 @@ function key(n, z)
                 local is_locked2 = params:get("2lock_" .. param_name) == 2
                 
                 if is_locked1 ~= is_locked2 then
-                    -- If only one is locked, unlock both
                     params:set("1lock_" .. param_name, 1)
                     params:set("2lock_" .. param_name, 1)
                 else
-                    -- Toggle both
                     local new_state = is_locked1 and 1 or 2
                     params:set("1lock_" .. param_name, new_state)
                     params:set("2lock_" .. param_name, new_state)
@@ -704,8 +685,15 @@ local function format_speed(speed)
 end
 
 function redraw()
-    if not installer:ready() then installer:redraw() do return end end
-    screen.clear()
+    if not installer:ready() then 
+        installer:redraw() 
+        return 
+    end
+     screen.clear()
+    local current_mode = current_mode
+    local current_filter_mode = current_filter_mode
+    local key1_level = key1_pressed and 6 or 3
+    local pan_level = key1_pressed and 6 or 1
 
     local param_rows = {
         {y = 10, label = "jitter:    ", mode = "jitter", param1 = "1jitter", param2 = "2jitter", hz = false, st = false},
@@ -715,25 +703,21 @@ function redraw()
         {y = 50, label = "pitch:    ", mode = "pitch", param1 = "1pitch", param2 = "2pitch", hz = false, st = true}
     }
     
+    local bottom_labels = {
+        seek = "seek:     ",
+        pan = "pan:      ",
+        lpf = current_filter_mode == "lpf" and "lpf:      " or "hpf:      ",
+        default = "speed:    "
+    }
+
     for _, row in ipairs(param_rows) do
         draw_param_row(row.y, row.label, row.param1, row.param2, row.hz, row.st, current_mode == row.mode)
     end
 
-    local bottom_row = {
-        x = 5, y = 60,
-        labels = {
-            seek = "seek:     ",
-            pan = "pan:      ",
-            lpf = current_filter_mode == "lpf" and "lpf:      " or "hpf:      ",
-            default = "speed:    "
-        }
-    }
-    
-    screen.move(bottom_row.x, bottom_row.y)
+    screen.move(5, 60)
     screen.level(15)
-    screen.text(bottom_row.labels[current_mode] or bottom_row.labels.default)
+    screen.text(bottom_labels[current_mode] or bottom_labels.default)
 
-    -- Draw progress bars for seek or filter modes
     if current_mode == "seek" then
         draw_progress_bar(51, 62, 30, params:get("1seek"), 0, 100, false, false)
         draw_progress_bar(92, 62, 30, params:get("2seek"), 0, 100, false, false)
@@ -744,10 +728,10 @@ function redraw()
         draw_progress_bar(92, 62, 30, params:get(param2), 20, 20000, false, true)
     end
 
-    -- Draw parameter values for bottom row
+    local is_highlighted = current_mode == "seek" or current_mode == "lpf" or current_mode == "hpf" or 
+                         current_mode == "speed" or current_mode == "pan"
+    
     local function draw_bottom_value(x, track)
-        local is_highlighted = current_mode == "seek" or current_mode == "lpf" or current_mode == "hpf" or 
-                             current_mode == "speed" or current_mode == "pan"
         screen.move(x, 60)
         screen.level(is_highlighted and 15 or 1)
         
@@ -780,22 +764,21 @@ function redraw()
     end
 
     -- Draw volume bars
-    local function draw_volume_bar(x, track)
+    screen.level(key1_level)
+    for i, x in ipairs({0, 127}) do
+        local track = tostring(i)
         if is_audio_loaded(track) then
             local volume = params:get(track.."volume")
             local height = util.linlin(-60, 20, 0, 64, volume)
-            local bar_width = 1
-            screen.rect(x, 64 - height, bar_width, height)
+            screen.rect(x, 64 - height, 1, height)
             screen.fill()
         end
     end
 
-    screen.level(key1_pressed and 6 or 3)
-    draw_volume_bar(0, 1)
-    draw_volume_bar(127, 2)
-
     -- Draw pan indicators
-    local function draw_pan_indicator(track, center_start)
+    screen.level(pan_level)
+    for i, center_start in ipairs({52, 93}) do
+        local track = tostring(i)
         if is_audio_loaded(track) then
             local pan = params:get(track.."pan")
             local center_end = center_start + 25
@@ -804,9 +787,6 @@ function redraw()
             screen.fill()
         end
     end
-    screen.level(key1_pressed and 6 or 1)
-    draw_pan_indicator(1, 52)
-    draw_pan_indicator(2, 93)
 
     screen.update()
 end
