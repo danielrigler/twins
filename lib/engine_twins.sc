@@ -57,7 +57,7 @@ Engine_twins : CroneEngine {
 
         bufSine = Buffer.alloc(context.server, 1024 * 16, 1);
         bufSine.sine2([2], [0.5], false);
-        wobbleBuffers = Array.fill(nvoices, {Buffer.alloc(context.server, 48000 * 1, 2) });
+        wobbleBuffers = Array.fill(nvoices, {Buffer.alloc(context.server, 48000 * 5, 2) });
         context.server.sync;
       
         SynthDef(\synth, {
