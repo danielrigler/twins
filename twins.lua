@@ -77,6 +77,7 @@ local function is_lfo_active_for_param(param_name)
     return false, nil
 end
 
+local last_random_sample = nil  
 local function load_random_tape_file(track_num)
     local tape_dir = _path.tape
     local files = util.scandir(tape_dir)
@@ -87,14 +88,24 @@ local function load_random_tape_file(track_num)
             table.insert(audio_files, tape_dir .. file)
         end
     end
-    if #audio_files > 0 then
-        local random_index = math.random(1, #audio_files)
-        params:set(track_num .. "sample", audio_files[random_index])
-        return true
+    if #audio_files == 0 then return false end
+    local selected_file
+    if not last_random_sample then
+        selected_file = audio_files[math.random(1, #audio_files)]
+        last_random_sample = selected_file
     else
-        print("No audio files found in tape directory")
-        return false
+        if math.random() < 0.5 then
+            selected_file = last_random_sample
+        else
+            selected_file = audio_files[math.random(1, #audio_files)]
+            while selected_file == last_random_sample and #audio_files > 1 do
+                selected_file = audio_files[math.random(1, #audio_files)]
+            end
+        end
+        last_random_sample = nil
     end
+    params:set(track_num .. "sample", selected_file)
+    return true
 end
 
 local function setup_params()
@@ -215,9 +226,9 @@ local function setup_params()
       params:add_taper(i .. "volume", i .. " volume", -70, 20, 0, 0, "dB") params:set_action(i .. "volume", function(value) if value == -70 then engine.volume(i, 0) else engine.volume(i, math.pow(10, value / 20)) end end)
       params:add_taper(i .. "pan", i .. " pan", -100, 100, 0, 0, "%") params:set_action(i .. "pan", function(value) engine.pan(i, value / 100)  end)
       params:add_control(i .. "speed", i .. " speed", controlspec.new(-2, 2, "lin", 0.01, 0.1, "")) params:set_action(i .. "speed", function(value) engine.speed(i, value) end)
-      params:add_taper(i .. "density", i .. " density", 0.1, 50, 10, 1) params:set_action(i .. "density", function(value) engine.density(i, value) end)
+      params:add_taper(i .. "density", i .. " density", 0.1, 300, 10, 1) params:set_action(i .. "density", function(value) engine.density(i, value) end)
       params:add_control(i .. "pitch", i .. " pitch", controlspec.new(-48, 48, "lin", 1, 0, "st")) params:set_action(i .. "pitch", function(value) engine.pitch_offset(i, math.pow(0.5, -value / 12)) end)
-      params:add_taper(i .. "jitter", i .. " jitter", 0, 1999, 250, 5, "ms") params:set_action(i .. "jitter", function(value) engine.jitter(i, value / 1000) end)
+      params:add_taper(i .. "jitter", i .. " jitter", 0, 4999, 250, 5, "ms") params:set_action(i .. "jitter", function(value) engine.jitter(i, value / 1000) end)
       params:add_taper(i .. "size", i .. " size", 1, 999, 100, 5, "ms") params:set_action(i .. "size", function(value) engine.size(i, value / 1000) end)
       params:add_taper(i .. "spread", i .. " spread", 0, 100, 0, 0, "%") params:set_action(i .. "spread", function(value) engine.spread(i, value / 100) end)
       params:add_control(i .. "seek", i .. " seek", controlspec.new(0, 100, "lin", 0.01, 0, "%")) params:set_action(i .. "seek", function(value) engine.seek(i, value) end)
@@ -233,8 +244,8 @@ local function setup_params()
     end
 
     params:add_group("Limits", 10)
-    params:add_taper("min_jitter", "jitter (min)", 0, 1999, 100, 5, "ms")
-    params:add_taper("max_jitter", "jitter (max)", 0, 1999, 1999, 5, "ms")
+    params:add_taper("min_jitter", "jitter (min)", 0, 4999, 100, 5, "ms")
+    params:add_taper("max_jitter", "jitter (max)", 0, 4999, 2999, 5, "ms")
     params:add_taper("min_size", "size (min)", 1, 999, 100, 5, "ms")
     params:add_taper("max_size", "size (max)", 1, 999, 599, 5, "ms")
     params:add_taper("min_density", "density (min)", 0.1, 50, 1, 5, "Hz")

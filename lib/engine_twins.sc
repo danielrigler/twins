@@ -106,7 +106,7 @@ Engine_twins : CroneEngine {
             var overtone_2_vol = overtones_2 / denominator * 2;
             var lagSpeed = Lag.kr(speed);
             var lagPitchOffset = Lag.kr(pitch_offset, 1);
-            var grain_direction = Select.kr(pitch_mode, [1, speed.sign]) * ((LFNoise1.kr(density).range(0,1) < direction_mod).linlin(0,1,1,-1));
+            var grain_direction = Select.kr(pitch_mode, [1, Select.kr(speed.abs > 0.001, [1, speed.sign])]) * ((LFNoise1.kr(density).range(0,1) < direction_mod).linlin(0,1,1,-1));
             var trig_rnd = LFNoise1.kr(density);
             var grain_size;
             var low, high;

@@ -136,10 +136,10 @@ function lfo.get_parameter_range(param_name)
   local param_ranges = {
     ["1pan"] = { -100, 100 }, ["2pan"] = { -100, 100 },
     ["1seek"] = { 0, 100 }, ["2seek"] = { 0, 100 },
-    ["1jitter"] = { 1, 1999 }, ["2jitter"] = { 1, 1999 },
+    ["1jitter"] = { 1, 2999 }, ["2jitter"] = { 1, 2999 },
     ["1spread"] = { 0, 100 }, ["2spread"] = { 0, 100 },
     ["1size"] = { 0, 599 }, ["2size"] = { 0, 599 },
-    ["1density"] = { 0, 16 }, ["2density"] = { 0, 16 },
+    ["1density"] = { 0, 20 }, ["2density"] = { 0, 20 },
     ["1volume"] = { -100, 100 }, ["2volume"] = { -100, 100 },
     ["1pitch"] = { -12, 12 }, ["2pitch"] = { -12, 12 },
     ["1cutoff"] = { 20, 20000 }, ["2cutoff"] = { 20, 20000 },
