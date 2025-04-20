@@ -59,7 +59,7 @@ local function randomize_fverb_params(steps)
     targets["reverb_diffusion_1"] = math.random(70, 90)
     targets["reverb_diffusion_2"] = math.random(70, 90)
     targets["reverb_tail_density"] = math.random(70, 90)
-    targets["reverb_decay"] = math.random(65, 90)
+    targets["reverb_decay"] = math.random(70, 90)
     targets["reverb_damping"] = math.random(1000, 4500)
     targets["reverb_modulator_frequency"] = random_float(0.3, 2)
     targets["reverb_modulator_depth"] = math.random(30, 100)
@@ -100,9 +100,9 @@ local function randomize_global_params()
     -- DELAY (global parameters)
     if math.random() <= 0.3 then targets["delay_h"] = 0 else targets["delay_h"] = math.random(30, 85) end
     if math.random() <= 0.6 then targets["delay_rate"] = random_float(0.2, 1) end
-    targets["delay_feedback"] = math.random(30, 85)
+    if math.random() <= 0.6 then targets["delay_feedback"] = math.random(30, 85) end
     -- SHIMMER
-    if math.random() <= 0.5 then targets["shimmer_mix"] = 0.0 end
+    if math.random() <= 0.75 then targets["shimmer_mix"] = 0.0 else targets["shimmer_mix"] = math.random(0, 9) end
     -- LFO scale (global parameter)
     if math.random() <= 0.3 then params:set("global_lfo_freq_scale", 1) else params:set("global_lfo_freq_scale", random_float(0.2, 1.5)) end
 end

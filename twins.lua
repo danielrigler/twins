@@ -145,10 +145,8 @@ local function setup_params()
     params:add_taper("reverb_modulator_depth", "Mod Depth", 0, 100, 40, 0, "%") params:set_action("reverb_modulator_depth", function(value) engine.reverb_modulator_depth(value / 100) end)
     params:add_taper("reverb_modulator_frequency", "Mod Freq", 0, 10, 1, 0, "Hz") params:set_action("reverb_modulator_frequency", function(value) engine.reverb_modulator_frequency(value) end)
     
-    params:add_group("Granular", 28)
+    params:add_group("Granular", 27)
     params:add_binary("randomize_voices", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_voices", function() randpara.randomize_voice_params(1) randpara.randomize_voice_params(2) end)
-    params:add_control("shimmer_mix", "Shimmer", controlspec.new(0, 100, "lin", 1, 0, "%"))
-    params:set_action("shimmer_mix", function(x) engine.shimmer_mix(x/35) end)
     for i = 1, 2 do
       params:add_separator("Sample " ..i)
       params:add_control(i .. "granular_gain", i .. " Mix", controlspec.new(0, 100, "lin", 1, 100, "%")) 
@@ -266,7 +264,10 @@ local function setup_params()
       params:add_option(i .. "lock_seek", i .. " lock seek", {"off", "on"}, 1) -- Add this line
     end
 
-    params:add_group("Other", 5)
+    params:add_group("Other", 7)
+    params:add_separator("Shimmer")
+    params:add_control("shimmer_mix", "Shimmer", controlspec.new(0, 100, "lin", 1, 0, "%"))
+    params:set_action("shimmer_mix", function(x) engine.shimmer_mix(x/35) end)
     params:add_separator("Stereo Width")
     for i = 1, 2 do
     params:add_control(i .. "Width", i .. " Width", controlspec.new(0, 200, "lin", 0.01, 100, "%"))
@@ -274,7 +275,6 @@ local function setup_params()
     end  
     params:add_separator("Transition Steps")
     params:add_control("steps","Steps",controlspec.new(10,2000,"lin",1,400)) params:set_action("steps", function(value) steps = value end)
-    
     params:bang()
 end
 
@@ -286,9 +286,7 @@ local function randomize(n)
     if not randomize_metro[n] then 
         randomize_metro[n] = metro.init() 
     end
-
     active_controlled_params = {}
-
     local param_config = {
     jitter = { min = "min_jitter", max = "max_jitter", lock = params:get(n.."lock_jitter")==1, param_name = n.."jitter" },
     size = { min = "min_size", max = "max_size", lock = params:get(n.."lock_size")==1, param_name = n.."size" },
@@ -297,9 +295,7 @@ local function randomize(n)
     pitch = { lock = params:get(n.."lock_pitch")==1, param_name = n.."pitch" },
     seek = { lock = params:get(n.."lock_seek")==1, param_name = n.."seek" }
     }
-    
     local targets = {}
-
     local current_pitch = params:get(n .. "pitch")
     local min_pitch = math.max(params:get("min_pitch"), current_pitch - 48)
     local max_pitch = math.min(params:get("max_pitch"), current_pitch + 48)
@@ -364,7 +360,6 @@ local function randomize(n)
             end
         end
     end
-
     randomize_metro[n].time = 1/30
     randomize_metro[n].event = function(count)
         local tolerance = 0.01
@@ -517,12 +512,14 @@ function key(n, z)
                 lfo.randomize_lfos("1", params:get("allow_volume_lfos") == 2)
                 randomize(1)
                 randpara.randomize_params(steps, 1)
+                randpara.randomize_fverb_params(steps) 
                 return
             elseif n == 3 then
                 lfo.clearLFOs(2)
                 lfo.randomize_lfos("2", params:get("allow_volume_lfos") == 2)
                 randomize(2)
                 randpara.randomize_params(steps, 2)
+                randpara.randomize_fverb_params(steps) 
                 return
             end
         end
@@ -637,7 +634,6 @@ local function draw_param_row(y, label, param1, param2, is_density, is_pitch, is
             screen.text(params:string(param))
         end
     end
-
     draw_param_value(51, param1, is_locked1)
     draw_param_value(92, param2, is_locked2)
 
@@ -648,29 +644,23 @@ local function draw_param_row(y, label, param1, param2, is_density, is_pitch, is
             local bar_height = 1
             local min_val, max_val = lfo.get_parameter_range(param)
             local bar_value = util.linlin(min_val, max_val, 0, bar_width, lfo_mod)
-            screen.level(key1_pressed and 6 or 1)
+            screen.level(5)
             screen.rect(x, y + 1, bar_value, bar_height)
             screen.fill()
         end
     end
-
     draw_lfo_bar(51, param1)
     draw_lfo_bar(92, param2)
 end
 
 local function draw_progress_bar(x, y, width, value, min, max, center, is_log)
-    -- Clamp the value to ensure it's within bounds
     value = math.min(math.max(value, min), max)
-    
-    -- Calculate position
     local value_pos
     if is_log then
         value_pos = util.linlin(math.log(min), math.log(max), x, x + width, math.log(value))
     else
         value_pos = util.linlin(min, max, x, x + width, value)
     end
-    
-    -- Draw the bar
     screen.level(3)
     if center then
         local center_pos = x + (width * 0.5)
@@ -703,8 +693,6 @@ function redraw()
      screen.clear()
     local current_mode = current_mode
     local current_filter_mode = current_filter_mode
-    local key1_level = key1_pressed and 6 or 3
-    local pan_level = key1_pressed and 6 or 1
 
     local param_rows = {
         {y = 10, label = "jitter:    ", mode = "jitter", param1 = "1jitter", param2 = "2jitter", hz = false, st = false},
@@ -713,22 +701,18 @@ function redraw()
         {y = 40, label = "spread:   ", mode = "spread", param1 = "1spread", param2 = "2spread", hz = false, st = false},
         {y = 50, label = "pitch:    ", mode = "pitch", param1 = "1pitch", param2 = "2pitch", hz = false, st = true}
     }
-    
     local bottom_labels = {
         seek = "seek:     ",
         pan = "pan:      ",
         lpf = current_filter_mode == "lpf" and "lpf:      " or "hpf:      ",
         default = "speed:    "
     }
-
     for _, row in ipairs(param_rows) do
         draw_param_row(row.y, row.label, row.param1, row.param2, row.hz, row.st, current_mode == row.mode)
     end
-
     screen.move(5, 60)
     screen.level(15)
     screen.text(bottom_labels[current_mode] or bottom_labels.default)
-
     if current_mode == "seek" then
         draw_progress_bar(51, 62, 30, params:get("1seek"), 0, 100, false, false)
         draw_progress_bar(92, 62, 30, params:get("2seek"), 0, 100, false, false)
@@ -738,14 +722,11 @@ function redraw()
         draw_progress_bar(51, 62, 30, params:get(param1), 20, 20000, false, true)
         draw_progress_bar(92, 62, 30, params:get(param2), 20, 20000, false, true)
     end
-
     local is_highlighted = current_mode == "seek" or current_mode == "lpf" or current_mode == "hpf" or 
                          current_mode == "speed" or current_mode == "pan"
-    
     local function draw_bottom_value(x, track)
         screen.move(x, 60)
         screen.level(is_highlighted and 15 or 1)
-        
         if current_mode == "seek" then
             screen.text(format_seek(params:get(track.."seek")))
         elseif current_mode == "pan" then
@@ -758,7 +739,6 @@ function redraw()
             screen.text(format_speed(params:get(track.."speed")))
         end
     end
-
     draw_bottom_value(51, "1")
     draw_bottom_value(92, "2")
 
@@ -775,7 +755,7 @@ function redraw()
     end
 
     -- Draw volume bars
-    screen.level(key1_level)
+    screen.level(key1_pressed and 6 or 3)
     for i, x in ipairs({0, 127}) do
         local track = tostring(i)
         if is_audio_loaded(track) then
@@ -787,7 +767,7 @@ function redraw()
     end
 
     -- Draw pan indicators
-    screen.level(pan_level)
+    screen.level(1)
     for i, center_start in ipairs({52, 93}) do
         local track = tostring(i)
         if is_audio_loaded(track) then

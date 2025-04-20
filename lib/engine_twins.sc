@@ -16,7 +16,7 @@ Engine_twins : CroneEngine {
         ^super.new(context, doneCallback);
     }
 
- readBuf { arg i, path;
+readBuf { arg i, path;
     if(buffersL[i].notNil && buffersR[i].notNil, {
         if (File.exists(path), {
             var numChannels;
@@ -46,7 +46,7 @@ Engine_twins : CroneEngine {
     });
 }
 
-    alloc {
+alloc {
         buffersL = Array.fill(nvoices, { arg i;
             Buffer.alloc(context.server, context.server.sampleRate * 1);
         });
@@ -54,7 +54,7 @@ Engine_twins : CroneEngine {
         buffersR = Array.fill(nvoices, { arg i;
             Buffer.alloc(context.server, context.server.sampleRate * 1);
         });
-
+        context.server.sync;
         bufSine = Buffer.alloc(context.server, 1024 * 16, 1);
         bufSine.sine2([2], [0.5], false);
         wobbleBuffers = Array.fill(nvoices, {Buffer.alloc(context.server, 48000 * 5, 2) });
@@ -198,21 +198,21 @@ Engine_twins : CroneEngine {
             ]);
         });
 
+        context.server.sync;
 
         SynthDef(\shimmer, {
             arg in, out, mix=0.0;
             var snd, orig;
             orig = In.ar(in, 2);
-            snd = orig + PitchShift.ar(orig, 0.13, 2,0,1,feedback:0.8,mul:1*mix);
-            snd = snd + PitchShift.ar(orig, 0.10, 4,0,1,feedback:0.8,mul:0.5*mix);
-            snd = LPF.ar(snd, 14000);
+            snd = orig + PitchShift.ar(orig, 0.13, 2,0.05,2,mul:1*mix);
+            snd = snd + PitchShift.ar(orig, 0.10, 4,0.05,2,mul:0.5*mix);
             Out.ar(out, snd);
         }).add;
 
         SynthDef(\fverb, {
             arg in, out, mix=0.0, predelay=0, input_amount=100, input_lowpass_cutoff=10000, input_highpass_cutoff=100, input_diffusion_1=75, input_diffusion_2=62.5, tail_density=70, decay=50, damping=5500, modulator_frequency=1, modulator_depth=0.5;
             var dry = In.ar(in, 2); 
-            var wet = Fverb2.ar(dry[0], dry[1], predelay, input_amount, input_lowpass_cutoff, input_highpass_cutoff, input_diffusion_1, input_diffusion_2, tail_density, decay, damping, modulator_frequency, modulator_depth);
+            var wet = Fverb2.ar(dry[0], dry[1], predelay, input_amount, input_lowpass_cutoff, input_highpass_cutoff, input_diffusion_1, input_diffusion_2, LFNoise2.kr(1/5).range(tail_density*0.8,tail_density*1.2), LFNoise2.kr(1/5).range(decay*0.8,decay*1.2), damping, modulator_frequency, modulator_depth);
             var sig = SelectX.ar(Lag.kr(mix), [dry, wet]);
             Out.ar(out, sig);
         }).add;
