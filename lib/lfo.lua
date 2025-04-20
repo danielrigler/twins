@@ -11,12 +11,14 @@ local assigned_params = {}
 local function is_locked(target)
   local track, param = string.match(target, "(%d)(%a+)")
   local lockable_params = { "jitter", "size", "density", "spread", "pitch", "pan", "seek" }
-  
   if table.find(lockable_params, param) then
     return params:get(track .. "lock_" .. param) == 2
   end
-  
   return false
+end
+
+function lfo.is_param_locked(track, param_name)
+    return params:get(track.."lock_"..param_name) == 2
 end
 
 for i = 1, number_of_outputs do
@@ -76,11 +78,9 @@ function lfo.clearLFOs(track, param_type)
             end
         end
     end
-
     local function reset_pan()
         local track1_loaded = is_audio_loaded("1")
         local track2_loaded = is_audio_loaded("2")
-        
         if track1_loaded and track2_loaded then
             params:set("1pan", -15)
             params:set("2pan", 15)
@@ -89,21 +89,17 @@ function lfo.clearLFOs(track, param_type)
             params:set("2pan", 0)
         end
     end
-
     if track and param_type then
-        -- Clear specific parameter type for specific track
         clear_targets(function(target) 
             return string.match(target, "^"..track..param_type.."$")
         end)
     elseif track then
-        -- Clear all parameters for specific track
         clear_targets(function(target) 
             return string.match(target, "^"..track) 
         end)
     else
         clear_targets(function() return true end)
     end
-
     if not param_type then
         reset_pan()
     end
@@ -148,47 +144,62 @@ function lfo.get_parameter_range(param_name)
   return param_ranges[param_name][1], param_ranges[param_name][2]
 end
 
+function lfo.assign_to_current_row(current_mode, current_filter_mode)
+    local param_map = {
+        seek = "seek",
+        pan = "pan",
+        jitter = "jitter",
+        size = "size",
+        density = "density",
+        spread = "spread",
+    }
+    local param_name = param_map[current_mode]
+    if not param_name then return end
+
+    lfo.clearLFOs("1", param_name)
+    lfo.clearLFOs("2", param_name)
+    local available_slots = {}
+    for i = 1, 16 do
+        if params:get(i.."lfo") == 1 then
+            table.insert(available_slots, i)
+        end
+    end
+    if not lfo.is_param_locked("1", param_name) and #available_slots > 0 then
+        local slot = table.remove(available_slots, 1)
+        randomize_lfo(slot, "1"..param_name)
+    end
+    if not lfo.is_param_locked("2", param_name) and #available_slots > 0 then
+        local slot = table.remove(available_slots, 1)
+        randomize_lfo(slot, "2"..param_name)
+    end
+end
+
 function randomize_lfo(i, target)
-    -- Early exit optimizations
     if assigned_params[target] or not lfo.target_ranges[target] then return end
-    
-    -- Check seek target condition
     if target:match("seek$") and params:get(target:sub(1,1).."granular_gain") < 100 then
         return
     end
-    
-    -- Check for conflicting LFOs
     for j = 1, number_of_outputs do
         if j ~= i and params:get(j.."lfo") == 2 and lfo.lfo_targets[params:get(j.."lfo_target")] == target then
             return
         end
     end
-    
     local target_index = table.find(lfo.lfo_targets, target)
     if not target_index then return end
-    
     local min_val, max_val = lfo.get_parameter_range(target)
     local current_val = params:get(target)
-    
     params:set(i.."lfo_target", target_index)
-    
-    -- Calculate offset
     local is_pan, is_seek = target:match("pan$"), target:match("seek$")
     lfo[i].offset = is_pan and 0 or (is_seek and (math.random() - 0.5) or lfo.scale(current_val, min_val, max_val, -1, 1))
     params:set(i.."offset", lfo[i].offset)
-    
-    -- Calculate and set depth
     local ranges = lfo.target_ranges[target]
     local max_allowed = math.min(max_val - current_val, current_val - min_val)
     local scaled_max = lfo.scale(max_allowed, 0, max_val - min_val, 0, 100)
-    
     lfo[i].depth = math.min(math.random(ranges.depth[1], ranges.depth[2]), math.floor(scaled_max))
     if lfo[i].depth == 0 then
         lfo[i].depth = math.random(ranges.depth[1], ranges.depth[2])
     end
     params:set(i.."lfo_depth", lfo[i].depth)
-    
-    -- Randomize frequency if applicable
     if ranges.frequency then
         local min_f, max_f = ranges.frequency[1] * 100, ranges.frequency[2] * 100
         if min_f <= max_f then
@@ -196,15 +207,11 @@ function randomize_lfo(i, target)
             params:set(i.."lfo_freq", lfo[i].freq)
         end
     end
-    
-    -- Randomize waveform if applicable
     if ranges.waveform then
         local wf_index = math.random(#ranges.waveform)
         lfo[i].waveform = ranges.waveform[wf_index]
         params:set(i.."lfo_shape", wf_index)
     end
-    
-    -- Activate LFO
     params:set(i.."lfo", 2)
     assigned_params[target] = true
 end
@@ -212,8 +219,6 @@ end
 function lfo.randomize_lfos(track, allow_volume_lfos)
     local other_track = track == "1" and "2" or "1"
     local track_pattern = "^"..track
-    
-    -- Clear existing LFOs
     for i = 1, 16 do
         local target_param = lfo.lfo_targets[params:get(i.."lfo_target")]
         if target_param and target_param:match(track_pattern) and not is_locked(target_param) then
@@ -222,8 +227,6 @@ function lfo.randomize_lfos(track, allow_volume_lfos)
             assigned_params[target_param] = nil
         end
     end
-    
-    -- Build available targets
     local available_targets = {}
     for target, ranges in pairs(lfo.target_ranges) do
         if (not target:match("volume$") or allow_volume_lfos) and target:match(track_pattern) and not is_locked(target) then
@@ -237,8 +240,6 @@ function lfo.randomize_lfos(track, allow_volume_lfos)
             end
         end
     end
-    
-    -- Find free slots
     local free_slots = {}
     local other_pattern = "^"..other_track
     for j = 1, 16 do
@@ -247,8 +248,6 @@ function lfo.randomize_lfos(track, allow_volume_lfos)
             table.insert(free_slots, j)
         end
     end
-    
-    -- Assign new LFOs
     for _, target in ipairs(available_targets) do
         if #free_slots > 0 then
             randomize_lfo(table.remove(free_slots, math.random(#free_slots)), target)
@@ -289,8 +288,7 @@ end
 
 function lfo.scale(old_value, old_min, old_max, new_min, new_max)
     local old_range = old_max - old_min
-    return old_range == 0 and new_min or 
-           (((old_value - old_min) * (new_max - new_min)) / old_range) + new_min
+    return (old_value - old_min) * (new_max - new_min) / old_range + new_min
 end
 
 function lfo.init()

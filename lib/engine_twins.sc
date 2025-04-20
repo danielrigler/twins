@@ -72,7 +72,7 @@ alloc {
             subharmonics_3=0,
             overtones_1=0, 
             overtones_2=0, 
-            cutoff=20000, q=1, hpf=20, hpfrq=1,
+            cutoff=20000, hpf=20,
             sine_drive=1, sine_wet=0,
             chew_wet=0, chew_depth=0.5, chew_freq=0.5, chew_variance=0.5,
             direction_mod=0,
@@ -157,7 +157,7 @@ alloc {
             sig_mix = (dry_sig * (1 - granular_gain)) + (granular_sig * granular_gain);
 
             shaped = Shaper.ar(bufSine, sig_mix * sine_drive);
-            sig_mix = SelectX.ar(Lag.kr(sine_wet), [sig_mix, shaped]);
+            sig_mix = SelectX.ar(sine_wet, [sig_mix, shaped]);
 
             // wow and flutter from Stefaan Himpe https://sccode.org/1-5bP & Zackary Scholl
             pw = Phasor.ar(0, BufRateScale.kr(wobble_bufnum), 0, BufFrames.kr(wobble_bufnum));
@@ -165,11 +165,11 @@ alloc {
             pr = DelayL.ar(Phasor.ar(0, BufRateScale.kr(wobble_bufnum)*rate, 0, BufFrames.kr(wobble_bufnum)), 0.2, 0.2);
             sig_mix = BufRd.ar(2, wobble_bufnum, pr, interpolation:4);
 
-            sig_mix = SelectX.ar(Lag.kr(chew_wet), [sig_mix, AnalogChew.ar(sig_mix, chew_depth, chew_freq, chew_variance)]);
+            sig_mix = SelectX.ar(chew_wet, [sig_mix, AnalogChew.ar(sig_mix, chew_depth, chew_freq, chew_variance)]);
 
-            sig_mix = BHiPass4.ar(sig_mix, Lag.kr(hpf), Lag.kr(hpfrq));
-            sig_mix = MoogFF.ar(sig_mix, Lag.kr(cutoff), Lag.kr(q));
-
+            sig_mix = HPF.ar(sig_mix, Lag.kr(hpf));
+            sig_mix = LPF.ar(sig_mix, Lag.kr(cutoff));
+            
             low = BLowShelf.ar(sig_mix, 200, 5, low_gain);
             high = BHiShelf.ar(sig_mix, 3600, 5, high_gain);
             sig_mix = low + high;
@@ -188,6 +188,8 @@ alloc {
         context.server.sync;
 
         mixBus = Bus.audio(context.server, 2);
+
+        context.server.sync;
 
         voices = Array.fill(nvoices, { arg i;
             Synth.new(\synth, [
@@ -213,7 +215,7 @@ alloc {
             arg in, out, mix=0.0, predelay=0, input_amount=100, input_lowpass_cutoff=10000, input_highpass_cutoff=100, input_diffusion_1=75, input_diffusion_2=62.5, tail_density=70, decay=50, damping=5500, modulator_frequency=1, modulator_depth=0.5;
             var dry = In.ar(in, 2); 
             var wet = Fverb2.ar(dry[0], dry[1], predelay, input_amount, input_lowpass_cutoff, input_highpass_cutoff, input_diffusion_1, input_diffusion_2, LFNoise2.kr(1/5).range(tail_density*0.8,tail_density*1.2), LFNoise2.kr(1/5).range(decay*0.8,decay*1.2), damping, modulator_frequency, modulator_depth);
-            var sig = SelectX.ar(Lag.kr(mix), [dry, wet]);
+            var sig = SelectX.ar(mix, [dry, wet]);
             Out.ar(out, sig);
         }).add;
         
@@ -292,9 +294,7 @@ alloc {
         this.addCommand("reverb_modulator_depth", "f", { arg msg; fverbEffect.set(\modulator_depth, msg[1]); });
 
         this.addCommand("cutoff", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\cutoff, msg[2]); });
-        this.addCommand("q", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\q, msg[2]); });
         this.addCommand("hpf", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\hpf, msg[2]); });
-        this.addCommand("hpfrq", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\hpfrq, msg[2]); });
         
         this.addCommand("granular_gain", "if", { arg msg; var voice = msg[1] - 1; var gain = msg[2]; voices[voice].set(\granular_gain, gain); });
         this.addCommand("density_mod_amt", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\density_mod_amt, msg[2]); });
