@@ -52,7 +52,7 @@ end
 local function randomize_fverb_params(steps)
   safe_metro_stop(randomize_metro)
     -- FVERB parameters
-    targets["reverb_input_amount"] = math.random(50, 100)
+    targets["reverb_input_amount"] = math.random(40, 95)
     targets["reverb_predelay"] = math.random(0, 250)
     targets["reverb_lowpass_cutoff"] = math.random(4000, 9000)
     targets["reverb_highpass_cutoff"] = math.random(20, 300)
@@ -73,7 +73,7 @@ end
 local function randomize_voice_params(i)
   safe_metro_stop(randomize_metro)
     -- VOICE-SPECIFIC PARAMETERS
-    if math.random() <= 0.4 then targets[i .. "direction_mod"] = 0 else targets[i .. "direction_mod"] = math.random(0, 35) end
+    if math.random() <= 0.6 then targets[i .. "direction_mod"] = 0 else targets[i .. "direction_mod"] = math.random(0, 20) end
     if math.random() <= 0.5 then targets[i .. "size_variation"] = 0 else targets[i .. "size_variation"] = math.random(0, 40) end
     if math.random() <= 0.5 then targets[i .. "density_mod_amt"] = 0 else targets[i .. "density_mod_amt"] = math.random(0, 75) end
     if math.random() <= 0.5 then targets[i .. "subharmonics_1"] = 0 else targets[i .. "subharmonics_1"] = random_float(0, 0.4) end
@@ -101,8 +101,21 @@ local function randomize_global_params()
     if math.random() <= 0.3 then targets["delay_h"] = 0 else targets["delay_h"] = math.random(30, 85) end
     if math.random() <= 0.6 then targets["delay_rate"] = random_float(0.2, 1) end
     if math.random() <= 0.6 then targets["delay_feedback"] = math.random(30, 85) end
-    -- SHIMMER
-    if math.random() <= 0.75 then targets["shimmer_mix"] = 0.0 else targets["shimmer_mix"] = math.random(0, 9) end
+    -- SHIMMER (global parameter)
+    if math.random() <= 0.65 then targets["shimmer_mix"] = 0.0 else targets["shimmer_mix"] = math.random(0, 20) end
+    -- TAPE (global parameters)
+    if math.random() <= 0.6 then targets["sine_wet"] = 0 else targets["sine_wet"] = math.random(5, 10) end
+    if math.random() <= 0.6 then targets["sine_drive"] = 0.75 else targets["sine_drive"] = random_float(0.5, 1) end
+    if math.random() <= 0.75 then targets["chew_wet"] = 0 else targets["chew_wet"] = math.random(0, 20) end
+    if math.random() <= 0.5 then targets["chew_depth"] = 0.3 else targets["chew_depth"] = random_float(0.2, 0.5) end
+    if math.random() <= 0.5 then targets["chew_freq"] = 0.3 else targets["chew_freq"] = random_float(0.2, 0.7) end
+    if math.random() <= 0.5 then targets["chew_variance"] = 0.4 else targets["chew_variance"] = random_float(0.2, 0.8) end
+    if math.random() <= 0.75 then targets["wobble_wet"] = 0 else targets["wobble_wet"] = math.random(0, 17) end
+    if math.random() <= 0.75 then targets["wobble_amp"] = 25 else targets["wobble_amp"] = math.random(15, 35) end
+    if math.random() <= 0.75 then targets["wobble_rpm"] = 33 else targets["wobble_rpm"] = math.random(30, 90) end
+    if math.random() <= 0.75 then targets["flutter_amp"] = 25 else targets["flutter_amp"] = math.random(15, 35) end
+    if math.random() <= 0.75 then targets["flutter_freq"] = 6 else targets["flutter_freq"] = math.random(4, 8) end
+    if math.random() <= 0.75 then targets["flutter_var"] = 2 else targets["flutter_var"] = math.random(1, 5) end
     -- LFO scale (global parameter)
     if math.random() <= 0.3 then params:set("global_lfo_freq_scale", 1) else params:set("global_lfo_freq_scale", random_float(0.2, 1.5)) end
 end

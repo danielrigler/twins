@@ -130,26 +130,9 @@ local function setup_params()
     
     params:add_separator("Settings")
 
-    params:add_group("Delay", 4)
-    delay.init()
-
-    params:add_group("Reverb", 13)
-    params:add_binary("randomize_fverb", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_fverb", function() randpara.randomize_fverb_params(steps) end)
-    params:add_taper("reverb_mix", "Mix", 0, 100, 0.0, 0, "%") params:set_action("reverb_mix", function(value) engine.reverb_mix(value / 100) end)
-    params:add_taper("reverb_predelay", "Predelay", 0, 250, 20, 0, "ms") params:set_action("reverb_predelay", function(value) engine.reverb_predelay(value) end)
-    params:add_taper("reverb_input_amount", "Input Amount", 0, 100, 100, 0, "%") params:set_action("reverb_input_amount", function(value) engine.reverb_input_amount(value) end)
-    params:add_taper("reverb_lowpass_cutoff", "Lowpass", 0, 20000, 8000, 0, "Hz") params:set_action("reverb_lowpass_cutoff", function(value) engine.reverb_lowpass_cutoff(value) end)
-    params:add_taper("reverb_highpass_cutoff", "Highpass", 0, 20000, 75, 0, "Hz") params:set_action("reverb_highpass_cutoff", function(value) engine.reverb_highpass_cutoff(value) end)
-    params:add_taper("reverb_diffusion_1", "Diffusion 1", 0, 100, 85, 0, "%") params:set_action("reverb_diffusion_1", function(value) engine.reverb_diffusion_1(value) end)
-    params:add_taper("reverb_diffusion_2", "Diffusion 2", 0, 100, 85, 0, "%") params:set_action("reverb_diffusion_2", function(value) engine.reverb_diffusion_2(value) end)
-    params:add_taper("reverb_tail_density", "Tail Density", 0, 100, 75, 0, "%") params:set_action("reverb_tail_density", function(value) engine.reverb_tail_density(value) end)
-    params:add_taper("reverb_decay", "Decay", 0, 100, 80, 0, "%") params:set_action("reverb_decay", function(value) engine.reverb_decay(value) end)
-    params:add_taper("reverb_damping", "Damping", 0, 20000, 6000, 0, "Hz") params:set_action("reverb_damping", function(value) engine.reverb_damping(value) end)
-    params:add_taper("reverb_modulator_depth", "Mod Depth", 0, 100, 40, 0, "%") params:set_action("reverb_modulator_depth", function(value) engine.reverb_modulator_depth(value / 100) end)
-    params:add_taper("reverb_modulator_frequency", "Mod Freq", 0, 10, 1, 0, "Hz") params:set_action("reverb_modulator_frequency", function(value) engine.reverb_modulator_frequency(value) end)
-    
-    params:add_group("Granular", 27)
+    params:add_group("Granular", 28)
     params:add_binary("randomize_voices", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_voices", function() randpara.randomize_voice_params(1) randpara.randomize_voice_params(2) end)
+    params:add_control("shimmer_mix", "Shimmer", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("shimmer_mix", function(x) engine.shimmer_mix(x/100) end)
     for i = 1, 2 do
       params:add_separator("Sample " ..i)
       params:add_control(i .. "granular_gain", i .. " Mix", controlspec.new(0, 100, "lin", 1, 100, "%")) 
@@ -172,6 +155,24 @@ local function setup_params()
       params:add_option(i .. "pitch_mode", i .. " Pitch Mode", {"match speed", "independent"}, 2) params:set_action(i .. "pitch_mode", function(value) engine.pitch_mode(i, value - 1) end)
     end
 
+    params:add_group("Delay", 4)
+    delay.init()
+
+    params:add_group("Reverb", 13)
+    params:add_binary("randomize_fverb", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_fverb", function() randpara.randomize_fverb_params(steps) end)
+    params:add_taper("reverb_mix", "Mix", 0, 100, 0.0, 0, "%") params:set_action("reverb_mix", function(value) engine.reverb_mix(value / 100) end)
+    params:add_taper("reverb_predelay", "Predelay", 0, 250, 20, 0, "ms") params:set_action("reverb_predelay", function(value) engine.reverb_predelay(value) end)
+    params:add_taper("reverb_input_amount", "Input Amount", 0, 100, 85, 0, "%") params:set_action("reverb_input_amount", function(value) engine.reverb_input_amount(value) end)
+    params:add_taper("reverb_lowpass_cutoff", "Lowpass", 0, 20000, 8000, 0, "Hz") params:set_action("reverb_lowpass_cutoff", function(value) engine.reverb_lowpass_cutoff(value) end)
+    params:add_taper("reverb_highpass_cutoff", "Highpass", 0, 20000, 75, 0, "Hz") params:set_action("reverb_highpass_cutoff", function(value) engine.reverb_highpass_cutoff(value) end)
+    params:add_taper("reverb_diffusion_1", "Diffusion 1", 0, 100, 85, 0, "%") params:set_action("reverb_diffusion_1", function(value) engine.reverb_diffusion_1(value) end)
+    params:add_taper("reverb_diffusion_2", "Diffusion 2", 0, 100, 85, 0, "%") params:set_action("reverb_diffusion_2", function(value) engine.reverb_diffusion_2(value) end)
+    params:add_taper("reverb_tail_density", "Tail Density", 0, 100, 75, 0, "%") params:set_action("reverb_tail_density", function(value) engine.reverb_tail_density(value) end)
+    params:add_taper("reverb_decay", "Decay", 0, 100, 80, 0, "%") params:set_action("reverb_decay", function(value) engine.reverb_decay(value) end)
+    params:add_taper("reverb_damping", "Damping", 0, 20000, 6000, 0, "Hz") params:set_action("reverb_damping", function(value) engine.reverb_damping(value) end)
+    params:add_taper("reverb_modulator_depth", "Mod Depth", 0, 100, 40, 0, "%") params:set_action("reverb_modulator_depth", function(value) engine.reverb_modulator_depth(value / 100) end)
+    params:add_taper("reverb_modulator_frequency", "Mod Freq", 0, 10, 1, 0, "Hz") params:set_action("reverb_modulator_frequency", function(value) engine.reverb_modulator_frequency(value) end)
+    
     params:add_control("1cutoff","1 Cutoff",controlspec.new(20,20000,"exp",0,20000,"Hz")) params:set_action("1cutoff",function(value) engine.cutoff(1,value) end)
     params:add_control("2cutoff","2 Cutoff",controlspec.new(20,20000,"exp",0,20000,"Hz")) params:set_action("2cutoff",function(value) engine.cutoff(2,value) end)
     params:add_control("1hpf", "1 Cutoff", controlspec.new(20, 20000, "exp", 0, 20, "Hz")) params:set_action("1hpf", function(value) engine.hpf(1, value) end)
@@ -206,7 +207,7 @@ local function setup_params()
     params:set_action("eq_high_gain_2", function(value) engine.eq_high_gain(2, value*45) end)
 
     params:add_group("LFOs", 116)
-    params:add_binary("randomize_lfos", "RaNd0m1ze LFOs", "trigger", 0) params:set_action("randomize_lfos", function() lfo.clearLFOs("1") lfo.clearLFOs("2") lfo.randomize_lfos("1", params:get("allow_volume_lfos") == 2)  lfo.randomize_lfos("2", params:get("allow_volume_lfos") == 2) if randomize_metro[1] then randomize_metro[1]:stop() end if randomize_metro[2] then randomize_metro[2]:stop() end end)
+    params:add_binary("randomize_lfos", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_lfos", function() lfo.clearLFOs("1") lfo.clearLFOs("2") lfo.randomize_lfos("1", params:get("allow_volume_lfos") == 2)  lfo.randomize_lfos("2", params:get("allow_volume_lfos") == 2) if randomize_metro[1] then randomize_metro[1]:stop() end if randomize_metro[2] then randomize_metro[2]:stop() end end)
     params:add_binary("ClearLFOs", "Clear All LFOs", "trigger", 0) params:set_action("ClearLFOs", function() lfo.clearLFOs() end)
     params:add_option("allow_volume_lfos", "Allow Volume LFOs", {"no", "yes"}, 2)
     params:add_control("global_lfo_freq_scale", "Freq Scale", controlspec.new(0.1, 10, "exp", 0.01, 1.0, "x")) params:set_action("global_lfo_freq_scale", function(value) 
@@ -220,7 +221,7 @@ local function setup_params()
     for i = 1, 2 do
       params:add_taper(i .. "volume", i .. " volume", -70, 20, 0, 0, "dB") params:set_action(i .. "volume", function(value) if value == -70 then engine.volume(i, 0) else engine.volume(i, math.pow(10, value / 20)) end end)
       params:add_taper(i .. "pan", i .. " pan", -100, 100, 0, 0, "%") params:set_action(i .. "pan", function(value) engine.pan(i, value / 100)  end)
-      params:add_control(i .. "speed", i .. " speed", controlspec.new(-2, 2, "lin", 0.01, 0.1, "")) params:set_action(i .. "speed", function(value) engine.speed(i, value) end)
+      params:add_taper(i .. "speed", i .. " speed", -2, 2, 0.10, 0) params:set_action(i .. "speed", function(value) engine.speed(i, value) end)
       params:add_taper(i .. "density", i .. " density", 0.1, 300, 10, 5) params:set_action(i .. "density", function(value) engine.density(i, value) end)
       params:add_control(i .. "pitch", i .. " pitch", controlspec.new(-48, 48, "lin", 1, 0, "st")) params:set_action(i .. "pitch", function(value) engine.pitch_offset(i, math.pow(0.5, -value / 12)) end)
       params:add_taper(i .. "jitter", i .. " jitter", 0, 4999, 250, 3, "ms") params:set_action(i .. "jitter", function(value) engine.jitter(i, value / 1000) end)
@@ -238,9 +239,9 @@ local function setup_params()
       params:hide(i .. "volume")
     end
 
-    params:add_group("Limits", 10)
+    params:add_group("Limits", 14)
     params:add_taper("min_jitter", "jitter (min)", 0, 4999, 100, 5, "ms")
-    params:add_taper("max_jitter", "jitter (max)", 0, 4999, 2999, 5, "ms")
+    params:add_taper("max_jitter", "jitter (max)", 0, 4999, 1999, 5, "ms")
     params:add_taper("min_size", "size (min)", 1, 999, 100, 5, "ms")
     params:add_taper("max_size", "size (max)", 1, 999, 599, 5, "ms")
     params:add_taper("min_density", "density (min)", 0.1, 50, 1, 5, "Hz")
@@ -249,8 +250,12 @@ local function setup_params()
     params:add_taper("max_spread", "spread (max)", 0, 100, 90, 0, "%")
     params:add_control("min_pitch", "pitch (min)", controlspec.new(-48, 48, "lin", 1, -31, "st"))
     params:add_control("max_pitch", "pitch (max)", controlspec.new(-48, 48, "lin", 1, 31, "st"))
+    params:add_taper("min_speed", "speed (min)", -2, 2, -1, 0, "x")
+    params:add_taper("max_speed", "speed (max)", -2, 2, 1, 0, "x")
+    params:add_taper("min_seek", "seek (min)", 0, 100, 0, 0, "%")
+    params:add_taper("max_seek", "seek (max)", 0, 100, 100, 0, "%")
 
-    params:add_group("Locking", 14)
+    params:add_group("Locking", 16)
     for i = 1, 2 do
       params:add_option(i .. "lock_jitter", i .. " lock jitter", {"off", "on"}, 1)
       params:add_option(i .. "lock_size", i .. " lock size", {"off", "on"}, 1)
@@ -258,13 +263,11 @@ local function setup_params()
       params:add_option(i .. "lock_spread", i .. " lock spread", {"off", "on"}, 1)
       params:add_option(i .. "lock_pitch", i .. " lock pitch", {"off", "on"}, 1)
       params:add_option(i .. "lock_pan", i .. " lock pan", {"off", "on"}, 1)
-      params:add_option(i .. "lock_seek", i .. " lock seek", {"off", "on"}, 1) -- Add this line
+      params:add_option(i .. "lock_seek", i .. " lock seek", {"off", "on"}, 1)
+      params:add_option(i .. "lock_speed", i .. " lock speed", {"off", "on"}, 1)
     end
 
-    params:add_group("Other", 7)
-    params:add_separator("Shimmer")
-    params:add_control("shimmer_mix", "Shimmer", controlspec.new(0, 100, "lin", 1, 0, "%"))
-    params:set_action("shimmer_mix", function(x) engine.shimmer_mix(x/35) end)
+    params:add_group("Other", 5)
     params:add_separator("Stereo Width")
     for i = 1, 2 do
     params:add_control(i .. "Width", i .. " Width", controlspec.new(0, 200, "lin", 0.01, 100, "%"))
@@ -285,59 +288,34 @@ local function randomize(n)
     end
     active_controlled_params = {}
     local param_config = {
-    jitter = { min = "min_jitter", max = "max_jitter", lock = params:get(n.."lock_jitter")==1, param_name = n.."jitter" },
-    size = { min = "min_size", max = "max_size", lock = params:get(n.."lock_size")==1, param_name = n.."size" },
-    density = { min = "min_density", max = "max_density", lock = params:get(n.."lock_density")==1, param_name = n.."density" },
-    spread = { min = "min_spread", max = "max_spread", lock = params:get(n.."lock_spread")==1, param_name = n.."spread" },
-    pitch = { lock = params:get(n.."lock_pitch")==1, param_name = n.."pitch" },
-    seek = { lock = params:get(n.."lock_seek")==1, param_name = n.."seek" }
-    }
-    local targets = {}
+      speed = {min = "min_speed", max = "max_speed", lock = params:get(n.."lock_speed")==1, param_name = n.."speed"},
+      jitter = {min = "min_jitter", max = "max_jitter", lock = params:get(n.."lock_jitter")==1, param_name = n.."jitter"},
+      size = {min = "min_size", max = "max_size", lock = params:get(n.."lock_size")==1, param_name = n.."size"},
+      density = {min = "min_density", max = "max_density", lock = params:get(n.."lock_density")==1, param_name = n.."density"},
+      spread = {min = "min_spread", max = "max_spread", lock = params:get(n.."lock_spread")==1, param_name = n.."spread"},
+      pitch = {lock = params:get(n.."lock_pitch")==1, param_name = n.."pitch"}}
     local current_pitch = params:get(n .. "pitch")
     local min_pitch = math.max(params:get("min_pitch"), current_pitch - 48)
     local max_pitch = math.min(params:get("max_pitch"), current_pitch + 48)
     local base_pitch = params:get(n == 1 and "2pitch" or "1pitch")
-
-    for param, config in pairs(param_config) do
-        if param ~= "pitch" and param ~= "seek" then
-            if config.lock and not active_controlled_params[config.param_name] then
-                local min_val = params:get(config.min)
-                local max_val = params:get(config.max)
-                
-                if min_val < max_val and not is_lfo_active_for_param(config.param_name) then
-                    targets[config.param_name] = random_float(min_val, max_val)
-                end
-            end
-        end
-    end
-
     if param_config.pitch.lock and not active_controlled_params[param_config.pitch.param_name] then
         if min_pitch < max_pitch and not is_lfo_active_for_param(param_config.pitch.param_name) then
             local weighted_intervals = {
-                {interval = -12, weight = 3}, {interval = -7, weight = 2},
-                {interval = -5, weight = 2},  {interval = -3, weight = 1},
-                {interval = 0, weight = 2},   {interval = 3, weight = 1},
-                {interval = 5, weight = 2},   {interval = 7, weight = 2},
-                {interval = 12, weight = 3}
-            }
-
+                [-12] = 3, [-7] = 2, [-5] = 2, [-3] = 1,
+                [0] = 2, [3] = 1, [5] = 2, [7] = 2, [12] = 3}
+            local larger_intervals = {-24, -19, -17, -15, 15, 17, 19, 24}
             local valid_intervals = {}
-            for _, v in ipairs(weighted_intervals) do
-                local candidate_pitch = base_pitch + v.interval
+            local total_weight = 0
+            for interval, weight in pairs(weighted_intervals) do
+                local candidate_pitch = base_pitch + interval
                 if candidate_pitch >= min_pitch and candidate_pitch <= max_pitch then
-                    table.insert(valid_intervals, v)
+                    table.insert(valid_intervals, {interval = interval, weight = weight})
+                    total_weight = total_weight + weight
                 end
             end
-
             if #valid_intervals > 0 then
-                local total_weight = 0
-                for _, v in ipairs(valid_intervals) do
-                    total_weight = total_weight + v.weight
-                end
-
                 local random_weight = math.random(total_weight)
                 local cumulative_weight = 0
-
                 for _, v in ipairs(valid_intervals) do
                     cumulative_weight = cumulative_weight + v.weight
                     if random_weight <= cumulative_weight then
@@ -346,7 +324,6 @@ local function randomize(n)
                     end
                 end
             else
-                local larger_intervals = {-24, -19, -17, -15, 15, 17, 19, 24}
                 for _, interval in ipairs(larger_intervals) do
                     local candidate_pitch = base_pitch + interval
                     if candidate_pitch >= min_pitch and candidate_pitch <= max_pitch then
@@ -357,6 +334,21 @@ local function randomize(n)
             end
         end
     end
+
+    local targets = {}
+    for param, config in pairs(param_config) do
+        if param ~= "pitch" then
+            if config.lock and not active_controlled_params[config.param_name] then
+                local min_val = config.min and params:get(config.min) or config.min
+                local max_val = config.max and params:get(config.max) or config.max
+                
+                if min_val < max_val and not is_lfo_active_for_param(config.param_name) then
+                    targets[config.param_name] = random_float(min_val, max_val)
+                end
+            end
+        end
+    end
+
     randomize_metro[n].time = 1/30
     randomize_metro[n].event = function(count)
         local tolerance = 0.01
@@ -541,7 +533,7 @@ function key(n, z)
             current_filter_mode = current_filter_mode == "lpf" and "hpf" or "lpf"
             redraw()
         else
-            local lockable_params = {"jitter", "size", "density", "spread", "pitch", "pan", "seek"}
+            local lockable_params = {"jitter", "size", "density", "spread", "pitch", "pan", "seek", "speed"}
             local param_name = string.match(current_mode, "%a+")
             
             if param_name and table.find(lockable_params, param_name) then
@@ -641,7 +633,7 @@ local function draw_param_row(y, label, param1, param2, is_density, is_pitch, is
             local bar_height = 1
             local min_val, max_val = lfo.get_parameter_range(param)
             local bar_value = util.linlin(min_val, max_val, 0, bar_width, lfo_mod)
-            screen.level(5)
+            screen.level(6)
             screen.rect(x, y + 1, bar_value, bar_height)
             screen.fill()
         end
@@ -650,7 +642,7 @@ local function draw_param_row(y, label, param1, param2, is_density, is_pitch, is
     draw_lfo_bar(92, param2)
 end
 
-local function draw_progress_bar(x, y, width, value, min, max, center, is_log)
+local function draw_progress_bar(x, y, width, value, min, max, is_log)
     value = math.min(math.max(value, min), max)
     local value_pos
     if is_log then
@@ -658,28 +650,16 @@ local function draw_progress_bar(x, y, width, value, min, max, center, is_log)
     else
         value_pos = util.linlin(min, max, x, x + width, value)
     end
-    screen.level(3)
-    if center then
-        local center_pos = x + (width * 0.5)
-        local bar_start = math.min(center_pos, value_pos)
-        local bar_width = math.abs(value_pos - center_pos)
-        screen.rect(bar_start, y, bar_width, 1)
-    else
-        screen.rect(x, y, value_pos - x, 1)
-    end
+    screen.level(6)
+    screen.rect(x, y, value_pos - x, 1)
     screen.fill()
 end
 
 local function format_speed(speed)
     if math.abs(speed) < 1 then
-        if speed < 0 then
-            return string.format("-.%02dx", math.floor(math.abs(speed) * 100))
-        else
-            return string.format(".%02dx", math.floor(math.abs(speed) * 100))
-        end
-    else
-        return string.format("%.2fx", speed)
-    end
+        if speed < -0.008 then return string.format("-.%02dx", math.floor(math.abs(speed) * 100))
+        else return string.format(".%02dx", math.floor(math.abs(speed) * 100)) end
+    else return string.format("%.2fx", speed) end
 end
 
 function redraw()
@@ -687,42 +667,34 @@ function redraw()
         installer:redraw() 
         return 
     end
-     screen.clear()
+    screen.clear()
     local current_mode = current_mode
     local current_filter_mode = current_filter_mode
-
     local param_rows = {
-        {y = 10, label = "jitter:    ", mode = "jitter", param1 = "1jitter", param2 = "2jitter", hz = false, st = false},
-        {y = 20, label = "size:     ", mode = "size", param1 = "1size", param2 = "2size", hz = false, st = false},
-        {y = 30, label = "density:  ", mode = "density", param1 = "1density", param2 = "2density", hz = true, st = false},
-        {y = 40, label = "spread:   ", mode = "spread", param1 = "1spread", param2 = "2spread", hz = false, st = false},
-        {y = 50, label = "pitch:    ", mode = "pitch", param1 = "1pitch", param2 = "2pitch", hz = false, st = true}
-    }
-    local bottom_labels = {
-        seek = "seek:     ",
-        pan = "pan:      ",
-        lpf = current_filter_mode == "lpf" and "lpf:      " or "hpf:      ",
-        default = "speed:    "
-    }
+        {y = 11, label = "jitter:    ", mode = "jitter", param1 = "1jitter", param2 = "2jitter", hz = false, st = false},
+        {y = 21, label = "size:     ", mode = "size", param1 = "1size", param2 = "2size", hz = false, st = false},
+        {y = 31, label = "density:  ", mode = "density", param1 = "1density", param2 = "2density", hz = true, st = false},
+        {y = 41, label = "spread:   ", mode = "spread", param1 = "1spread", param2 = "2spread", hz = false, st = false},
+        {y = 51, label = "pitch:    ", mode = "pitch", param1 = "1pitch", param2 = "2pitch", hz = false, st = true}}
+    local bottom_labels = {seek = "seek:     ",pan = "pan:      ",lpf = current_filter_mode == "lpf" and "lpf:      " or "hpf:      ",speed = "speed:    "}
     for _, row in ipairs(param_rows) do
         draw_param_row(row.y, row.label, row.param1, row.param2, row.hz, row.st, current_mode == row.mode)
     end
-    screen.move(5, 60)
+    screen.move(5, 61)
     screen.level(15)
-    screen.text(bottom_labels[current_mode] or bottom_labels.default)
+    screen.text(bottom_labels[current_mode] or "speed:    ")
     if current_mode == "seek" then
-        draw_progress_bar(51, 62, 30, params:get("1seek"), 0, 100, false, false)
-        draw_progress_bar(92, 62, 30, params:get("2seek"), 0, 100, false, false)
+        draw_progress_bar(51, 63, 30, params:get("1seek"), 0, 100, false)
+        draw_progress_bar(92, 63, 30, params:get("2seek"), 0, 100, false)
     elseif current_mode == "lpf" or current_mode == "hpf" then
         local param1 = current_filter_mode == "lpf" and "1cutoff" or "1hpf"
         local param2 = current_filter_mode == "lpf" and "2cutoff" or "2hpf"
-        draw_progress_bar(51, 62, 30, params:get(param1), 20, 20000, false, true)
-        draw_progress_bar(92, 62, 30, params:get(param2), 20, 20000, false, true)
+        draw_progress_bar(51, 63, 30, params:get(param1), 20, 20000, true)
+        draw_progress_bar(92, 63, 30, params:get(param2), 20, 20000, true)
     end
-    local is_highlighted = current_mode == "seek" or current_mode == "lpf" or current_mode == "hpf" or 
-                         current_mode == "speed" or current_mode == "pan"
+    local is_highlighted = current_mode == "seek" or current_mode == "lpf" or current_mode == "hpf" or current_mode == "speed" or current_mode == "pan"
     local function draw_bottom_value(x, track)
-        screen.move(x, 60)
+        screen.move(x, 61)
         screen.level(is_highlighted and 15 or 1)
         if current_mode == "seek" then
             screen.text(format_seek(params:get(track.."seek")))
@@ -739,12 +711,12 @@ function redraw()
     draw_bottom_value(51, "1")
     draw_bottom_value(92, "2")
 
-    -- Draw L-shapes for locked parameters
-    if current_mode == "pan" or current_mode == "seek" then
-        local param_type = current_mode
+    local show_speed_lock = current_mode == "speed" or current_mode == "jitter" or current_mode == "size" or current_mode == "density" or current_mode == "spread" or current_mode == "pitch"
+    if current_mode == "pan" or current_mode == "seek" or show_speed_lock then
+        local param_type = show_speed_lock and "speed" or current_mode
         local function draw_if_locked(x, track)
             if is_param_locked(track, param_type) then
-                draw_l_shape(x, 60, true)
+                draw_l_shape(x, 61, true)
             end
         end
         draw_if_locked(51, 1)
@@ -764,7 +736,7 @@ function redraw()
     end
 
     -- Draw pan indicators
-    screen.level(1)
+    screen.level(3)
     for i, center_start in ipairs({52, 93}) do
         local track = tostring(i)
         if is_audio_loaded(track) then

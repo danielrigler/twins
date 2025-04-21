@@ -21,16 +21,13 @@ readBuf { arg i, path;
         if (File.exists(path), {
             var numChannels;
             var newbuf;
-
             numChannels = SoundFile.use(path.asString(), { |f| f.numChannels });
-
             newbuf = Buffer.readChannel(context.server, path, 0, -1, [0], { |b|
                 voices[i].set(\buf_l, b);
                 buffersL[i].free;
                 buffersL[i] = b;
                 voices[i].set(\pos, 0, \t_reset_pos, 1, \freeze, 0);
             });
-
             if (numChannels > 1, {
                 newbuf = Buffer.readChannel(context.server, path, 0, -1, [1], { |b|
                     voices[i].set(\buf_r, b);
@@ -54,7 +51,7 @@ alloc {
         buffersR = Array.fill(nvoices, { arg i;
             Buffer.alloc(context.server, context.server.sampleRate * 1);
         });
-        context.server.sync;
+        
         bufSine = Buffer.alloc(context.server, 1024 * 16, 1);
         bufSine.sine2([2], [0.5], false);
         wobbleBuffers = Array.fill(nvoices, {Buffer.alloc(context.server, 48000 * 5, 2) });
@@ -104,7 +101,6 @@ alloc {
             var subharmonic_3_vol = subharmonics_3 / denominator * 2;
             var overtone_1_vol = overtones_1 / denominator * 2;
             var overtone_2_vol = overtones_2 / denominator * 2;
-            var lagSpeed = Lag.kr(speed);
             var lagPitchOffset = Lag.kr(pitch_offset, 1);
             var grain_direction = Select.kr(pitch_mode, [1, Select.kr(speed.abs > 0.001, [1, speed.sign])]) * ((LFNoise1.kr(density).range(0,1) < direction_mod).linlin(0,1,1,-1));
             var trig_rnd = LFNoise1.kr(density);
@@ -125,12 +121,12 @@ alloc {
 
             buf_dur = BufDur.kr(buf_l);
             jitter_sig = TRand.kr(trig: grain_trig, lo: buf_dur.reciprocal.neg * jitter, hi: buf_dur.reciprocal * jitter);
-            buf_pos = Phasor.kr(trig: t_reset_pos, rate: buf_dur.reciprocal / ControlRate.ir * lagSpeed, resetPos: pos);
+            buf_pos = Phasor.kr(trig: t_reset_pos, rate: buf_dur.reciprocal / ControlRate.ir * speed, resetPos: pos);
             pos_sig = Wrap.kr(Select.kr(freeze, [buf_pos, pos]));
-            dry_sig = [PlayBuf.ar(1, buf_l, lagSpeed, startPos: pos * BufFrames.kr(buf_l), trigger: t_reset_pos, loop: 1), PlayBuf.ar(1, buf_r, lagSpeed, startPos: pos * BufFrames.kr(buf_r), trigger: t_reset_pos, loop: 1)];
+            dry_sig = [PlayBuf.ar(1, buf_l, speed, startPos: pos * BufFrames.kr(buf_l), trigger: t_reset_pos, loop: 1), PlayBuf.ar(1, buf_r, speed, startPos: pos * BufFrames.kr(buf_r), trigger: t_reset_pos, loop: 1)];
             
             rand_val = LFNoise1.kr(density).range(0, 1);
-            base_pitch = Select.kr(pitch_mode, [lagSpeed * lagPitchOffset, lagPitchOffset]);
+            base_pitch = Select.kr(pitch_mode, [speed * lagPitchOffset, lagPitchOffset]);
             interval_plus = (rand_val < pitch_random_plus) * TChoose.kr(grain_trig, positive_intervals);
             interval_minus = (rand_val < pitch_random_minus) * TChoose.kr(grain_trig, negative_intervals);
             final_interval = interval_plus + interval_minus;
@@ -170,7 +166,7 @@ alloc {
             sig_mix = HPF.ar(sig_mix, Lag.kr(hpf));
             sig_mix = LPF.ar(sig_mix, Lag.kr(cutoff));
             
-            low = BLowShelf.ar(sig_mix, 200, 5, low_gain);
+            low = BLowShelf.ar(sig_mix, 250, 5, low_gain);
             high = BHiShelf.ar(sig_mix, 3600, 5, high_gain);
             sig_mix = low + high;
 
@@ -189,8 +185,6 @@ alloc {
 
         mixBus = Bus.audio(context.server, 2);
 
-        context.server.sync;
-
         voices = Array.fill(nvoices, { arg i;
             Synth.new(\synth, [
                 \out, mixBus.index, 
@@ -200,14 +194,14 @@ alloc {
             ]);
         });
 
-        context.server.sync;
-
         SynthDef(\shimmer, {
             arg in, out, mix=0.0;
-            var snd, orig;
+            var pit, snd, orig, hpforig;
             orig = In.ar(in, 2);
-            snd = orig + PitchShift.ar(orig, 0.13, 2,0.05,2,mul:1*mix);
-            snd = snd + PitchShift.ar(orig, 0.10, 4,0.05,2,mul:0.5*mix);
+            hpforig = HPF.ar(orig, 600);
+            pit = LPF.ar(PitchShift.ar(hpforig, 0.13,2,0,1,mul:4), 16000);
+		        pit = LeakDC.ar(pit);
+            snd = SelectX.ar(mix, [orig, pit]);
             Out.ar(out, snd);
         }).add;
 
@@ -254,7 +248,7 @@ alloc {
             \in, mixBus.index,
             \out, context.out_b.index
         ], context.xg);
-        
+
         
         this.addCommand("shimmer_mix", "f", { arg msg;
             var mix = msg[1];
@@ -267,7 +261,7 @@ alloc {
             };
             shimmerEffect.set(\mix, mix);
         });
-
+        
         this.addCommand("reverb_mix", "f", { arg msg; 
             var mix = msg[1];
             if (mix == 0) { fverbEffect.run(false) } { fverbEffect.run(true) };
@@ -337,7 +331,7 @@ alloc {
         this.addCommand("eq_high_gain", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\high_gain, msg[2]); });
         
         this.addCommand("width", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\width, msg[2]); });
-
+        
         seek_tasks = Array.fill(nvoices, { arg i; Routine {} });
     }
 

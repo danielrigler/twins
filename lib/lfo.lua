@@ -10,7 +10,7 @@ local assigned_params = {}
 
 local function is_locked(target)
   local track, param = string.match(target, "(%d)(%a+)")
-  local lockable_params = { "jitter", "size", "density", "spread", "pitch", "pan", "seek" }
+  local lockable_params = { "jitter", "size", "density", "spread", "pitch", "pan", "seek", "speed" }
   if table.find(lockable_params, param) then
     return params:get(track .. "lock_" .. param) == 2
   end
@@ -108,7 +108,7 @@ end
 lfo.lfo_targets = {
   "none", "1pan", "2pan", "1seek", "2seek", "1jitter", "2jitter", 
   "1spread", "2spread", "1size", "2size", "1density", "2density", "1volume", "2volume", 
-  "1pitch", "2pitch", "1cutoff", "2cutoff", "1hpf", "2hpf"
+  "1pitch", "2pitch", "1cutoff", "2cutoff", "1hpf", "2hpf", "1speed", "2speed"
 }
 
 lfo.target_ranges = {
@@ -124,15 +124,18 @@ lfo.target_ranges = {
   ["2density"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
   ["1volume"] = { depth = { 2, 3 }, offset = { -1, 1 }, frequency = { 0.1, 0.5 }, waveform = { "sine" }, chance = 1.0 },
   ["2volume"] = { depth = { 2, 3 }, offset = { -1, 1 }, frequency = { 0.1, 0.5 }, waveform = { "sine" }, chance = 1.0 },
-  ["1seek"] = { depth = { 30, 60 }, offset = { 0, 0 }, frequency = { 0.05, 0.3 }, waveform = { "sine", "random" }, chance = 0.35 },
-  ["2seek"] = { depth = { 30, 60 }, offset = { 0, 0 }, frequency = { 0.05, 0.3 }, waveform = { "sine", "random" }, chance = 0.35 }
+  ["1seek"] = { depth = { 30, 60 }, offset = { 0, 0 }, frequency = { 0.05, 0.3 }, waveform = { "sine", "random" }, chance = 0.4 },
+  ["2seek"] = { depth = { 30, 60 }, offset = { 0, 0 }, frequency = { 0.05, 0.3 }, waveform = { "sine", "random" }, chance = 0.4 },
+  ["1speed"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.02, 0.1 }, waveform = { "sine" }, chance = 0.1 },
+  ["2speed"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.02, 0.1 }, waveform = { "sine" }, chance = 0.1 }
 }
 
 function lfo.get_parameter_range(param_name)
   local param_ranges = {
     ["1pan"] = { -100, 100 }, ["2pan"] = { -100, 100 },
     ["1seek"] = { 0, 100 }, ["2seek"] = { 0, 100 },
-    ["1jitter"] = { 1, 2999 }, ["2jitter"] = { 1, 2999 },
+    ["1speed"] = { -2, 2 }, ["2speed"] = { -2, 2 },
+    ["1jitter"] = { 1, 1999 }, ["2jitter"] = { 1, 1999 },
     ["1spread"] = { 0, 100 }, ["2spread"] = { 0, 100 },
     ["1size"] = { 0, 599 }, ["2size"] = { 0, 599 },
     ["1density"] = { 0, 20 }, ["2density"] = { 0, 20 },
@@ -152,6 +155,7 @@ function lfo.assign_to_current_row(current_mode, current_filter_mode)
         size = "size",
         density = "density",
         spread = "spread",
+        speed = "speed"
     }
     local param_name = param_map[current_mode]
     if not param_name then return end
