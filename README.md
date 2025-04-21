@@ -2,7 +2,7 @@
 
 A randomized dual granular sample player for Monome Norns.
 
-![|549x300, 100%](https://llllllll.co/uploads/default/original/3X/d/5/d564abe96616f701bfe6c23082a1614cde317476.png)
+![100%](https://llllllll.co/uploads/default/original/3X/7/8/78283686b6c662e3d1a4af378cad1709eb29fcd0.png)
 
 Heavily influenced by @cfd90's Twine and contains inspiration and code from a lot of other users. I'm especially grateful for the work of @infinitedigits, @justmat, @artfwo, @Nuno_Zimas and @sonoCircuit. I'm completely new to programming and had a lot of fun hacking this together. I tried to create something which is highly playable and controllable without any external gadgets. My main goal with this is to have a tool to create nice ambient soundscapes.
 
@@ -35,7 +35,7 @@ _some features might require a pi4 based unit._
 ### Discussion
 **[FORUM](https://llllllll.co/t/twins/71052)**
 ### Download
-**v0.24**
+**v0.25**
 install from Maiden:
 ```
 ;install https://github.com/danielrigler/twins
@@ -43,6 +43,7 @@ install from Maiden:
 And after this do not forget to restart.
 
 ### Version history
+* **v0.25** - Improved shimmer. Small tweaks and fixes. 
 * **v0.24** - Added tape wobble. 
 * **v0.23** - Added shimmer again. 0 mix is bypass to save resources. 
 * **v0.22** - Seek tweak, shift vis, random tapes.
