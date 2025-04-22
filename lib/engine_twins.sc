@@ -195,7 +195,7 @@ alloc {
             arg in, out, mix=0.0;
             var pit, snd, orig;
             orig = In.ar(in, 2);
-            pit = LeakDC.ar(LPF.ar(PitchShift.ar(HPF.ar(orig, 600), 0.13,2,0,1,mul:4), 16000));
+            pit = LeakDC.ar(LPF.ar(PitchShift.ar(HPF.ar(orig, 400), 0.15,2,0,1,mul:4), 15000));
             snd = SelectX.ar(mix, [orig, pit]);
             Out.ar(out, snd); 
         }).add;

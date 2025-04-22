@@ -48,6 +48,8 @@ local randomize_metro = { [1] = nil, [2] = nil }
 local key1_pressed, key2_pressed, key3_pressed = false
 local current_mode = "speed"
 local current_filter_mode = "lpf"
+local manual_adjustments = {}
+local MANUAL_ADJUSTMENT_DURATION = 0.5
 
 local function is_audio_loaded(track_num)
     local file_path = params:get(track_num .. "sample")
@@ -109,6 +111,15 @@ local function load_random_tape_file(track_num)
 end
 
 local function setup_params()
+    local all_params = {
+        "jitter", "size", "density", "spread", "pitch", 
+        "pan", "seek", "speed", "cutoff", "hpf"}
+    
+    for _, param in ipairs(all_params) do
+        manual_adjustments["1"..param] = {active = false, value = 0}
+        manual_adjustments["2"..param] = {active = false, value = 0}
+    end
+
     params:add_separator("Samples")
     for i = 1, 2 do
         params:add_file(i .. "sample", "Sample " ..i)
@@ -122,6 +133,7 @@ local function setup_params()
             end
         end)
     end
+    
     params:add_binary("randomize_params", "Random Tapes", "trigger", 0) 
     params:set_action("randomize_params", function() load_random_tape_file(1) load_random_tape_file(2) randpara.randomize_params(steps) end)
     
@@ -225,7 +237,7 @@ local function setup_params()
       params:add_taper(i .. "density", i .. " density", 0.1, 300, 10, 5) params:set_action(i .. "density", function(value) engine.density(i, value) end)
       params:add_control(i .. "pitch", i .. " pitch", controlspec.new(-48, 48, "lin", 1, 0, "st")) params:set_action(i .. "pitch", function(value) engine.pitch_offset(i, math.pow(0.5, -value / 12)) end)
       params:add_taper(i .. "jitter", i .. " jitter", 0, 4999, 250, 3, "ms") params:set_action(i .. "jitter", function(value) engine.jitter(i, value / 1000) end)
-      params:add_taper(i .. "size", i .. " size", 1, 999, 100, 2, "ms") params:set_action(i .. "size", function(value) engine.size(i, value / 1000) end)
+      params:add_taper(i .. "size", i .. " size", 1, 999, 100, 1, "ms") params:set_action(i .. "size", function(value) engine.size(i, value / 1000) end)
       params:add_taper(i .. "spread", i .. " spread", 0, 100, 0, 0, "%") params:set_action(i .. "spread", function(value) engine.spread(i, value / 100) end)
       params:add_control(i .. "seek", i .. " seek", controlspec.new(0, 100, "lin", 0.01, 0, "%")) params:set_action(i .. "seek", function(value) engine.seek(i, value) end)
       params:hide(i .. "speed")
@@ -341,8 +353,7 @@ local function randomize(n)
             if config.lock and not active_controlled_params[config.param_name] then
                 local min_val = config.min and params:get(config.min) or config.min
                 local max_val = config.max and params:get(config.max) or config.max
-                
-                if min_val < max_val and not is_lfo_active_for_param(config.param_name) then
+                    if min_val < max_val and not is_lfo_active_for_param(config.param_name) then
                     targets[config.param_name] = random_float(min_val, max_val)
                 end
             end
@@ -414,7 +425,6 @@ function enc(n, d)
             local track1_delta = key1_pressed and 3 or 3
             local track2_delta = key1_pressed and -3 or 3
             local lfo_delta = 0.75 * d
-            
             if is_active1 or is_active2 then
                 if is_active1 and is_active2 then
                     params:delta(lfo_index1 .. "offset", key1_pressed and lfo_delta or lfo_delta)
@@ -431,7 +441,6 @@ function enc(n, d)
                 params:delta("2volume", track2_delta * d)
             end
         end,
-        
         [2] = function()
             local track = 1
             if key1_pressed then 
@@ -445,6 +454,10 @@ function enc(n, d)
                 active_controlled_params[param_name] = true
                 local is_active, lfo_index = is_lfo_active_for_param(param_name)
                 if is_active then params:set(lfo_index .. "lfo", 1) end
+                manual_adjustments[param_name] = manual_adjustments[param_name] or {}
+                manual_adjustments[param_name].active = true
+                manual_adjustments[param_name].value = params:get(param_name)
+                manual_adjustments[param_name].time = util.time()
                 if config.wrap then
                     local current_val = params:get(param_name)
                     local new_val = wrap_value(current_val + d, config.wrap[1], config.wrap[2])
@@ -455,7 +468,6 @@ function enc(n, d)
                 end
             end
         end,
-        
         [3] = function()
             local track = 2
             if key1_pressed then 
@@ -469,6 +481,10 @@ function enc(n, d)
                 active_controlled_params[param_name] = true
                 local is_active, lfo_index = is_lfo_active_for_param(param_name)
                 if is_active then params:set(lfo_index .. "lfo", 1) end
+                manual_adjustments[param_name] = manual_adjustments[param_name] or {}
+                manual_adjustments[param_name].active = true
+                manual_adjustments[param_name].value = params:get(param_name)
+                manual_adjustments[param_name].time = util.time()
                 if config.wrap then
                     local current_val = params:get(param_name)
                     local new_val = wrap_value(current_val + d, config.wrap[1], config.wrap[2])
@@ -633,20 +649,30 @@ local function draw_param_row(y, label, param1, param2, is_density, is_pitch, is
     draw_param_value(51, param1, is_locked1)
     draw_param_value(92, param2, is_locked2)
 
-    local function draw_lfo_bar(x, param)
-        local lfo_mod = get_lfo_modulation(param)
-        if lfo_mod then
+    if not is_pitch then
+        local function draw_value_bar(x, param)
             local bar_width = 30
             local bar_height = 1
             local min_val, max_val = lfo.get_parameter_range(param)
-            local bar_value = util.linlin(min_val, max_val, 0, bar_width, lfo_mod)
-            screen.level(6)
-            screen.rect(x, y + 1, bar_value, bar_height)
-            screen.fill()
+            if manual_adjustments[param] and manual_adjustments[param].active then
+                local bar_value = util.linlin(min_val, max_val, 0, bar_width, manual_adjustments[param].value)
+                screen.level(6)
+                screen.rect(x, y + 1, bar_value, bar_height)
+                screen.fill()
+            else
+                local lfo_mod = get_lfo_modulation(param)
+                if lfo_mod then
+                    local bar_value = util.linlin(min_val, max_val, 0, bar_width, lfo_mod)
+                    screen.level(6)
+                    screen.rect(x, y + 1, bar_value, bar_height)
+                    screen.fill()
+                end
+            end
         end
+        
+        draw_value_bar(51, param1)
+        draw_value_bar(92, param2)
     end
-    draw_lfo_bar(51, param1)
-    draw_lfo_bar(92, param2)
 end
 
 local function draw_progress_bar(x, y, width, value, min, max, is_log)
@@ -667,6 +693,14 @@ function redraw()
         installer:redraw() 
         return 
     end
+    
+    local current_time = util.time()
+    for param, adjustment in pairs(manual_adjustments) do
+        if adjustment and adjustment.time and (current_time - adjustment.time > MANUAL_ADJUSTMENT_DURATION) then
+            adjustment.active = false
+        end
+    end
+    
     screen.clear()
     local current_mode = current_mode
     local current_filter_mode = current_filter_mode
