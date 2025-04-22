@@ -570,6 +570,13 @@ local function format_seek(value)
     return string.format("%.0f%%", value)
 end
 
+local function format_speed(speed)
+    if math.abs(speed) < 1 then
+        if speed < -0.008 then return string.format("-.%02dx", math.floor(math.abs(speed) * 100))
+        else return string.format(".%02dx", math.floor(math.abs(speed) * 100)) end
+    else return string.format("%.2fx", speed) end
+end
+
 local function is_param_locked(track_num, param)
     return params:get(track_num .. "lock_" .. param) == 2
 end
@@ -653,13 +660,6 @@ local function draw_progress_bar(x, y, width, value, min, max, is_log)
     screen.level(6)
     screen.rect(x, y, value_pos - x, 1)
     screen.fill()
-end
-
-local function format_speed(speed)
-    if math.abs(speed) < 1 then
-        if speed < -0.008 then return string.format("-.%02dx", math.floor(math.abs(speed) * 100))
-        else return string.format(".%02dx", math.floor(math.abs(speed) * 100)) end
-    else return string.format("%.2fx", speed) end
 end
 
 function redraw()

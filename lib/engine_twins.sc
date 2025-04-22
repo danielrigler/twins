@@ -94,13 +94,13 @@ alloc {
             var base_pitch;
             var grain_pitch;
             var shaped;
-            var denominator = 1 + subharmonics_1 + subharmonics_2 + subharmonics_3 + overtones_1 + overtones_2;
-            var main_vol = 1 / denominator;
-            var subharmonic_1_vol = subharmonics_1 / denominator * 2;
-            var subharmonic_2_vol = subharmonics_2 / denominator * 2;
-            var subharmonic_3_vol = subharmonics_3 / denominator * 2;
-            var overtone_1_vol = overtones_1 / denominator * 2;
-            var overtone_2_vol = overtones_2 / denominator * 2;
+            var invDenom = 2 / (1 + subharmonics_1 + subharmonics_2 + subharmonics_3 + overtones_1 + overtones_2);
+            var main_vol = 0.5 * invDenom;
+            var subharmonic_1_vol = subharmonics_1 * invDenom;
+            var subharmonic_2_vol = subharmonics_2 * invDenom;
+            var subharmonic_3_vol = subharmonics_3 * invDenom;
+            var overtone_1_vol = overtones_1 * invDenom;
+            var overtone_2_vol = overtones_2 * invDenom;
             var lagPitchOffset = Lag.kr(pitch_offset, 1);
             var grain_direction = Select.kr(pitch_mode, [1, Select.kr(speed.abs > 0.001, [1, speed.sign])]) * ((LFNoise1.kr(density).range(0,1) < direction_mod).linlin(0,1,1,-1));
             var trig_rnd = LFNoise1.kr(density);
@@ -116,9 +116,6 @@ alloc {
 
             density_mod = density * (2**(trig_rnd * density_mod_amt));
             grain_trig = Impulse.kr(density_mod);
-
-            pan_sig = Lag.kr(TRand.kr(trig: grain_trig, lo: spread.neg, hi: spread), 0.2);
-
             buf_dur = BufDur.kr(buf_l);
             jitter_sig = TRand.kr(trig: grain_trig, lo: buf_dur.reciprocal.neg * jitter, hi: buf_dur.reciprocal * jitter);
             buf_pos = Phasor.kr(trig: t_reset_pos, rate: buf_dur.reciprocal / ControlRate.ir * speed, resetPos: pos);
@@ -130,10 +127,9 @@ alloc {
             interval_plus = (rand_val < pitch_random_plus) * TChoose.kr(grain_trig, positive_intervals);
             interval_minus = (rand_val < pitch_random_minus) * TChoose.kr(grain_trig, negative_intervals);
             final_interval = interval_plus + interval_minus;
+
             grain_pitch = base_pitch * (2 ** (final_interval/12));
-
             grain_size = size * (1 + TRand.kr(trig: grain_trig, lo: -1 * size_variation, hi: size_variation));
-
             ~grainBufFunc = { |buf, pitch, size, vol| GrainBuf.ar(1, grain_trig, size, buf, pitch * grain_direction, pos_sig + jitter_sig, 2, mul: vol); };
             sig_l = ~grainBufFunc.(buf_l, grain_pitch, grain_size, main_vol);
             sig_r = ~grainBufFunc.(buf_r, grain_pitch, grain_size, main_vol);
@@ -147,7 +143,8 @@ alloc {
             sig_r = sig_r + ~grainBufFunc.(buf_r, grain_pitch * 2, grain_size, overtone_1_vol);
             sig_l = sig_l + ~grainBufFunc.(buf_l, grain_pitch * 4, grain_size, overtone_2_vol);
             sig_r = sig_r + ~grainBufFunc.(buf_r, grain_pitch * 4, grain_size, overtone_2_vol);
-
+            
+            pan_sig = Lag.kr(TRand.kr(trig: grain_trig, lo: spread.neg, hi: spread), 0.2);
             granular_sig = Balance2.ar(sig_l, sig_r, pan_sig);
 
             sig_mix = (dry_sig * (1 - granular_gain)) + (granular_sig * granular_gain);
@@ -170,11 +167,11 @@ alloc {
             high = BHiShelf.ar(sig_mix, 3600, 5, high_gain);
             sig_mix = low + high;
 
-            sig_mix = Compander.ar(sig_mix,sig_mix,0.25)/2;
-            
             mid = (sig_mix[0] + sig_mix[1]) * 0.5;
             side = (sig_mix[0] - sig_mix[1]) * 0.5 * width;
             sig_mix = [mid + side, mid - side];
+
+            sig_mix = Compander.ar(sig_mix,sig_mix,0.25)/2;
 
             sig_mix = Balance2.ar(sig_mix[0], sig_mix[1], pan);
 
@@ -196,13 +193,11 @@ alloc {
 
         SynthDef(\shimmer, {
             arg in, out, mix=0.0;
-            var pit, snd, orig, hpforig;
+            var pit, snd, orig;
             orig = In.ar(in, 2);
-            hpforig = HPF.ar(orig, 600);
-            pit = LPF.ar(PitchShift.ar(hpforig, 0.13,2,0,1,mul:4), 16000);
-		        pit = LeakDC.ar(pit);
+            pit = LeakDC.ar(LPF.ar(PitchShift.ar(HPF.ar(orig, 600), 0.13,2,0,1,mul:4), 16000));
             snd = SelectX.ar(mix, [orig, pit]);
-            Out.ar(out, snd);
+            Out.ar(out, snd); 
         }).add;
 
         SynthDef(\fverb, {
@@ -221,6 +216,12 @@ alloc {
 
         context.server.sync;
 
+        shimmerEffect = Synth.new(\shimmer, [
+            \in, mixBus.index,
+            \out, context.out_b.index,
+            \mix, 0.0
+        ], context.xg);
+        
         fverbEffect = Synth.new(\fverb, [
             \in, mixBus.index,
             \out, context.out_b.index,
@@ -238,12 +239,6 @@ alloc {
             \modulator_depth, 0.5
         ], context.xg);
         
-        shimmerEffect = Synth.new(\shimmer, [
-            \in, mixBus.index,
-            \out, context.out_b.index,
-            \mix, 0.0
-        ], context.xg);
-        
         directOut = Synth.new(\directOut, [
             \in, mixBus.index,
             \out, context.out_b.index
@@ -252,27 +247,16 @@ alloc {
         
         this.addCommand("shimmer_mix", "f", { arg msg;
             var mix = msg[1];
-            if (mix == 0) { 
-                shimmerEffect.run(false);
-                directOut.run(true);
-            } { 
-                shimmerEffect.run(true); 
-                directOut.run(false);
-            };
             shimmerEffect.set(\mix, mix);
+            shimmerEffect.run(mix > 0);
+            directOut.run(mix == 0);
         });
-        
-        this.addCommand("reverb_mix", "f", { arg msg; 
+
+        this.addCommand("reverb_mix", "f", { arg msg;
             var mix = msg[1];
-            if (mix == 0) { fverbEffect.run(false) } { fverbEffect.run(true) };
             fverbEffect.set(\mix, mix);
-            fverbEffect.get(\mix, { |fverbMix|
-                if (fverbMix == 0) {
-                    directOut.run(true);
-                } {
-                    directOut.run(false);
-                };
-            });
+            fverbEffect.run(mix > 0);
+            directOut.run(mix == 0);
         });
 
         this.addCommand("reverb_predelay", "f", { arg msg; fverbEffect.set(\predelay, msg[1]); });
