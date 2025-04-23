@@ -282,8 +282,8 @@ local function setup_params()
     params:add_group("Other", 5)
     params:add_separator("Stereo Width")
     for i = 1, 2 do
-    params:add_control(i .. "Width", i .. " Width", controlspec.new(0, 200, "lin", 0.01, 100, "%"))
-    params:set_action(i .. "Width", function(value) engine.width(i, value / 100) end)
+      params:add_control(i .. "Width", i .. " Width", controlspec.new(0, 200, "lin", 0.01, 100, "%"))
+      params:set_action(i .. "Width", function(value) engine.width(i, value / 100) end)
     end  
     params:add_separator("Transition Steps")
     params:add_control("steps","Steps",controlspec.new(10,2000,"lin",1,400)) params:set_action("steps", function(value) steps = value end)
@@ -756,9 +756,9 @@ function redraw()
         draw_if_locked(51, 1)
         draw_if_locked(92, 2)
     end
+    screen.level(6)
 
     -- Draw volume bars
-    screen.level(key1_pressed and 6 or 3)
     for i, x in ipairs({0, 127}) do
         local track = tostring(i)
         if is_audio_loaded(track) then
@@ -770,7 +770,6 @@ function redraw()
     end
 
     -- Draw pan indicators
-    screen.level(3)
     for i, center_start in ipairs({52, 93}) do
         local track = tostring(i)
         if is_audio_loaded(track) then
