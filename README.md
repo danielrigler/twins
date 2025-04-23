@@ -2,7 +2,7 @@
 
 A randomized dual granular sample player for Monome Norns.
 
-![100%](https://llllllll.co/uploads/default/original/3X/7/8/78283686b6c662e3d1a4af378cad1709eb29fcd0.png)
+![100%](https://llllllll.co/uploads/default/original/3X/3/c/3c5256be810b01e9d48ec62541b852443f9cdf44.png)
 
 Influenced by @cfd90's Twine and contains inspiration and code from a lot of other users. I'm especially grateful for the work of @infinitedigits, @justmat, @artfwo, @Nuno_Zimas and @sonoCircuit. I'm completely new to programming and had a lot of fun hacking this together. I tried to create something which is highly playable and controllable without any external gadgets. My main goal with this is to have a tool to create nice ambient soundscapes.
 
