@@ -4,7 +4,7 @@ A randomized dual granular sample player for Monome Norns.
 
 ![100%](https://llllllll.co/uploads/default/original/3X/3/c/3c5256be810b01e9d48ec62541b852443f9cdf44.png)
 
-Influenced by @cfd90's Twine and contains inspiration and code from a lot of other users. I'm especially grateful for the work of @infinitedigits, @justmat, @artfwo, @Nuno_Zimas and @sonoCircuit. I'm completely new to programming and had a lot of fun hacking this together. I tried to create something which is highly playable and controllable without any external gadgets. My main goal with this is to have a tool to create nice ambient soundscapes.
+Inspired by @cfd90's Twine and contains influence and code from a lot of norns users. I'm especially grateful for the work of @infinitedigits, @justmat, @artfwo, @Nuno_Zimas and @sonoCircuit. I'm completely new to programming and had a lot of fun hacking this together. I tried to create something that is highly playable and controllable without any external gadgets. My main goal with this is to have a tool to create nice ambient soundscapes.
 
 **Some of the new features:**
 * Reverb and delay
@@ -35,14 +35,15 @@ _some features might require a pi4 based unit._
 ### Discussion
 **[FORUM](https://llllllll.co/t/twins/71052)**
 ### Download
-**v0.25**
-install from Maiden:
+**v0.26**
+install from Maiden Project Manager, or from Maiden REPL:
 ```
 ;install https://github.com/danielrigler/twins
 ```
-And after this do not forget to restart.
+do not forget to restart.
 
 ### Version history
+* **v0.26** - Swith to JPverb. Locking improvements. 
 * **v0.25** - Improved shimmer. Small tweaks and fixes. 
 * **v0.24** - Added tape wobble. 
 * **v0.23** - Added shimmer again. 0 mix is bypass to save resources. 
