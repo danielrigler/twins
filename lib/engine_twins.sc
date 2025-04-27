@@ -1,7 +1,7 @@
 Engine_twins : CroneEngine {
     classvar nvoices = 2;
 
-    var fverbEffect;
+    var jpverbEffect;
     var shimmerEffect;
     var directOut;
     var <buffersL;
@@ -163,7 +163,7 @@ alloc {
             sig_mix = HPF.ar(sig_mix, Lag.kr(hpf));
             sig_mix = LPF.ar(sig_mix, Lag.kr(cutoff));
             
-            low = BLowShelf.ar(sig_mix, 250, 5, low_gain);
+            low = BLowShelf.ar(sig_mix, 200, 5, low_gain);
             high = BHiShelf.ar(sig_mix, 3600, 5, high_gain);
             sig_mix = low + high;
 
@@ -195,15 +195,15 @@ alloc {
             arg in, out, mix=0.0;
             var pit, snd, orig;
             orig = In.ar(in, 2);
-            pit = LeakDC.ar(LPF.ar(PitchShift.ar(HPF.ar(orig, 400), 0.15,2,0,1,mul:4), 15000));
+            pit = LeakDC.ar(LPF.ar(PitchShift.ar(HPF.ar(orig, 300), 0.15,2,0,1,mul:4), 15000));
             snd = SelectX.ar(mix, [orig, pit]);
             Out.ar(out, snd); 
         }).add;
 
-        SynthDef(\fverb, {
-            arg in, out, mix=0.0, predelay=0, input_amount=100, input_lowpass_cutoff=10000, input_highpass_cutoff=100, input_diffusion_1=75, input_diffusion_2=62.5, tail_density=70, decay=50, damping=5500, modulator_frequency=1, modulator_depth=0.5;
+        SynthDef(\jpverb, {
+            arg in, out, mix=0.0, t60, damp, rsize, earlyDiff, modDepth, modFreq, low, mid, high, lowcut, highcut;
             var dry = In.ar(in, 2); 
-            var wet = Fverb2.ar(dry[0], dry[1], predelay, input_amount, input_lowpass_cutoff, input_highpass_cutoff, input_diffusion_1, input_diffusion_2, LFNoise2.kr(1/5).range(tail_density*0.8,tail_density*1.2), LFNoise2.kr(1/5).range(decay*0.8,decay*1.2), damping, modulator_frequency, modulator_depth);
+            var wet = JPverb.ar(dry, t60, damp, rsize, earlyDiff, modDepth, modFreq, low, mid, high, lowcut, highcut);
             var sig = SelectX.ar(mix, [dry, wet]);
             Out.ar(out, sig);
         }).add;
@@ -222,21 +222,10 @@ alloc {
             \mix, 0.0
         ], context.xg);
         
-        fverbEffect = Synth.new(\fverb, [
+        jpverbEffect = Synth.new(\jpverb, [
             \in, mixBus.index,
             \out, context.out_b.index,
-            \mix, 0.5,
-            \predelay, 0,
-            \input_amount, 100,
-            \input_lowpass_cutoff, 10000,
-            \input_highpass_cutoff, 100,
-            \input_diffusion_1, 75,
-            \input_diffusion_2, 62.5,
-            \tail_density, 70,
-            \decay, 50,
-            \damping, 5500,
-            \modulator_frequency, 1,
-            \modulator_depth, 0.5
+            \mix, 0.0
         ], context.xg);
         
         directOut = Synth.new(\directOut, [
@@ -254,22 +243,22 @@ alloc {
 
         this.addCommand("reverb_mix", "f", { arg msg;
             var mix = msg[1];
-            fverbEffect.set(\mix, mix);
-            fverbEffect.run(mix > 0);
+            jpverbEffect.set(\mix, mix);
+            jpverbEffect.run(mix > 0);
             directOut.run(mix == 0);
         });
 
-        this.addCommand("reverb_predelay", "f", { arg msg; fverbEffect.set(\predelay, msg[1]); });
-        this.addCommand("reverb_input_amount", "f", { arg msg; fverbEffect.set(\input_amount, msg[1]); });
-        this.addCommand("reverb_lowpass_cutoff", "f", { arg msg; fverbEffect.set(\input_lowpass_cutoff, msg[1]); });
-        this.addCommand("reverb_highpass_cutoff", "f", { arg msg; fverbEffect.set(\input_highpass_cutoff, msg[1]); });
-        this.addCommand("reverb_diffusion_1", "f", { arg msg; fverbEffect.set(\input_diffusion_1, msg[1]); });
-        this.addCommand("reverb_diffusion_2", "f", { arg msg; fverbEffect.set(\input_diffusion_2, msg[1]); });
-        this.addCommand("reverb_tail_density", "f", { arg msg; fverbEffect.set(\tail_density, msg[1]); });
-        this.addCommand("reverb_decay", "f", { arg msg; fverbEffect.set(\decay, msg[1]); });
-        this.addCommand("reverb_damping", "f", { arg msg; fverbEffect.set(\damping, msg[1]); });
-        this.addCommand("reverb_modulator_frequency", "f", { arg msg; fverbEffect.set(\modulator_frequency, msg[1]); });
-        this.addCommand("reverb_modulator_depth", "f", { arg msg; fverbEffect.set(\modulator_depth, msg[1]); });
+        this.addCommand("t60", "f", { arg msg; jpverbEffect.set(\t60, msg[1]); });
+        this.addCommand("damp", "f", { arg msg; jpverbEffect.set(\damp, msg[1]); });
+        this.addCommand("rsize", "f", { arg msg; jpverbEffect.set(\rsize, msg[1]); });
+        this.addCommand("earlyDiff", "f", { arg msg; jpverbEffect.set(\earlyDiff, msg[1]); });
+        this.addCommand("modDepth", "f", { arg msg; jpverbEffect.set(\modDepth, msg[1]); });
+        this.addCommand("modFreq", "f", { arg msg; jpverbEffect.set(\modFreq, msg[1]); });
+        this.addCommand("low", "f", { arg msg; jpverbEffect.set(\low, msg[1]); });
+        this.addCommand("mid", "f", { arg msg; jpverbEffect.set(\mid, msg[1]); });
+        this.addCommand("high", "f", { arg msg; jpverbEffect.set(\high, msg[1]); });
+        this.addCommand("lowcut", "f", { arg msg; jpverbEffect.set(\lowcut, msg[1]); });
+        this.addCommand("highcut", "f", { arg msg; jpverbEffect.set(\highcut, msg[1]); });
 
         this.addCommand("cutoff", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\cutoff, msg[2]); });
         this.addCommand("hpf", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\hpf, msg[2]); });
@@ -324,7 +313,7 @@ alloc {
         buffersL.do({ arg b; b.free; });
         buffersR.do({ arg b; b.free; });
         wobbleBuffers.do({ arg b; b.free; });
-        fverbEffect.free;
+        jpverbEffect.free;
         shimmerEffect.free;
         directOut.free;
         mixBus.free;

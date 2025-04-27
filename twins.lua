@@ -6,7 +6,7 @@
 --           by: @dddstudio                       
 --
 --                          
---                           v0.25
+--                           v0.26
 -- E1: Master Volume
 -- K1+E2/E3: Volume 1/2
 -- K1+E1: Crossfade Volumes
@@ -39,7 +39,7 @@ local lfo = include("lib/lfo")
 local randpara = include("lib/randpara")
 delay = include("lib/delay")
 installer_ = include("lib/scinstaller/scinstaller")
-installer = installer_:new{requirements = {"Fverb2","AnalogChew"}, 
+installer = installer_:new{requirements = {"AnalogChew"}, 
   zip = "https://github.com/schollz/portedplugins/releases/download/v0.4.6/PortedPlugins-RaspberryPi.zip"}
 engine.name = installer:ready() and 'twins' or nil
 
@@ -135,15 +135,11 @@ local function setup_params()
     end
     
     params:add_binary("randomize_params", "Random Tapes", "trigger", 0) 
-    params:set_action("randomize_params", function() load_random_tape_file(1) load_random_tape_file(2) randpara.randomize_params(steps) end)
-    
-    params:add_separator("Actions")
-    params:add_binary("lfo.assign_to_current_row", "Assign LFOs", "trigger", 0) params:set_action("lfo.assign_to_current_row", function() lfo.assign_to_current_row(current_mode, current_filter_mode) end)
+    params:set_action("randomize_params", function() load_random_tape_file(1) load_random_tape_file(2) end)
     
     params:add_separator("Settings")
 
-    params:add_group("Granular", 28)
-    params:add_binary("randomize_voices", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_voices", function() randpara.randomize_voice_params(1) randpara.randomize_voice_params(2) end)
+    params:add_group("Granular", 30)
     params:add_control("shimmer_mix", "Shimmer", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("shimmer_mix", function(x) engine.shimmer_mix(x/100) end)
     for i = 1, 2 do
       params:add_separator("Sample " ..i)
@@ -166,35 +162,32 @@ local function setup_params()
       params:add_control(i .. "direction_mod", i .. " Reverse", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i .. "direction_mod", function(value) engine.direction_mod(i, value / 100) end)
       params:add_option(i .. "pitch_mode", i .. " Pitch Mode", {"match speed", "independent"}, 2) params:set_action(i .. "pitch_mode", function(value) engine.pitch_mode(i, value - 1) end)
     end
+    params:add_separator(" ")
+    params:add_binary("randomize_granular", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_granular", function() randpara.randomize_granular_params(1) randpara.randomize_granular_params(2) end)
+    params:add_option("lock_granular", "Lock Parameters", {"off", "on"}, 1)
 
-    params:add_group("Delay", 4)
+
+    params:add_group("Delay", 6)
     delay.init()
 
-    params:add_group("Reverb", 13)
-    params:add_binary("randomize_fverb", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_fverb", function() randpara.randomize_fverb_params(steps) end)
+    params:add_group("Reverb", 15)
     params:add_taper("reverb_mix", "Mix", 0, 100, 0.0, 0, "%") params:set_action("reverb_mix", function(value) engine.reverb_mix(value / 100) end)
-    params:add_taper("reverb_predelay", "Predelay", 0, 250, 20, 0, "ms") params:set_action("reverb_predelay", function(value) engine.reverb_predelay(value) end)
-    params:add_taper("reverb_input_amount", "Input Amount", 0, 100, 85, 0, "%") params:set_action("reverb_input_amount", function(value) engine.reverb_input_amount(value) end)
-    params:add_taper("reverb_lowpass_cutoff", "Lowpass", 0, 20000, 8000, 0, "Hz") params:set_action("reverb_lowpass_cutoff", function(value) engine.reverb_lowpass_cutoff(value) end)
-    params:add_taper("reverb_highpass_cutoff", "Highpass", 0, 20000, 75, 0, "Hz") params:set_action("reverb_highpass_cutoff", function(value) engine.reverb_highpass_cutoff(value) end)
-    params:add_taper("reverb_diffusion_1", "Diffusion 1", 0, 100, 85, 0, "%") params:set_action("reverb_diffusion_1", function(value) engine.reverb_diffusion_1(value) end)
-    params:add_taper("reverb_diffusion_2", "Diffusion 2", 0, 100, 85, 0, "%") params:set_action("reverb_diffusion_2", function(value) engine.reverb_diffusion_2(value) end)
-    params:add_taper("reverb_tail_density", "Tail Density", 0, 100, 75, 0, "%") params:set_action("reverb_tail_density", function(value) engine.reverb_tail_density(value) end)
-    params:add_taper("reverb_decay", "Decay", 0, 100, 80, 0, "%") params:set_action("reverb_decay", function(value) engine.reverb_decay(value) end)
-    params:add_taper("reverb_damping", "Damping", 0, 20000, 6000, 0, "Hz") params:set_action("reverb_damping", function(value) engine.reverb_damping(value) end)
-    params:add_taper("reverb_modulator_depth", "Mod Depth", 0, 100, 40, 0, "%") params:set_action("reverb_modulator_depth", function(value) engine.reverb_modulator_depth(value / 100) end)
-    params:add_taper("reverb_modulator_frequency", "Mod Freq", 0, 10, 1, 0, "Hz") params:set_action("reverb_modulator_frequency", function(value) engine.reverb_modulator_frequency(value) end)
+    params:add_taper("t60", "Decay", 0.1, 60, 3, 5, "s") params:set_action("t60", function(value) engine.t60(value) end)
+    params:add_taper("damp", "Damping", 0, 100, 0, 0, "%") params:set_action("damp", function(value) engine.damp(value/100) end)
+    params:add_taper("rsize", "Size", 0.5, 5, 1, 0, "") params:set_action("rsize", function(value) engine.rsize(value) end)
+    params:add_taper("earlyDiff", "Early Diffusion", 0, 100, 70.7, 0, "%") params:set_action("earlyDiff", function(value) engine.earlyDiff(value/100) end)
+    params:add_taper("modDepth", "Modulation Depth", 0, 100, 10, 0, "%") params:set_action("modDepth", function(value) engine.modDepth(value/100) end)
+    params:add_taper("modFreq", "Modulation Freq.", 0, 10, 2, 0, "Hz") params:set_action("modFreq", function(value) engine.modFreq(value) end)
+    params:add_taper("low", "Low", 0, 100, 100, 0, "%") params:set_action("low", function(value) engine.low(value/100) end)
+    params:add_taper("mid", "Mid", 0, 100, 100, 0, "%") params:set_action("mid", function(value) engine.mid(value/100) end)
+    params:add_taper("high", "High", 0, 100, 100, 0, "%") params:set_action("high", function(value) engine.high(value/100) end)
+    params:add_taper("lowcut", "Low Cut", 100, 6000, 500, 2, "Hz") params:set_action("lowcut", function(value) engine.lowcut(value) end)
+    params:add_taper("highcut", "High Cut", 1000, 10000, 2000, 2, "Hz") params:set_action("highcut", function(value) engine.highcut(value) end)
+    params:add_separator("  ")
+    params:add_binary("randomize_jpverb", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_jpverb", function() randpara.randomize_jpverb_params(steps) end)
+    params:add_option("lock_reverb", "Lock Parameters", {"off", "on"}, 1)
     
-    params:add_control("1cutoff","1 Cutoff",controlspec.new(20,20000,"exp",0,20000,"Hz")) params:set_action("1cutoff",function(value) engine.cutoff(1,value) end)
-    params:add_control("2cutoff","2 Cutoff",controlspec.new(20,20000,"exp",0,20000,"Hz")) params:set_action("2cutoff",function(value) engine.cutoff(2,value) end)
-    params:add_control("1hpf", "1 Cutoff", controlspec.new(20, 20000, "exp", 0, 20, "Hz")) params:set_action("1hpf", function(value) engine.hpf(1, value) end)
-    params:add_control("2hpf", "2 Cutoff", controlspec.new(20, 20000, "exp", 0, 20, "Hz")) params:set_action("2hpf", function(value) engine.hpf(2, value) end)
-    params:hide("1cutoff")
-    params:hide("2cutoff")
-    params:hide("1hpf")
-    params:hide("2hpf")
-    
-    params:add_group("Tape", 12)
+    params:add_group("Tape", 15)
     params:add_control("sine_wet", "Drive Mix", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("sine_wet", function(value) engine.sine_wet(1, value / 100) engine.sine_wet(2, value / 100) end)
     params:add_control("sine_drive", "Drive", controlspec.new(0, 5, "lin", 0.01, 1, "")) params:set_action("sine_drive", function(value) engine.sine_drive(1, value) engine.sine_drive(2, value) end)
     params:add{type = "control", id = "wobble_wet", name = "Wobble Mix", controlspec = controlspec.new(0, 100, "lin", 1, 0, "%"), action = function(value) engine.wobble_wet(1, value/100) engine.wobble_wet(2, value/100) end}
@@ -207,8 +200,11 @@ local function setup_params()
     params:add{type = "control", id = "chew_depth", name = "Chew Depth", controlspec = controlspec.new(0, 1, "lin", 0.01, 0.5, ""), action = function(value) engine.chew_depth(1, value) engine.chew_depth(2, value) end}
     params:add{type = "control", id = "chew_freq", name = "Chew Freq", controlspec = controlspec.new(0, 1, "lin", 0.01, 0.5, ""), action = function(value) engine.chew_freq(1, value) engine.chew_freq(2, value) end}
     params:add{type = "control", id = "chew_variance", name = "Chew Variance", controlspec = controlspec.new(0, 1, "lin", 0.01, 0.5, ""), action = function(value) engine.chew_variance(1, value) engine.chew_variance(2, value) end}
-
-    params:add_group("EQ", 4)
+    params:add_separator("    ")
+    params:add_binary("randomize_tape", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_tape", function() randpara.randomize_tape_params(steps) end)
+    params:add_option("lock_tape", "Lock Parameters", {"off", "on"}, 1)
+    
+    params:add_group("EQ", 6)
     params:add_control("eq_low_gain_1", "1 Bass", controlspec.new(-1, 1, "lin", 0.01, 0, ""))
     params:set_action("eq_low_gain_1", function(value) engine.eq_low_gain(1, value*45) end)
     params:add_control("eq_high_gain_1", "1 Treble", controlspec.new(-1, 1, "lin", 0.01, 0, ""))
@@ -217,9 +213,18 @@ local function setup_params()
     params:set_action("eq_low_gain_2", function(value) engine.eq_low_gain(2, value*45) end)
     params:add_control("eq_high_gain_2", "2 Treble", controlspec.new(-1, 1, "lin", 0.01, 0, ""))
     params:set_action("eq_high_gain_2", function(value) engine.eq_high_gain(2, value*45) end)
+    params:add_separator("     ")
+    params:add_option("lock_eq", "Lock Parameters", {"off", "on"}, 1)
 
-    params:add_group("LFOs", 116)
+    params:add_group("Stereo Width", 2)
+    for i = 1, 2 do
+      params:add_control(i .. "Width", i .. " Width", controlspec.new(0, 200, "lin", 0.01, 100, "%"))
+      params:set_action(i .. "Width", function(value) engine.width(i, value / 100) end)
+    end  
+
+    params:add_group("LFOs", 117)
     params:add_binary("randomize_lfos", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_lfos", function() lfo.clearLFOs("1") lfo.clearLFOs("2") lfo.randomize_lfos("1", params:get("allow_volume_lfos") == 2)  lfo.randomize_lfos("2", params:get("allow_volume_lfos") == 2) if randomize_metro[1] then randomize_metro[1]:stop() end if randomize_metro[2] then randomize_metro[2]:stop() end end)
+    params:add_binary("lfo.assign_to_current_row", "Assign to Selection", "trigger", 0) params:set_action("lfo.assign_to_current_row", function() lfo.assign_to_current_row(current_mode, current_filter_mode) end)
     params:add_binary("ClearLFOs", "Clear All LFOs", "trigger", 0) params:set_action("ClearLFOs", function() lfo.clearLFOs() end)
     params:add_option("allow_volume_lfos", "Allow Volume LFOs", {"no", "yes"}, 2)
     params:add_control("global_lfo_freq_scale", "Freq Scale", controlspec.new(0.1, 10, "exp", 0.01, 1.0, "x")) params:set_action("global_lfo_freq_scale", function(value) 
@@ -279,14 +284,19 @@ local function setup_params()
       params:add_option(i .. "lock_speed", i .. " lock speed", {"off", "on"}, 1)
     end
 
-    params:add_group("Other", 5)
-    params:add_separator("Stereo Width")
-    for i = 1, 2 do
-      params:add_control(i .. "Width", i .. " Width", controlspec.new(0, 200, "lin", 0.01, 100, "%"))
-      params:set_action(i .. "Width", function(value) engine.width(i, value / 100) end)
-    end  
+    params:add_group("Other", 2)
     params:add_separator("Transition Steps")
-    params:add_control("steps","Steps",controlspec.new(10,2000,"lin",1,400)) params:set_action("steps", function(value) steps = value end)
+    params:add_control("steps","Steps",controlspec.new(10,20000,"lin",1,400)) params:set_action("steps", function(value) steps = value end)
+    
+    params:add_control("1cutoff","1 Cutoff",controlspec.new(20,20000,"exp",0,20000,"Hz")) params:set_action("1cutoff",function(value) engine.cutoff(1,value) end)
+    params:add_control("2cutoff","2 Cutoff",controlspec.new(20,20000,"exp",0,20000,"Hz")) params:set_action("2cutoff",function(value) engine.cutoff(2,value) end)
+    params:add_control("1hpf", "1 Cutoff", controlspec.new(20, 20000, "exp", 0, 20, "Hz")) params:set_action("1hpf", function(value) engine.hpf(1, value) end)
+    params:add_control("2hpf", "2 Cutoff", controlspec.new(20, 20000, "exp", 0, 20, "Hz")) params:set_action("2hpf", function(value) engine.hpf(2, value) end)
+    params:hide("1cutoff")
+    params:hide("2cutoff")
+    params:hide("1hpf")
+    params:hide("2hpf")
+    
     params:bang()
 end
 
@@ -404,20 +414,18 @@ end
 
 function enc(n, d)
     if not installer:ready() then return end
-                
     local param_modes = {
-      speed = {param = "speed", delta = 0.5},
-      seek = {param = "seek", delta = 1, wrap = {0, 100}, engine = true},
-      pan = {param = "pan", delta = 5},
-      lpf = {param = "cutoff", delta = 1},
-      hpf = {param = "hpf", delta = 1},
-      jitter = {param = "jitter", delta = 2},
-      size = {param = "size", delta = 2},
-      density = {param = "density", delta = 2},
-      spread = {param = "spread", delta = 2},
-      pitch = {param = "pitch", delta = 1}
+      speed = {param = "speed", delta = 0.5, has_lock = true},
+      seek = {param = "seek", delta = 1, wrap = {0, 100}, engine = true, has_lock = true},
+      pan = {param = "pan", delta = 5, has_lock = true},
+      lpf = {param = "cutoff", delta = 1, has_lock = false},
+      hpf = {param = "hpf", delta = 1, has_lock = false},
+      jitter = {param = "jitter", delta = 2, has_lock = true},
+      size = {param = "size", delta = 2, has_lock = true},
+      density = {param = "density", delta = 2, has_lock = true},
+      spread = {param = "spread", delta = 2, has_lock = true},
+      pitch = {param = "pitch", delta = 1, has_lock = true}
     }
-                
     local enc_actions = {
         [1] = function()
             local is_active1, lfo_index1 = is_lfo_active_for_param("1volume")
@@ -451,20 +459,22 @@ function enc(n, d)
                 local mode = (current_mode == "lpf" or current_mode == "hpf") and current_filter_mode or current_mode
                 local config = param_modes[mode]
                 local param_name = track .. config.param
-                active_controlled_params[param_name] = true
-                local is_active, lfo_index = is_lfo_active_for_param(param_name)
-                if is_active then params:set(lfo_index .. "lfo", 1) end
-                manual_adjustments[param_name] = manual_adjustments[param_name] or {}
-                manual_adjustments[param_name].active = true
-                manual_adjustments[param_name].value = params:get(param_name)
-                manual_adjustments[param_name].time = util.time()
-                if config.wrap then
-                    local current_val = params:get(param_name)
-                    local new_val = wrap_value(current_val + d, config.wrap[1], config.wrap[2])
-                    params:set(param_name, new_val)
-                    if config.engine then engine.seek(track, new_val / 100) end
-                else
-                    params:delta(param_name, config.delta * d)
+                if not config.has_lock or params:get(track .. "lock_" .. config.param) ~= 2 then
+                    active_controlled_params[param_name] = true
+                    local is_active, lfo_index = is_lfo_active_for_param(param_name)
+                    if is_active then params:set(lfo_index .. "lfo", 1) end
+                    manual_adjustments[param_name] = manual_adjustments[param_name] or {}
+                    manual_adjustments[param_name].active = true
+                    manual_adjustments[param_name].value = params:get(param_name)
+                    manual_adjustments[param_name].time = util.time()
+                    if config.wrap then
+                        local current_val = params:get(param_name)
+                        local new_val = wrap_value(current_val + d, config.wrap[1], config.wrap[2])
+                        params:set(param_name, new_val)
+                        if config.engine then engine.seek(track, new_val / 100) end
+                    else
+                        params:delta(param_name, config.delta * d)
+                    end
                 end
             end
         end,
@@ -478,20 +488,22 @@ function enc(n, d)
                 local mode = (current_mode == "lpf" or current_mode == "hpf") and current_filter_mode or current_mode
                 local config = param_modes[mode]
                 local param_name = track .. config.param
-                active_controlled_params[param_name] = true
-                local is_active, lfo_index = is_lfo_active_for_param(param_name)
-                if is_active then params:set(lfo_index .. "lfo", 1) end
-                manual_adjustments[param_name] = manual_adjustments[param_name] or {}
-                manual_adjustments[param_name].active = true
-                manual_adjustments[param_name].value = params:get(param_name)
-                manual_adjustments[param_name].time = util.time()
-                if config.wrap then
-                    local current_val = params:get(param_name)
-                    local new_val = wrap_value(current_val + d, config.wrap[1], config.wrap[2])
-                    params:set(param_name, new_val)
-                    if config.engine then engine.seek(track, new_val / 100) end
-                else
-                    params:delta(param_name, config.delta * d)
+                if not config.has_lock or params:get(track .. "lock_" .. config.param) ~= 2 then
+                    active_controlled_params[param_name] = true
+                    local is_active, lfo_index = is_lfo_active_for_param(param_name)
+                    if is_active then params:set(lfo_index .. "lfo", 1) end
+                    manual_adjustments[param_name] = manual_adjustments[param_name] or {}
+                    manual_adjustments[param_name].active = true
+                    manual_adjustments[param_name].value = params:get(param_name)
+                    manual_adjustments[param_name].time = util.time()
+                    if config.wrap then
+                        local current_val = params:get(param_name)
+                        local new_val = wrap_value(current_val + d, config.wrap[1], config.wrap[2])
+                        params:set(param_name, new_val)
+                        if config.engine then engine.seek(track, new_val / 100) end
+                    else
+                        params:delta(param_name, config.delta * d)
+                    end
                 end
             end
         end
@@ -504,12 +516,10 @@ function key(n, z)
         installer:key(n, z) 
         return 
     end
-
     if n == 1 then key1_pressed = z == 1
       elseif n == 2 then key2_pressed = z == 1
       elseif n == 3 then key3_pressed = z == 1
     end
-
     if z == 1 then
         if key1_pressed then
             if n == 2 then
@@ -517,18 +527,15 @@ function key(n, z)
                 lfo.randomize_lfos("1", params:get("allow_volume_lfos") == 2)
                 randomize(1)
                 randpara.randomize_params(steps, 1)
-                randpara.randomize_fverb_params(steps) 
                 return
             elseif n == 3 then
                 lfo.clearLFOs(2)
                 lfo.randomize_lfos("2", params:get("allow_volume_lfos") == 2)
                 randomize(2)
                 randpara.randomize_params(steps, 2)
-                randpara.randomize_fverb_params(steps) 
                 return
             end
         end
-
         if not key1_pressed then
             if n == 2 then
                 local modes = {"pitch", "spread", "density", "size", "jitter", "lpf", "pan", "seek", "speed"}
@@ -543,7 +550,6 @@ function key(n, z)
             end
         end
     end
-
     if key2_pressed and key3_pressed then
         if current_mode == "lpf" or current_mode == "hpf" then
             current_filter_mode = current_filter_mode == "lpf" and "hpf" or "lpf"
@@ -551,7 +557,6 @@ function key(n, z)
         else
             local lockable_params = {"jitter", "size", "density", "spread", "pitch", "pan", "seek", "speed"}
             local param_name = string.match(current_mode, "%a+")
-            
             if param_name and table.find(lockable_params, param_name) then
                 local is_locked1 = params:get("1lock_" .. param_name) == 2
                 local is_locked2 = params:get("2lock_" .. param_name) == 2
@@ -625,11 +630,9 @@ local function draw_param_row(y, label, param1, param2, is_density, is_pitch, is
     local is_locked1 = is_param_locked(1, param_name)
     local is_locked2 = is_param_locked(2, param_name)
     local text_level = is_highlighted and 15 or 1
-
     screen.level(15)
     screen.move(5, y)
     screen.text(label)
-
     local function draw_param_value(x, param, is_locked)
         if is_locked then
             draw_l_shape(x, y, true)  
@@ -648,7 +651,6 @@ local function draw_param_row(y, label, param1, param2, is_density, is_pitch, is
     end
     draw_param_value(51, param1, is_locked1)
     draw_param_value(92, param2, is_locked2)
-
     if not is_pitch then
         local function draw_value_bar(x, param)
             local bar_width = 30
@@ -669,7 +671,6 @@ local function draw_param_row(y, label, param1, param2, is_density, is_pitch, is
                 end
             end
         end
-        
         draw_value_bar(51, param1)
         draw_value_bar(92, param2)
     end
@@ -744,7 +745,6 @@ function redraw()
     end
     draw_bottom_value(51, "1")
     draw_bottom_value(92, "2")
-
     local show_speed_lock = current_mode == "speed" or current_mode == "jitter" or current_mode == "size" or current_mode == "density" or current_mode == "spread" or current_mode == "pitch"
     if current_mode == "pan" or current_mode == "seek" or show_speed_lock then
         local param_type = show_speed_lock and "speed" or current_mode
@@ -780,7 +780,6 @@ function redraw()
             screen.fill()
         end
     end
-
     screen.update()
 end
 

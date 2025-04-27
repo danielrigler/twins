@@ -90,5 +90,8 @@ params:add{
     end
 }
 
+params:add_separator("   ")
+params:add_option("lock_delay", "Lock Parameters", {"off", "on"}, 1)
+
 end
 return sc

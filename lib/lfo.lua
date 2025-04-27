@@ -17,6 +17,10 @@ local function is_locked(target)
   return false
 end
 
+local function random_float(l, h)
+    return l + math.random() * (h - l)
+end
+
 function lfo.is_param_locked(track, param_name)
     return params:get(track.."lock_"..param_name) == 2
 end
@@ -223,6 +227,11 @@ end
 function lfo.randomize_lfos(track, allow_volume_lfos)
     local other_track = track == "1" and "2" or "1"
     local track_pattern = "^"..track
+    
+    for i=1, 2 do
+      if math.random() <= 0.3 then params:set("global_lfo_freq_scale", 1) else params:set("global_lfo_freq_scale", random_float(0.2, 1.5)) end
+    end
+    
     for i = 1, 16 do
         local target_param = lfo.lfo_targets[params:get(i.."lfo_target")]
         if target_param and target_param:match(track_pattern) and not is_locked(target_param) then
