@@ -3,7 +3,7 @@ Engine_twins : CroneEngine {
 
     var jpverbEffect;
     var shimmerEffect;
-    var directOut;
+    var outputSynth;
     var <buffersL;
     var <buffersR;
     var <voices;
@@ -11,7 +11,7 @@ Engine_twins : CroneEngine {
     var <seek_tasks;
     var bufSine;
     var <wobbleBuffers;
-
+    
     *new { arg context, doneCallback;
         ^super.new(context, doneCallback);
     }
@@ -159,10 +159,10 @@ alloc {
             sig_mix = BufRd.ar(2, wobble_bufnum, pr, interpolation:4);
 
             sig_mix = SelectX.ar(chew_wet, [sig_mix, AnalogChew.ar(sig_mix, chew_depth, chew_freq, chew_variance)]);
-
+            
             sig_mix = HPF.ar(sig_mix, Lag.kr(hpf));
             sig_mix = MoogFF.ar(sig_mix, Lag.kr(cutoff), 0);
-            
+
             low = BLowShelf.ar(sig_mix, 200, 5, low_gain);
             high = BHiShelf.ar(sig_mix, 3600, 5, high_gain);
             sig_mix = low + high;
@@ -191,61 +191,58 @@ alloc {
             ]);
         });
 
+
         SynthDef(\shimmer, {
-            arg in, out, mix=0.0;
-            var pit, snd, orig;
-            orig = In.ar(in, 2);
-            pit = LeakDC.ar(LPF.ar(PitchShift.ar(HPF.ar(orig, 300), 0.15,2,0,1,mul:4), 15000));
-            snd = SelectX.ar(mix, [orig, pit]);
-            Out.ar(out, snd); 
+            arg bus, mix=0.0;
+            var orig = In.ar(bus, 2);
+            var pit = LPF.ar(PitchShift.ar(HPF.ar(orig, 300), 0.15, 2, 0, 1, mul:4), 15000);
+            var snd = SelectX.ar(mix, [orig, pit]);
+            ReplaceOut.ar(bus, snd);
         }).add;
 
         SynthDef(\jpverb, {
-            arg in, out, mix=0.0, t60, damp, rsize, earlyDiff, modDepth, modFreq, low, mid, high, lowcut, highcut;
-            var dry = In.ar(in, 2); 
+            arg bus, mix=0.0, t60=3, damp=0, rsize=1, earlyDiff=0.707, modDepth=0.1, modFreq=2, 
+            low=1, mid=1, high=1, lowcut=500, highcut=2000;
+            var dry = In.ar(bus, 2);
             var wet = JPverb.ar(dry, t60, damp, rsize, earlyDiff, modDepth, modFreq, low, mid, high, lowcut, highcut);
             var sig = SelectX.ar(mix, [dry, wet]);
-            Out.ar(out, sig);
+            ReplaceOut.ar(bus, sig);
         }).add;
-        
-        SynthDef(\directOut, {
+
+        SynthDef(\output, {
             arg in, out;
             var sig = In.ar(in, 2);
             Out.ar(out, sig);
         }).add;
 
         context.server.sync;
-
+        
         shimmerEffect = Synth.new(\shimmer, [
-            \in, mixBus.index,
-            \out, context.out_b.index,
+            \bus, mixBus.index,
             \mix, 0.0
-        ], context.xg);
-        
+        ], context.xg, 'addToTail');     
+     
         jpverbEffect = Synth.new(\jpverb, [
-            \in, mixBus.index,
-            \out, context.out_b.index,
+            \bus, mixBus.index,
             \mix, 0.0
-        ], context.xg);
-        
-        directOut = Synth.new(\directOut, [
+        ], context.xg, 'addToTail');
+
+        outputSynth = Synth.new(\output, [
             \in, mixBus.index,
             \out, context.out_b.index
-        ], context.xg);
+        ], context.xg, 'addToTail');   
 
         
         this.addCommand("shimmer_mix", "f", { arg msg;
             var mix = msg[1];
             shimmerEffect.set(\mix, mix);
             shimmerEffect.run(mix > 0);
-            directOut.run(mix == 0);
         });
 
         this.addCommand("reverb_mix", "f", { arg msg;
             var mix = msg[1];
             jpverbEffect.set(\mix, mix);
             jpverbEffect.run(mix > 0);
-            directOut.run(mix == 0);
         });
 
         this.addCommand("t60", "f", { arg msg; jpverbEffect.set(\t60, msg[1]); });
@@ -315,7 +312,7 @@ alloc {
         wobbleBuffers.do({ arg b; b.free; });
         jpverbEffect.free;
         shimmerEffect.free;
-        directOut.free;
+        outputSynth.free;
         mixBus.free;
         bufSine.free;
     }
