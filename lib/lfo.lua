@@ -104,7 +104,7 @@ function lfo.clearLFOs(track, param_type)
     else
         clear_targets(function() return true end)
     end
-    if not param_type then
+    if not track and not param_type then
         reset_pan()
     end
 end
