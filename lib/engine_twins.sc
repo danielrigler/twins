@@ -161,7 +161,7 @@ alloc {
             sig_mix = SelectX.ar(chew_wet, [sig_mix, AnalogChew.ar(sig_mix, chew_depth, chew_freq, chew_variance)]);
 
             sig_mix = HPF.ar(sig_mix, Lag.kr(hpf));
-            sig_mix = LPF.ar(sig_mix, Lag.kr(cutoff));
+            sig_mix = MoogFF.ar(sig_mix, Lag.kr(cutoff), 0);
             
             low = BLowShelf.ar(sig_mix, 200, 5, low_gain);
             high = BHiShelf.ar(sig_mix, 3600, 5, high_gain);
