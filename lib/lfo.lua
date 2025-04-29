@@ -229,7 +229,7 @@ function lfo.randomize_lfos(track, allow_volume_lfos)
     local track_pattern = "^"..track
     
     for i=1, 2 do
-      if math.random() <= 0.3 then params:set("global_lfo_freq_scale", 1) else params:set("global_lfo_freq_scale", random_float(0.2, 1.5)) end
+      if math.random() <= 0.5 then params:set("global_lfo_freq_scale", 0.75) else params:set("global_lfo_freq_scale", random_float(0.1, 1.8)) end
     end
     
     for i = 1, 16 do
