@@ -38,10 +38,7 @@
 local lfo = include("lib/lfo")
 local randpara = include("lib/randpara")
 delay = include("lib/delay")
-installer_ = include("lib/scinstaller/scinstaller")
-installer = installer_:new{requirements = {"AnalogChew"}, 
-  zip = "https://github.com/schollz/portedplugins/releases/download/v0.4.6/PortedPlugins-RaspberryPi.zip"}
-engine.name = installer:ready() and 'twins' or nil
+engine.name = 'twins'
 
 local ui_metro
 local randomize_metro = { [1] = nil, [2] = nil }
@@ -187,7 +184,7 @@ local function setup_params()
     params:add_binary("randomize_jpverb", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_jpverb", function() randpara.randomize_jpverb_params(steps) end)
     params:add_option("lock_reverb", "Lock Parameters", {"off", "on"}, 1)
     
-    params:add_group("Tape", 15)
+    params:add_group("Tape", 11)
     params:add_control("sine_wet", "Drive Mix", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("sine_wet", function(value) engine.sine_wet(1, value / 100) engine.sine_wet(2, value / 100) end)
     params:add_control("sine_drive", "Drive", controlspec.new(0, 5, "lin", 0.01, 1, "")) params:set_action("sine_drive", function(value) engine.sine_drive(1, value) engine.sine_drive(2, value) end)
     params:add{type = "control", id = "wobble_wet", name = "Wobble Mix", controlspec = controlspec.new(0, 100, "lin", 1, 0, "%"), action = function(value) engine.wobble_wet(1, value/100) engine.wobble_wet(2, value/100) end}
@@ -196,10 +193,6 @@ local function setup_params()
     params:add{type = "control", id = "flutter_amp", name = "Flutter Amt", controlspec = controlspec.new(0, 100, "lin", 1, 25, "%"), action = function(value) engine.flutter_amp(1, value/100) engine.flutter_amp(2, value/100) end}
     params:add{type = "control", id = "flutter_freq", name = "Flutter Freq", controlspec = controlspec.new(3, 30, "lin", 0.01, 6, "Hz"), action = function(value) engine.flutter_freq(1, value) engine.flutter_freq(2, value) end}
     params:add{type = "control", id = "flutter_var", name = "Flutter Var", controlspec = controlspec.new(0.1, 10, "lin", 0.01, 2, "Hz"), action = function(value) engine.flutter_var(1, value) engine.flutter_var(2, value) end}
-    params:add{type = "control", id = "chew_wet", name = "Chew Mix", controlspec = controlspec.new(0, 100, "lin", 1, 0, "%"), action = function(value) engine.chew_wet(1, value / 100) engine.chew_wet(2, value / 100) end}
-    params:add{type = "control", id = "chew_depth", name = "Chew Depth", controlspec = controlspec.new(0, 1, "lin", 0.01, 0.5, ""), action = function(value) engine.chew_depth(1, value) engine.chew_depth(2, value) end}
-    params:add{type = "control", id = "chew_freq", name = "Chew Freq", controlspec = controlspec.new(0, 1, "lin", 0.01, 0.5, ""), action = function(value) engine.chew_freq(1, value) engine.chew_freq(2, value) end}
-    params:add{type = "control", id = "chew_variance", name = "Chew Variance", controlspec = controlspec.new(0, 1, "lin", 0.01, 0.5, ""), action = function(value) engine.chew_variance(1, value) engine.chew_variance(2, value) end}
     params:add_separator("    ")
     params:add_binary("randomize_tape", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_tape", function() randpara.randomize_tape_params(steps) end)
     params:add_option("lock_tape", "Lock Parameters", {"off", "on"}, 1)
@@ -396,7 +389,7 @@ local function setup_engine()
     audio.level_adc(0)
 end
 
-function init() if not installer:ready() then clock.run(function() while true do redraw() clock.sleep(1 / 10) end end) do return end end
+function init()
     setup_ui_metro()
     setup_params()
     setup_engine()
@@ -413,7 +406,6 @@ local function wrap_value(value, min, max)
 end
 
 function enc(n, d)
-    if not installer:ready() then return end
     local param_modes = {
       speed = {param = "speed", delta = 0.5, has_lock = true},
       seek = {param = "seek", delta = 1, wrap = {0, 100}, engine = true, has_lock = true},
@@ -512,10 +504,6 @@ function enc(n, d)
 end
 
 function key(n, z)
-    if not installer:ready() then 
-        installer:key(n, z) 
-        return 
-    end
     if n == 1 then key1_pressed = z == 1
       elseif n == 2 then key2_pressed = z == 1
       elseif n == 3 then key3_pressed = z == 1
@@ -690,18 +678,12 @@ local function draw_progress_bar(x, y, width, value, min, max, is_log)
 end
 
 function redraw()
-    if not installer:ready() then 
-        installer:redraw() 
-        return 
-    end
-    
     local current_time = util.time()
     for param, adjustment in pairs(manual_adjustments) do
         if adjustment and adjustment.time and (current_time - adjustment.time > MANUAL_ADJUSTMENT_DURATION) then
             adjustment.active = false
         end
     end
-    
     screen.clear()
     local current_mode = current_mode
     local current_filter_mode = current_filter_mode

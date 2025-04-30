@@ -126,10 +126,6 @@ local function randomize_tape_params()
     -- TAPE
     if math.random() <= 0.6 then targets["sine_wet"] = 0 else targets["sine_wet"] = math.random(5, 10) end
     if math.random() <= 0.6 then targets["sine_drive"] = 0.75 else targets["sine_drive"] = random_float(0.5, 1) end
-    if math.random() <= 0.75 then targets["chew_wet"] = 0 else targets["chew_wet"] = math.random(0, 20) end
-    if math.random() <= 0.5 then targets["chew_depth"] = 0.3 else targets["chew_depth"] = random_float(0.2, 0.5) end
-    if math.random() <= 0.5 then targets["chew_freq"] = 0.3 else targets["chew_freq"] = random_float(0.2, 0.7) end
-    if math.random() <= 0.5 then targets["chew_variance"] = 0.4 else targets["chew_variance"] = random_float(0.2, 0.8) end
     if math.random() <= 0.75 then targets["wobble_wet"] = 0 else targets["wobble_wet"] = math.random(0, 25) end
     if math.random() <= 0.75 then targets["wobble_amp"] = 25 else targets["wobble_amp"] = math.random(10, 35) end
     if math.random() <= 0.75 then targets["wobble_rpm"] = 33 else targets["wobble_rpm"] = math.random(30, 90) end

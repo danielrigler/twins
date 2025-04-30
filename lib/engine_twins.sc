@@ -71,7 +71,6 @@ alloc {
             overtones_2=0, 
             cutoff=20000, hpf=20,
             sine_drive=1, sine_wet=0,
-            chew_wet=0, chew_depth=0.5, chew_freq=0.5, chew_variance=0.5,
             direction_mod=0,
             size_variation=0,
             low_gain=0, high_gain=0,
@@ -157,8 +156,6 @@ alloc {
             BufWr.ar(sig_mix, wobble_bufnum, pw);
             pr = DelayL.ar(Phasor.ar(0, BufRateScale.kr(wobble_bufnum)*rate, 0, BufFrames.kr(wobble_bufnum)), 0.2, 0.2);
             sig_mix = BufRd.ar(2, wobble_bufnum, pr, interpolation:4);
-
-            sig_mix = SelectX.ar(chew_wet, [sig_mix, AnalogChew.ar(sig_mix, chew_depth, chew_freq, chew_variance)]);
             
             sig_mix = HPF.ar(sig_mix, Lag.kr(hpf));
             sig_mix = MoogFF.ar(sig_mix, Lag.kr(cutoff), 0);
@@ -292,10 +289,6 @@ alloc {
         this.addCommand("flutter_amp", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\flutter_amp, msg[2]); });
         this.addCommand("flutter_freq", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\flutter_freq, msg[2]); });
         this.addCommand("flutter_var", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\flutter_var, msg[2]); });
-        this.addCommand("chew_wet", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\chew_wet, msg[2]); });
-        this.addCommand("chew_depth", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\chew_depth, msg[2]); });
-        this.addCommand("chew_freq", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\chew_freq, msg[2]); });
-        this.addCommand("chew_variance", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\chew_variance, msg[2]); });
 
         this.addCommand("eq_low_gain", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\low_gain, msg[2]); });
         this.addCommand("eq_high_gain", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\high_gain, msg[2]); });
