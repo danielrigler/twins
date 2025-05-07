@@ -188,9 +188,9 @@ local function setup_params()
     params:add_control("sine_wet", "Drive Mix", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("sine_wet", function(value) engine.sine_wet(1, value / 100) engine.sine_wet(2, value / 100) end)
     params:add_control("sine_drive", "Drive", controlspec.new(0, 5, "lin", 0.01, 1, "")) params:set_action("sine_drive", function(value) engine.sine_drive(1, value) engine.sine_drive(2, value) end)
     params:add{type = "control", id = "wobble_wet", name = "Wobble Mix", controlspec = controlspec.new(0, 100, "lin", 1, 0, "%"), action = function(value) engine.wobble_wet(1, value/100) engine.wobble_wet(2, value/100) end}
-    params:add{type = "control", id = "wobble_amp", name = "Wow Amount", controlspec = controlspec.new(0, 100, "lin", 1, 25, "%"), action = function(value) engine.wobble_amp(1, value/100) engine.wobble_amp(2, value/100) end}
+    params:add{type = "control", id = "wobble_amp", name = "Wow Amount", controlspec = controlspec.new(0, 100, "lin", 1, 20, "%"), action = function(value) engine.wobble_amp(1, value/100) engine.wobble_amp(2, value/100) end}
     params:add{type = "control", id = "wobble_rpm", name = "Wow Speed", controlspec = controlspec.new(30, 90, "lin", 1, 33, "RPM"), action = function(value) engine.wobble_rpm(1, value) engine.wobble_rpm(2, value) end}
-    params:add{type = "control", id = "flutter_amp", name = "Flutter Amt", controlspec = controlspec.new(0, 100, "lin", 1, 25, "%"), action = function(value) engine.flutter_amp(1, value/100) engine.flutter_amp(2, value/100) end}
+    params:add{type = "control", id = "flutter_amp", name = "Flutter Amt", controlspec = controlspec.new(0, 100, "lin", 1, 35, "%"), action = function(value) engine.flutter_amp(1, value/100) engine.flutter_amp(2, value/100) end}
     params:add{type = "control", id = "flutter_freq", name = "Flutter Freq", controlspec = controlspec.new(3, 30, "lin", 0.01, 6, "Hz"), action = function(value) engine.flutter_freq(1, value) engine.flutter_freq(2, value) end}
     params:add{type = "control", id = "flutter_var", name = "Flutter Var", controlspec = controlspec.new(0.1, 10, "lin", 0.01, 2, "Hz"), action = function(value) engine.flutter_var(1, value) engine.flutter_var(2, value) end}
     params:add_separator("    ")
@@ -219,7 +219,7 @@ local function setup_params()
     params:add_binary("randomize_lfos", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_lfos", function() lfo.clearLFOs("1") lfo.clearLFOs("2") lfo.randomize_lfos("1", params:get("allow_volume_lfos") == 2)  lfo.randomize_lfos("2", params:get("allow_volume_lfos") == 2) if randomize_metro[1] then randomize_metro[1]:stop() end if randomize_metro[2] then randomize_metro[2]:stop() end end)
     params:add_binary("lfo.assign_to_current_row", "Assign to Selection", "trigger", 0) params:set_action("lfo.assign_to_current_row", function() lfo.assign_to_current_row(current_mode, current_filter_mode) end)
     params:add_binary("ClearLFOs", "Clear All LFOs", "trigger", 0) params:set_action("ClearLFOs", function() lfo.clearLFOs() end)
-    params:add_option("allow_volume_lfos", "Allow Volume LFOs", {"no", "yes"}, 2)
+    params:add_option("allow_volume_lfos", "Allow Volume LFOs", {"no", "yes"}, 1)
     params:add_control("global_lfo_freq_scale", "Freq Scale", controlspec.new(0.1, 10, "exp", 0.01, 1.0, "x")) params:set_action("global_lfo_freq_scale", function(value) 
     for i = 1, 16 do 
       lfo[i].base_freq = params:get(i .. "lfo_freq")
@@ -251,17 +251,17 @@ local function setup_params()
 
     params:add_group("Limits", 14)
     params:add_taper("min_jitter", "jitter (min)", 0, 4999, 100, 5, "ms")
-    params:add_taper("max_jitter", "jitter (max)", 0, 4999, 1999, 5, "ms")
+    params:add_taper("max_jitter", "jitter (max)", 0, 4999, 999, 5, "ms")
     params:add_taper("min_size", "size (min)", 1, 999, 100, 5, "ms")
-    params:add_taper("max_size", "size (max)", 1, 999, 599, 5, "ms")
+    params:add_taper("max_size", "size (max)", 1, 999, 500, 5, "ms")
     params:add_taper("min_density", "density (min)", 0.1, 50, 1, 5, "Hz")
     params:add_taper("max_density", "density (max)", 0.1, 50, 16, 5, "Hz")
     params:add_taper("min_spread", "spread (min)", 0, 100, 0, 0, "%")
-    params:add_taper("max_spread", "spread (max)", 0, 100, 90, 0, "%")
+    params:add_taper("max_spread", "spread (max)", 0, 100, 50, 0, "%")
     params:add_control("min_pitch", "pitch (min)", controlspec.new(-48, 48, "lin", 1, -31, "st"))
     params:add_control("max_pitch", "pitch (max)", controlspec.new(-48, 48, "lin", 1, 31, "st"))
     params:add_taper("min_speed", "speed (min)", -2, 2, 0, 0, "x")
-    params:add_taper("max_speed", "speed (max)", -2, 2, 1, 0, "x")
+    params:add_taper("max_speed", "speed (max)", -2, 2, 0.2, 0, "x")
     params:add_taper("min_seek", "seek (min)", 0, 100, 0, 0, "%")
     params:add_taper("max_seek", "seek (max)", 0, 100, 100, 0, "%")
 

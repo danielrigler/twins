@@ -143,7 +143,7 @@ alloc {
             sig_l = sig_l + ~grainBufFunc.(buf_l, grain_pitch * 4, grain_size, overtone_2_vol);
             sig_r = sig_r + ~grainBufFunc.(buf_r, grain_pitch * 4, grain_size, overtone_2_vol);
             
-            pan_sig = Lag.kr(TRand.kr(trig: grain_trig, lo: spread.neg, hi: spread), 0.2);
+            pan_sig = TRand.kr(trig: grain_trig, lo: spread.neg, hi: spread);
             granular_sig = Balance2.ar(sig_l, sig_r, pan_sig);
 
             sig_mix = (dry_sig * (1 - granular_gain)) + (granular_sig * granular_gain);
@@ -151,7 +151,6 @@ alloc {
             shaped = Shaper.ar(bufSine, sig_mix * sine_drive);
             sig_mix = SelectX.ar(sine_wet, [sig_mix, shaped]);
 
-            // wow and flutter from Stefaan Himpe https://sccode.org/1-5bP & Zackary Scholl
             pw = Phasor.ar(0, BufRateScale.kr(wobble_bufnum), 0, BufFrames.kr(wobble_bufnum));
             BufWr.ar(sig_mix, wobble_bufnum, pw);
             pr = DelayL.ar(Phasor.ar(0, BufRateScale.kr(wobble_bufnum)*rate, 0, BufFrames.kr(wobble_bufnum)), 0.2, 0.2);
@@ -168,7 +167,7 @@ alloc {
             side = (sig_mix[0] - sig_mix[1]) * 0.5 * width;
             sig_mix = [mid + side, mid - side];
 
-            sig_mix = Compander.ar(sig_mix,sig_mix,0.25)/2;
+            sig_mix = Compander.ar(sig_mix,sig_mix,0.25)/1.85;
 
             sig_mix = Balance2.ar(sig_mix[0], sig_mix[1], pan);
 

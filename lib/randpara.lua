@@ -53,8 +53,8 @@ local function randomize_jpverb_params(steps)
   if params:get("lock_reverb") == 2 then return end
   safe_metro_stop(randomize_metro)
   -- JPVERB
-  if math.random() <= 0.6 then targets["t60"] = 3.5 else targets["t60"] = random_float(2, 5) end
-  if math.random() <= 0.6 then targets["damp"] = 0 else targets["damp"] = random_float(0, 9) end
+  if math.random() <= 0.6 then targets["t60"] = 4 else targets["t60"] = random_float(2.5, 6) end
+  if math.random() <= 0.6 then targets["damp"] = 0 else targets["damp"] = random_float(0, 15) end
   if math.random() <= 0.3 then targets["rsize"] = 1 else targets["rsize"] = random_float(1, 3) end
   if math.random() <= 0.6 then targets["earlyDiff"] = 70.7 else targets["earlyDiff"] = random_float(70.7, 90) end
   if math.random() <= 0.6 then targets["modDepth"] = 10 else targets["modDepth"] = math.random(10, 90) end
@@ -76,13 +76,13 @@ local function randomize_granular_params(i)
   safe_metro_stop(randomize_metro)
     -- GRANULAR
     if math.random() <= 0.6 then targets[i .. "direction_mod"] = 0 else targets[i .. "direction_mod"] = math.random(0, 20) end
-    if math.random() <= 0.5 then targets[i .. "size_variation"] = 0 else targets[i .. "size_variation"] = math.random(0, 40) end
-    if math.random() <= 0.5 then targets[i .. "density_mod_amt"] = 0 else targets[i .. "density_mod_amt"] = math.random(0, 75) end
-    if math.random() <= 0.5 then targets[i .. "subharmonics_1"] = 0 else targets[i .. "subharmonics_1"] = random_float(0, 0.4) end
-    if math.random() <= 0.5 then targets[i .. "subharmonics_2"] = 0 else targets[i .. "subharmonics_2"] = random_float(0, 0.4) end
-    if math.random() <= 0.5 then targets[i .. "subharmonics_3"] = 0 else targets[i .. "subharmonics_3"] = random_float(0, 0.4) end
-    if math.random() <= 0.5 then targets[i .. "overtones_1"] = 0 else targets[i .. "overtones_1"] = random_float(0, 0.5) end
-    if math.random() <= 0.5 then targets[i .. "overtones_2"] = 0 else targets[i .. "overtones_2"] = random_float(0, 0.5) end
+    if math.random() <= 0.4 then targets[i .. "size_variation"] = 0 else targets[i .. "size_variation"] = math.random(0, 40) end
+    if math.random() <= 0.4 then targets[i .. "density_mod_amt"] = 0 else targets[i .. "density_mod_amt"] = math.random(0, 75) end
+    if math.random() <= 0.4 then targets[i .. "subharmonics_1"] = 0 else targets[i .. "subharmonics_1"] = random_float(0, 0.4) end
+    if math.random() <= 0.4 then targets[i .. "subharmonics_2"] = 0 else targets[i .. "subharmonics_2"] = random_float(0, 0.4) end
+    if math.random() <= 0.4 then targets[i .. "subharmonics_3"] = 0 else targets[i .. "subharmonics_3"] = random_float(0, 0.4) end
+    if math.random() <= 0.4 then targets[i .. "overtones_1"] = 0 else targets[i .. "overtones_1"] = random_float(0, 0.5) end
+    if math.random() <= 0.4 then targets[i .. "overtones_2"] = 0 else targets[i .. "overtones_2"] = random_float(0, 0.5) end
     if math.random() <= 0.65 then targets["shimmer_mix"] = 0.0 else targets["shimmer_mix"] = math.random(0, 20) end
     if math.random() <= 0.5 then targets[i .. "pitch_random_plus"] = 0 end
     if math.random() <= 0.5 then targets[i .. "pitch_random_minus"] = 0 end
@@ -127,9 +127,9 @@ local function randomize_tape_params()
     if math.random() <= 0.6 then targets["sine_wet"] = 0 else targets["sine_wet"] = math.random(5, 10) end
     if math.random() <= 0.6 then targets["sine_drive"] = 0.75 else targets["sine_drive"] = random_float(0.5, 1) end
     if math.random() <= 0.75 then targets["wobble_wet"] = 0 else targets["wobble_wet"] = math.random(0, 25) end
-    if math.random() <= 0.75 then targets["wobble_amp"] = 25 else targets["wobble_amp"] = math.random(10, 35) end
+    if math.random() <= 0.75 then targets["wobble_amp"] = 15 else targets["wobble_amp"] = math.random(5, 25) end
     if math.random() <= 0.75 then targets["wobble_rpm"] = 33 else targets["wobble_rpm"] = math.random(30, 90) end
-    if math.random() <= 0.75 then targets["flutter_amp"] = 25 else targets["flutter_amp"] = math.random(10, 50) end
+    if math.random() <= 0.75 then targets["flutter_amp"] = 35 else targets["flutter_amp"] = math.random(5, 60) end
     if math.random() <= 0.75 then targets["flutter_freq"] = 6 else targets["flutter_freq"] = math.random(4, 8) end
     if math.random() <= 0.75 then targets["flutter_var"] = 2 else targets["flutter_var"] = math.random(1, 5) end
    
