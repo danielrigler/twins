@@ -101,8 +101,8 @@ alloc {
             var overtone_1_vol = overtones_1 * invDenom;
             var overtone_2_vol = overtones_2 * invDenom;
             var lagPitchOffset = Lag.kr(pitch_offset, 1);
-            var grain_direction = Select.kr(pitch_mode, [1, Select.kr(speed.abs > 0.001, [1, speed.sign])]) * ((LFNoise1.kr(density).range(0,1) < direction_mod).linlin(0,1,1,-1));
             var trig_rnd = LFNoise1.kr(density);
+            var grain_direction = Select.kr(pitch_mode, [1, Select.kr(speed.abs > 0.001, [1, speed.sign])]) * ((trig_rnd.range(0,1) < direction_mod).linlin(0,1,1,-1));
             var grain_size;
             var low, high;
             var positive_intervals = [12, 24], negative_intervals = [-12, -24];
@@ -121,7 +121,7 @@ alloc {
             pos_sig = Wrap.kr(Select.kr(freeze, [buf_pos, pos]));
             dry_sig = [PlayBuf.ar(1, buf_l, speed, startPos: pos * BufFrames.kr(buf_l), trigger: t_reset_pos, loop: 1), PlayBuf.ar(1, buf_r, speed, startPos: pos * BufFrames.kr(buf_r), trigger: t_reset_pos, loop: 1)];
             
-            rand_val = LFNoise1.kr(density).range(0, 1);
+            rand_val = trig_rnd.range(0, 1);
             base_pitch = Select.kr(pitch_mode, [speed * lagPitchOffset, lagPitchOffset]);
             interval_plus = (rand_val < pitch_random_plus) * TChoose.kr(grain_trig, positive_intervals);
             interval_minus = (rand_val < pitch_random_minus) * TChoose.kr(grain_trig, negative_intervals);
@@ -129,20 +129,17 @@ alloc {
 
             grain_pitch = base_pitch * (2 ** (final_interval/12));
             grain_size = size * (1 + TRand.kr(trig: grain_trig, lo: -1 * size_variation, hi: size_variation));
-            ~grainBufFunc = { |buf, pitch, size, vol| GrainBuf.ar(1, grain_trig, size, buf, pitch * grain_direction, pos_sig + jitter_sig, 2, mul: vol); };
-            sig_l = ~grainBufFunc.(buf_l, grain_pitch, grain_size, main_vol);
-            sig_r = ~grainBufFunc.(buf_r, grain_pitch, grain_size, main_vol);
-            sig_l = sig_l + ~grainBufFunc.(buf_l, grain_pitch / 2, grain_size * 2, subharmonic_1_vol);
-            sig_r = sig_r + ~grainBufFunc.(buf_r, grain_pitch / 2, grain_size * 2, subharmonic_1_vol);
-            sig_l = sig_l + ~grainBufFunc.(buf_l, grain_pitch / 4, grain_size * 2, subharmonic_2_vol);
-            sig_r = sig_r + ~grainBufFunc.(buf_r, grain_pitch / 4, grain_size * 2, subharmonic_2_vol);
-            sig_l = sig_l + ~grainBufFunc.(buf_l, grain_pitch / 8, grain_size * 2, subharmonic_3_vol);
-            sig_r = sig_r + ~grainBufFunc.(buf_r, grain_pitch / 8, grain_size * 2, subharmonic_3_vol);
-            sig_l = sig_l + ~grainBufFunc.(buf_l, grain_pitch * 2, grain_size, overtone_1_vol);
-            sig_r = sig_r + ~grainBufFunc.(buf_r, grain_pitch * 2, grain_size, overtone_1_vol);
-            sig_l = sig_l + ~grainBufFunc.(buf_l, grain_pitch * 4, grain_size, overtone_2_vol);
-            sig_r = sig_r + ~grainBufFunc.(buf_r, grain_pitch * 4, grain_size, overtone_2_vol);
-            
+
+            ~grainBufFunc = {|buf, pitch, size, vol| GrainBuf.ar(1, grain_trig, size, buf, pitch * grain_direction, pos_sig + jitter_sig, 2, mul: vol)};
+            ~processGrains = { |buf_l, buf_r, pitch, size, vol| [~grainBufFunc.(buf_l, pitch, size, vol),  ~grainBufFunc.(buf_r, pitch, size, vol)]};
+            #sig_l, sig_r = ~processGrains.(buf_l, buf_r, grain_pitch, grain_size, main_vol);
+            [1/2, 1/4, 1/8].do { |div, i| #sig_l, sig_r = [
+                sig_l + ~grainBufFunc.(buf_l, grain_pitch * div, grain_size * 2, [subharmonic_1_vol, subharmonic_2_vol, subharmonic_3_vol][i]),
+                sig_r + ~grainBufFunc.(buf_r, grain_pitch * div, grain_size * 2, [subharmonic_1_vol, subharmonic_2_vol, subharmonic_3_vol][i])]};
+            [2, 4].do { |mult, i| #sig_l, sig_r = [
+                sig_l + ~grainBufFunc.(buf_l, grain_pitch * mult, grain_size, [overtone_1_vol, overtone_2_vol][i]),
+                sig_r + ~grainBufFunc.(buf_r, grain_pitch * mult, grain_size, [overtone_1_vol, overtone_2_vol][i])]};
+
             pan_sig = TRand.kr(trig: grain_trig, lo: spread.neg, hi: spread);
             granular_sig = Balance2.ar(sig_l, sig_r, pan_sig);
 
@@ -167,7 +164,7 @@ alloc {
             side = (sig_mix[0] - sig_mix[1]) * 0.5 * width;
             sig_mix = [mid + side, mid - side];
 
-            sig_mix = Compander.ar(sig_mix,sig_mix,0.25)/1.85;
+            sig_mix = Compander.ar(sig_mix,sig_mix,0.25)/1.8;
 
             sig_mix = Balance2.ar(sig_mix[0], sig_mix[1], pan);
 
@@ -191,14 +188,16 @@ alloc {
         SynthDef(\shimmer, {
             arg bus, mix=0.0;
             var orig = In.ar(bus, 2);
-            var pit = LPF.ar(PitchShift.ar(HPF.ar(orig, 300), 0.15, 2, 0, 1, mul:4), 15000);
-            var snd = SelectX.ar(mix, [orig, pit]);
-            ReplaceOut.ar(bus, snd);
+            var hpf = HPF.ar(orig, 300);
+            var pitch1 = PitchShift.ar(hpf, 0.15, 2, 0, 1, mul:2);
+            var pitch2 = LPF.ar(PitchShift.ar(hpf, 0.13, 4, 0, 1, mul:1), 13000);
+            var pit = (pitch1 + pitch2);
+            ReplaceOut.ar(bus, XFade2.ar(orig, pit, mix * 2 - 1));
         }).add;
 
         SynthDef(\jpverb, {
-            arg bus, mix=0.0, t60=3, damp=0, rsize=1, earlyDiff=0.707, modDepth=0.1, modFreq=2, 
-            low=1, mid=1, high=1, lowcut=500, highcut=2000;
+            arg bus, mix=0.0, t60, damp, rsize, earlyDiff, modDepth, modFreq, 
+            low, mid, high, lowcut, highcut;
             var dry = In.ar(bus, 2);
             var wet = JPverb.ar(dry, t60, damp, rsize, earlyDiff, modDepth, modFreq, low, mid, high, lowcut, highcut);
             var sig = SelectX.ar(mix, [dry, wet]);
@@ -293,7 +292,7 @@ alloc {
         this.addCommand("eq_high_gain", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\high_gain, msg[2]); });
         
         this.addCommand("width", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\width, msg[2]); });
-        
+
         seek_tasks = Array.fill(nvoices, { arg i; Routine {} });
     }
 
