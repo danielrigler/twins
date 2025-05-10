@@ -16,28 +16,28 @@ Engine_twins : CroneEngine {
         ^super.new(context, doneCallback);
     }
 
-readBuf { arg i, path;
+readBuf { arg i, path, normalizeStrength = 0.5;
     if(buffersL[i].notNil && buffersR[i].notNil, {
         if (File.exists(path), {
-            var numChannels;
-            var newbuf;
-            numChannels = SoundFile.use(path.asString(), { |f| f.numChannels });
-            newbuf = Buffer.readChannel(context.server, path, 0, -1, [0], { |b|
+            var numChannels = SoundFile.use(path.asString(), { |f| f.numChannels });
+            Buffer.readChannel(context.server, path, 0, -1, [0], { |b|
+                b.normalize(normalizeStrength);
                 voices[i].set(\buf_l, b);
                 buffersL[i].free;
                 buffersL[i] = b;
                 voices[i].set(\pos, 0, \t_reset_pos, 1, \freeze, 0);
-            });
-            if (numChannels > 1, {
-                newbuf = Buffer.readChannel(context.server, path, 0, -1, [1], { |b|
+                if (numChannels > 1, {
+                    Buffer.readChannel(context.server, path, 0, -1, [1], { |b|
+                        b.normalize(normalizeStrength);
+                        voices[i].set(\buf_r, b);
+                        buffersR[i].free;
+                        buffersR[i] = b;
+                    });
+                }, {
                     voices[i].set(\buf_r, b);
                     buffersR[i].free;
                     buffersR[i] = b;
                 });
-            }, {
-                voices[i].set(\buf_r, newbuf);
-                buffersR[i].free;
-                buffersR[i] = newbuf;
             });
         });
     });
@@ -164,7 +164,7 @@ alloc {
             side = (sig_mix[0] - sig_mix[1]) * 0.5 * width;
             sig_mix = [mid + side, mid - side];
 
-            sig_mix = Compander.ar(sig_mix,sig_mix,0.25)/1.8;
+            sig_mix = Compander.ar(sig_mix,sig_mix,0.25)/2;
 
             sig_mix = Balance2.ar(sig_mix[0], sig_mix[1], pan);
 
@@ -186,13 +186,19 @@ alloc {
 
 
         SynthDef(\shimmer, {
-            arg bus, mix=0.0;
+            arg bus, mix=0.0, lowpass=13000, hipass=1400, pitchv=0.02, fb=0.0, fbDelay=0.15, fbLowpass=10000;
+            var processed;
             var orig = In.ar(bus, 2);
-            var hpf = HPF.ar(orig, 300);
-            var pitch1 = PitchShift.ar(hpf, 0.15, 2, 0, 1, mul:2);
-            var pitch2 = LPF.ar(PitchShift.ar(hpf, 0.13, 4, 0, 1, mul:1), 13000);
-            var pit = (pitch1 + pitch2);
-            ReplaceOut.ar(bus, XFade2.ar(orig, pit, mix * 2 - 1));
+            var hpf = HPF.ar(orig, hipass);
+            var pitch1 = PitchShift.ar(hpf, 0.17, 2, pitchv, 1, mul:4);
+            var pitch2 = PitchShift.ar(hpf, 0.13, 4, pitchv, 1, mul:1);
+            var pit = LPF.ar(pitch1 + pitch2, lowpass);
+            var fbSig = LocalIn.ar(2);
+            var fbProcessed = LPF.ar(fbSig, fbLowpass) * fb;
+            pit = pit + fbProcessed;
+            LocalOut.ar(DelayC.ar(pit, 0.5, fbDelay));
+            processed = orig + pit;
+            ReplaceOut.ar(bus, XFade2.ar(orig, processed, mix * 2 - 1));
         }).add;
 
         SynthDef(\jpverb, {
@@ -268,6 +274,12 @@ alloc {
         this.addCommand("size_variation", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\size_variation, msg[2]); });
         this.addCommand("pitch_random_plus", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\pitch_random_plus, msg[2]); });
         this.addCommand("pitch_random_minus", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\pitch_random_minus, msg[2]); });
+        
+        this.addCommand("lowpass", "f", { arg msg; shimmerEffect.set(\lowpass, msg[1]); });
+        this.addCommand("hipass", "f", { arg msg; shimmerEffect.set(\hipass, msg[1]); });
+        this.addCommand("pitchv", "f", { arg msg; shimmerEffect.set(\pitchv, msg[1]); });
+        this.addCommand("fb", "f", { arg msg; shimmerEffect.set(\fb, msg[1]); });
+        this.addCommand("fbDelay", "f", { arg msg; shimmerEffect.set(\fbDelay, msg[1]); });
 
         this.addCommand("read", "is", { arg msg; this.readBuf(msg[1] - 1, msg[2]); });
         this.addCommand("seek", "if", { arg msg; var voice = msg[1] - 1; var pos = msg[2]; seek_tasks[voice].stop; voices[voice].set(\pos, pos); voices[voice].set(\t_reset_pos, 1); voices[voice].set(\freeze, 0); });

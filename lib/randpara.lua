@@ -83,10 +83,24 @@ local function randomize_granular_params(i)
     if math.random() <= 0.4 then targets[i .. "subharmonics_3"] = 0 else targets[i .. "subharmonics_3"] = random_float(0, 0.4) end
     if math.random() <= 0.4 then targets[i .. "overtones_1"] = 0 else targets[i .. "overtones_1"] = random_float(0, 0.5) end
     if math.random() <= 0.4 then targets[i .. "overtones_2"] = 0 else targets[i .. "overtones_2"] = random_float(0, 0.5) end
-    if math.random() <= 0.65 then targets["shimmer_mix"] = 0.0 else targets["shimmer_mix"] = math.random(0, 20) end
     if math.random() <= 0.5 then targets[i .. "pitch_random_plus"] = 0 end
     if math.random() <= 0.5 then targets[i .. "pitch_random_minus"] = 0 end
 
+    for param, _ in pairs(targets) do
+        active_interpolations[param] = true
+    end
+    start_interpolation(steps)
+end
+
+local function randomize_shimmer_params()
+  if params:get("lock_shimmer") == 2 then return end
+  safe_metro_stop(randomize_metro)
+    -- SHIMMER
+    if math.random() <= 0.75 then targets["shimmer_mix"] = 0.0 else targets["shimmer_mix"] = math.random(0, 30) end
+    if math.random() <= 0.85 then targets["pitchv"] = 0.0 else targets["pitchv"] = math.random(0, 3) end
+    if math.random() <= 0.5 then targets["lowpass"] = 13000 else targets["lowpass"] = math.random(6000, 15000) end
+    if math.random() <= 0.4 then targets["hipass"] = 1300 else targets["hipass"] = math.random(20, 1300) end
+  
     for param, _ in pairs(targets) do
         active_interpolations[param] = true
     end
@@ -169,6 +183,7 @@ local function randomize_params(steps, track_num)
     randomize_tape_params()
     randomize_delay_params()
     randomize_jpverb_params()
+    randomize_shimmer_params()
     randomize_filter_params(track_num)
     randomize_stereo_params(track_num)
     randomize_eq_params(track_num)

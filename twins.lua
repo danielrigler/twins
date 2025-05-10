@@ -6,7 +6,7 @@
 --           by: @dddstudio                       
 --
 --                          
---                           v0.27
+--                           v0.28
 -- E1: Master Volume
 -- K1+E2/E3: Volume 1/2
 -- K1+E1: Crossfade Volumes
@@ -136,8 +136,7 @@ local function setup_params()
     
     params:add_separator("Settings")
 
-    params:add_group("Granular", 30)
-    params:add_control("shimmer_mix", "Shimmer", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("shimmer_mix", function(x) engine.shimmer_mix(x/100) end)
+    params:add_group("Granular", 29)
     for i = 1, 2 do
       params:add_separator("Sample " ..i)
       params:add_control(i .. "granular_gain", i .. " Mix", controlspec.new(0, 100, "lin", 1, 100, "%")) 
@@ -184,6 +183,16 @@ local function setup_params()
     params:add_binary("randomize_jpverb", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_jpverb", function() randpara.randomize_jpverb_params(steps) end)
     params:add_option("lock_reverb", "Lock Parameters", {"off", "on"}, 1)
     
+    params:add_group("Shimmer", 8)
+    params:add_control("shimmer_mix", "Mix", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("shimmer_mix", function(x) engine.shimmer_mix(x/100) end)
+    params:add_control("pitchv", "Pitch Variance", controlspec.new(0, 100, "lin", 1, 2, "%")) params:set_action("pitchv", function(x) engine.pitchv(x/100) end)
+    params:add_control("lowpass", "LPF", controlspec.new(20, 20000, "lin", 1, 13000, "Hz")) params:set_action("lowpass", function(x) engine.lowpass(x) end)
+    params:add_control("hipass", "HPF", controlspec.new(20, 20000, "exp", 1, 1400, "Hz")) params:set_action("hipass", function(x) engine.hipass(x) end)
+    params:add_control("fbDelay", "Delay", controlspec.new(0.01, 0.5, "lin", 0.01, 0.2, "s")) params:set_action("fbDelay", function(x) engine.fbDelay(x) end)
+    params:add_control("fb", "Feedback", controlspec.new(0, 100, "lin", 1, 15, "%")) params:set_action("fb", function(x) engine.fb(x/100) end)
+    params:add_separator("        ")
+    params:add_option("lock_shimmer", "Lock Parameters", {"off", "on"}, 1)
+    
     params:add_group("Tape", 11)
     params:add_control("sine_wet", "Drive Mix", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("sine_wet", function(value) engine.sine_wet(1, value / 100) engine.sine_wet(2, value / 100) end)
     params:add_control("sine_drive", "Drive", controlspec.new(0, 5, "lin", 0.01, 1, "")) params:set_action("sine_drive", function(value) engine.sine_drive(1, value) engine.sine_drive(2, value) end)
@@ -209,17 +218,11 @@ local function setup_params()
     params:add_separator("     ")
     params:add_option("lock_eq", "Lock Parameters", {"off", "on"}, 1)
 
-    params:add_group("Stereo Width", 2)
-    for i = 1, 2 do
-      params:add_control(i .. "Width", i .. " Width", controlspec.new(0, 200, "lin", 0.01, 100, "%"))
-      params:set_action(i .. "Width", function(value) engine.width(i, value / 100) end)
-    end  
-
     params:add_group("LFOs", 117)
     params:add_binary("randomize_lfos", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_lfos", function() lfo.clearLFOs("1") lfo.clearLFOs("2") lfo.randomize_lfos("1", params:get("allow_volume_lfos") == 2)  lfo.randomize_lfos("2", params:get("allow_volume_lfos") == 2) if randomize_metro[1] then randomize_metro[1]:stop() end if randomize_metro[2] then randomize_metro[2]:stop() end end)
     params:add_binary("lfo.assign_to_current_row", "Assign to Selection", "trigger", 0) params:set_action("lfo.assign_to_current_row", function() lfo.assign_to_current_row(current_mode, current_filter_mode) end)
     params:add_binary("ClearLFOs", "Clear All LFOs", "trigger", 0) params:set_action("ClearLFOs", function() lfo.clearLFOs() end)
-    params:add_option("allow_volume_lfos", "Allow Volume LFOs", {"no", "yes"}, 1)
+    params:add_option("allow_volume_lfos", "Allow Volume LFOs", {"no", "yes"}, 2)
     params:add_control("global_lfo_freq_scale", "Freq Scale", controlspec.new(0.1, 10, "exp", 0.01, 1.0, "x")) params:set_action("global_lfo_freq_scale", function(value) 
     for i = 1, 16 do 
       lfo[i].base_freq = params:get(i .. "lfo_freq")
@@ -227,27 +230,6 @@ local function setup_params()
     end 
     end)
     lfo.init()
-
-    for i = 1, 2 do
-      params:add_taper(i .. "volume", i .. " volume", -70, 20, 0, 0, "dB") params:set_action(i .. "volume", function(value) if value == -70 then engine.volume(i, 0) else engine.volume(i, math.pow(10, value / 20)) end end)
-      params:add_taper(i .. "pan", i .. " pan", -100, 100, 0, 0, "%") params:set_action(i .. "pan", function(value) engine.pan(i, value / 100)  end)
-      params:add_taper(i .. "speed", i .. " speed", -2, 2, 0.10, 0) params:set_action(i .. "speed", function(value) engine.speed(i, value) end)
-      params:add_taper(i .. "density", i .. " density", 0.1, 300, 10, 5) params:set_action(i .. "density", function(value) engine.density(i, value) end)
-      params:add_control(i .. "pitch", i .. " pitch", controlspec.new(-48, 48, "lin", 1, 0, "st")) params:set_action(i .. "pitch", function(value) engine.pitch_offset(i, math.pow(0.5, -value / 12)) end)
-      params:add_taper(i .. "jitter", i .. " jitter", 0, 4999, 250, 3, "ms") params:set_action(i .. "jitter", function(value) engine.jitter(i, value / 1000) end)
-      params:add_taper(i .. "size", i .. " size", 1, 999, 100, 1, "ms") params:set_action(i .. "size", function(value) engine.size(i, value / 1000) end)
-      params:add_taper(i .. "spread", i .. " spread", 0, 100, 0, 0, "%") params:set_action(i .. "spread", function(value) engine.spread(i, value / 100) end)
-      params:add_control(i .. "seek", i .. " seek", controlspec.new(0, 100, "lin", 0.01, 0, "%")) params:set_action(i .. "seek", function(value) engine.seek(i, value) end)
-      params:hide(i .. "speed")
-      params:hide(i .. "jitter")
-      params:hide(i .. "size")
-      params:hide(i .. "density")
-      params:hide(i .. "pitch")
-      params:hide(i .. "spread")
-      params:hide(i .. "seek")
-      params:hide(i .. "pan")
-      params:hide(i .. "volume")
-    end
 
     params:add_group("Limits", 14)
     params:add_taper("min_jitter", "jitter (min)", 0, 4999, 100, 5, "ms")
@@ -277,9 +259,35 @@ local function setup_params()
       params:add_option(i .. "lock_speed", i .. " lock speed", {"off", "on"}, 1)
     end
 
-    params:add_group("Other", 2)
+    params:add_group("Other", 5)
+    params:add_separator("Stereo Width")
+    for i = 1, 2 do
+      params:add_control(i .. "Width", i .. " Width", controlspec.new(0, 200, "lin", 0.01, 100, "%"))
+      params:set_action(i .. "Width", function(value) engine.width(i, value / 100) end)
+    end 
     params:add_separator("Transition Steps")
     params:add_control("steps","Steps",controlspec.new(10,20000,"lin",1,400)) params:set_action("steps", function(value) steps = value end)
+    
+    for i = 1, 2 do
+      params:add_taper(i .. "volume", i .. " volume", -70, 20, 0, 0, "dB") params:set_action(i .. "volume", function(value) if value == -70 then engine.volume(i, 0) else engine.volume(i, math.pow(10, value / 20)) end end)
+      params:add_taper(i .. "pan", i .. " pan", -100, 100, 0, 0, "%") params:set_action(i .. "pan", function(value) engine.pan(i, value / 100)  end)
+      params:add_taper(i .. "speed", i .. " speed", -2, 2, 0.10, 0) params:set_action(i .. "speed", function(value) engine.speed(i, value) end)
+      params:add_taper(i .. "density", i .. " density", 0.1, 300, 10, 5) params:set_action(i .. "density", function(value) engine.density(i, value) end)
+      params:add_control(i .. "pitch", i .. " pitch", controlspec.new(-48, 48, "lin", 1, 0, "st")) params:set_action(i .. "pitch", function(value) engine.pitch_offset(i, math.pow(0.5, -value / 12)) end)
+      params:add_taper(i .. "jitter", i .. " jitter", 0, 4999, 250, 3, "ms") params:set_action(i .. "jitter", function(value) engine.jitter(i, value / 1000) end)
+      params:add_taper(i .. "size", i .. " size", 1, 999, 100, 1, "ms") params:set_action(i .. "size", function(value) engine.size(i, value / 1000) end)
+      params:add_taper(i .. "spread", i .. " spread", 0, 100, 0, 0, "%") params:set_action(i .. "spread", function(value) engine.spread(i, value / 100) end)
+      params:add_control(i .. "seek", i .. " seek", controlspec.new(0, 100, "lin", 0.01, 0, "%")) params:set_action(i .. "seek", function(value) engine.seek(i, value) end)
+      params:hide(i .. "speed")
+      params:hide(i .. "jitter")
+      params:hide(i .. "size")
+      params:hide(i .. "density")
+      params:hide(i .. "pitch")
+      params:hide(i .. "spread")
+      params:hide(i .. "seek")
+      params:hide(i .. "pan")
+      params:hide(i .. "volume")
+    end
     
     params:add_control("1cutoff","1 Cutoff",controlspec.new(20,20000,"exp",0,20000,"Hz")) params:set_action("1cutoff",function(value) engine.cutoff(1,value) end)
     params:add_control("2cutoff","2 Cutoff",controlspec.new(20,20000,"exp",0,20000,"Hz")) params:set_action("2cutoff",function(value) engine.cutoff(2,value) end)
