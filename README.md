@@ -35,7 +35,7 @@ _some features might require a pi4 based unit._
 ### Discussion
 **[FORUM](https://llllllll.co/t/twins/71052)**
 ### Download
-**v0.26**
+**v0.28**
 install from Maiden Project Manager, or from Maiden REPL:
 ```
 ;install https://github.com/danielrigler/twins
@@ -43,6 +43,7 @@ install from Maiden Project Manager, or from Maiden REPL:
 do not forget to restart.
 
 ### Version history
+* **v0.28** - Shimmer update. 
 * **v0.26** - Swith to JPverb. Locking improvements. 
 * **v0.25** - Improved shimmer. Small tweaks and fixes. 
 * **v0.24** - Added tape wobble. 
