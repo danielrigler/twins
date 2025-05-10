@@ -120,18 +120,6 @@ local function randomize_eq_params(i)
     start_interpolation(steps)
 end
 
-local function randomize_filter_params(i)
-  safe_metro_stop(randomize_metro)
-    -- FILTERS
-    if math.random() <= 0.6 then targets[i.. "cutoff"] = 20000 else targets[i.. "cutoff"] = math.random(9500, 20000) end
-    if math.random() <= 0.7 then targets[i.. "hpf"] = 20 else targets[i.. "hpf"] = math.random(20, 300) end
-
-    for param, _ in pairs(targets) do
-        active_interpolations[param] = true
-    end
-    start_interpolation(steps)
-end
-
 local function randomize_delay_params()
   if params:get("lock_delay") == 2 then return end
   safe_metro_stop(randomize_metro)
@@ -165,18 +153,6 @@ local function randomize_tape_params()
     start_interpolation(steps)
 end
 
-local function randomize_stereo_params(i)
-  safe_metro_stop(randomize_metro)
-    --STEREO WIDTH
-    if math.random() <= 0.65 then targets[i.."Width"] = 100 else targets[i.."Width"] = math.random(100, 200) end    
-    
-    for param, _ in pairs(targets) do
-        active_interpolations[param] = true
-    end
-    start_interpolation(steps)
-end
-
-
 local function randomize_params(steps, track_num)
     targets = {}
     active_interpolations = {}
@@ -184,8 +160,6 @@ local function randomize_params(steps, track_num)
     randomize_delay_params()
     randomize_jpverb_params()
     randomize_shimmer_params()
-    randomize_filter_params(track_num)
-    randomize_stereo_params(track_num)
     randomize_eq_params(track_num)
     randomize_granular_params(track_num)
 end

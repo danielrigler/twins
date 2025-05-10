@@ -3,6 +3,7 @@ Engine_twins : CroneEngine {
 
     var jpverbEffect;
     var shimmerEffect;
+    var tapeEffect;
     var outputSynth;
     var <buffersL;
     var <buffersR;
@@ -185,14 +186,20 @@ alloc {
         });
 
 
+        SynthDef(\tape, {
+            arg bus, mix=0.0;
+            var orig = In.ar(bus, 2);
+            var wet = AnalogTape.ar(orig, 0.9, 0.9, 0.9, 0);
+            var sig = SelectX.ar(mix, [orig, wet]);
+            ReplaceOut.ar(bus, sig);
+        }).add;
+        
         SynthDef(\shimmer, {
             arg bus, mix=0.0, lowpass=13000, hipass=1400, pitchv=0.02, fb=0.0, fbDelay=0.15, fbLowpass=10000;
             var processed;
             var orig = In.ar(bus, 2);
             var hpf = HPF.ar(orig, hipass);
-            var pitch1 = PitchShift.ar(hpf, 0.17, 2, pitchv, 1, mul:4);
-            var pitch2 = PitchShift.ar(hpf, 0.13, 4, pitchv, 1, mul:1);
-            var pit = LPF.ar(pitch1 + pitch2, lowpass);
+            var pit = LPF.ar(PitchShift.ar(hpf, 0.17, 2, pitchv, 1, mul:4), lowpass);
             var fbSig = LocalIn.ar(2);
             var fbProcessed = LPF.ar(fbSig, fbLowpass) * fb;
             pit = pit + fbProcessed;
@@ -218,6 +225,11 @@ alloc {
 
         context.server.sync;
         
+        tapeEffect = Synth.new(\tape, [
+            \bus, mixBus.index,
+            \mix, 0.0
+        ], context.xg, 'addToTail');  
+        
         shimmerEffect = Synth.new(\shimmer, [
             \bus, mixBus.index,
             \mix, 0.0
@@ -233,6 +245,12 @@ alloc {
             \out, context.out_b.index
         ], context.xg, 'addToTail');   
 
+
+        this.addCommand("tape_mix", "f", { arg msg;
+            var mix = msg[1];
+            tapeEffect.set(\mix, mix);
+            tapeEffect.run(mix > 0);
+        });
         
         this.addCommand("shimmer_mix", "f", { arg msg;
             var mix = msg[1];
@@ -280,7 +298,7 @@ alloc {
         this.addCommand("pitchv", "f", { arg msg; shimmerEffect.set(\pitchv, msg[1]); });
         this.addCommand("fb", "f", { arg msg; shimmerEffect.set(\fb, msg[1]); });
         this.addCommand("fbDelay", "f", { arg msg; shimmerEffect.set(\fbDelay, msg[1]); });
-
+        
         this.addCommand("read", "is", { arg msg; this.readBuf(msg[1] - 1, msg[2]); });
         this.addCommand("seek", "if", { arg msg; var voice = msg[1] - 1; var pos = msg[2]; seek_tasks[voice].stop; voices[voice].set(\pos, pos); voices[voice].set(\t_reset_pos, 1); voices[voice].set(\freeze, 0); });
         this.addCommand("speed", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\speed, msg[2]); });
@@ -305,6 +323,8 @@ alloc {
         
         this.addCommand("width", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\width, msg[2]); });
 
+        this.addCommand("effects_order", "i", { arg msg; var order = msg[1]; if (order == 0) {shimmerEffect.moveBefore(jpverbEffect);} {jpverbEffect.moveBefore(shimmerEffect);} });
+
         seek_tasks = Array.fill(nvoices, { arg i; Routine {} });
     }
 
@@ -315,6 +335,7 @@ alloc {
         wobbleBuffers.do({ arg b; b.free; });
         jpverbEffect.free;
         shimmerEffect.free;
+        tapeEffect.free;
         outputSynth.free;
         mixBus.free;
         bufSine.free;
