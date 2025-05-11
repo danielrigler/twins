@@ -79,21 +79,7 @@ alloc {
             pitch_random_plus=0, pitch_random_minus=0,
             wobble_wet=0, wobble_amp=0.05, wobble_rpm=33, flutter_amp=0.03, flutter_freq=6, flutter_var=2, wobble_bufnum;
  
-            var grain_trig;
-            var jitter_sig;
-            var buf_dur;
-            var pan_sig;
-            var buf_pos;
-            var pos_sig;
-            var sig_l;
-            var sig_r;
-            var sig_mix;
-            var density_mod;
-            var dry_sig;
-            var granular_sig;
-            var base_pitch;
-            var grain_pitch;
-            var shaped;
+            var grain_trig, jitter_sig, buf_dur, pan_sig, buf_pos, pos_sig, sig_l, sig_r, sig_mix, density_mod, dry_sig, granular_sig, base_pitch, grain_pitch, shaped, grain_size;
             var invDenom = 2 / (1 + subharmonics_1 + subharmonics_2 + subharmonics_3 + overtones_1 + overtones_2);
             var main_vol = 0.5 * invDenom;
             var subharmonic_1_vol = subharmonics_1 * invDenom;
@@ -104,7 +90,6 @@ alloc {
             var lagPitchOffset = Lag.kr(pitch_offset, 1);
             var trig_rnd = LFNoise1.kr(density);
             var grain_direction = Select.kr(pitch_mode, [1, Select.kr(speed.abs > 0.001, [1, speed.sign])]) * ((trig_rnd.range(0,1) < direction_mod).linlin(0,1,1,-1));
-            var grain_size;
             var low, high;
             var positive_intervals = [12, 24], negative_intervals = [-12, -24];
             var rand_val, interval_plus, interval_minus, final_interval;
@@ -141,7 +126,7 @@ alloc {
                 sig_l + ~grainBufFunc.(buf_l, grain_pitch * mult, grain_size, [overtone_1_vol, overtone_2_vol][i]),
                 sig_r + ~grainBufFunc.(buf_r, grain_pitch * mult, grain_size, [overtone_1_vol, overtone_2_vol][i])]};
 
-            pan_sig = TRand.kr(trig: grain_trig, lo: spread.neg, hi: spread);
+            pan_sig = Lag.kr(TRand.kr(trig: grain_trig, lo: spread.neg, hi: spread), grain_size * 0.5);
             granular_sig = Balance2.ar(sig_l, sig_r, pan_sig);
 
             sig_mix = (dry_sig * (1 - granular_gain)) + (granular_sig * granular_gain);
@@ -165,7 +150,7 @@ alloc {
             side = (sig_mix[0] - sig_mix[1]) * 0.5 * width;
             sig_mix = [mid + side, mid - side];
 
-            sig_mix = Compander.ar(sig_mix,sig_mix,0.25)/2;
+            sig_mix = Compander.ar(sig_mix, sig_mix, 0.4, 1, 0.5, 0.03, 0.3).softclip * 0.8;     
 
             sig_mix = Balance2.ar(sig_mix[0], sig_mix[1], pan);
 
@@ -190,13 +175,11 @@ alloc {
             arg bus, mix=0.0;
             var orig = In.ar(bus, 2);
             var wet = AnalogTape.ar(orig, 0.9, 0.9, 0.9, 0);
-            var sig = SelectX.ar(mix, [orig, wet]);
-            ReplaceOut.ar(bus, sig);
+            ReplaceOut.ar(bus, XFade2.ar(orig, wet, mix * 2 - 1));
         }).add;
-        
+
         SynthDef(\shimmer, {
             arg bus, mix=0.0, lowpass=13000, hipass=1400, pitchv=0.02, fb=0.0, fbDelay=0.15, fbLowpass=10000;
-            var processed;
             var orig = In.ar(bus, 2);
             var hpf = HPF.ar(orig, hipass);
             var pit = LPF.ar(PitchShift.ar(hpf, 0.17, 2, pitchv, 1, mul:4), lowpass);
@@ -204,8 +187,7 @@ alloc {
             var fbProcessed = LPF.ar(fbSig, fbLowpass) * fb;
             pit = pit + fbProcessed;
             LocalOut.ar(DelayC.ar(pit, 0.5, fbDelay));
-            processed = orig + pit;
-            ReplaceOut.ar(bus, XFade2.ar(orig, processed, mix * 2 - 1));
+            ReplaceOut.ar(bus, XFade2.ar(orig, orig + pit, mix * 2 - 1));
         }).add;
 
         SynthDef(\jpverb, {
@@ -213,8 +195,7 @@ alloc {
             low, mid, high, lowcut, highcut;
             var dry = In.ar(bus, 2);
             var wet = JPverb.ar(dry, t60, damp, rsize, earlyDiff, modDepth, modFreq, low, mid, high, lowcut, highcut);
-            var sig = SelectX.ar(mix, [dry, wet]);
-            ReplaceOut.ar(bus, sig);
+            ReplaceOut.ar(bus, XFade2.ar(dry, wet, mix * 2 - 1));
         }).add;
 
         SynthDef(\output, {
@@ -298,7 +279,7 @@ alloc {
         this.addCommand("pitchv", "f", { arg msg; shimmerEffect.set(\pitchv, msg[1]); });
         this.addCommand("fb", "f", { arg msg; shimmerEffect.set(\fb, msg[1]); });
         this.addCommand("fbDelay", "f", { arg msg; shimmerEffect.set(\fbDelay, msg[1]); });
-        
+
         this.addCommand("read", "is", { arg msg; this.readBuf(msg[1] - 1, msg[2]); });
         this.addCommand("seek", "if", { arg msg; var voice = msg[1] - 1; var pos = msg[2]; seek_tasks[voice].stop; voices[voice].set(\pos, pos); voices[voice].set(\t_reset_pos, 1); voices[voice].set(\freeze, 0); });
         this.addCommand("speed", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\speed, msg[2]); });
