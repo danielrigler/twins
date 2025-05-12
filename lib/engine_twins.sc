@@ -4,6 +4,9 @@ Engine_twins : CroneEngine {
     var jpverbEffect;
     var shimmerEffect;
     var tapeEffect;
+    var chewEffect;
+    var widthEffect;
+    var tascamEffect;
     var outputSynth;
     var <buffersL;
     var <buffersR;
@@ -126,7 +129,7 @@ alloc {
                 sig_l + ~grainBufFunc.(buf_l, grain_pitch * mult, grain_size, [overtone_1_vol, overtone_2_vol][i]),
                 sig_r + ~grainBufFunc.(buf_r, grain_pitch * mult, grain_size, [overtone_1_vol, overtone_2_vol][i])]};
 
-            pan_sig = Lag.kr(TRand.kr(trig: grain_trig, lo: spread.neg, hi: spread), grain_size * 0.5);
+            pan_sig = TRand.kr(trig: grain_trig, lo: spread.neg, hi: spread);
             granular_sig = Balance2.ar(sig_l, sig_r, pan_sig);
 
             sig_mix = (dry_sig * (1 - granular_gain)) + (granular_sig * granular_gain);
@@ -146,12 +149,7 @@ alloc {
             high = BHiShelf.ar(sig_mix, 3600, 5, high_gain);
             sig_mix = low + high;
 
-            mid = (sig_mix[0] + sig_mix[1]) * 0.5;
-            side = (sig_mix[0] - sig_mix[1]) * 0.5 * width;
-            sig_mix = [mid + side, mid - side];
-
             sig_mix = Compander.ar(sig_mix, sig_mix, 0.4, 1, 0.5, 0.03, 0.3).softclip * 0.8;     
-
             sig_mix = Balance2.ar(sig_mix[0], sig_mix[1], pan);
 
             Out.ar(out, sig_mix * gain);
@@ -170,6 +168,20 @@ alloc {
             ]);
         });
 
+        SynthDef(\tascam, {
+            arg bus, mix=0.0;
+            var orig = In.ar(bus, 2);
+            var tascam_snd=BHiPass.ar(orig,30);
+			      tascam_snd=BPeakEQ.ar(tascam_snd,freq:60,rq:3,db:4);
+			      tascam_snd=BPeakEQ.ar(tascam_snd,freq:150,rq:1.5,db:4);
+			      tascam_snd=BPeakEQ.ar(tascam_snd,210,db:3);
+			      tascam_snd=BPeakEQ.ar(tascam_snd,250,db:-1.5);
+			      tascam_snd=BPeakEQ.ar(tascam_snd,300,db:3);
+			      tascam_snd=BPeakEQ.ar(tascam_snd,400,db:-3);
+			      tascam_snd=BPeakEQ.ar(tascam_snd,7000,db:1);
+			      tascam_snd=BLowPass.ar(tascam_snd,10000);
+            ReplaceOut.ar(bus, tascam_snd);
+        }).add;
 
         SynthDef(\tape, {
             arg bus, mix=0.0;
@@ -177,7 +189,14 @@ alloc {
             var wet = AnalogTape.ar(orig, 0.9, 0.9, 0.9, 0);
             ReplaceOut.ar(bus, XFade2.ar(orig, wet, mix * 2 - 1));
         }).add;
-
+        
+        SynthDef(\chew, {
+            arg bus, mix=0.0, chew_depth=0.5, chew_freq=0.5, chew_variance=0.5;
+            var orig = In.ar(bus, 2);
+            var wet = AnalogChew.ar(orig, chew_depth, chew_freq, chew_variance);
+            ReplaceOut.ar(bus, XFade2.ar(orig, wet, mix * 2 - 1));
+        }).add;
+        
         SynthDef(\shimmer, {
             arg bus, mix=0.0, lowpass=13000, hipass=1400, pitchv=0.02, fb=0.0, fbDelay=0.15, fbLowpass=10000;
             var orig = In.ar(bus, 2);
@@ -197,6 +216,15 @@ alloc {
             var wet = JPverb.ar(dry, t60, damp, rsize, earlyDiff, modDepth, modFreq, low, mid, high, lowcut, highcut);
             ReplaceOut.ar(bus, XFade2.ar(dry, wet, mix * 2 - 1));
         }).add;
+        
+        SynthDef(\width, {
+            arg bus, width=1.0;
+            var sig = In.ar(bus, 2);
+            var mid = (sig[0] + sig[1]) * 0.5;
+            var side = (sig[0] - sig[1]) * 0.5 * width;
+            sig = [mid + side, mid - side];
+            ReplaceOut.ar(bus, sig);
+        }).add;   
 
         SynthDef(\output, {
             arg in, out;
@@ -205,8 +233,18 @@ alloc {
         }).add;
 
         context.server.sync;
+
+        tascamEffect = Synth.new(\tascam, [
+            \bus, mixBus.index,
+            \mix, 0.0
+        ], context.xg, 'addToTail');  
         
         tapeEffect = Synth.new(\tape, [
+            \bus, mixBus.index,
+            \mix, 0.0
+        ], context.xg, 'addToTail');  
+        
+        chewEffect = Synth.new(\chew, [
             \bus, mixBus.index,
             \mix, 0.0
         ], context.xg, 'addToTail');  
@@ -220,6 +258,11 @@ alloc {
             \bus, mixBus.index,
             \mix, 0.0
         ], context.xg, 'addToTail');
+        
+        widthEffect = Synth.new(\width, [
+            \bus, mixBus.index,
+            \width, 1.0
+        ], context.xg, 'addToTail');
 
         outputSynth = Synth.new(\output, [
             \in, mixBus.index,
@@ -227,10 +270,22 @@ alloc {
         ], context.xg, 'addToTail');   
 
 
+        this.addCommand("tascam_mix", "f", { arg msg;
+            var mix = msg[1];
+            tascamEffect.set(\mix, mix);
+            tascamEffect.run(mix > 0);
+        });
+
         this.addCommand("tape_mix", "f", { arg msg;
             var mix = msg[1];
             tapeEffect.set(\mix, mix);
             tapeEffect.run(mix > 0);
+        });
+        
+        this.addCommand("chew_mix", "f", { arg msg;
+            var mix = msg[1];
+            chewEffect.set(\mix, mix);
+            chewEffect.run(mix > 0);
         });
         
         this.addCommand("shimmer_mix", "f", { arg msg;
@@ -244,6 +299,13 @@ alloc {
             jpverbEffect.set(\mix, mix);
             jpverbEffect.run(mix > 0);
         });
+        
+        this.addCommand("width", "f", { arg msg;
+            var width = msg[1];
+            widthEffect.set(\width, width);
+            widthEffect.run(width != 1);
+        });
+
 
         this.addCommand("t60", "f", { arg msg; jpverbEffect.set(\t60, msg[1]); });
         this.addCommand("damp", "f", { arg msg; jpverbEffect.set(\damp, msg[1]); });
@@ -298,11 +360,12 @@ alloc {
         this.addCommand("flutter_amp", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\flutter_amp, msg[2]); });
         this.addCommand("flutter_freq", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\flutter_freq, msg[2]); });
         this.addCommand("flutter_var", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\flutter_var, msg[2]); });
+        this.addCommand("chew_depth", "f", { arg msg; chewEffect.set(\chew_depth, msg[1]); });
+        this.addCommand("chew_freq", "f", { arg msg; chewEffect.set(\chew_freq, msg[1]); });
+        this.addCommand("chew_variance", "f", { arg msg; chewEffect.set(\chew_variance, msg[1]); });
 
         this.addCommand("eq_low_gain", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\low_gain, msg[2]); });
         this.addCommand("eq_high_gain", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\high_gain, msg[2]); });
-        
-        this.addCommand("width", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\width, msg[2]); });
 
         this.addCommand("effects_order", "i", { arg msg; var order = msg[1]; if (order == 0) {shimmerEffect.moveBefore(jpverbEffect);} {jpverbEffect.moveBefore(shimmerEffect);} });
 
@@ -317,6 +380,9 @@ alloc {
         jpverbEffect.free;
         shimmerEffect.free;
         tapeEffect.free;
+        chewEffect.free;
+        widthEffect.free;
+        tascamEffect.free;
         outputSynth.free;
         mixBus.free;
         bufSine.free;

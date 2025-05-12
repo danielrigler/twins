@@ -138,7 +138,6 @@ local function randomize_tape_params()
   if params:get("lock_tape") == 2 then return end
   safe_metro_stop(randomize_metro)
     -- TAPE
-    if math.random() <= 0.6 then targets["sine_wet"] = 0 else targets["sine_wet"] = math.random(5, 10) end
     if math.random() <= 0.6 then targets["sine_drive"] = 0.75 else targets["sine_drive"] = random_float(0.5, 1) end
     if math.random() <= 0.75 then targets["wobble_wet"] = 0 else targets["wobble_wet"] = math.random(0, 25) end
     if math.random() <= 0.75 then targets["wobble_amp"] = 15 else targets["wobble_amp"] = math.random(5, 25) end
@@ -146,6 +145,9 @@ local function randomize_tape_params()
     if math.random() <= 0.75 then targets["flutter_amp"] = 35 else targets["flutter_amp"] = math.random(5, 60) end
     if math.random() <= 0.75 then targets["flutter_freq"] = 6 else targets["flutter_freq"] = math.random(4, 8) end
     if math.random() <= 0.75 then targets["flutter_var"] = 2 else targets["flutter_var"] = math.random(1, 5) end
+    if math.random() <= 0.75 then targets["chew_depth"] = 50 else targets["chew_depth"] = math.random(20, 80) end
+    if math.random() <= 0.75 then targets["chew_freq"] = 50 else targets["chew_depth"] = math.random(20, 80) end
+    if math.random() <= 0.75 then targets["chew_variance"] = 50 else targets["chew_variance"] = math.random(20, 80) end
    
     for param, _ in pairs(targets) do
         active_interpolations[param] = true

@@ -39,7 +39,7 @@ local lfo = include("lib/lfo")
 local randpara = include("lib/randpara")
 delay = include("lib/delay")
 installer_ = include("lib/scinstaller/scinstaller")
-installer = installer_:new{requirements = {"AnalogTape"}, 
+installer = installer_:new{requirements = {"AnalogTape", "AnalogChew"}, 
   zip = "https://github.com/schollz/portedplugins/releases/download/v0.4.6/PortedPlugins-RaspberryPi.zip"}
 engine.name = installer:ready() and 'twins' or nil
 
@@ -196,8 +196,9 @@ local function setup_params()
     params:add_separator("        ")
     params:add_option("lock_shimmer", "Lock Parameters", {"off", "on"}, 1)
     
-    params:add_group("Tape", 12)
+    params:add_group("Tape", 17)
     params:add_option("tape_mix", "Analog Tape", {"off", "on"}, 1) params:set_action("tape_mix", function(x) engine.tape_mix(x-1) end)
+    params:add_option("tascam_mix", "Tascam Filter", {"off", "on"}, 1) params:set_action("tascam_mix", function(x) engine.tascam_mix(x-1) end)
     params:add_control("sine_wet", "Sine Shaper", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("sine_wet", function(value) engine.sine_wet(1, value / 100) engine.sine_wet(2, value / 100) end)
     params:add_control("sine_drive", "Sine Drive", controlspec.new(0, 5, "lin", 0.01, 1, "")) params:set_action("sine_drive", function(value) engine.sine_drive(1, value) engine.sine_drive(2, value) end)
     params:add{type = "control", id = "wobble_wet", name = "Wobble Mix", controlspec = controlspec.new(0, 100, "lin", 1, 0, "%"), action = function(value) engine.wobble_wet(1, value/100) engine.wobble_wet(2, value/100) end}
@@ -206,6 +207,10 @@ local function setup_params()
     params:add{type = "control", id = "flutter_amp", name = "Flutter Amt", controlspec = controlspec.new(0, 100, "lin", 1, 35, "%"), action = function(value) engine.flutter_amp(1, value/100) engine.flutter_amp(2, value/100) end}
     params:add{type = "control", id = "flutter_freq", name = "Flutter Freq", controlspec = controlspec.new(3, 30, "lin", 0.01, 6, "Hz"), action = function(value) engine.flutter_freq(1, value) engine.flutter_freq(2, value) end}
     params:add{type = "control", id = "flutter_var", name = "Flutter Var", controlspec = controlspec.new(0.1, 10, "lin", 0.01, 2, "Hz"), action = function(value) engine.flutter_var(1, value) engine.flutter_var(2, value) end}
+    params:add{type = "control", id = "chew_mix", name = "Chew Mix", controlspec = controlspec.new(0, 100, "lin", 1, 0, "%"), action = function(value) engine.chew_mix(value/100) end}
+    params:add{type = "control", id = "chew_depth", name = "Chew Depth", controlspec = controlspec.new(0, 100, "lin", 1, 50, "%"), action = function(value) engine.chew_depth(value/100) end}
+    params:add{type = "control", id = "chew_freq", name = "Chew Freq", controlspec = controlspec.new(0, 100, "lin", 1, 50, "%"), action = function(value) engine.chew_freq(value/100) end}
+    params:add{type = "control", id = "chew_variance", name = "Chew Variance", controlspec = controlspec.new(0, 100, "lin", 1, 50, "%"), action = function(value) engine.chew_variance(value/100) end}
 
     params:add_separator("    ")
     params:add_binary("randomize_tape", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_tape", function() randpara.randomize_tape_params(steps) end)
@@ -223,11 +228,10 @@ local function setup_params()
     params:add_separator("     ")
     params:add_option("lock_eq", "Lock Parameters", {"off", "on"}, 1)
     
-    params:add_group("Stereo", 2)
-    for i = 1, 2 do
-      params:add_control(i .. "Width", i .. " Width", controlspec.new(0, 200, "lin", 0.01, 100, "%"))
-      params:set_action(i .. "Width", function(value) engine.width(i, value / 100) end)
-    end
+    params:add_group("Stereo", 1)
+    params:add_control("Width", "Width", controlspec.new(0, 200, "lin", 0.01, 100, "%"))
+    params:set_action("Width", function(value) engine.width(value / 100) end)
+    
 
     params:add_group("LFOs", 117)
     params:add_binary("randomize_lfos", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_lfos", function() lfo.clearLFOs("1") lfo.clearLFOs("2") lfo.randomize_lfos("1", params:get("allow_volume_lfos") == 2)  lfo.randomize_lfos("2", params:get("allow_volume_lfos") == 2) if randomize_metro[1] then randomize_metro[1]:stop() end if randomize_metro[2] then randomize_metro[2]:stop() end end)
@@ -250,7 +254,7 @@ local function setup_params()
     params:add_taper("min_density", "density (min)", 0.1, 50, 1, 5, "Hz")
     params:add_taper("max_density", "density (max)", 0.1, 50, 16, 5, "Hz")
     params:add_taper("min_spread", "spread (min)", 0, 100, 0, 0, "%")
-    params:add_taper("max_spread", "spread (max)", 0, 100, 100, 0, "%")
+    params:add_taper("max_spread", "spread (max)", 0, 100, 70, 0, "%")
     params:add_control("min_pitch", "pitch (min)", controlspec.new(-48, 48, "lin", 1, -31, "st"))
     params:add_control("max_pitch", "pitch (max)", controlspec.new(-48, 48, "lin", 1, 31, "st"))
     params:add_taper("min_speed", "speed (min)", -2, 2, 0, 0, "x")
