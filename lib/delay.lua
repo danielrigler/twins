@@ -76,6 +76,33 @@ params:add{
 }
 
 params:add{
+  id = "delay_darkness",
+  name = "Tone",
+  type = "control",
+  controlspec = controlspec.new(0, 100, 'lin', 1, 50, "%"),  -- Default at 50%
+  formatter = function(param) return tostring(param:get()) .. "%" end,
+  action = function(x)
+    local freq
+    local rq
+   
+    if x <= 50 then
+      freq = util.linlin(0, 50, 200, 1200, x)
+      rq = util.linlin(0, 50, 0.5, 2.0, x)
+    else
+      freq = util.linlin(50, 100, 1200, 5000, x)
+      rq = util.linlin(50, 100, 2.0, 5.0, x)
+    end
+   
+    for i=1,2 do
+      softcut.filter_fc(i, freq)
+      softcut.filter_rq(i, rq)
+      softcut.filter_bp(i, 1.0)
+      softcut.filter_lp(i, 0)
+    end
+  end
+}
+
+params:add{
     id = "tap_tempo",
     name = "Tap Tempo",
     type = "trigger",

@@ -6,14 +6,17 @@ Engine_twins : CroneEngine {
     var tapeEffect;
     var chewEffect;
     var widthEffect;
+    var monobassEffect;
+    var sineEffect;
+    var wobbleEffect;
     var outputSynth;
     var <buffersL;
     var <buffersR;
+    var wobbleBuffer;
     var <voices;
     var mixBus;
     var <seek_tasks;
     var bufSine;
-    var <wobbleBuffers;
     
     *new { arg context, doneCallback;
         ^super.new(context, doneCallback);
@@ -57,7 +60,9 @@ alloc {
         
         bufSine = Buffer.alloc(context.server, 1024 * 16, 1);
         bufSine.sine2([2], [0.5], false);
-        wobbleBuffers = Array.fill(nvoices, {Buffer.alloc(context.server, 48000 * 5, 2) });
+        wobbleBuffer = Buffer.alloc(context.server, 48000 * 5, 2);
+        mixBus = Bus.audio(context.server, 2);
+        
         context.server.sync;
       
         SynthDef(\synth, {
@@ -78,8 +83,7 @@ alloc {
             size_variation=0,
             low_gain=0, high_gain=0,
             width=1,
-            pitch_random_plus=0, pitch_random_minus=0,
-            wobble_wet=0, wobble_amp=0.05, wobble_rpm=33, flutter_amp=0.03, flutter_freq=6, flutter_var=2, wobble_bufnum;
+            pitch_random_plus=0, pitch_random_minus=0;
  
             var grain_trig, jitter_sig, buf_dur, pan_sig, buf_pos, pos_sig, sig_l, sig_r, sig_mix, density_mod, dry_sig, granular_sig, base_pitch, grain_pitch, shaped, grain_size;
             var invDenom = 2 / (1 + subharmonics_1 + subharmonics_2 + subharmonics_3 + overtones_1 + overtones_2);
@@ -96,15 +100,11 @@ alloc {
             var positive_intervals = [12, 24], negative_intervals = [-12, -24];
             var rand_val, interval_plus, interval_minus, final_interval;
             var mid, side;
-            var wow = wobble_amp * SinOsc.kr(wobble_rpm/60, mul:0.2);
-            var flutter = flutter_amp * SinOsc.kr(flutter_freq + LFNoise2.kr(flutter_var), mul:0.1);
-            var rate = 1 + (wobble_wet * (wow + flutter));
-            var pw, pr;
 
             density_mod = density * (2**(trig_rnd * density_mod_amt));
             grain_trig = Impulse.kr(density_mod);
             buf_dur = BufDur.kr(buf_l);
-            jitter_sig = TRand.kr(trig: grain_trig, lo: buf_dur.reciprocal.neg * jitter, hi: buf_dur.reciprocal * jitter);
+            jitter_sig = TRand.kr(trig: grain_trig, lo: (speed < 0) * buf_dur.reciprocal.neg * jitter, hi: (speed >= 0) * buf_dur.reciprocal * jitter);
             buf_pos = Phasor.kr(trig: t_reset_pos, rate: buf_dur.reciprocal / ControlRate.ir * speed, resetPos: pos);
             pos_sig = Wrap.kr(Select.kr(freeze, [buf_pos, pos]));
             dry_sig = [PlayBuf.ar(1, buf_l, speed, startPos: pos * BufFrames.kr(buf_l), trigger: t_reset_pos, loop: 1), PlayBuf.ar(1, buf_r, speed, startPos: pos * BufFrames.kr(buf_r), trigger: t_reset_pos, loop: 1)];
@@ -128,18 +128,9 @@ alloc {
                 sig_l + ~grainBufFunc.(buf_l, grain_pitch * mult, grain_size, [overtone_1_vol, overtone_2_vol][i]),
                 sig_r + ~grainBufFunc.(buf_r, grain_pitch * mult, grain_size, [overtone_1_vol, overtone_2_vol][i])]};
 
-            pan_sig = TRand.kr(trig: grain_trig, lo: spread.neg, hi: spread);
-            granular_sig = Balance2.ar(sig_l, sig_r, pan_sig);
-
+            pan_sig = Lag.kr(TRand.kr(trig: grain_trig, lo: 0, hi: spread) * (ToggleFF.kr(grain_trig) * 2 - 1), grain_size * 0.5);
+            granular_sig = Balance2.ar(sig_l, sig_r, pan + pan_sig);
             sig_mix = (dry_sig * (1 - granular_gain)) + (granular_sig * granular_gain);
-
-            shaped = Shaper.ar(bufSine, sig_mix * sine_drive);
-            sig_mix = SelectX.ar(sine_wet, [sig_mix, shaped]);
-
-            pw = Phasor.ar(0, BufRateScale.kr(wobble_bufnum), 0, BufFrames.kr(wobble_bufnum));
-            BufWr.ar(sig_mix, wobble_bufnum, pw);
-            pr = DelayL.ar(Phasor.ar(0, BufRateScale.kr(wobble_bufnum)*rate, 0, BufFrames.kr(wobble_bufnum)), 0.2, 0.2);
-            sig_mix = BufRd.ar(2, wobble_bufnum, pr, interpolation:4);
             
             sig_mix = HPF.ar(sig_mix, Lag.kr(hpf));
             sig_mix = MoogFF.ar(sig_mix, Lag.kr(cutoff), 0);
@@ -148,7 +139,7 @@ alloc {
             high = BHiShelf.ar(sig_mix, 3600, 5, high_gain);
             sig_mix = low + high;
 
-            sig_mix = Compander.ar(sig_mix, sig_mix, 0.4, 1, 0.5, 0.03, 0.3).softclip * 0.65;     
+            sig_mix = Compander.ar(sig_mix, sig_mix, 0.4, 1, 0.5, 0.03, 0.3) * 0.7;     
             sig_mix = Balance2.ar(sig_mix[0], sig_mix[1], pan);
 
             Out.ar(out, sig_mix * gain);
@@ -156,16 +147,15 @@ alloc {
 
         context.server.sync;
 
-        mixBus = Bus.audio(context.server, 2);
-
         voices = Array.fill(nvoices, { arg i;
             Synth.new(\synth, [
                 \out, mixBus.index, 
                 \buf_l, buffersL[i],
                 \buf_r, buffersR[i],
-                \wobble_bufnum, wobbleBuffers[i]
             ]);
         });
+
+        context.server.sync;
 
         SynthDef(\width, {
             arg bus, width=1.0;
@@ -176,20 +166,13 @@ alloc {
             ReplaceOut.ar(bus, sig);
         }).add;  
 
-        SynthDef(\tape, {
+        SynthDef(\monobass, {
             arg bus, mix=0.0;
-            var orig = In.ar(bus, 2);
-            var wet = AnalogTape.ar(orig, 0.9, 0.9, 0.9, 0);
-            ReplaceOut.ar(bus, XFade2.ar(orig, wet, mix * 2 - 1));
-        }).add;
-        
-        SynthDef(\chew, {
-            arg bus, mix=0.0, chew_depth=0.5, chew_freq=0.5, chew_variance=0.5;
-            var orig = In.ar(bus, 2);
-            var wet = AnalogChew.ar(orig, chew_depth, chew_freq, chew_variance);
-            ReplaceOut.ar(bus, XFade2.ar(orig, wet, mix * 2 - 1));
-        }).add;
-        
+            var sig = In.ar(bus, 2);
+            sig = BHiPass.ar(sig,200)+Pan2.ar(BLowPass.ar(sig[0]+sig[1],200));
+            ReplaceOut.ar(bus, sig);
+        }).add;  
+
         SynthDef(\shimmer, {
             arg bus, mix=0.0, lowpass=13000, hipass=1400, pitchv=0.02, fb=0.0, fbDelay=0.15, fbLowpass=10000;
             var orig = In.ar(bus, 2);
@@ -201,7 +184,42 @@ alloc {
             LocalOut.ar(DelayC.ar(pit, 0.5, fbDelay));
             ReplaceOut.ar(bus, XFade2.ar(orig, orig + pit, mix * 2 - 1));
         }).add;
-
+        
+        SynthDef(\sine, {
+            arg bus, mix=0.0, sine_drive;
+            var orig = In.ar(bus, 2);
+            var shaped = Shaper.ar(bufSine, orig * sine_drive);
+            ReplaceOut.ar(bus, XFade2.ar(orig, shaped, mix * 2 - 1));
+        }).add;
+        
+        SynthDef(\tape, {
+            arg bus, mix=0.0;
+            var orig = In.ar(bus, 2);
+            var wet = AnalogTape.ar(orig, 0.9, 0.9, 0.9, 0, 0);
+            ReplaceOut.ar(bus, XFade2.ar(orig, wet, mix * 2 - 1));
+        }).add;
+        
+        SynthDef(\wobble, {
+            arg bus, mix=0.0, wobble_amp=0.05, wobble_rpm=33, flutter_amp=0.03, flutter_freq=6, flutter_var=2, bufnum;
+            var pr, pw, rate, wet, flutter, wow, dry;
+            dry = In.ar(bus, 2);
+            wow = wobble_amp * SinOsc.kr(wobble_rpm/60, mul:0.2);
+            flutter = flutter_amp * SinOsc.kr(flutter_freq + LFNoise2.kr(flutter_var), mul:0.1);
+            rate = 1 + (mix * (wow + flutter));
+            pw = Phasor.ar(0, BufRateScale.kr(bufnum), 0, BufFrames.kr(bufnum));
+            BufWr.ar(dry, bufnum, pw);
+            pr = DelayL.ar(Phasor.ar(0, BufRateScale.kr(bufnum)*rate, 0, BufFrames.kr(bufnum)), 0.2, 0.2);
+            wet = BufRd.ar(2, bufnum, pr, interpolation:4);
+            ReplaceOut.ar(bus, XFade2.ar(dry, wet, mix * 2 - 1));
+        }).add;
+        
+        SynthDef(\chew, {
+            arg bus, mix=0.0, chew_depth=0.5, chew_freq=0.5, chew_variance=0.5;
+            var orig = In.ar(bus, 2);
+            var wet = AnalogChew.ar(orig, chew_depth, chew_freq, chew_variance);
+            ReplaceOut.ar(bus, XFade2.ar(orig, wet, mix * 2 - 1));
+        }).add;
+        
         SynthDef(\jpverb, {
             arg bus, mix=0.0, t60, damp, rsize, earlyDiff, modDepth, modFreq, 
             low, mid, high, lowcut, highcut;
@@ -223,21 +241,37 @@ alloc {
             \width, 1.0
         ], context.xg, 'addToTail');
         
+        monobassEffect = Synth.new(\monobass, [
+            \bus, mixBus.index,
+            \mix, 0.0
+        ], context.xg, 'addToTail');    
+        
+        shimmerEffect = Synth.new(\shimmer, [
+            \bus, mixBus.index,
+            \mix, 0.0
+        ], context.xg, 'addToTail');    
+
+        sineEffect = Synth.new(\sine, [
+            \bus, mixBus.index,
+            \mix, 0.0
+        ], context.xg, 'addToTail');  
+
         tapeEffect = Synth.new(\tape, [
             \bus, mixBus.index,
             \mix, 0.0
         ], context.xg, 'addToTail');  
         
+        wobbleEffect = Synth.new(\wobble, [
+            \bus, mixBus.index,
+            \mix, 0.0,
+            \bufnum, wobbleBuffer
+        ], context.xg, 'addToTail');
+        
         chewEffect = Synth.new(\chew, [
             \bus, mixBus.index,
             \mix, 0.0
-        ], context.xg, 'addToTail');  
+        ], context.xg, 'addToTail');
         
-        shimmerEffect = Synth.new(\shimmer, [
-            \bus, mixBus.index,
-            \mix, 0.0
-        ], context.xg, 'addToTail');     
-     
         jpverbEffect = Synth.new(\jpverb, [
             \bus, mixBus.index,
             \mix, 0.0
@@ -248,37 +282,7 @@ alloc {
             \out, context.out_b.index
         ], context.xg, 'addToTail');   
 
-        this.addCommand("tape_mix", "f", { arg msg;
-            var mix = msg[1];
-            tapeEffect.set(\mix, mix);
-            tapeEffect.run(mix > 0);
-        });
-        
-        this.addCommand("chew_mix", "f", { arg msg;
-            var mix = msg[1];
-            chewEffect.set(\mix, mix);
-            chewEffect.run(mix > 0);
-        });
-        
-        this.addCommand("shimmer_mix", "f", { arg msg;
-            var mix = msg[1];
-            shimmerEffect.set(\mix, mix);
-            shimmerEffect.run(mix > 0);
-        });
-
-        this.addCommand("reverb_mix", "f", { arg msg;
-            var mix = msg[1];
-            jpverbEffect.set(\mix, mix);
-            jpverbEffect.run(mix > 0);
-        });
-        
-        this.addCommand("width", "f", { arg msg;
-            var width = msg[1];
-            widthEffect.set(\width, width);
-            widthEffect.run(width != 1);
-        });
-
-
+        this.addCommand("reverb_mix", "f", { arg msg; var mix = msg[1]; jpverbEffect.set(\mix, mix); jpverbEffect.run(mix > 0); });
         this.addCommand("t60", "f", { arg msg; jpverbEffect.set(\t60, msg[1]); });
         this.addCommand("damp", "f", { arg msg; jpverbEffect.set(\damp, msg[1]); });
         this.addCommand("rsize", "f", { arg msg; jpverbEffect.set(\rsize, msg[1]); });
@@ -290,7 +294,7 @@ alloc {
         this.addCommand("high", "f", { arg msg; jpverbEffect.set(\high, msg[1]); });
         this.addCommand("lowcut", "f", { arg msg; jpverbEffect.set(\lowcut, msg[1]); });
         this.addCommand("highcut", "f", { arg msg; jpverbEffect.set(\highcut, msg[1]); });
-
+        
         this.addCommand("cutoff", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\cutoff, msg[2]); });
         this.addCommand("hpf", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\hpf, msg[2]); });
         
@@ -308,6 +312,7 @@ alloc {
         this.addCommand("pitch_random_plus", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\pitch_random_plus, msg[2]); });
         this.addCommand("pitch_random_minus", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\pitch_random_minus, msg[2]); });
         
+        this.addCommand("shimmer_mix", "f", { arg msg; var mix = msg[1]; shimmerEffect.set(\mix, mix); shimmerEffect.run(mix > 0); });
         this.addCommand("lowpass", "f", { arg msg; shimmerEffect.set(\lowpass, msg[1]); });
         this.addCommand("hipass", "f", { arg msg; shimmerEffect.set(\hipass, msg[1]); });
         this.addCommand("pitchv", "f", { arg msg; shimmerEffect.set(\pitchv, msg[1]); });
@@ -315,6 +320,7 @@ alloc {
         this.addCommand("fbDelay", "f", { arg msg; shimmerEffect.set(\fbDelay, msg[1]); });
 
         this.addCommand("read", "is", { arg msg; this.readBuf(msg[1] - 1, msg[2]); });
+        seek_tasks = Array.fill(nvoices, { arg i; Routine {} });
         this.addCommand("seek", "if", { arg msg; var voice = msg[1] - 1; var pos = msg[2]; seek_tasks[voice].stop; voices[voice].set(\pos, pos); voices[voice].set(\t_reset_pos, 1); voices[voice].set(\freeze, 0); });
         this.addCommand("speed", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\speed, msg[2]); });
         this.addCommand("jitter", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\jitter, msg[2]); });
@@ -324,14 +330,16 @@ alloc {
         this.addCommand("spread", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\spread, msg[2]); });
         this.addCommand("volume", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\gain, msg[2]); });
 
-        this.addCommand("sine_drive", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\sine_drive, msg[2]); });
-        this.addCommand("sine_wet", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\sine_wet, msg[2]); });
-        this.addCommand("wobble_wet", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\wobble_wet, msg[2]); });
-        this.addCommand("wobble_amp", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\wobble_amp, msg[2]); });
-        this.addCommand("wobble_rpm", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\wobble_rpm, msg[2]); });
-        this.addCommand("flutter_amp", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\flutter_amp, msg[2]); });
-        this.addCommand("flutter_freq", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\flutter_freq, msg[2]); });
-        this.addCommand("flutter_var", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\flutter_var, msg[2]); });
+        this.addCommand("tape_mix", "f", { arg msg; var mix = msg[1]; tapeEffect.set(\mix, mix); tapeEffect.run(mix > 0); });
+        this.addCommand("sine_mix", "f", { arg msg; var mix = msg[1]; sineEffect.set(\mix, mix); sineEffect.run(mix > 0); });
+        this.addCommand("sine_drive", "f", { arg msg; sineEffect.set(\sine_drive, msg[1]); });
+        this.addCommand("wobble_mix", "f", { arg msg; var mix = msg[1]; wobbleEffect.set(\mix, mix); wobbleEffect.run(mix > 0); });
+        this.addCommand("wobble_amp", "f", { arg msg; wobbleEffect.set(\wobble_amp, msg[1]); });
+        this.addCommand("wobble_rpm", "f", { arg msg; wobbleEffect.set(\wobble_rpm, msg[1]); });
+        this.addCommand("flutter_amp", "f", { arg msg; wobbleEffect.set(\flutter_amp, msg[1]); });
+        this.addCommand("flutter_freq", "f", { arg msg; wobbleEffect.set(\flutter_freq, msg[1]); });
+        this.addCommand("flutter_var", "f", { arg msg; wobbleEffect.set(\flutter_var, msg[1]); });
+        this.addCommand("chew_mix", "f", { arg msg; var mix = msg[1]; chewEffect.set(\mix, mix); chewEffect.run(mix > 0); });
         this.addCommand("chew_depth", "f", { arg msg; chewEffect.set(\chew_depth, msg[1]); });
         this.addCommand("chew_freq", "f", { arg msg; chewEffect.set(\chew_freq, msg[1]); });
         this.addCommand("chew_variance", "f", { arg msg; chewEffect.set(\chew_variance, msg[1]); });
@@ -339,23 +347,25 @@ alloc {
         this.addCommand("eq_low_gain", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\low_gain, msg[2]); });
         this.addCommand("eq_high_gain", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\high_gain, msg[2]); });
 
-        this.addCommand("effects_order", "i", { arg msg; var order = msg[1]; if (order == 0) {shimmerEffect.moveBefore(jpverbEffect);} {jpverbEffect.moveBefore(shimmerEffect);} });
-
-        seek_tasks = Array.fill(nvoices, { arg i; Routine {} });
+        this.addCommand("width", "f", { arg msg; var width = msg[1]; widthEffect.set(\width, width); widthEffect.run(width != 1); });
+        this.addCommand("monobass_mix", "f", { arg msg; var mix = msg[1]; monobassEffect.set(\mix, mix); monobassEffect.run(mix > 0); });
     }
 
     free {
         voices.do({ arg voice; voice.free; });
         buffersL.do({ arg b; b.free; });
         buffersR.do({ arg b; b.free; });
-        wobbleBuffers.do({ arg b; b.free; });
+        wobbleBuffer.free;
+        mixBus.free;
+        bufSine.free;
         jpverbEffect.free;
         shimmerEffect.free;
         tapeEffect.free;
         chewEffect.free;
         widthEffect.free;
+        monobassEffect.free;
+        sineEffect.free;
+        wobbleEffect.free;
         outputSynth.free;
-        mixBus.free;
-        bufSine.free;
     }
 }

@@ -6,7 +6,7 @@
 --           by: @dddstudio                       
 --
 --                          
---                           v0.28
+--                           v0.29
 -- E1: Master Volume
 -- K1+E2/E3: Volume 1/2
 -- K1+E1: Crossfade Volumes
@@ -166,7 +166,7 @@ local function setup_params()
     params:add_option("lock_granular", "Lock Parameters", {"off", "on"}, 1)
 
 
-    params:add_group("Delay", 6)
+    params:add_group("Delay", 7)
     delay.init()
 
     params:add_group("Reverb", 15)
@@ -198,17 +198,17 @@ local function setup_params()
     
     params:add_group("Tape", 16)
     params:add_option("tape_mix", "Analog Tape", {"off", "on"}, 1) params:set_action("tape_mix", function(x) engine.tape_mix(x-1) end)
-    params:add_control("sine_wet", "Sine Shaper", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("sine_wet", function(value) engine.sine_wet(1, value / 100) engine.sine_wet(2, value / 100) end)
-    params:add_control("sine_drive", "Sine Drive", controlspec.new(0, 5, "lin", 0.01, 1, "")) params:set_action("sine_drive", function(value) engine.sine_drive(1, value) engine.sine_drive(2, value) end)
-    params:add{type = "control", id = "wobble_wet", name = "Wobble Mix", controlspec = controlspec.new(0, 100, "lin", 1, 0, "%"), action = function(value) engine.wobble_wet(1, value/100) engine.wobble_wet(2, value/100) end}
-    params:add{type = "control", id = "wobble_amp", name = "Wow Amount", controlspec = controlspec.new(0, 100, "lin", 1, 20, "%"), action = function(value) engine.wobble_amp(1, value/100) engine.wobble_amp(2, value/100) end}
-    params:add{type = "control", id = "wobble_rpm", name = "Wow Speed", controlspec = controlspec.new(30, 90, "lin", 1, 33, "RPM"), action = function(value) engine.wobble_rpm(1, value) engine.wobble_rpm(2, value) end}
-    params:add{type = "control", id = "flutter_amp", name = "Flutter Amt", controlspec = controlspec.new(0, 100, "lin", 1, 35, "%"), action = function(value) engine.flutter_amp(1, value/100) engine.flutter_amp(2, value/100) end}
-    params:add{type = "control", id = "flutter_freq", name = "Flutter Freq", controlspec = controlspec.new(3, 30, "lin", 0.01, 6, "Hz"), action = function(value) engine.flutter_freq(1, value) engine.flutter_freq(2, value) end}
-    params:add{type = "control", id = "flutter_var", name = "Flutter Var", controlspec = controlspec.new(0.1, 10, "lin", 0.01, 2, "Hz"), action = function(value) engine.flutter_var(1, value) engine.flutter_var(2, value) end}
+    params:add_control("sine_mix", "Sine Shaper", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("sine_mix", function(value) engine.sine_mix(value / 100) end)
+    params:add_control("sine_drive", "Sine Drive", controlspec.new(0, 5, "lin", 0.01, 1, "")) params:set_action("sine_drive", function(value) engine.sine_drive(value) end)
+    params:add{type = "control", id = "wobble_mix", name = "Wobble Mix", controlspec = controlspec.new(0, 100, "lin", 1, 0, "%"), action = function(value) engine.wobble_mix(value/100) end}
+    params:add{type = "control", id = "wobble_amp", name = "Wow Amount", controlspec = controlspec.new(0, 100, "lin", 1, 20, "%"), action = function(value) engine.wobble_amp(value/100) end}
+    params:add{type = "control", id = "wobble_rpm", name = "Wow Speed", controlspec = controlspec.new(30, 90, "lin", 1, 33, "RPM"), action = function(value) engine.wobble_rpm(value) end}
+    params:add{type = "control", id = "flutter_amp", name = "Flutter Amt", controlspec = controlspec.new(0, 100, "lin", 1, 35, "%"), action = function(value) engine.flutter_amp(value/100) end}
+    params:add{type = "control", id = "flutter_freq", name = "Flutter Freq", controlspec = controlspec.new(3, 30, "lin", 0.01, 6, "Hz"), action = function(value) engine.flutter_freq(value) end}
+    params:add{type = "control", id = "flutter_var", name = "Flutter Var", controlspec = controlspec.new(0.1, 10, "lin", 0.01, 2, "Hz"), action = function(value) engine.flutter_var(value) end}
     params:add{type = "control", id = "chew_mix", name = "Chew Mix", controlspec = controlspec.new(0, 100, "lin", 1, 0, "%"), action = function(value) engine.chew_mix(value/100) end}
     params:add{type = "control", id = "chew_depth", name = "Chew Depth", controlspec = controlspec.new(0, 100, "lin", 1, 50, "%"), action = function(value) engine.chew_depth(value/100) end}
-    params:add{type = "control", id = "chew_freq", name = "Chew Freq", controlspec = controlspec.new(0, 100, "lin", 1, 50, "%"), action = function(value) engine.chew_freq(value/100) end}
+    params:add{type = "control", id = "chew_freq", name = "Chew Freq", controlspec = controlspec.new(0, 75, "lin", 1, 50, "%"), action = function(value) engine.chew_freq(value/100) end}
     params:add{type = "control", id = "chew_variance", name = "Chew Variance", controlspec = controlspec.new(0, 100, "lin", 1, 50, "%"), action = function(value) engine.chew_variance(value/100) end}
 
     params:add_separator("    ")
@@ -227,9 +227,9 @@ local function setup_params()
     params:add_separator("     ")
     params:add_option("lock_eq", "Lock Parameters", {"off", "on"}, 1)
     
-    params:add_group("Stereo", 1)
-    params:add_control("Width", "Width", controlspec.new(0, 200, "lin", 0.01, 100, "%"))
-    params:set_action("Width", function(value) engine.width(value / 100) end)
+    params:add_group("Stereo", 2)
+    params:add_control("Width", "Stereo Width", controlspec.new(0, 200, "lin", 0.01, 100, "%")) params:set_action("Width", function(value) engine.width(value / 100) end)
+    params:add_option("monobass_mix", "Mono Bass", {"off", "on"}, 1) params:set_action("monobass_mix", function(x) engine.monobass_mix(x-1) end)
     
 
     params:add_group("LFOs", 117)
@@ -273,9 +273,7 @@ local function setup_params()
       params:add_option(i .. "lock_speed", i .. " lock speed", {"off", "on"}, 1)
     end
 
-    params:add_group("Other", 4)
-    params:add_separator("Effect Order")
-    params:add_option("effects_order", "Routing", {"Shimmer->Reverb", "Reverb->Shimmer"}, 1) params:set_action("effects_order", function(value) engine.effects_order(value - 1) end)
+    params:add_group("Other", 2)
     params:add_separator("Transition Steps")
     params:add_control("steps","Steps",controlspec.new(10,20000,"lin",1,400)) params:set_action("steps", function(value) steps = value end)
     
