@@ -6,7 +6,6 @@ Engine_twins : CroneEngine {
     var tapeEffect;
     var chewEffect;
     var widthEffect;
-    var tascamEffect;
     var outputSynth;
     var <buffersL;
     var <buffersR;
@@ -149,7 +148,7 @@ alloc {
             high = BHiShelf.ar(sig_mix, 3600, 5, high_gain);
             sig_mix = low + high;
 
-            sig_mix = Compander.ar(sig_mix, sig_mix, 0.4, 1, 0.5, 0.03, 0.3).softclip * 0.8;     
+            sig_mix = Compander.ar(sig_mix, sig_mix, 0.4, 1, 0.5, 0.03, 0.3).softclip * 0.65;     
             sig_mix = Balance2.ar(sig_mix[0], sig_mix[1], pan);
 
             Out.ar(out, sig_mix * gain);
@@ -168,20 +167,14 @@ alloc {
             ]);
         });
 
-        SynthDef(\tascam, {
-            arg bus, mix=0.0;
-            var orig = In.ar(bus, 2);
-            var tascam_snd=BHiPass.ar(orig,30);
-			      tascam_snd=BPeakEQ.ar(tascam_snd,freq:60,rq:3,db:4);
-			      tascam_snd=BPeakEQ.ar(tascam_snd,freq:150,rq:1.5,db:4);
-			      tascam_snd=BPeakEQ.ar(tascam_snd,210,db:3);
-			      tascam_snd=BPeakEQ.ar(tascam_snd,250,db:-1.5);
-			      tascam_snd=BPeakEQ.ar(tascam_snd,300,db:3);
-			      tascam_snd=BPeakEQ.ar(tascam_snd,400,db:-3);
-			      tascam_snd=BPeakEQ.ar(tascam_snd,7000,db:1);
-			      tascam_snd=BLowPass.ar(tascam_snd,10000);
-            ReplaceOut.ar(bus, tascam_snd);
-        }).add;
+        SynthDef(\width, {
+            arg bus, width=1.0;
+            var sig = In.ar(bus, 2);
+            var mid = (sig[0] + sig[1]) * 0.5;
+            var side = (sig[0] - sig[1]) * 0.5 * width;
+            sig = [mid + side, mid - side];
+            ReplaceOut.ar(bus, sig);
+        }).add;  
 
         SynthDef(\tape, {
             arg bus, mix=0.0;
@@ -217,15 +210,6 @@ alloc {
             ReplaceOut.ar(bus, XFade2.ar(dry, wet, mix * 2 - 1));
         }).add;
         
-        SynthDef(\width, {
-            arg bus, width=1.0;
-            var sig = In.ar(bus, 2);
-            var mid = (sig[0] + sig[1]) * 0.5;
-            var side = (sig[0] - sig[1]) * 0.5 * width;
-            sig = [mid + side, mid - side];
-            ReplaceOut.ar(bus, sig);
-        }).add;   
-
         SynthDef(\output, {
             arg in, out;
             var sig = In.ar(in, 2);
@@ -234,10 +218,10 @@ alloc {
 
         context.server.sync;
 
-        tascamEffect = Synth.new(\tascam, [
+        widthEffect = Synth.new(\width, [
             \bus, mixBus.index,
-            \mix, 0.0
-        ], context.xg, 'addToTail');  
+            \width, 1.0
+        ], context.xg, 'addToTail');
         
         tapeEffect = Synth.new(\tape, [
             \bus, mixBus.index,
@@ -259,22 +243,10 @@ alloc {
             \mix, 0.0
         ], context.xg, 'addToTail');
         
-        widthEffect = Synth.new(\width, [
-            \bus, mixBus.index,
-            \width, 1.0
-        ], context.xg, 'addToTail');
-
         outputSynth = Synth.new(\output, [
             \in, mixBus.index,
             \out, context.out_b.index
         ], context.xg, 'addToTail');   
-
-
-        this.addCommand("tascam_mix", "f", { arg msg;
-            var mix = msg[1];
-            tascamEffect.set(\mix, mix);
-            tascamEffect.run(mix > 0);
-        });
 
         this.addCommand("tape_mix", "f", { arg msg;
             var mix = msg[1];
@@ -382,7 +354,6 @@ alloc {
         tapeEffect.free;
         chewEffect.free;
         widthEffect.free;
-        tascamEffect.free;
         outputSynth.free;
         mixBus.free;
         bufSine.free;
