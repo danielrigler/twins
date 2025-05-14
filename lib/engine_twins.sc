@@ -22,19 +22,19 @@ Engine_twins : CroneEngine {
         ^super.new(context, doneCallback);
     }
 
-readBuf { arg i, path, normalizeStrength = 0.5;
+readBuf { arg i, path;
     if(buffersL[i].notNil && buffersR[i].notNil, {
         if (File.exists(path), {
             var numChannels = SoundFile.use(path.asString(), { |f| f.numChannels });
             Buffer.readChannel(context.server, path, 0, -1, [0], { |b|
-                b.normalize(normalizeStrength);
+                b.normalize(0.5);
                 voices[i].set(\buf_l, b);
                 buffersL[i].free;
                 buffersL[i] = b;
-                voices[i].set(\pos, 0, \t_reset_pos, 1, \freeze, 0);
+                voices[i].set(\pos, 0, \t_reset_pos, 1);
                 if (numChannels > 1, {
                     Buffer.readChannel(context.server, path, 0, -1, [1], { |b|
-                        b.normalize(normalizeStrength);
+                        b.normalize(0.5);
                         voices[i].set(\buf_r, b);
                         buffersR[i].free;
                         buffersR[i] = b;
@@ -69,7 +69,7 @@ alloc {
             arg out, buf_l, buf_r,
             pos=0, speed=1, jitter=0,
             size=0.1, density=20, density_mod_amt=0, pitch_offset=0, pan=0, spread=0, gain=1,
-            freeze=0, t_reset_pos=0,
+            t_reset_pos=0,
             granular_gain=1,
             pitch_mode=0,
             subharmonics_1=0, 
@@ -106,7 +106,7 @@ alloc {
             buf_dur = BufDur.kr(buf_l);
             jitter_sig = TRand.kr(trig: grain_trig, lo: (speed < 0) * buf_dur.reciprocal.neg * jitter, hi: (speed >= 0) * buf_dur.reciprocal * jitter);
             buf_pos = Phasor.kr(trig: t_reset_pos, rate: buf_dur.reciprocal / ControlRate.ir * speed, resetPos: pos);
-            pos_sig = Wrap.kr(Select.kr(freeze, [buf_pos, pos]));
+            pos_sig = Wrap.kr(buf_pos);
             dry_sig = [PlayBuf.ar(1, buf_l, speed, startPos: pos * BufFrames.kr(buf_l), trigger: t_reset_pos, loop: 1), PlayBuf.ar(1, buf_r, speed, startPos: pos * BufFrames.kr(buf_r), trigger: t_reset_pos, loop: 1)];
             
             rand_val = trig_rnd.range(0, 1);
@@ -128,7 +128,7 @@ alloc {
                 sig_l + ~grainBufFunc.(buf_l, grain_pitch * mult, grain_size, [overtone_1_vol, overtone_2_vol][i]),
                 sig_r + ~grainBufFunc.(buf_r, grain_pitch * mult, grain_size, [overtone_1_vol, overtone_2_vol][i])]};
 
-            pan_sig = Lag.kr(TRand.kr(trig: grain_trig, lo: 0, hi: spread) * (ToggleFF.kr(grain_trig) * 2 - 1), grain_size * 0.5);
+            pan_sig = Lag.kr(TRand.kr(trig: grain_trig, lo: 0, hi: spread) * (ToggleFF.kr(grain_trig) * 2 - 1)) * 1.1;
             granular_sig = Balance2.ar(sig_l, sig_r, pan + pan_sig);
             sig_mix = (dry_sig * (1 - granular_gain)) + (granular_sig * granular_gain);
             
@@ -195,7 +195,7 @@ alloc {
         SynthDef(\tape, {
             arg bus, mix=0.0;
             var orig = In.ar(bus, 2);
-            var wet = AnalogTape.ar(orig, 0.9, 0.9, 0.9, 0, 0);
+            var wet = AnalogTape.ar(orig, 0.9, 0.9, 0.9, 2, 0);
             ReplaceOut.ar(bus, XFade2.ar(orig, wet, mix * 2 - 1));
         }).add;
         
@@ -321,7 +321,7 @@ alloc {
 
         this.addCommand("read", "is", { arg msg; this.readBuf(msg[1] - 1, msg[2]); });
         seek_tasks = Array.fill(nvoices, { arg i; Routine {} });
-        this.addCommand("seek", "if", { arg msg; var voice = msg[1] - 1; var pos = msg[2]; seek_tasks[voice].stop; voices[voice].set(\pos, pos); voices[voice].set(\t_reset_pos, 1); voices[voice].set(\freeze, 0); });
+        this.addCommand("seek", "if", { arg msg; var voice = msg[1] - 1; var pos = msg[2]; seek_tasks[voice].stop; voices[voice].set(\pos, pos); voices[voice].set(\t_reset_pos, 1); });
         this.addCommand("speed", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\speed, msg[2]); });
         this.addCommand("jitter", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\jitter, msg[2]); });
         this.addCommand("size", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\size, msg[2]); });
