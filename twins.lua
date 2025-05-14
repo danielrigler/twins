@@ -6,7 +6,7 @@
 --           by: @dddstudio                       
 --
 --                          
---                           v0.29
+--                           v0.30
 -- E1: Master Volume
 -- K1+E2/E3: Volume 1/2
 -- K1+E1: Crossfade Volumes
@@ -39,7 +39,7 @@ local lfo = include("lib/lfo")
 local randpara = include("lib/randpara")
 delay = include("lib/delay")
 installer_ = include("lib/scinstaller/scinstaller")
-installer = installer_:new{requirements = {"AnalogTape", "AnalogChew"}, 
+installer = installer_:new{requirements = {"AnalogTape", "AnalogChew", "AnalogLoss", "AnalogDegrade"}, 
   zip = "https://github.com/schollz/portedplugins/releases/download/v0.4.6/PortedPlugins-RaspberryPi.zip"}
 engine.name = installer:ready() and 'twins' or nil
 
@@ -186,8 +186,9 @@ local function setup_params()
     params:add_binary("randomize_jpverb", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_jpverb", function() randpara.randomize_jpverb_params(steps) end)
     params:add_option("lock_reverb", "Lock Parameters", {"off", "on"}, 1)
     
-    params:add_group("Shimmer", 8)
+    params:add_group("Shimmer", 9)
     params:add_control("shimmer_mix", "Mix", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("shimmer_mix", function(x) engine.shimmer_mix(x/100) end)
+    params:add_control("shimmer_second_octave", "2nd Octave", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("shimmer_second_octave", function(x) engine.shimmer_second_octave(x/100) end)
     params:add_control("pitchv", "Pitch Variance", controlspec.new(0, 100, "lin", 1, 2, "%")) params:set_action("pitchv", function(x) engine.pitchv(x/100) end)
     params:add_control("lowpass", "LPF", controlspec.new(20, 20000, "lin", 1, 13000, "Hz")) params:set_action("lowpass", function(x) engine.lowpass(x) end)
     params:add_control("hipass", "HPF", controlspec.new(20, 20000, "exp", 1, 1400, "Hz")) params:set_action("hipass", function(x) engine.hipass(x) end)
@@ -196,21 +197,21 @@ local function setup_params()
     params:add_separator("        ")
     params:add_option("lock_shimmer", "Lock Parameters", {"off", "on"}, 1)
     
-    params:add_group("Tape", 16)
+    params:add_group("Tape", 17)
     params:add_option("tape_mix", "Analog Tape", {"off", "on"}, 1) params:set_action("tape_mix", function(x) engine.tape_mix(x-1) end)
     params:add_control("sine_mix", "Sine Shaper", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("sine_mix", function(value) engine.sine_mix(value / 100) end)
     params:add_control("sine_drive", "Sine Drive", controlspec.new(0, 5, "lin", 0.01, 1, "")) params:set_action("sine_drive", function(value) engine.sine_drive(value) end)
-    params:add{type = "control", id = "wobble_mix", name = "Wobble Mix", controlspec = controlspec.new(0, 100, "lin", 1, 0, "%"), action = function(value) engine.wobble_mix(value/100) end}
+    params:add{type = "control", id = "wobble_mix", name = "Wobble", controlspec = controlspec.new(0, 100, "lin", 1, 0, "%"), action = function(value) engine.wobble_mix(value/100) end}
     params:add{type = "control", id = "wobble_amp", name = "Wow Amount", controlspec = controlspec.new(0, 100, "lin", 1, 20, "%"), action = function(value) engine.wobble_amp(value/100) end}
     params:add{type = "control", id = "wobble_rpm", name = "Wow Speed", controlspec = controlspec.new(30, 90, "lin", 1, 33, "RPM"), action = function(value) engine.wobble_rpm(value) end}
     params:add{type = "control", id = "flutter_amp", name = "Flutter Amt", controlspec = controlspec.new(0, 100, "lin", 1, 35, "%"), action = function(value) engine.flutter_amp(value/100) end}
     params:add{type = "control", id = "flutter_freq", name = "Flutter Freq", controlspec = controlspec.new(3, 30, "lin", 0.01, 6, "Hz"), action = function(value) engine.flutter_freq(value) end}
     params:add{type = "control", id = "flutter_var", name = "Flutter Var", controlspec = controlspec.new(0.1, 10, "lin", 0.01, 2, "Hz"), action = function(value) engine.flutter_var(value) end}
-    params:add{type = "control", id = "chew_mix", name = "Chew Mix", controlspec = controlspec.new(0, 100, "lin", 1, 0, "%"), action = function(value) engine.chew_mix(value/100) end}
+    params:add{type = "control", id = "chew_mix", name = "Chew", controlspec = controlspec.new(0, 100, "lin", 1, 0, "%"), action = function(value) engine.chew_mix(value/100) end}
     params:add{type = "control", id = "chew_depth", name = "Chew Depth", controlspec = controlspec.new(0, 100, "lin", 1, 50, "%"), action = function(value) engine.chew_depth(value/100) end}
     params:add{type = "control", id = "chew_freq", name = "Chew Freq", controlspec = controlspec.new(0, 75, "lin", 1, 50, "%"), action = function(value) engine.chew_freq(value/100) end}
     params:add{type = "control", id = "chew_variance", name = "Chew Variance", controlspec = controlspec.new(0, 100, "lin", 1, 50, "%"), action = function(value) engine.chew_variance(value/100) end}
-
+    params:add_control("lossdegrade_mix", "Loss / Degrade", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("lossdegrade_mix", function(value) engine.lossdegrade_mix(value / 100) end)
     params:add_separator("    ")
     params:add_binary("randomize_tape", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_tape", function() randpara.randomize_tape_params(steps) end)
     params:add_option("lock_tape", "Lock Parameters", {"off", "on"}, 1)

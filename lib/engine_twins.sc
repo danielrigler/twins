@@ -9,6 +9,7 @@ Engine_twins : CroneEngine {
     var monobassEffect;
     var sineEffect;
     var wobbleEffect;
+    var lossdegradeEffect;
     var outputSynth;
     var <buffersL;
     var <buffersR;
@@ -133,13 +134,13 @@ alloc {
             sig_mix = (dry_sig * (1 - granular_gain)) + (granular_sig * granular_gain);
             
             sig_mix = HPF.ar(sig_mix, Lag.kr(hpf));
-            sig_mix = MoogFF.ar(sig_mix, Lag.kr(cutoff), 0);
+            sig_mix = LPF.ar(sig_mix, Lag.kr(cutoff));
 
             low = BLowShelf.ar(sig_mix, 200, 5, low_gain);
             high = BHiShelf.ar(sig_mix, 3600, 5, high_gain);
             sig_mix = low + high;
 
-            sig_mix = Compander.ar(sig_mix, sig_mix, 0.4, 1, 0.5, 0.03, 0.3) * 0.7;     
+            sig_mix = Compander.ar(sig_mix, sig_mix, 0.4, 1, 0.5, 0.03, 0.3) * 0.8;     
             sig_mix = Balance2.ar(sig_mix[0], sig_mix[1], pan);
 
             Out.ar(out, sig_mix * gain);
@@ -174,13 +175,14 @@ alloc {
         }).add;  
 
         SynthDef(\shimmer, {
-            arg bus, mix=0.0, lowpass=13000, hipass=1400, pitchv=0.02, fb=0.0, fbDelay=0.15, fbLowpass=10000;
+            arg bus, mix=0.0, lowpass=13000, hipass=1400, pitchv=0.02, fb=0.0, fbDelay=0.15, fbLowpass=10000, second_octave=0;
             var orig = In.ar(bus, 2);
             var hpf = HPF.ar(orig, hipass);
-            var pit = LPF.ar(PitchShift.ar(hpf, 0.17, 2, pitchv, 1, mul:4), lowpass);
+            var pit = LPF.ar(PitchShift.ar(hpf*2, 0.17, 2, pitchv, 1, mul:2), lowpass);
+            var pit2 = LPF.ar(PitchShift.ar(hpf*2, 0.11, 4, pitchv, 1, mul:2 * second_octave), lowpass);
             var fbSig = LocalIn.ar(2);
             var fbProcessed = LPF.ar(fbSig, fbLowpass) * fb;
-            pit = pit + fbProcessed;
+            pit = pit + pit2 + fbProcessed;
             LocalOut.ar(DelayC.ar(pit, 0.5, fbDelay));
             ReplaceOut.ar(bus, XFade2.ar(orig, orig + pit, mix * 2 - 1));
         }).add;
@@ -205,7 +207,7 @@ alloc {
             dry = In.ar(bus, 2);
             wow = wobble_amp * SinOsc.kr(wobble_rpm/60, mul:0.2);
             flutter = flutter_amp * SinOsc.kr(flutter_freq + LFNoise2.kr(flutter_var), mul:0.1);
-            rate = 1 + (mix * (wow + flutter));
+            rate = 1 + (wow + flutter);
             pw = Phasor.ar(0, BufRateScale.kr(bufnum), 0, BufFrames.kr(bufnum));
             BufWr.ar(dry, bufnum, pw);
             pr = DelayL.ar(Phasor.ar(0, BufRateScale.kr(bufnum)*rate, 0, BufFrames.kr(bufnum)), 0.2, 0.2);
@@ -218,6 +220,14 @@ alloc {
             var orig = In.ar(bus, 2);
             var wet = AnalogChew.ar(orig, chew_depth, chew_freq, chew_variance);
             ReplaceOut.ar(bus, XFade2.ar(orig, wet, mix * 2 - 1));
+        }).add;
+
+        SynthDef(\lossdegrade, {
+            arg bus, mix=0.0;
+            var sig = In.ar(bus, 2);
+            var loss = AnalogLoss.ar(sig,0.4,0.38,0.5,1);
+            var degrade = AnalogDegrade.ar(loss,0.3,0.3,0.5,0.5);
+            ReplaceOut.ar(bus, XFade2.ar(sig, degrade, mix * 2 - 1));
         }).add;
         
         SynthDef(\jpverb, {
@@ -244,7 +254,7 @@ alloc {
         monobassEffect = Synth.new(\monobass, [
             \bus, mixBus.index,
             \mix, 0.0
-        ], context.xg, 'addToTail');    
+        ], context.xg, 'addToTail');
         
         shimmerEffect = Synth.new(\shimmer, [
             \bus, mixBus.index,
@@ -271,6 +281,11 @@ alloc {
             \bus, mixBus.index,
             \mix, 0.0
         ], context.xg, 'addToTail');
+
+        lossdegradeEffect = Synth.new(\lossdegrade, [
+            \bus, mixBus.index,
+            \mix, 0.0
+        ], context.xg, 'addToTail');
         
         jpverbEffect = Synth.new(\jpverb, [
             \bus, mixBus.index,
@@ -281,6 +296,8 @@ alloc {
             \in, mixBus.index,
             \out, context.out_b.index
         ], context.xg, 'addToTail');   
+
+        seek_tasks = Array.fill(nvoices, { arg i; Routine {} });
 
         this.addCommand("reverb_mix", "f", { arg msg; var mix = msg[1]; jpverbEffect.set(\mix, mix); jpverbEffect.run(mix > 0); });
         this.addCommand("t60", "f", { arg msg; jpverbEffect.set(\t60, msg[1]); });
@@ -318,9 +335,9 @@ alloc {
         this.addCommand("pitchv", "f", { arg msg; shimmerEffect.set(\pitchv, msg[1]); });
         this.addCommand("fb", "f", { arg msg; shimmerEffect.set(\fb, msg[1]); });
         this.addCommand("fbDelay", "f", { arg msg; shimmerEffect.set(\fbDelay, msg[1]); });
-
+        this.addCommand("shimmer_second_octave", "f", { arg msg; shimmerEffect.set(\second_octave, msg[1]); });
+        
         this.addCommand("read", "is", { arg msg; this.readBuf(msg[1] - 1, msg[2]); });
-        seek_tasks = Array.fill(nvoices, { arg i; Routine {} });
         this.addCommand("seek", "if", { arg msg; var voice = msg[1] - 1; var pos = msg[2]; seek_tasks[voice].stop; voices[voice].set(\pos, pos); voices[voice].set(\t_reset_pos, 1); });
         this.addCommand("speed", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\speed, msg[2]); });
         this.addCommand("jitter", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\jitter, msg[2]); });
@@ -343,7 +360,8 @@ alloc {
         this.addCommand("chew_depth", "f", { arg msg; chewEffect.set(\chew_depth, msg[1]); });
         this.addCommand("chew_freq", "f", { arg msg; chewEffect.set(\chew_freq, msg[1]); });
         this.addCommand("chew_variance", "f", { arg msg; chewEffect.set(\chew_variance, msg[1]); });
-
+        this.addCommand("lossdegrade_mix", "f", { arg msg; var mix = msg[1]; lossdegradeEffect.set(\mix, mix); lossdegradeEffect.run(mix > 0); });
+        
         this.addCommand("eq_low_gain", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\low_gain, msg[2]); });
         this.addCommand("eq_high_gain", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\high_gain, msg[2]); });
 
@@ -364,6 +382,7 @@ alloc {
         chewEffect.free;
         widthEffect.free;
         monobassEffect.free;
+        lossdegradeEffect.free;
         sineEffect.free;
         wobbleEffect.free;
         outputSynth.free;
