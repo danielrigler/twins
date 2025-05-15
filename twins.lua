@@ -165,8 +165,7 @@ local function setup_params()
     params:add_binary("randomize_granular", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_granular", function() randpara.randomize_granular_params(1) randpara.randomize_granular_params(2) end)
     params:add_option("lock_granular", "Lock Parameters", {"off", "on"}, 1)
 
-
-    params:add_group("Delay", 7)
+    params:add_group("Delay", 6)
     delay.init()
 
     params:add_group("Reverb", 15)
@@ -186,9 +185,8 @@ local function setup_params()
     params:add_binary("randomize_jpverb", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_jpverb", function() randpara.randomize_jpverb_params(steps) end)
     params:add_option("lock_reverb", "Lock Parameters", {"off", "on"}, 1)
     
-    params:add_group("Shimmer", 9)
+    params:add_group("Shimmer", 8)
     params:add_control("shimmer_mix", "Mix", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("shimmer_mix", function(x) engine.shimmer_mix(x/100) end)
-    params:add_control("shimmer_second_octave", "2nd Octave", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("shimmer_second_octave", function(x) engine.shimmer_second_octave(x/100) end)
     params:add_control("pitchv", "Pitch Variance", controlspec.new(0, 100, "lin", 1, 2, "%")) params:set_action("pitchv", function(x) engine.pitchv(x/100) end)
     params:add_control("lowpass", "LPF", controlspec.new(20, 20000, "lin", 1, 13000, "Hz")) params:set_action("lowpass", function(x) engine.lowpass(x) end)
     params:add_control("hipass", "HPF", controlspec.new(20, 20000, "exp", 1, 1400, "Hz")) params:set_action("hipass", function(x) engine.hipass(x) end)

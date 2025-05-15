@@ -59,6 +59,8 @@ alloc {
             Buffer.alloc(context.server, context.server.sampleRate * 1);
         });
         
+        context.server.sync;
+        
         bufSine = Buffer.alloc(context.server, 1024 * 16, 1);
         bufSine.sine2([2], [0.5], false);
         wobbleBuffer = Buffer.alloc(context.server, 48000 * 5, 2);
@@ -140,7 +142,7 @@ alloc {
             high = BHiShelf.ar(sig_mix, 3600, 5, high_gain);
             sig_mix = low + high;
 
-            sig_mix = Compander.ar(sig_mix, sig_mix, 0.4, 1, 0.5, 0.03, 0.3) * 0.8;     
+            sig_mix = Compander.ar(sig_mix, sig_mix, 0.4, 1, 0.5, 0.03, 0.3) * 0.7;     
             sig_mix = Balance2.ar(sig_mix[0], sig_mix[1], pan);
 
             Out.ar(out, sig_mix * gain);
@@ -175,14 +177,13 @@ alloc {
         }).add;  
 
         SynthDef(\shimmer, {
-            arg bus, mix=0.0, lowpass=13000, hipass=1400, pitchv=0.02, fb=0.0, fbDelay=0.15, fbLowpass=10000, second_octave=0;
+            arg bus, mix=0.0, lowpass=13000, hipass=1400, pitchv=0.02, fb=0.0, fbDelay=0.15, fbLowpass=10000;
             var orig = In.ar(bus, 2);
             var hpf = HPF.ar(orig, hipass);
             var pit = LPF.ar(PitchShift.ar(hpf*2, 0.17, 2, pitchv, 1, mul:2), lowpass);
-            var pit2 = LPF.ar(PitchShift.ar(hpf*2, 0.11, 4, pitchv, 1, mul:2 * second_octave), lowpass);
             var fbSig = LocalIn.ar(2);
             var fbProcessed = LPF.ar(fbSig, fbLowpass) * fb;
-            pit = pit + pit2 + fbProcessed;
+            pit = pit + fbProcessed;
             LocalOut.ar(DelayC.ar(pit, 0.5, fbDelay));
             ReplaceOut.ar(bus, XFade2.ar(orig, orig + pit, mix * 2 - 1));
         }).add;
@@ -335,7 +336,6 @@ alloc {
         this.addCommand("pitchv", "f", { arg msg; shimmerEffect.set(\pitchv, msg[1]); });
         this.addCommand("fb", "f", { arg msg; shimmerEffect.set(\fb, msg[1]); });
         this.addCommand("fbDelay", "f", { arg msg; shimmerEffect.set(\fbDelay, msg[1]); });
-        this.addCommand("shimmer_second_octave", "f", { arg msg; shimmerEffect.set(\second_octave, msg[1]); });
         
         this.addCommand("read", "is", { arg msg; this.readBuf(msg[1] - 1, msg[2]); });
         this.addCommand("seek", "if", { arg msg; var voice = msg[1] - 1; var pos = msg[2]; seek_tasks[voice].stop; voices[voice].set(\pos, pos); voices[voice].set(\t_reset_pos, 1); });

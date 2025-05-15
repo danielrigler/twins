@@ -136,14 +136,14 @@ local function randomize_tape_params()
   safe_metro_stop(randomize_metro)
     -- TAPE
     if math.random() <= 0.6 then targets["sine_drive"] = 0.75 else targets["sine_drive"] = random_float(0.5, 1) end
-    if math.random() <= 0.75 then targets["wobble_amp"] = 15 else targets["wobble_amp"] = math.random(5, 25) end
-    if math.random() <= 0.75 then targets["wobble_rpm"] = 33 else targets["wobble_rpm"] = math.random(30, 90) end
-    if math.random() <= 0.75 then targets["flutter_amp"] = 35 else targets["flutter_amp"] = math.random(5, 60) end
-    if math.random() <= 0.75 then targets["flutter_freq"] = 6 else targets["flutter_freq"] = math.random(4, 8) end
-    if math.random() <= 0.75 then targets["flutter_var"] = 2 else targets["flutter_var"] = math.random(1, 5) end
-    if math.random() <= 0.75 then targets["chew_depth"] = 50 else targets["chew_depth"] = math.random(20, 80) end
-    if math.random() <= 0.75 then targets["chew_freq"] = 50 else targets["chew_depth"] = math.random(20, 75) end
-    if math.random() <= 0.75 then targets["chew_variance"] = 50 else targets["chew_variance"] = math.random(20, 80) end
+    if math.random() <= 0.5 then targets["wobble_amp"] = 10 else targets["wobble_amp"] = math.random(1, 15) end
+    if math.random() <= 0.5 then targets["wobble_rpm"] = 33 else targets["wobble_rpm"] = math.random(30, 90) end
+    if math.random() <= 0.5 then targets["flutter_amp"] = 15 else targets["flutter_amp"] = math.random(1, 20) end
+    if math.random() <= 0.5 then targets["flutter_freq"] = 6 else targets["flutter_freq"] = math.random(4, 8) end
+    if math.random() <= 0.5 then targets["flutter_var"] = 2 else targets["flutter_var"] = math.random(1, 5) end
+    if math.random() <= 0.5 then targets["chew_depth"] = 50 else targets["chew_depth"] = math.random(20, 80) end
+    if math.random() <= 0.5 then targets["chew_freq"] = 50 else targets["chew_depth"] = math.random(20, 70) end
+    if math.random() <= 0.5 then targets["chew_variance"] = 50 else targets["chew_variance"] = math.random(20, 80) end
    
     for param, _ in pairs(targets) do
         active_interpolations[param] = true
