@@ -16,7 +16,6 @@ Engine_twins : CroneEngine {
     var wobbleBuffer;
     var <voices;
     var mixBus;
-    var <seek_tasks;
     var bufSine;
     
     *new { arg context, doneCallback;
@@ -90,13 +89,12 @@ alloc {
  
             var grain_trig, jitter_sig, buf_dur, pan_sig, buf_pos, pos_sig, sig_l, sig_r, sig_mix, density_mod, dry_sig, granular_sig, base_pitch, grain_pitch, shaped, grain_size;
             var invDenom = 2 / (1 + subharmonics_1 + subharmonics_2 + subharmonics_3 + overtones_1 + overtones_2);
-            var main_vol = 0.5 * invDenom;
             var subharmonic_1_vol = subharmonics_1 * invDenom;
             var subharmonic_2_vol = subharmonics_2 * invDenom;
             var subharmonic_3_vol = subharmonics_3 * invDenom;
             var overtone_1_vol = overtones_1 * invDenom;
             var overtone_2_vol = overtones_2 * invDenom;
-            var lagPitchOffset = Lag.kr(pitch_offset, 1);
+            var lagPitchOffset = Lag.kr(pitch_offset);
             var trig_rnd = LFNoise1.kr(density);
             var grain_direction = Select.kr(pitch_mode, [1, Select.kr(speed.abs > 0.001, [1, speed.sign])]) * ((trig_rnd.range(0,1) < direction_mod).linlin(0,1,1,-1));
             var low, high;
@@ -123,7 +121,7 @@ alloc {
 
             ~grainBufFunc = {|buf, pitch, size, vol| GrainBuf.ar(1, grain_trig, size, buf, pitch * grain_direction, pos_sig + jitter_sig, 2, mul: vol)};
             ~processGrains = { |buf_l, buf_r, pitch, size, vol| [~grainBufFunc.(buf_l, pitch, size, vol),  ~grainBufFunc.(buf_r, pitch, size, vol)]};
-            #sig_l, sig_r = ~processGrains.(buf_l, buf_r, grain_pitch, grain_size, main_vol);
+            #sig_l, sig_r = ~processGrains.(buf_l, buf_r, grain_pitch, grain_size, 0.5 * invDenom);
             [1/2, 1/4, 1/8].do { |div, i| #sig_l, sig_r = [
                 sig_l + ~grainBufFunc.(buf_l, grain_pitch * div, grain_size * 2, [subharmonic_1_vol, subharmonic_2_vol, subharmonic_3_vol][i]),
                 sig_r + ~grainBufFunc.(buf_r, grain_pitch * div, grain_size * 2, [subharmonic_1_vol, subharmonic_2_vol, subharmonic_3_vol][i])]};
@@ -298,8 +296,6 @@ alloc {
             \out, context.out_b.index
         ], context.xg, 'addToTail');   
 
-        seek_tasks = Array.fill(nvoices, { arg i; Routine {} });
-
         this.addCommand("reverb_mix", "f", { arg msg; var mix = msg[1]; jpverbEffect.set(\mix, mix); jpverbEffect.run(mix > 0); });
         this.addCommand("t60", "f", { arg msg; jpverbEffect.set(\t60, msg[1]); });
         this.addCommand("damp", "f", { arg msg; jpverbEffect.set(\damp, msg[1]); });
@@ -338,7 +334,7 @@ alloc {
         this.addCommand("fbDelay", "f", { arg msg; shimmerEffect.set(\fbDelay, msg[1]); });
         
         this.addCommand("read", "is", { arg msg; this.readBuf(msg[1] - 1, msg[2]); });
-        this.addCommand("seek", "if", { arg msg; var voice = msg[1] - 1; var pos = msg[2]; seek_tasks[voice].stop; voices[voice].set(\pos, pos); voices[voice].set(\t_reset_pos, 1); });
+        this.addCommand("seek", "if", { arg msg; var voice = msg[1] - 1; var pos = msg[2]; voices[voice].set(\pos, pos); voices[voice].set(\t_reset_pos, 1); });
         this.addCommand("speed", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\speed, msg[2]); });
         this.addCommand("jitter", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\jitter, msg[2]); });
         this.addCommand("size", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\size, msg[2]); });

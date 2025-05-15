@@ -49,7 +49,11 @@ local key1_pressed, key2_pressed, key3_pressed = false
 local current_mode = "speed"
 local current_filter_mode = "lpf"
 local manual_adjustments = {}
-local MANUAL_ADJUSTMENT_DURATION = 0.5
+local manual_adjustment_duration = 0.5
+local animation_y = -64
+local animation_speed = 300
+local animation_complete = false
+local animation_start_time = nil
 
 local function is_audio_loaded(track_num)
     local file_path = params:get(track_num .. "sample")
@@ -64,6 +68,18 @@ local function setup_ui_metro()
     ui_metro = metro.init()
     ui_metro.time = 1/30
     ui_metro.event = function()
+        if not animation_complete then
+            local current_time = util.time()
+            if not animation_start_time then
+                animation_start_time = current_time
+            end
+            local elapsed = current_time - animation_start_time
+            animation_y = util.clamp(elapsed * animation_speed - 64, -64, 0)
+            if animation_y >= 0 then
+                animation_complete = true
+                animation_y = 0
+            end
+        end
         redraw()
     end
     ui_metro:start()
@@ -699,11 +715,13 @@ function redraw()
     if not installer:ready() then installer:redraw() do return end end
     local current_time = util.time()
     for param, adjustment in pairs(manual_adjustments) do
-        if adjustment and adjustment.time and (current_time - adjustment.time > MANUAL_ADJUSTMENT_DURATION) then
+        if adjustment and adjustment.time and (current_time - adjustment.time > manual_adjustment_duration) then
             adjustment.active = false
         end
     end
     screen.clear()
+    screen.save()
+    screen.translate(0, animation_y)
     local current_mode = current_mode
     local current_filter_mode = current_filter_mode
     local param_rows = {
@@ -758,7 +776,6 @@ function redraw()
         draw_if_locked(92, 2)
     end
     screen.level(6)
-
     -- Draw volume bars
     for i, x in ipairs({0, 127}) do
         local track = tostring(i)
@@ -769,7 +786,6 @@ function redraw()
             screen.fill()
         end
     end
-
     -- Draw pan indicators
     for i, center_start in ipairs({52, 93}) do
         local track = tostring(i)
@@ -781,6 +797,7 @@ function redraw()
             screen.fill()
         end
     end
+    screen.restore()
     screen.update()
 end
 
