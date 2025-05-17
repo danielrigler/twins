@@ -75,14 +75,14 @@ local function randomize_granular_params(i)
   if params:get("lock_granular") == 2 then return end
   safe_metro_stop(randomize_metro)
     -- GRANULAR
-    if math.random() <= 0.6 then targets[i .. "direction_mod"] = 0 else targets[i .. "direction_mod"] = math.random(0, 20) end
-    if math.random() <= 0.4 then targets[i .. "size_variation"] = 0 else targets[i .. "size_variation"] = math.random(0, 40) end
-    if math.random() <= 0.4 then targets[i .. "density_mod_amt"] = 0 else targets[i .. "density_mod_amt"] = math.random(0, 75) end
-    if math.random() <= 0.4 then targets[i .. "subharmonics_1"] = 0 else targets[i .. "subharmonics_1"] = random_float(0, 0.5) end
-    if math.random() <= 0.4 then targets[i .. "subharmonics_2"] = 0 else targets[i .. "subharmonics_2"] = random_float(0, 0.5) end
-    if math.random() <= 0.4 then targets[i .. "subharmonics_3"] = 0 else targets[i .. "subharmonics_3"] = random_float(0, 0.5) end
-    if math.random() <= 0.4 then targets[i .. "overtones_1"] = 0 else targets[i .. "overtones_1"] = random_float(0, 0.6) end
-    if math.random() <= 0.4 then targets[i .. "overtones_2"] = 0 else targets[i .. "overtones_2"] = random_float(0, 0.6) end
+    if math.random() <= 0.5 then targets[i .. "direction_mod"] = 0 else targets[i .. "direction_mod"] = math.random(0, 20) end
+    if math.random() <= 0.5 then targets[i .. "size_variation"] = 0 else targets[i .. "size_variation"] = math.random(0, 40) end
+    if math.random() <= 0.5 then targets[i .. "density_mod_amt"] = 0 else targets[i .. "density_mod_amt"] = math.random(0, 75) end
+    if math.random() <= 0.6 then targets[i .. "subharmonics_1"] = 0 else targets[i .. "subharmonics_1"] = random_float(0, 0.5) end
+    if math.random() <= 0.6 then targets[i .. "subharmonics_2"] = 0 else targets[i .. "subharmonics_2"] = random_float(0, 0.5) end
+    if math.random() <= 0.6 then targets[i .. "subharmonics_3"] = 0 else targets[i .. "subharmonics_3"] = random_float(0, 0.5) end
+    if math.random() <= 0.6 then targets[i .. "overtones_1"] = 0 else targets[i .. "overtones_1"] = random_float(0, 0.6) end
+    if math.random() <= 0.6 then targets[i .. "overtones_2"] = 0 else targets[i .. "overtones_2"] = random_float(0, 0.6) end
 
     for param, _ in pairs(targets) do
         active_interpolations[param] = true
@@ -108,8 +108,8 @@ local function randomize_eq_params(i)
   if params:get("lock_eq") == 2 then return end
   safe_metro_stop(randomize_metro)
     -- EQ
-    if math.random() <= 0.6 then targets["eq_low_gain_" .. i] = 0 else targets["eq_low_gain_" .. i] = random_float(-0.3, 0.2) end
-    if math.random() <= 0.4 then targets["eq_high_gain_" .. i] = 0 else targets["eq_high_gain_" .. i] = random_float(0.1, 0.4) end
+    if math.random() <= 0.5 then targets["eq_low_gain_" .. i] = 0 else targets["eq_low_gain_" .. i] = random_float(-0.3, 0.25) end
+    if math.random() <= 0.4 then targets["eq_high_gain_" .. i] = 0 else targets["eq_high_gain_" .. i] = random_float(0.05, 0.4) end
 
     for param, _ in pairs(targets) do
         active_interpolations[param] = true
@@ -137,7 +137,7 @@ local function randomize_tape_params()
     -- TAPE
     if math.random() <= 0.6 then targets["sine_drive"] = 0.75 else targets["sine_drive"] = random_float(0.5, 1) end
     if math.random() <= 0.5 then targets["wobble_amp"] = 10 else targets["wobble_amp"] = math.random(1, 15) end
-    if math.random() <= 0.5 then targets["wobble_rpm"] = 33 else targets["wobble_rpm"] = math.random(30, 90) end
+    if math.random() <= 0.7 then targets["wobble_rpm"] = 33 else targets["wobble_rpm"] = math.random(30, 90) end
     if math.random() <= 0.5 then targets["flutter_amp"] = 15 else targets["flutter_amp"] = math.random(1, 20) end
     if math.random() <= 0.5 then targets["flutter_freq"] = 6 else targets["flutter_freq"] = math.random(4, 8) end
     if math.random() <= 0.5 then targets["flutter_var"] = 2 else targets["flutter_var"] = math.random(1, 5) end

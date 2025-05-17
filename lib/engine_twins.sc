@@ -27,14 +27,12 @@ readBuf { arg i, path;
         if (File.exists(path), {
             var numChannels = SoundFile.use(path.asString(), { |f| f.numChannels });
             Buffer.readChannel(context.server, path, 0, -1, [0], { |b|
-                b.normalize(0.5);
                 voices[i].set(\buf_l, b);
                 buffersL[i].free;
                 buffersL[i] = b;
                 voices[i].set(\pos, 0, \t_reset_pos, 1);
                 if (numChannels > 1, {
                     Buffer.readChannel(context.server, path, 0, -1, [1], { |b|
-                        b.normalize(0.5);
                         voices[i].set(\buf_r, b);
                         buffersR[i].free;
                         buffersR[i] = b;
@@ -57,8 +55,6 @@ alloc {
         buffersR = Array.fill(nvoices, { arg i;
             Buffer.alloc(context.server, context.server.sampleRate * 1);
         });
-        
-        context.server.sync;
         
         bufSine = Buffer.alloc(context.server, 1024 * 16, 1);
         bufSine.sine2([2], [0.5], false);
@@ -85,6 +81,7 @@ alloc {
             size_variation=0,
             low_gain=0, high_gain=0,
             width=1,
+            smoothbass=2,
             pitch_random_plus=0, pitch_random_minus=0;
  
             var grain_trig, jitter_sig, buf_dur, pan_sig, buf_pos, pos_sig, sig_l, sig_r, sig_mix, density_mod, dry_sig, granular_sig, base_pitch, grain_pitch, shaped, grain_size;
@@ -101,7 +98,8 @@ alloc {
             var positive_intervals = [12, 24], negative_intervals = [-12, -24];
             var rand_val, interval_plus, interval_minus, final_interval;
             var mid, side;
-
+            
+            speed = Lag.kr(speed);
             density_mod = density * (2**(trig_rnd * density_mod_amt));
             grain_trig = Impulse.kr(density_mod);
             buf_dur = BufDur.kr(buf_l);
@@ -109,6 +107,7 @@ alloc {
             buf_pos = Phasor.kr(trig: t_reset_pos, rate: buf_dur.reciprocal / ControlRate.ir * speed, resetPos: pos);
             pos_sig = Wrap.kr(buf_pos);
             dry_sig = [PlayBuf.ar(1, buf_l, speed, startPos: pos * BufFrames.kr(buf_l), trigger: t_reset_pos, loop: 1), PlayBuf.ar(1, buf_r, speed, startPos: pos * BufFrames.kr(buf_r), trigger: t_reset_pos, loop: 1)];
+            dry_sig = Balance2.ar(dry_sig[0], dry_sig[1], pan);
             
             rand_val = trig_rnd.range(0, 1);
             base_pitch = Select.kr(pitch_mode, [speed * lagPitchOffset, lagPitchOffset]);
@@ -117,46 +116,33 @@ alloc {
             final_interval = interval_plus + interval_minus;
 
             grain_pitch = base_pitch * (2 ** (final_interval/12));
-            grain_size = size * (1 + TRand.kr(trig: grain_trig, lo: -1 * size_variation, hi: size_variation));
+            grain_size = size * (1 + TRand.kr(trig: grain_trig, lo: size_variation.neg, hi: size_variation));
 
             ~grainBufFunc = {|buf, pitch, size, vol| GrainBuf.ar(1, grain_trig, size, buf, pitch * grain_direction, pos_sig + jitter_sig, 2, mul: vol)};
             ~processGrains = { |buf_l, buf_r, pitch, size, vol| [~grainBufFunc.(buf_l, pitch, size, vol),  ~grainBufFunc.(buf_r, pitch, size, vol)]};
             #sig_l, sig_r = ~processGrains.(buf_l, buf_r, grain_pitch, grain_size, 0.5 * invDenom);
             [1/2, 1/4, 1/8].do { |div, i| #sig_l, sig_r = [
-                sig_l + ~grainBufFunc.(buf_l, grain_pitch * div, grain_size * 2, [subharmonic_1_vol, subharmonic_2_vol, subharmonic_3_vol][i]),
-                sig_r + ~grainBufFunc.(buf_r, grain_pitch * div, grain_size * 2, [subharmonic_1_vol, subharmonic_2_vol, subharmonic_3_vol][i])]};
+                sig_l + ~grainBufFunc.(buf_l, grain_pitch * div, grain_size * smoothbass, [subharmonic_1_vol, subharmonic_2_vol, subharmonic_3_vol][i]),
+                sig_r + ~grainBufFunc.(buf_r, grain_pitch * div, grain_size * smoothbass, [subharmonic_1_vol, subharmonic_2_vol, subharmonic_3_vol][i])]};
             [2, 4].do { |mult, i| #sig_l, sig_r = [
                 sig_l + ~grainBufFunc.(buf_l, grain_pitch * mult, grain_size, [overtone_1_vol, overtone_2_vol][i]),
                 sig_r + ~grainBufFunc.(buf_r, grain_pitch * mult, grain_size, [overtone_1_vol, overtone_2_vol][i])]};
 
-            pan_sig = Lag.kr(TRand.kr(trig: grain_trig, lo: 0, hi: spread) * (ToggleFF.kr(grain_trig) * 2 - 1)) * 1.1;
+            pan_sig = Lag.kr(TRand.kr(trig: grain_trig, lo: 0, hi: spread)) * (ToggleFF.kr(grain_trig) * 2 - 1);
             granular_sig = Balance2.ar(sig_l, sig_r, pan + pan_sig);
             sig_mix = (dry_sig * (1 - granular_gain)) + (granular_sig * granular_gain);
+            
+            low = BLowShelf.ar(sig_mix, 130, 6, low_gain);
+            high = BHiShelf.ar(sig_mix, 3900, 6, high_gain);
+            sig_mix = low + high;
             
             sig_mix = HPF.ar(sig_mix, Lag.kr(hpf));
             sig_mix = LPF.ar(sig_mix, Lag.kr(cutoff));
 
-            low = BLowShelf.ar(sig_mix, 200, 5, low_gain);
-            high = BHiShelf.ar(sig_mix, 3600, 5, high_gain);
-            sig_mix = low + high;
-
             sig_mix = Compander.ar(sig_mix, sig_mix, 0.4, 1, 0.5, 0.03, 0.3) * 0.7;     
-            sig_mix = Balance2.ar(sig_mix[0], sig_mix[1], pan);
 
             Out.ar(out, sig_mix * gain);
         }).add;
-
-        context.server.sync;
-
-        voices = Array.fill(nvoices, { arg i;
-            Synth.new(\synth, [
-                \out, mixBus.index, 
-                \buf_l, buffersL[i],
-                \buf_r, buffersR[i],
-            ]);
-        });
-
-        context.server.sync;
 
         SynthDef(\width, {
             arg bus, width=1.0;
@@ -201,16 +187,16 @@ alloc {
         }).add;
         
         SynthDef(\wobble, {
-            arg bus, mix=0.0, wobble_amp=0.05, wobble_rpm=33, flutter_amp=0.03, flutter_freq=6, flutter_var=2, bufnum;
+            arg bus, mix=0.0, wobble_amp=0.05, wobble_rpm=33, flutter_amp=0.03, flutter_freq=6, flutter_var=2;
             var pr, pw, rate, wet, flutter, wow, dry;
             dry = In.ar(bus, 2);
             wow = wobble_amp * SinOsc.kr(wobble_rpm/60, mul:0.2);
             flutter = flutter_amp * SinOsc.kr(flutter_freq + LFNoise2.kr(flutter_var), mul:0.1);
             rate = 1 + (wow + flutter);
-            pw = Phasor.ar(0, BufRateScale.kr(bufnum), 0, BufFrames.kr(bufnum));
-            BufWr.ar(dry, bufnum, pw);
-            pr = DelayL.ar(Phasor.ar(0, BufRateScale.kr(bufnum)*rate, 0, BufFrames.kr(bufnum)), 0.2, 0.2);
-            wet = BufRd.ar(2, bufnum, pr, interpolation:4);
+            pw = Phasor.ar(0, BufRateScale.kr(wobbleBuffer), 0, BufFrames.kr(wobbleBuffer));
+            BufWr.ar(dry, wobbleBuffer, pw);
+            pr = DelayL.ar(Phasor.ar(0, BufRateScale.kr(wobbleBuffer)*rate, 0, BufFrames.kr(wobbleBuffer)), 0.2, 0.2);
+            wet = BufRd.ar(2, wobbleBuffer, pr, interpolation:4);
             ReplaceOut.ar(bus, XFade2.ar(dry, wet, mix * 2 - 1));
         }).add;
         
@@ -244,6 +230,14 @@ alloc {
         }).add;
 
         context.server.sync;
+        
+        voices = Array.fill(nvoices, { arg i;
+            Synth.new(\synth, [
+                \out, mixBus.index, 
+                \buf_l, buffersL[i],
+                \buf_r, buffersR[i],
+            ]);
+        });
 
         widthEffect = Synth.new(\width, [
             \bus, mixBus.index,
@@ -273,7 +267,6 @@ alloc {
         wobbleEffect = Synth.new(\wobble, [
             \bus, mixBus.index,
             \mix, 0.0,
-            \bufnum, wobbleBuffer
         ], context.xg, 'addToTail');
         
         chewEffect = Synth.new(\chew, [
@@ -325,6 +318,7 @@ alloc {
         this.addCommand("size_variation", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\size_variation, msg[2]); });
         this.addCommand("pitch_random_plus", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\pitch_random_plus, msg[2]); });
         this.addCommand("pitch_random_minus", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\pitch_random_minus, msg[2]); });
+        this.addCommand("smoothbass", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\smoothbass, msg[2]); });
         
         this.addCommand("shimmer_mix", "f", { arg msg; var mix = msg[1]; shimmerEffect.set(\mix, mix); shimmerEffect.run(mix > 0); });
         this.addCommand("lowpass", "f", { arg msg; shimmerEffect.set(\lowpass, msg[1]); });

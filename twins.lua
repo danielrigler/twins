@@ -96,32 +96,35 @@ local function is_lfo_active_for_param(param_name)
 end
 
 local last_random_sample = nil  
-local function load_random_tape_file(track_num)
-    local tape_dir = _path.tape
-    local files = util.scandir(tape_dir)
-    local audio_files = {}
-    for _, file in ipairs(files) do
-        local ext = string.lower(string.match(file, "%.(.+)$")) or ""
-        if (ext == "wav") or (ext == "aif") or (ext == "aiff") or (ext == "flac") then
-            table.insert(audio_files, tape_dir .. file)
-        end
-    end
-    if #audio_files == 0 then return false end
-    local selected_file
-    if not last_random_sample then
-        selected_file = audio_files[math.random(1, #audio_files)]
-        last_random_sample = selected_file
-    else
-        if math.random() < 0.5 then
-            selected_file = last_random_sample
+local function scan_audio_files(dir)
+    local files = {}
+    for _, entry in ipairs(util.scandir(dir)) do
+        local path = dir .. entry
+        if entry:sub(-1) == "/" then
+            local subdir_files = scan_audio_files(path)
+            for _, f in ipairs(subdir_files) do
+                table.insert(files, f)
+            end
         else
-            selected_file = audio_files[math.random(1, #audio_files)]
-            while selected_file == last_random_sample and #audio_files > 1 do
-                selected_file = audio_files[math.random(1, #audio_files)]
+            local ext = path:lower():match("^.+(%..+)$") or ""
+            if ext == ".wav" or ext == ".aif" or ext == ".aiff" or ext == ".flac" then
+                table.insert(files, path)
             end
         end
-        last_random_sample = nil
     end
+    return files
+end
+
+local function load_random_tape_file(track_num)
+    local audio_files = scan_audio_files(_path.tape)
+    if #audio_files == 0 then return false end
+    local selected_file = last_random_sample and math.random() < 0.5 
+        and last_random_sample 
+        or audio_files[math.random(#audio_files)]
+    while selected_file == last_random_sample and #audio_files > 1 do
+        selected_file = audio_files[math.random(#audio_files)]
+    end
+    last_random_sample = selected_file
     params:set(track_num .. "sample", selected_file)
     return true
 end
@@ -157,21 +160,15 @@ local function setup_params()
 
     params:add_group("Granular", 29)
     for i = 1, 2 do
-      params:add_separator("Sample " ..i)
-      params:add_control(i .. "granular_gain", i .. " Mix", controlspec.new(0, 100, "lin", 1, 100, "%")) 
-      params:set_action(i .. "granular_gain", function(value) engine.granular_gain(i, value / 100) if value < 100 then lfo.clearLFOs(i, "seek") end end)
+      params:add_control(i .. "granular_gain", i .. " Mix", controlspec.new(0, 100, "lin", 1, 100, "%")) params:set_action(i .. "granular_gain", function(value) engine.granular_gain(i, value / 100) if value < 100 then lfo.clearLFOs(i, "seek") end end)
+      params:add_control(i .. "subharmonics_3", i .. " Subharmonics -3oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0)) params:set_action(i .. "subharmonics_3", function(value) engine.subharmonics_3(i, value) end)
+      params:add_control(i .. "subharmonics_2", i .. " Subharmonics -2oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0)) params:set_action(i .. "subharmonics_2", function(value) engine.subharmonics_2(i, value) end)
+      params:add_control(i .. "subharmonics_1", i .. " Subharmonics -1oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0)) params:set_action(i .. "subharmonics_1", function(value) engine.subharmonics_1(i, value) end)
+      params:add_control(i .. "overtones_1", i .. " Overtones +1oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0)) params:set_action(i .. "overtones_1", function(value) engine.overtones_1(i, value) end)
+      params:add_control(i .. "overtones_2", i .. " Overtones +2oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0)) params:set_action(i .. "overtones_2", function(value) engine.overtones_2(i, value) end)
+      params:add_option("smoothbass", i.." Smooth Sub", {"off", "on"}, 1) params:set_action("smoothbass", function(x) local engine_value = (x == 2) and 2.5 or 1 engine.smoothbass(i, engine_value) end)
       params:add_control(i .. "pitch_random_plus", i .. " Octave Variation +", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i .. "pitch_random_plus", function(value) engine.pitch_random_plus(i, value / 100) end)
       params:add_control(i .. "pitch_random_minus", i .. " Octave Variation -", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i .. "pitch_random_minus", function(value) engine.pitch_random_minus(i, value / 100) end)
-      params:add_control(i .. "subharmonics_3", i .. " Subharmonics -3oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0))
-      params:set_action(i .. "subharmonics_3", function(value) engine.subharmonics_3(i, value) end)
-      params:add_control(i .. "subharmonics_2", i .. " Subharmonics -2oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0))
-      params:set_action(i .. "subharmonics_2", function(value) engine.subharmonics_2(i, value) end)
-      params:add_control(i .. "subharmonics_1", i .. " Subharmonics -1oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0))
-      params:set_action(i .. "subharmonics_1", function(value) engine.subharmonics_1(i, value) end)
-      params:add_control(i .. "overtones_1", i .. " Overtones +1oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0))
-      params:set_action(i .. "overtones_1", function(value) engine.overtones_1(i, value) end)
-      params:add_control(i .. "overtones_2", i .. " Overtones +2oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0))
-      params:set_action(i .. "overtones_2", function(value) engine.overtones_2(i, value) end)
       params:add_control(i .. "size_variation", i .. " Size Variation", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i .. "size_variation", function(value) engine.size_variation(i, value / 100) end)
       params:add_control(i .. "density_mod_amt", i .. " Density Mod", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i .. "density_mod_amt", function(value) engine.density_mod_amt(i, value / 100) end)
       params:add_control(i .. "direction_mod", i .. " Reverse", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i .. "direction_mod", function(value) engine.direction_mod(i, value / 100) end)
@@ -232,11 +229,11 @@ local function setup_params()
     
     params:add_group("EQ", 6)
     params:add_control("eq_low_gain_1", "1 Bass", controlspec.new(-1, 1, "lin", 0.01, 0, ""))
-    params:set_action("eq_low_gain_1", function(value) engine.eq_low_gain(1, value*45) end)
+    params:set_action("eq_low_gain_1", function(value) engine.eq_low_gain(1, value*55) end)
     params:add_control("eq_high_gain_1", "1 Treble", controlspec.new(-1, 1, "lin", 0.01, 0, ""))
     params:set_action("eq_high_gain_1", function(value) engine.eq_high_gain(1, value*45) end)
     params:add_control("eq_low_gain_2", "2 Bass", controlspec.new(-1, 1, "lin", 0.01, 0, ""))
-    params:set_action("eq_low_gain_2", function(value) engine.eq_low_gain(2, value*45) end)
+    params:set_action("eq_low_gain_2", function(value) engine.eq_low_gain(2, value*55) end)
     params:add_control("eq_high_gain_2", "2 Treble", controlspec.new(-1, 1, "lin", 0.01, 0, ""))
     params:set_action("eq_high_gain_2", function(value) engine.eq_high_gain(2, value*45) end)
     params:add_separator("     ")
