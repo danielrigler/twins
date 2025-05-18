@@ -29,15 +29,20 @@
 -- @infinitedigits @cfdrake 
 -- @justmat @artfwo @nzimas
 -- @sonoCircuit @graymazes
+-- @Higaru
 --
 -- If you like this,
 -- buy them a beer :)
 --
 --                    Daniel Rigler
 
+delay = include("lib/delay")
 local lfo = include("lib/lfo")
 local randpara = include("lib/randpara")
-delay = include("lib/delay")
+local lfo = include("lib/lfo")
+local Mirror = include("lib/mirror")
+local macro = include("lib/macro")
+macro.set_lfo_reference(lfo)
 installer_ = include("lib/scinstaller/scinstaller")
 installer = installer_:new{requirements = {"AnalogTape", "AnalogChew", "AnalogLoss", "AnalogDegrade"}, 
   zip = "https://github.com/schollz/portedplugins/releases/download/v0.4.6/PortedPlugins-RaspberryPi.zip"}
@@ -51,7 +56,7 @@ local current_filter_mode = "lpf"
 local manual_adjustments = {}
 local manual_adjustment_duration = 0.5
 local animation_y = -64
-local animation_speed = 300
+local animation_speed = 200
 local animation_complete = false
 local animation_start_time = nil
 
@@ -118,9 +123,11 @@ end
 local function load_random_tape_file(track_num)
     local audio_files = scan_audio_files(_path.tape)
     if #audio_files == 0 then return false end
-    local selected_file = last_random_sample and math.random() < 0.5 
-        and last_random_sample 
-        or audio_files[math.random(#audio_files)]
+    if last_random_sample and math.random() < 0.5 and tab.contains(audio_files, last_random_sample) then
+        params:set(track_num .. "sample", last_random_sample)
+        return true
+    end
+    local selected_file = audio_files[math.random(#audio_files)]
     while selected_file == last_random_sample and #audio_files > 1 do
         selected_file = audio_files[math.random(#audio_files)]
     end
@@ -158,7 +165,7 @@ local function setup_params()
     
     params:add_separator("Settings")
 
-    params:add_group("Granular", 29)
+    params:add_group("Granular", 30)
     for i = 1, 2 do
       params:add_control(i .. "granular_gain", i .. " Mix", controlspec.new(0, 100, "lin", 1, 100, "%")) params:set_action(i .. "granular_gain", function(value) engine.granular_gain(i, value / 100) if value < 100 then lfo.clearLFOs(i, "seek") end end)
       params:add_control(i .. "subharmonics_3", i .. " Subharmonics -3oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0)) params:set_action(i .. "subharmonics_3", function(value) engine.subharmonics_3(i, value) end)
@@ -166,13 +173,14 @@ local function setup_params()
       params:add_control(i .. "subharmonics_1", i .. " Subharmonics -1oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0)) params:set_action(i .. "subharmonics_1", function(value) engine.subharmonics_1(i, value) end)
       params:add_control(i .. "overtones_1", i .. " Overtones +1oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0)) params:set_action(i .. "overtones_1", function(value) engine.overtones_1(i, value) end)
       params:add_control(i .. "overtones_2", i .. " Overtones +2oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0)) params:set_action(i .. "overtones_2", function(value) engine.overtones_2(i, value) end)
-      params:add_option("smoothbass", i.." Smooth Sub", {"off", "on"}, 1) params:set_action("smoothbass", function(x) local engine_value = (x == 2) and 2.5 or 1 engine.smoothbass(i, engine_value) end)
+      params:add_option(i.. "smoothbass", i.." Smooth Sub", {"off", "on"}, 1) params:set_action(i.. "smoothbass", function(x) local engine_value = (x == 2) and 2.5 or 1 engine.smoothbass(i, engine_value) end)
       params:add_control(i .. "pitch_random_plus", i .. " Octave Variation +", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i .. "pitch_random_plus", function(value) engine.pitch_random_plus(i, value / 100) end)
       params:add_control(i .. "pitch_random_minus", i .. " Octave Variation -", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i .. "pitch_random_minus", function(value) engine.pitch_random_minus(i, value / 100) end)
       params:add_control(i .. "size_variation", i .. " Size Variation", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i .. "size_variation", function(value) engine.size_variation(i, value / 100) end)
       params:add_control(i .. "density_mod_amt", i .. " Density Mod", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i .. "density_mod_amt", function(value) engine.density_mod_amt(i, value / 100) end)
       params:add_control(i .. "direction_mod", i .. " Reverse", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i .. "direction_mod", function(value) engine.direction_mod(i, value / 100) end)
       params:add_option(i .. "pitch_mode", i .. " Pitch Mode", {"match speed", "independent"}, 2) params:set_action(i .. "pitch_mode", function(value) engine.pitch_mode(i, value - 1) end)
+      params:add_separator("              ")
     end
     params:add_separator(" ")
     params:add_binary("randomize_granular", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_granular", function() randpara.randomize_granular_params(1) randpara.randomize_granular_params(2) end)
@@ -187,20 +195,20 @@ local function setup_params()
     params:add_taper("damp", "Damping", 0, 100, 0, 0, "%") params:set_action("damp", function(value) engine.damp(value/100) end)
     params:add_taper("rsize", "Size", 0.5, 5, 1, 0, "") params:set_action("rsize", function(value) engine.rsize(value) end)
     params:add_taper("earlyDiff", "Early Diffusion", 0, 100, 70.7, 0, "%") params:set_action("earlyDiff", function(value) engine.earlyDiff(value/100) end)
-    params:add_taper("modDepth", "Modulation Depth", 0, 100, 10, 0, "%") params:set_action("modDepth", function(value) engine.modDepth(value/100) end)
-    params:add_taper("modFreq", "Modulation Freq.", 0, 10, 2, 0, "Hz") params:set_action("modFreq", function(value) engine.modFreq(value) end)
-    params:add_taper("low", "Low", 0, 100, 100, 0, "%") params:set_action("low", function(value) engine.low(value/100) end)
-    params:add_taper("mid", "Mid", 0, 100, 100, 0, "%") params:set_action("mid", function(value) engine.mid(value/100) end)
-    params:add_taper("high", "High", 0, 100, 100, 0, "%") params:set_action("high", function(value) engine.high(value/100) end)
-    params:add_taper("lowcut", "Low Cut", 100, 6000, 500, 2, "Hz") params:set_action("lowcut", function(value) engine.lowcut(value) end)
-    params:add_taper("highcut", "High Cut", 1000, 10000, 2000, 2, "Hz") params:set_action("highcut", function(value) engine.highcut(value) end)
+    params:add_taper("modDepth", "Mod Depth", 0, 100, 10, 0, "%") params:set_action("modDepth", function(value) engine.modDepth(value/100) end)
+    params:add_taper("modFreq", "Mod Frequency", 0, 10, 2, 0, "Hz") params:set_action("modFreq", function(value) engine.modFreq(value) end)
+    params:add_control("low", "Low Decay", controlspec.new(0, 1, "lin", 0.01, 1, "x")) params:set_action("low", function(value) engine.low(value) end)
+    params:add_control("mid", "Mid Decay", controlspec.new(0, 1, "lin", 0.01, 1, "x")) params:set_action("mid", function(value) engine.mid(value) end)
+    params:add_control("high", "High Decay", controlspec.new(0, 1, "lin", 0.01, 1, "x")) params:set_action("high", function(value) engine.high(value) end)
+    params:add_taper("lowcut", "Low-Mid X", 100, 6000, 500, 2, "Hz") params:set_action("lowcut", function(value) engine.lowcut(value) end)
+    params:add_taper("highcut", "Mid-High X", 1000, 10000, 2000, 2, "Hz") params:set_action("highcut", function(value) engine.highcut(value) end)
     params:add_separator("  ")
     params:add_binary("randomize_jpverb", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_jpverb", function() randpara.randomize_jpverb_params(steps) end)
     params:add_option("lock_reverb", "Lock Parameters", {"off", "on"}, 1)
     
     params:add_group("Shimmer", 8)
     params:add_control("shimmer_mix", "Mix", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("shimmer_mix", function(x) engine.shimmer_mix(x/100) end)
-    params:add_control("pitchv", "Pitch Variance", controlspec.new(0, 100, "lin", 1, 2, "%")) params:set_action("pitchv", function(x) engine.pitchv(x/100) end)
+    params:add_control("pitchv", "Variance", controlspec.new(0, 100, "lin", 1, 2, "%")) params:set_action("pitchv", function(x) engine.pitchv(x/100) end)
     params:add_control("lowpass", "LPF", controlspec.new(20, 20000, "lin", 1, 13000, "Hz")) params:set_action("lowpass", function(x) engine.lowpass(x) end)
     params:add_control("hipass", "HPF", controlspec.new(20, 20000, "exp", 1, 1400, "Hz")) params:set_action("hipass", function(x) engine.hipass(x) end)
     params:add_control("fbDelay", "Delay", controlspec.new(0.01, 0.5, "lin", 0.01, 0.2, "s")) params:set_action("fbDelay", function(x) engine.fbDelay(x) end)
@@ -211,31 +219,27 @@ local function setup_params()
     params:add_group("Tape", 17)
     params:add_option("tape_mix", "Analog Tape", {"off", "on"}, 1) params:set_action("tape_mix", function(x) engine.tape_mix(x-1) end)
     params:add_control("sine_mix", "Sine Shaper", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("sine_mix", function(value) engine.sine_mix(value / 100) end)
-    params:add_control("sine_drive", "Sine Drive", controlspec.new(0, 5, "lin", 0.01, 1, "")) params:set_action("sine_drive", function(value) engine.sine_drive(value) end)
+    params:add_control("sine_drive", "Sine Drive", controlspec.new(0, 100, "lin", 1, 17, "%")) params:set_action("sine_drive", function(value) engine.sine_drive(value/20) end)
     params:add{type = "control", id = "wobble_mix", name = "Wobble", controlspec = controlspec.new(0, 100, "lin", 1, 0, "%"), action = function(value) engine.wobble_mix(value/100) end}
-    params:add{type = "control", id = "wobble_amp", name = "Wow Amount", controlspec = controlspec.new(0, 100, "lin", 1, 20, "%"), action = function(value) engine.wobble_amp(value/100) end}
+    params:add{type = "control", id = "wobble_amp", name = "Wow Depth", controlspec = controlspec.new(0, 100, "lin", 1, 20, "%"), action = function(value) engine.wobble_amp(value/100) end}
     params:add{type = "control", id = "wobble_rpm", name = "Wow Speed", controlspec = controlspec.new(30, 90, "lin", 1, 33, "RPM"), action = function(value) engine.wobble_rpm(value) end}
-    params:add{type = "control", id = "flutter_amp", name = "Flutter Amt", controlspec = controlspec.new(0, 100, "lin", 1, 35, "%"), action = function(value) engine.flutter_amp(value/100) end}
-    params:add{type = "control", id = "flutter_freq", name = "Flutter Freq", controlspec = controlspec.new(3, 30, "lin", 0.01, 6, "Hz"), action = function(value) engine.flutter_freq(value) end}
-    params:add{type = "control", id = "flutter_var", name = "Flutter Var", controlspec = controlspec.new(0.1, 10, "lin", 0.01, 2, "Hz"), action = function(value) engine.flutter_var(value) end}
+    params:add{type = "control", id = "flutter_amp", name = "Flutter Depth", controlspec = controlspec.new(0, 100, "lin", 1, 35, "%"), action = function(value) engine.flutter_amp(value/100) end}
+    params:add{type = "control", id = "flutter_freq", name = "Flutter Speed", controlspec = controlspec.new(3, 30, "lin", 0.01, 6, "Hz"), action = function(value) engine.flutter_freq(value) end}
+    params:add{type = "control", id = "flutter_var", name = "Flutter Var.", controlspec = controlspec.new(0.1, 10, "lin", 0.01, 2, "Hz"), action = function(value) engine.flutter_var(value) end}
     params:add{type = "control", id = "chew_mix", name = "Chew", controlspec = controlspec.new(0, 100, "lin", 1, 0, "%"), action = function(value) engine.chew_mix(value/100) end}
     params:add{type = "control", id = "chew_depth", name = "Chew Depth", controlspec = controlspec.new(0, 100, "lin", 1, 50, "%"), action = function(value) engine.chew_depth(value/100) end}
-    params:add{type = "control", id = "chew_freq", name = "Chew Freq", controlspec = controlspec.new(0, 75, "lin", 1, 50, "%"), action = function(value) engine.chew_freq(value/100) end}
-    params:add{type = "control", id = "chew_variance", name = "Chew Variance", controlspec = controlspec.new(0, 100, "lin", 1, 50, "%"), action = function(value) engine.chew_variance(value/100) end}
+    params:add{type = "control", id = "chew_freq", name = "Chew Freq.", controlspec = controlspec.new(0, 75, "lin", 1, 50, "%"), action = function(value) engine.chew_freq(value/100) end}
+    params:add{type = "control", id = "chew_variance", name = "Chew Var.", controlspec = controlspec.new(0, 100, "lin", 1, 50, "%"), action = function(value) engine.chew_variance(value/100) end}
     params:add_control("lossdegrade_mix", "Loss / Degrade", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("lossdegrade_mix", function(value) engine.lossdegrade_mix(value / 100) end)
     params:add_separator("    ")
     params:add_binary("randomize_tape", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_tape", function() randpara.randomize_tape_params(steps) end)
     params:add_option("lock_tape", "Lock Parameters", {"off", "on"}, 1)
     
     params:add_group("EQ", 6)
-    params:add_control("eq_low_gain_1", "1 Bass", controlspec.new(-1, 1, "lin", 0.01, 0, ""))
-    params:set_action("eq_low_gain_1", function(value) engine.eq_low_gain(1, value*55) end)
-    params:add_control("eq_high_gain_1", "1 Treble", controlspec.new(-1, 1, "lin", 0.01, 0, ""))
-    params:set_action("eq_high_gain_1", function(value) engine.eq_high_gain(1, value*45) end)
-    params:add_control("eq_low_gain_2", "2 Bass", controlspec.new(-1, 1, "lin", 0.01, 0, ""))
-    params:set_action("eq_low_gain_2", function(value) engine.eq_low_gain(2, value*55) end)
-    params:add_control("eq_high_gain_2", "2 Treble", controlspec.new(-1, 1, "lin", 0.01, 0, ""))
-    params:set_action("eq_high_gain_2", function(value) engine.eq_high_gain(2, value*45) end)
+    for i = 1, 2 do 
+    params:add_control(i.."eq_low_gain", i.." Bass", controlspec.new(-1, 1, "lin", 0.01, 0, "")) params:set_action(i.."eq_low_gain", function(value) engine.eq_low_gain(i, value*55) end)
+    params:add_control(i.."eq_high_gain", i.." Treble", controlspec.new(-1, 1, "lin", 0.01, 0, "")) params:set_action(i.."eq_high_gain", function(value) engine.eq_high_gain(i, value*45) end)
+    end
     params:add_separator("     ")
     params:add_option("lock_eq", "Lock Parameters", {"off", "on"}, 1)
     
@@ -287,12 +291,24 @@ local function setup_params()
 
     params:add_group("Other", 2)
     params:add_separator("Transition Steps")
-    params:add_control("steps","Steps",controlspec.new(10,20000,"lin",1,400)) params:set_action("steps", function(value) steps = value end)
+    params:add_control("steps","Steps",controlspec.new(10,5000,"lin",1,400)) params:set_action("steps", function(value) steps = value end)
+
+    params:add_group("Actions", 6)
+    params:add_separator("Perform")
+    params:add_binary("macro_more", "More+", "trigger", 0)
+    params:set_action("macro_more", function() macro.macro_more() end)
+    params:add_binary("macro_less", "Less-", "trigger", 0)
+    params:set_action("macro_less", function() macro.macro_less() end)
+    params:add_separator("Mirror")
+    params:add_binary("copy_1_to_2", "Copy 1 → 2", "trigger", 0)
+    params:set_action("copy_1_to_2", function() Mirror.copy_voice_params("1", "2", true) Mirror.copy_voice_params("2", "1", true) end)
+    params:add_binary("copy_2_to_1", "Copy 1 ← 2", "trigger", 0)
+    params:set_action("copy_2_to_1", function() Mirror.copy_voice_params("2", "1", true) Mirror.copy_voice_params("1", "2", true) end)
     
     for i = 1, 2 do
       params:add_taper(i .. "volume", i .. " volume", -70, 20, 0, 0, "dB") params:set_action(i .. "volume", function(value) if value == -70 then engine.volume(i, 0) else engine.volume(i, math.pow(10, value / 20)) end end)
       params:add_taper(i .. "pan", i .. " pan", -100, 100, 0, 0, "%") params:set_action(i .. "pan", function(value) engine.pan(i, value / 100)  end)
-      params:add_taper(i .. "speed", i .. " speed", -2, 2, 0.10, 0) params:set_action(i .. "speed", function(value) engine.speed(i, value) end)
+      params:add_taper(i .. "speed", i .. " speed", -2, 2, 0.10, 0) params:set_action(i .. "speed", function(value) if math.abs(value) < 0.01 then engine.speed(i, 0) else engine.speed(i, value) end end)
       params:add_taper(i .. "density", i .. " density", 0.1, 300, 10, 5) params:set_action(i .. "density", function(value) engine.density(i, value) end)
       params:add_control(i .. "pitch", i .. " pitch", controlspec.new(-48, 48, "lin", 1, 0, "st")) params:set_action(i .. "pitch", function(value) engine.pitch_offset(i, math.pow(0.5, -value / 12)) end)
       params:add_taper(i .. "jitter", i .. " jitter", 0, 4999, 250, 3, "ms") params:set_action(i .. "jitter", function(value) engine.jitter(i, value / 1000) end)
@@ -422,6 +438,7 @@ function init() if not installer:ready() then clock.run(function() while true do
     setup_ui_metro()
     setup_params()
     setup_engine()
+    Mirror.init(lfo)
 end
 
 local function wrap_value(value, min, max)
@@ -437,7 +454,7 @@ end
 function enc(n, d)
     if not installer:ready() then return end
     local param_modes = {
-      speed = {param = "speed", delta = 0.5, has_lock = true},
+      speed = {param = "speed", delta = 0.5, has_lock = true, action = function(track, value) if math.abs(value) < 0.01 then engine.speed(track, 0) else engine.speed(track, value) end end},
       seek = {param = "seek", delta = 1, wrap = {0, 100}, engine = true, has_lock = true},
       pan = {param = "pan", delta = 5, has_lock = true},
       lpf = {param = "cutoff", delta = 1, has_lock = false},
@@ -611,10 +628,17 @@ local function format_seek(value)
 end
 
 local function format_speed(speed)
-    if math.abs(speed) < 1 then
-        if speed < -0.008 then return string.format("-.%02dx", math.floor(math.abs(speed) * 100))
-        else return string.format(".%02dx", math.floor(math.abs(speed) * 100)) end
-    else return string.format("%.2fx", speed) end
+    if math.abs(speed) < 0.01 then
+        return ".00x"
+    elseif math.abs(speed) < 1 then
+        if speed < -0.01 then 
+            return string.format("-.%02dx", math.floor(math.abs(speed) * 100))
+        else 
+            return string.format(".%02dx", math.floor(math.abs(speed) * 100))
+        end
+    else 
+        return string.format("%.2fx", speed)
+    end
 end
 
 local function is_param_locked(track_num, param)

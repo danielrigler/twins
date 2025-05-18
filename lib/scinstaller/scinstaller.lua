@@ -24,9 +24,6 @@ end
 
 
 function Installer:split_path(path)
-  -- https://stackoverflow.com/questions/5243179/what-is-the-neatest-way-to-split-out-a-path-name-into-its-components-in-lua
-  -- /home/zns/1.txt returns
-  -- /home/zns/   1.txt   txt
   pathname,filename,ext=string.match(path,"(.-)([^\\/]-%.?([^%.\\/]*))$")
   return pathname,filename,ext
 end

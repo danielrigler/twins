@@ -140,7 +140,7 @@ function lfo.get_parameter_range(param_name)
     ["1seek"] = { 0, 100 }, ["2seek"] = { 0, 100 },
     ["1speed"] = { -0.2, 0.2 }, ["2speed"] = { -0.2, 0.2 },
     ["1jitter"] = { 1, 999 }, ["2jitter"] = { 1, 999 },
-    ["1spread"] = { 0, 70 }, ["2spread"] = { 0, 70 },
+    ["1spread"] = { 0, 100 }, ["2spread"] = { 0, 100 },
     ["1size"] = { 0, 500 }, ["2size"] = { 0, 500 },
     ["1density"] = { 0, 20 }, ["2density"] = { 0, 20 },
     ["1volume"] = { -100, 100 }, ["2volume"] = { -100, 100 },

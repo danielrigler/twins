@@ -59,9 +59,9 @@ local function randomize_jpverb_params(steps)
   if math.random() <= 0.6 then targets["earlyDiff"] = 70.7 else targets["earlyDiff"] = random_float(70.7, 90) end
   if math.random() <= 0.6 then targets["modDepth"] = 10 else targets["modDepth"] = math.random(10, 90) end
   if math.random() <= 0.6 then targets["modFreq"] = 2 else targets["modFreq"] = random_float(1, 3) end
-  if math.random() <= 0.6 then targets["low"] = 100 else targets["low"] = math.random(95, 100) end
-  if math.random() <= 0.6 then targets["mid"] = 100 else targets["mid"] = math.random(90, 100) end
-  if math.random() <= 0.6 then targets["high"] = 100 else targets["high"] = math.random(85, 100) end
+  if math.random() <= 0.6 then targets["low"] = 1 else targets["low"] = random_float(0.9, 1) end
+  if math.random() <= 0.6 then targets["mid"] = 1 else targets["mid"] = random_float(0.8, 1) end
+  if math.random() <= 0.6 then targets["high"] = 1 else targets["high"] = random_float(0.6, 1) end
   if math.random() <= 0.6 then targets["lowcut"] = 500 else targets["lowcut"] = math.random(250, 750) end
   if math.random() <= 0.6 then targets["highcut"] = 2000 else targets["highcut"] = math.random(1500, 3500) end
 
@@ -108,8 +108,8 @@ local function randomize_eq_params(i)
   if params:get("lock_eq") == 2 then return end
   safe_metro_stop(randomize_metro)
     -- EQ
-    if math.random() <= 0.5 then targets["eq_low_gain_" .. i] = 0 else targets["eq_low_gain_" .. i] = random_float(-0.3, 0.25) end
-    if math.random() <= 0.4 then targets["eq_high_gain_" .. i] = 0 else targets["eq_high_gain_" .. i] = random_float(0.05, 0.4) end
+    if math.random() <= 0.5 then targets[i.."eq_low_gain"] = 0 else targets[i.."eq_low_gain"] = random_float(-0.3, 0.25) end
+    if math.random() <= 0.4 then targets[i.."eq_high_gain"] = 0 else targets[i.."eq_high_gain"] = random_float(0.05, 0.4) end
 
     for param, _ in pairs(targets) do
         active_interpolations[param] = true
@@ -135,9 +135,9 @@ local function randomize_tape_params()
   if params:get("lock_tape") == 2 then return end
   safe_metro_stop(randomize_metro)
     -- TAPE
-    if math.random() <= 0.6 then targets["sine_drive"] = 0.75 else targets["sine_drive"] = random_float(0.5, 1) end
+    if math.random() <= 0.6 then targets["sine_drive"] = 17 else targets["sine_drive"] = math.random(0, 35) end
     if math.random() <= 0.5 then targets["wobble_amp"] = 10 else targets["wobble_amp"] = math.random(1, 15) end
-    if math.random() <= 0.7 then targets["wobble_rpm"] = 33 else targets["wobble_rpm"] = math.random(30, 90) end
+    if math.random() <= 0.7 then targets["wobble_rpm"] = 33 else targets["wobble_rpm"] = math.random(30, 70) end
     if math.random() <= 0.5 then targets["flutter_amp"] = 15 else targets["flutter_amp"] = math.random(1, 20) end
     if math.random() <= 0.5 then targets["flutter_freq"] = 6 else targets["flutter_freq"] = math.random(4, 8) end
     if math.random() <= 0.5 then targets["flutter_var"] = 2 else targets["flutter_var"] = math.random(1, 5) end

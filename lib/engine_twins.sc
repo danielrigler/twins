@@ -238,6 +238,8 @@ alloc {
                 \buf_r, buffersR[i],
             ]);
         });
+        
+        context.server.sync;
 
         widthEffect = Synth.new(\width, [
             \bus, mixBus.index,
