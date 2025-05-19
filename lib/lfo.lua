@@ -7,6 +7,7 @@ local options = {
 
 local lfo = {}
 local assigned_params = {}
+local lfo_paused = false  -- New: Global pause state
 
 local function is_locked(target)
   local track, param = string.match(target, "(%d)(%a+)")
@@ -23,6 +24,10 @@ end
 
 function lfo.is_param_locked(track, param_name)
     return params:get(track.."lock_"..param_name) == 2
+end
+
+function lfo.set_pause(paused)
+    lfo_paused = paused
 end
 
 for i = 1, number_of_outputs do
@@ -269,6 +274,21 @@ function lfo.randomize_lfos(track, allow_volume_lfos)
 end
 
 function lfo.process()
+    if lfo_paused then
+        -- When paused, only process volume LFO offsets
+        for i = 1, 16 do
+            if params:get(i.."lfo") == 2 then
+                local target_param = lfo.lfo_targets[params:get(i.."lfo_target")]
+                if target_param and (target_param == "1volume" or target_param == "2volume") then
+                    local min_val, max_val = lfo.get_parameter_range(target_param)
+                    local modulated_value = lfo.scale(params:get(i.."offset"), -1.0, 1.0, min_val, max_val)
+                    params:set(target_param, modulated_value)
+                end
+            end
+        end
+        return
+    end
+    
     for i = 1, 16 do
         if params:get(i.."lfo") == 2 then
             lfo[i].phase = (lfo[i].phase + lfo[i].freq * (1/30)) % 1.0
@@ -330,6 +350,7 @@ function lfo.init()
 end
 
 function lfo.cleanup()
+  lfo_paused = false  -- Reset pause state on cleanup
   if lfo_metro then
     lfo_metro:stop()
   end
