@@ -165,7 +165,7 @@ local function setup_params()
     
     params:add_separator("Settings")
 
-    params:add_group("Granular", 30)
+    params:add_group("Granular", 31)
     for i = 1, 2 do
       params:add_control(i .. "granular_gain", i .. " Mix", controlspec.new(0, 100, "lin", 1, 100, "%")) params:set_action(i .. "granular_gain", function(value) engine.granular_gain(i, value / 100) if value < 100 then lfo.clearLFOs(i, "seek") end end)
       params:add_control(i .. "subharmonics_3", i .. " Subharmonics -3oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0)) params:set_action(i .. "subharmonics_3", function(value) engine.subharmonics_3(i, value) end)
