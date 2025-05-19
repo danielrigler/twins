@@ -165,7 +165,7 @@ local function setup_params()
     
     params:add_separator("Settings")
 
-    params:add_group("Granular", 31)
+    params:add_group("Granular", 30)
     for i = 1, 2 do
       params:add_control(i .. "granular_gain", i .. " Mix", controlspec.new(0, 100, "lin", 1, 100, "%")) params:set_action(i .. "granular_gain", function(value) engine.granular_gain(i, value / 100) if value < 100 then lfo.clearLFOs(i, "seek") end end)
       params:add_control(i .. "subharmonics_3", i .. " Subharmonics -3oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0)) params:set_action(i .. "subharmonics_3", function(value) engine.subharmonics_3(i, value) end)
@@ -180,9 +180,8 @@ local function setup_params()
       params:add_control(i .. "density_mod_amt", i .. " Density Mod", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i .. "density_mod_amt", function(value) engine.density_mod_amt(i, value / 100) end)
       params:add_control(i .. "direction_mod", i .. " Reverse", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i .. "direction_mod", function(value) engine.direction_mod(i, value / 100) end)
       params:add_option(i .. "pitch_mode", i .. " Pitch Mode", {"match speed", "independent"}, 2) params:set_action(i .. "pitch_mode", function(value) engine.pitch_mode(i, value - 1) end)
-      params:add_separator("              ")
+      params:add_separator(" ")
     end
-    params:add_separator(" ")
     params:add_binary("randomize_granular", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_granular", function() randpara.randomize_granular_params(1) randpara.randomize_granular_params(2) end)
     params:add_option("lock_granular", "Lock Parameters", {"off", "on"}, 1)
 
