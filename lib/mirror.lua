@@ -1,4 +1,3 @@
--- mirror.lua
 local Mirror = {}
 
 function Mirror.init(lfo_ref)
