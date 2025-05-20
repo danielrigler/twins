@@ -42,11 +42,12 @@ local lfo = include("lib/lfo")
 local Mirror = include("lib/mirror")
 local macro = include("lib/macro")
 macro.set_lfo_reference(lfo)
+local drymode = include("lib/drymode")
+drymode.set_lfo_reference(lfo)
 installer_ = include("lib/scinstaller/scinstaller")
 installer = installer_:new{requirements = {"AnalogTape", "AnalogChew", "AnalogLoss", "AnalogDegrade"}, 
   zip = "https://github.com/schollz/portedplugins/releases/download/v0.4.6/PortedPlugins-RaspberryPi.zip"}
 engine.name = installer:ready() and 'twins' or nil
-
 local ui_metro
 local randomize_metro = { [1] = nil, [2] = nil }
 local key1_pressed, key2_pressed, key3_pressed = false
@@ -158,12 +159,10 @@ local function setup_params()
             end
         end)
     end
-    
     params:add_binary("randomize_params", "Random Tapes", "trigger", 0) 
     params:set_action("randomize_params", function() load_random_tape_file(1) load_random_tape_file(2) end)
     
     params:add_separator("Settings")
-
     params:add_group("Granular", 31)
     for i = 1, 2 do
       params:add_separator("Sample "..i)
@@ -284,21 +283,18 @@ local function setup_params()
       params:add_option(i.. "lock_speed", i.. " lock speed", {"off", "on"}, 1)
     end
 
+    params:add_group("Symmetry", 3)
+    params:add_binary("copy_1_to_2", "Copy 1 → 2", "trigger", 0) params:set_action("copy_1_to_2", function() Mirror.copy_voice_params("1", "2", true) Mirror.copy_voice_params("2", "1", true) end)
+    params:add_binary("copy_2_to_1", "Copy 1 ← 2", "trigger", 0) params:set_action("copy_2_to_1", function() Mirror.copy_voice_params("2", "1", true) Mirror.copy_voice_params("1", "2", true) end)
+    params:add_option("symmetry", "Symmetry Mode", {"off", "on"}, 1)
+    
+    params:add_group("Actions", 2)
+    params:add_binary("macro_more", "More+", "trigger", 0) params:set_action("macro_more", function() macro.macro_more() end)
+    params:add_binary("macro_less", "Less-", "trigger", 0) params:set_action("macro_less", function() macro.macro_less() end)
+    
     params:add_group("Other", 2)
-    params:add_separator("Transition Steps")
-    params:add_control("steps","Steps",controlspec.new(10,5000,"lin",1,400)) params:set_action("steps", function(value) steps = value end)
-
-    params:add_group("Actions", 6)
-    params:add_separator("Perform")
-    params:add_binary("macro_more", "More+", "trigger", 0)
-    params:set_action("macro_more", function() macro.macro_more() end)
-    params:add_binary("macro_less", "Less-", "trigger", 0)
-    params:set_action("macro_less", function() macro.macro_less() end)
-    params:add_separator("Mirror")
-    params:add_binary("copy_1_to_2", "Copy 1 → 2", "trigger", 0)
-    params:set_action("copy_1_to_2", function() Mirror.copy_voice_params("1", "2", true) Mirror.copy_voice_params("2", "1", true) end)
-    params:add_binary("copy_2_to_1", "Copy 1 ← 2", "trigger", 0)
-    params:set_action("copy_2_to_1", function() Mirror.copy_voice_params("2", "1", true) Mirror.copy_voice_params("1", "2", true) end)
+    params:add_binary("dry_mode", "Dry Mode Toggle", "toggle", 0) params:set_action("dry_mode", function(x) drymode.toggle_dry_mode() end)
+    params:add_option("steps", "Transition Time", {"short", "medium", "long"}, 2) params:set_action("steps", function(value) for i = 1, 2 do if randomize_metro[i] then randomize_metro[i]:stop() end end lfo.cleanup() steps = ({20, 400, 5000})[value] end)
     
     for i = 1, 2 do
       params:add_taper(i.. "volume", i.. " volume", -70, 20, 0, 0, "dB") params:set_action(i.. "volume", function(value) if value == -70 then engine.volume(i, 0) else engine.volume(i, math.pow(10, value / 20)) end end)
@@ -355,9 +351,7 @@ local function randomize(n)
     local base_pitch = params:get(n == 1 and "2pitch" or "1pitch")
     if param_config.pitch.lock and not active_controlled_params[param_config.pitch.param_name] then
         if min_pitch < max_pitch and not is_lfo_active_for_param(param_config.pitch.param_name) then
-            local weighted_intervals = {
-                [-12] = 3, [-7] = 2, [-5] = 2, [-3] = 1,
-                [0] = 2, [3] = 1, [5] = 2, [7] = 2, [12] = 3}
+            local weighted_intervals = {[-12] = 3, [-7] = 2, [-5] = 2, [-3] = 1, [0] = 2, [3] = 1, [5] = 2, [7] = 2, [12] = 3}
             local larger_intervals = {-24, -19, -17, -15, 15, 17, 19, 24}
             local valid_intervals = {}
             local total_weight = 0
@@ -448,18 +442,27 @@ end
 
 function enc(n, d)
     if not installer:ready() then return end
+    local function disable_lfos_for_param(param_name)
+        local base_param = param_name:sub(2)
+        for track = 1, 2 do
+            local full_param = track .. base_param
+            local is_active, lfo_index = is_lfo_active_for_param(full_param)
+            if is_active then
+                params:set(lfo_index .. "lfo", 1)
+            end
+        end
+    end
     local param_modes = {
       speed = {param = "speed", delta = 0.5, has_lock = true, action = function(track, value) if math.abs(value) < 0.01 then engine.speed(track, 0) else engine.speed(track, value) end end},
       seek = {param = "seek", delta = 1, wrap = {0, 100}, engine = true, has_lock = true},
-      pan = {param = "pan", delta = 5, has_lock = true},
+      pan = {param = "pan", delta = 5, has_lock = true, invert = true},
       lpf = {param = "cutoff", delta = 1, has_lock = false},
       hpf = {param = "hpf", delta = 1, has_lock = false},
       jitter = {param = "jitter", delta = 2, has_lock = true},
       size = {param = "size", delta = 2, has_lock = true},
       density = {param = "density", delta = 2, has_lock = true},
       spread = {param = "spread", delta = 2, has_lock = true},
-      pitch = {param = "pitch", delta = 1, has_lock = true}
-    }
+      pitch = {param = "pitch", delta = 1, has_lock = true}}
     local enc_actions = {
         [1] = function()
             local is_active1, lfo_index1 = is_lfo_active_for_param("1volume")
@@ -467,8 +470,6 @@ function enc(n, d)
             local track1_delta = key1_pressed and 3 or 3
             local track2_delta = key1_pressed and -3 or 3
             local lfo_delta = 0.75 * d
-            
-            -- Always allow volume offset adjustment, even when paused
             if is_active1 or is_active2 then
                 if is_active1 and is_active2 then
                     params:delta(lfo_index1 .. "offset", key1_pressed and lfo_delta or lfo_delta)
@@ -488,21 +489,43 @@ function enc(n, d)
         [2] = function()
             local track = 1
             if key1_pressed then 
-                local is_active, lfo_index = is_lfo_active_for_param("1volume")
-                if is_active then params:set(lfo_index .. "lfo", 1) end
+                if params:get("symmetry") == 2 then
+                    disable_lfos_for_param("1volume")
+                else
+                    local is_active, lfo_index = is_lfo_active_for_param("1volume")
+                    if is_active then params:set(lfo_index .. "lfo", 1) end
+                end
                 params:delta("1volume", 3*d)
             else
                 local mode = (current_mode == "lpf" or current_mode == "hpf") and current_filter_mode or current_mode
                 local config = param_modes[mode]
                 local param_name = track .. config.param
                 if not config.has_lock or params:get(track .. "lock_" .. config.param) ~= 2 then
-                    active_controlled_params[param_name] = true
-                    local is_active, lfo_index = is_lfo_active_for_param(param_name)
-                    if is_active then params:set(lfo_index .. "lfo", 1) end
-                    manual_adjustments[param_name] = manual_adjustments[param_name] or {}
-                    manual_adjustments[param_name].active = true
-                    manual_adjustments[param_name].value = params:get(param_name)
-                    manual_adjustments[param_name].time = util.time()
+                    if params:get("symmetry") == 2 then
+                        disable_lfos_for_param(param_name)
+                    else
+                        local is_active, lfo_index = is_lfo_active_for_param(param_name)
+                        if is_active then params:set(lfo_index .. "lfo", 1) end
+                    end
+                        manual_adjustments[param_name] = {active = true, value = params:get(param_name), time = util.time()}
+                    if params:get("symmetry") == 2 then
+                        local other_track = track == 1 and 2 or 1
+                        local other_param_name = other_track .. config.param
+                        
+                        if not config.has_lock or params:get(other_track .. "lock_" .. config.param) ~= 2 then
+                            if config.wrap then
+                                local current_val = params:get(other_param_name)
+                                local delta = config.invert and -d or d
+                                local new_val = wrap_value(current_val + delta, config.wrap[1], config.wrap[2])
+                                params:set(other_param_name, new_val)
+                                if config.engine then engine.seek(other_track, new_val / 100) end
+                            else
+                                local delta = config.invert and -config.delta * d or config.delta * d
+                                params:delta(other_param_name, delta)
+                            end
+                        manual_adjustments[param_name] = {active = true, value = params:get(param_name), time = util.time()}
+                        end
+                    end
                     if config.wrap then
                         local current_val = params:get(param_name)
                         local new_val = wrap_value(current_val + d, config.wrap[1], config.wrap[2])
@@ -517,21 +540,42 @@ function enc(n, d)
         [3] = function()
             local track = 2
             if key1_pressed then 
-                local is_active, lfo_index = is_lfo_active_for_param("2volume")
-                if is_active then params:set(lfo_index .. "lfo", 1) end
+                if params:get("symmetry") == 2 then
+                    disable_lfos_for_param("2volume")
+                else
+                    local is_active, lfo_index = is_lfo_active_for_param("2volume")
+                    if is_active then params:set(lfo_index .. "lfo", 1) end
+                end
                 params:delta("2volume", 3*d)
             else
                 local mode = (current_mode == "lpf" or current_mode == "hpf") and current_filter_mode or current_mode
                 local config = param_modes[mode]
                 local param_name = track .. config.param
                 if not config.has_lock or params:get(track .. "lock_" .. config.param) ~= 2 then
-                    active_controlled_params[param_name] = true
-                    local is_active, lfo_index = is_lfo_active_for_param(param_name)
-                    if is_active then params:set(lfo_index .. "lfo", 1) end
-                    manual_adjustments[param_name] = manual_adjustments[param_name] or {}
-                    manual_adjustments[param_name].active = true
-                    manual_adjustments[param_name].value = params:get(param_name)
-                    manual_adjustments[param_name].time = util.time()
+                    if params:get("symmetry") == 2 then
+                        disable_lfos_for_param(param_name)
+                    else
+                        local is_active, lfo_index = is_lfo_active_for_param(param_name)
+                        if is_active then params:set(lfo_index .. "lfo", 1) end
+                    end
+                    manual_adjustments[param_name] = {active = true, value = params:get(param_name), time = util.time()}
+                    if params:get("symmetry") == 2 then
+                        local other_track = track == 1 and 2 or 1
+                        local other_param_name = other_track .. config.param
+                        if not config.has_lock or params:get(other_track .. "lock_" .. config.param) ~= 2 then
+                            if config.wrap then
+                                local current_val = params:get(other_param_name)
+                                local delta = config.invert and -d or d
+                                local new_val = wrap_value(current_val + delta, config.wrap[1], config.wrap[2])
+                                params:set(other_param_name, new_val)
+                                if config.engine then engine.seek(other_track, new_val / 100) end
+                            else
+                                local delta = config.invert and -config.delta * d or config.delta * d
+                                params:delta(other_param_name, delta)
+                            end
+                        manual_adjustments[param_name] = {active = true, value = params:get(param_name), time = util.time()}
+                        end
+                    end
                     if config.wrap then
                         local current_val = params:get(param_name)
                         local new_val = wrap_value(current_val + d, config.wrap[1], config.wrap[2])
