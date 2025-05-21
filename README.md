@@ -15,6 +15,7 @@ Inspired by @cfd90's Twine and contains influence and code from a lot of norns u
 * Smooth transition interpolation
 * Freely assignable LFOs with randomization
 * Navigation with parameter locking
+* Symmetry / mirroring
 * High-pass and low-pass filters
 +lots of other usability tweaks and features.
 
@@ -35,7 +36,7 @@ _some features might require a pi4 based unit._
 ### Discussion
 **[FORUM](https://llllllll.co/t/twins/71052)**
 ### Download
-**v0.29**
+**v0.30**
 install from Maiden Project Manager, or from Maiden REPL:
 ```
 ;install https://github.com/danielrigler/twins
@@ -43,6 +44,7 @@ install from Maiden Project Manager, or from Maiden REPL:
 do not forget to restart.
 
 ### Version history
+* **v0.30** - Symmetry, dry mode, actions (less+/more-, LFO pause)
 * **v0.29** - Optimizations and tweaks.
 * **v0.28** - Shimmer update. 
 * **v0.26** - Swith to JPverb. Locking improvements. 
