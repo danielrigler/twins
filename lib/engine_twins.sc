@@ -137,7 +137,7 @@ alloc {
             sig_mix = low + high;
             
             sig_mix = HPF.ar(sig_mix, Lag.kr(hpf));
-            sig_mix = LPF.ar(sig_mix, Lag.kr(cutoff));
+            sig_mix = MoogFF.ar(sig_mix, Lag.kr(cutoff), 0.1);
 
             sig_mix = Compander.ar(sig_mix, sig_mix, 0.4, 1, 0.5, 0.03, 0.3) * 0.7;     
 

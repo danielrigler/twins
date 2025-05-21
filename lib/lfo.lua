@@ -171,12 +171,11 @@ function lfo.assign_to_current_row(current_mode, current_filter_mode)
 
     local symmetry = params:get("symmetry") == 1
     
-    -- Clear LFOs for this parameter (both tracks in symmetry mode)
+    -- Clear existing LFOs for this parameter
     lfo.clearLFOs("1", param_name)
-    if symmetry then
-        lfo.clearLFOs("2", param_name)
-    end
+    lfo.clearLFOs("2", param_name)
     
+    -- Get available LFO slots
     local available_slots = {}
     for i = 1, 16 do
         if params:get(i.."lfo") == 1 then
@@ -184,38 +183,57 @@ function lfo.assign_to_current_row(current_mode, current_filter_mode)
         end
     end
     
-    -- Assign to track 1 if not locked
-    if not lfo.is_param_locked("1", param_name) and #available_slots > 0 then
-        local slot = table.remove(available_slots, 1)
-        randomize_lfo(slot, "1"..param_name)
-        
-        -- In symmetry mode, assign same LFO to track 2 if not locked
-        if symmetry and not lfo.is_param_locked("2", param_name) and #available_slots > 0 then
+    -- Assign LFOs with symmetry handling
+    if symmetry then
+        -- Try to assign to both voices with phase relationship
+        if not lfo.is_param_locked("1", param_name) and 
+           not lfo.is_param_locked("2", param_name) and 
+           #available_slots >= 2 then
+            
+            local slot1 = table.remove(available_slots, 1)
             local slot2 = table.remove(available_slots, 1)
+            
+            -- Assign to voice 1
+            randomize_lfo(slot1, "1"..param_name)
+            
+            -- Assign to voice 2 with mirrored settings
             randomize_lfo(slot2, "2"..param_name)
-            -- Copy LFO settings and sync phase
-            lfo[slot2].freq = lfo[slot].freq
-            lfo[slot2].waveform = lfo[slot].waveform
-            lfo[slot2].depth = lfo[slot].depth
-            lfo[slot2].offset = lfo[slot].offset
-            lfo[slot2].phase = lfo[slot].phase -- Sync phase
+            
+            -- Sync settings between voices
+            lfo[slot2].freq = lfo[slot1].freq
+            lfo[slot2].waveform = lfo[slot1].waveform
+            lfo[slot2].depth = lfo[slot1].depth
+            
+            -- Special phase handling for pan (invert phase)
+            if param_name == "pan" then
+                lfo[slot2].phase = (lfo[slot1].phase + 0.5) % 1.0  -- 180° phase shift
+                lfo[slot2].offset = -lfo[slot1].offset  -- Invert offset
+                params:set(slot2.."offset", -params:get(slot1.."offset"))
+            else
+                -- For other parameters, keep identical phase
+                lfo[slot2].phase = lfo[slot1].phase
+                lfo[slot2].offset = lfo[slot1].offset
+                params:set(slot2.."offset", params:get(slot1.."offset"))
+            end
+            
+            -- Update other parameters
+            params:set(slot2.."lfo_freq", params:get(slot1.."lfo_freq"))
+            params:set(slot2.."lfo_shape", params:get(slot1.."lfo_shape"))
+            params:set(slot2.."lfo_depth", params:get(slot1.."lfo_depth"))
+            
+            return  -- Done with symmetry assignment
         end
     end
     
-    -- If symmetry is on but track 1 was locked, try track 2
-    if symmetry and not lfo.is_param_locked("2", param_name) and #available_slots > 0 and lfo.is_param_locked("1", param_name) then
+    -- Fallback to individual assignments if symmetry isn't enabled or couldn't be applied
+    if not lfo.is_param_locked("1", param_name) and #available_slots > 0 then
+        local slot = table.remove(available_slots, 1)
+        randomize_lfo(slot, "1"..param_name)
+    end
+    
+    if not lfo.is_param_locked("2", param_name) and #available_slots > 0 then
         local slot = table.remove(available_slots, 1)
         randomize_lfo(slot, "2"..param_name)
-        -- Copy LFO settings to track 1 if possible
-        if not lfo.is_param_locked("1", param_name) and #available_slots > 0 then
-            local slot2 = table.remove(available_slots, 1)
-            randomize_lfo(slot2, "1"..param_name)
-            lfo[slot2].freq = lfo[slot].freq
-            lfo[slot2].waveform = lfo[slot].waveform
-            lfo[slot2].depth = lfo[slot].depth
-            lfo[slot2].offset = lfo[slot].offset
-            lfo[slot2].phase = lfo[slot].phase -- Sync phase
-        end
     end
 end
 

@@ -255,7 +255,7 @@ local function setup_params()
     params:add_group("LFOs", 118)
     params:add_binary("randomize_lfos", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_lfos", function() lfo.clearLFOs() lfo.randomize_lfos("1", params:get("allow_volume_lfos") == 2)  lfo.randomize_lfos("2", params:get("allow_volume_lfos") == 2) if randomize_metro[1] then randomize_metro[1]:stop() end if randomize_metro[2] then randomize_metro[2]:stop() end end)
     params:add_control("global_lfo_freq_scale", "Freq Scale", controlspec.new(0.1, 10, "exp", 0.01, 1.0, "x"))
-params:set_action("global_lfo_freq_scale", function(value)
+    params:set_action("global_lfo_freq_scale", function(value)
     -- Store current phase relationships
     local phase_ref = {}
     for i = 1, 16 do
@@ -270,7 +270,7 @@ params:set_action("global_lfo_freq_scale", function(value)
         -- Restore phase relationship
         lfo[i].phase = phase_ref[i]
     end
-end)
+    end)
     params:add_binary("lfo.assign_to_current_row", "Assign to Selection", "trigger", 0) params:set_action("lfo.assign_to_current_row", function() lfo.assign_to_current_row(current_mode, current_filter_mode) end)
     params:add_binary("lfo_pause", "Pause LFOs", "toggle", 0) params:set_action("lfo_pause", function(value) lfo.set_pause(value == 1) end)
     params:add_binary("ClearLFOs", "Clear All LFOs", "trigger", 0) params:set_action("ClearLFOs", function() lfo.clearLFOs() end)
