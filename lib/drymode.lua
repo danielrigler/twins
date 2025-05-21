@@ -68,9 +68,9 @@ function drymode.toggle_dry_mode()
                         offset = params:get(i.."offset"),
                         freq = params:get(i.."lfo_freq")
                     }
-                    params:set(i.."lfo", 1) -- Turn off LFO
+                    params:set(i.."lfo", 1) -- Turn off 
                 elseif target and (target == "1volume" or target == "2volume") then
-                    prev_settings.pan_lfos[i] = {
+                    prev_settings.volume_lfos[i] = {
                         state = params:get(i.."lfo"),
                         target_index = params:get(i.."lfo_target"),
                         shape = params:get(i.."lfo_shape"),
@@ -78,7 +78,7 @@ function drymode.toggle_dry_mode()
                         offset = params:get(i.."offset"),
                         freq = params:get(i.."lfo_freq")
                     }
-                    params:set(i.."lfo", 1) -- Turn off LFO                    
+                    params:set(i.."lfo", 1) -- Turn off                     
                 end
             end
         end
@@ -160,6 +160,7 @@ function drymode.toggle_dry_mode()
             restore_lfos(prev_settings.speed_lfos)
             restore_lfos(prev_settings.seek_lfos)
             restore_lfos(prev_settings.pan_lfos)
+            restore_lfos(prev_settings.volume_lfos)
         end
     end
 end
