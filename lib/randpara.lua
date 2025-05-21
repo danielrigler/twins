@@ -1,3 +1,5 @@
+local symmetry_enabled = false
+
 local function random_float(l, h)
     return l + math.random() * (h - l)
 end
@@ -33,6 +35,23 @@ local function start_interpolation(steps)
                 local current_value = params:get(param)
                 local new_value = interpolate(current_value, target, factor)
                 params:set(param, new_value)
+
+                -- Handle symmetric parameter if symmetry is enabled
+                if symmetry_enabled then
+                    local mirrored_param = param:gsub("^(%d)(.*)", function(num, rest)
+                        return (tonumber(num) % 2) + 1 .. rest
+                    end)
+                    if params.lookup[mirrored_param] then
+                        local mirrored_target = targets[mirrored_param] or target
+                        local mirrored_current = params:get(mirrored_param)
+                        local mirrored_new = interpolate(mirrored_current, mirrored_target, factor)
+                        params:set(mirrored_param, mirrored_new)
+                        
+                        if math.abs(mirrored_new - mirrored_target) > 0.00 then
+                            all_done = false
+                        end
+                    end
+                end
 
                 if math.abs(new_value - target) > 0.00 then
                     all_done = false
@@ -154,20 +173,62 @@ end
 local function randomize_params(steps, track_num)
     targets = {}
     active_interpolations = {}
-    randomize_tape_params()
-    randomize_delay_params()
-    randomize_jpverb_params()
-    randomize_shimmer_params()
-    randomize_eq_params(track_num)
-    randomize_granular_params(track_num)
+    symmetry_enabled = params:get("symmetry") == 1
+    
+    -- Store which track we're randomizing first
+    local primary_track = track_num
+    
+    -- For each randomization function, if symmetry is enabled, we'll set targets for both tracks
+    if symmetry_enabled then
+        -- For each parameter group, we'll randomize both tracks with mirrored values
+        randomize_tape_params()
+        randomize_delay_params()
+        randomize_jpverb_params()
+        randomize_shimmer_params()
+        randomize_eq_params(1)
+        randomize_eq_params(2)
+        randomize_granular_params(1)
+        randomize_granular_params(2)
+    else
+        -- Original behavior when symmetry is off
+        randomize_tape_params()
+        randomize_delay_params()
+        randomize_jpverb_params()
+        randomize_shimmer_params()
+        randomize_eq_params(track_num)
+        randomize_granular_params(track_num)
+    end
+    
+    -- If symmetry is enabled, mirror the targets from the primary track to the other track
+    if symmetry_enabled then
+        local new_targets = {}
+        for param, target in pairs(targets) do
+            -- Only process parameters from the primary track
+            if param:sub(1,1) == tostring(primary_track) then
+                local mirrored_param = param:gsub("^(%d)(.*)", function(num, rest)
+                    return (tonumber(num) % 2) + 1 .. rest
+                end)
+                if params.lookup[mirrored_param] then
+                    new_targets[mirrored_param] = target
+                    active_interpolations[mirrored_param] = true
+                end
+            end
+        end
+        -- Merge the mirrored targets with the original targets
+        for param, target in pairs(new_targets) do
+            targets[param] = target
+        end
+    end
+    
+    start_interpolation(steps)
 end
-
 
 return {
     randomize_params = randomize_params,
     randomize_jpverb_params = randomize_jpverb_params,
     randomize_granular_params = randomize_granular_params,
     randomize_delay_params = randomize_delay_params,
-    randomize_voice_params = randomize_voice_params,
-    randomize_tape_params = randomize_tape_params
+    randomize_shimmer_params = randomize_shimmer_params,
+    randomize_tape_params = randomize_tape_params,
+    symmetry_enabled = symmetry_enabled
 }

@@ -7,7 +7,7 @@ local options = {
 
 local lfo = {}
 local assigned_params = {}
-local lfo_paused = false  -- New: Global pause state
+local lfo_paused = false
 
 local function is_locked(target)
   local track, param = string.match(target, "(%d)(%a+)")
@@ -169,21 +169,53 @@ function lfo.assign_to_current_row(current_mode, current_filter_mode)
     local param_name = param_map[current_mode]
     if not param_name then return end
 
+    local symmetry = params:get("symmetry") == 1
+    
+    -- Clear LFOs for this parameter (both tracks in symmetry mode)
     lfo.clearLFOs("1", param_name)
-    lfo.clearLFOs("2", param_name)
+    if symmetry then
+        lfo.clearLFOs("2", param_name)
+    end
+    
     local available_slots = {}
     for i = 1, 16 do
         if params:get(i.."lfo") == 1 then
             table.insert(available_slots, i)
         end
     end
+    
+    -- Assign to track 1 if not locked
     if not lfo.is_param_locked("1", param_name) and #available_slots > 0 then
         local slot = table.remove(available_slots, 1)
         randomize_lfo(slot, "1"..param_name)
+        
+        -- In symmetry mode, assign same LFO to track 2 if not locked
+        if symmetry and not lfo.is_param_locked("2", param_name) and #available_slots > 0 then
+            local slot2 = table.remove(available_slots, 1)
+            randomize_lfo(slot2, "2"..param_name)
+            -- Copy LFO settings and sync phase
+            lfo[slot2].freq = lfo[slot].freq
+            lfo[slot2].waveform = lfo[slot].waveform
+            lfo[slot2].depth = lfo[slot].depth
+            lfo[slot2].offset = lfo[slot].offset
+            lfo[slot2].phase = lfo[slot].phase -- Sync phase
+        end
     end
-    if not lfo.is_param_locked("2", param_name) and #available_slots > 0 then
+    
+    -- If symmetry is on but track 1 was locked, try track 2
+    if symmetry and not lfo.is_param_locked("2", param_name) and #available_slots > 0 and lfo.is_param_locked("1", param_name) then
         local slot = table.remove(available_slots, 1)
         randomize_lfo(slot, "2"..param_name)
+        -- Copy LFO settings to track 1 if possible
+        if not lfo.is_param_locked("1", param_name) and #available_slots > 0 then
+            local slot2 = table.remove(available_slots, 1)
+            randomize_lfo(slot2, "1"..param_name)
+            lfo[slot2].freq = lfo[slot].freq
+            lfo[slot2].waveform = lfo[slot].waveform
+            lfo[slot2].depth = lfo[slot].depth
+            lfo[slot2].offset = lfo[slot].offset
+            lfo[slot2].phase = lfo[slot].phase -- Sync phase
+        end
     end
 end
 
@@ -231,44 +263,100 @@ end
 
 function lfo.randomize_lfos(track, allow_volume_lfos)
     local other_track = track == "1" and "2" or "1"
-    local track_pattern = "^"..track
+    local symmetry = params:get("symmetry") == 1
+    if math.random() <= 0.5 then params:set("global_lfo_freq_scale", 0.75) else params:set("global_lfo_freq_scale", random_float(0.1, 1.8)) end
     
-    for i=1, 2 do
-      if math.random() <= 0.5 then params:set("global_lfo_freq_scale", 0.75) else params:set("global_lfo_freq_scale", random_float(0.1, 1.8)) end
-    end
-    
+    -- Clear existing LFOs for both tracks in symmetry mode
     for i = 1, 16 do
         local target_param = lfo.lfo_targets[params:get(i.."lfo_target")]
-        if target_param and target_param:match(track_pattern) and not is_locked(target_param) then
-            params:set(i.."lfo", 1)
-            params:set(i.."lfo_target", 1)
-            assigned_params[target_param] = nil
-        end
-    end
-    local available_targets = {}
-    for target, ranges in pairs(lfo.target_ranges) do
-        if (not target:match("volume$") or allow_volume_lfos) and target:match(track_pattern) and not is_locked(target) then
-            if target:match("seek$") then
-                local t_num = target:sub(1,1)
-                if params:get(t_num.."granular_gain") >= 100 and math.random() < ranges.chance then
-                    table.insert(available_targets, target)
-                end
-            elseif math.random() < ranges.chance then
-                table.insert(available_targets, target)
+        if target_param then
+            local should_clear = false
+            if symmetry and not target_param:match("volume$") then
+                should_clear = target_param:match("^[12]")
+            else
+                should_clear = target_param:match("^"..track)
+            end
+            
+            if should_clear and not is_locked(target_param) then
+                params:set(i.."lfo", 1)
+                params:set(i.."lfo_target", 1)
+                assigned_params[target_param] = nil
             end
         end
     end
+
+    -- Find available targets
+    local available_targets = {}
+    for target, ranges in pairs(lfo.target_ranges) do
+        if (symmetry and not target:match("volume$")) or target:match("^"..track) then
+            if not is_locked(target) and (not target:match("volume$") or allow_volume_lfos) then
+                if target:match("seek$") then
+                    local t_num = target:sub(1,1)
+                    if params:get(t_num.."granular_gain") >= 100 and math.random() < ranges.chance then
+                        table.insert(available_targets, target)
+                    end
+                elseif math.random() < ranges.chance then
+                    table.insert(available_targets, target)
+                end
+            end
+        end
+    end
+
+    -- Find free slots
     local free_slots = {}
-    local other_pattern = "^"..other_track
     for j = 1, 16 do
-        local target_param = lfo.lfo_targets[params:get(j.."lfo_target")]
-        if (not target_param or not target_param:match(other_pattern)) and not is_locked(target_param) then
+        if params:get(j.."lfo") == 1 then
             table.insert(free_slots, j)
         end
     end
+
+    -- Assign LFOs with mirroring
+    local mirrored_pairs = {}
     for _, target in ipairs(available_targets) do
-        if #free_slots > 0 then
-            randomize_lfo(table.remove(free_slots, math.random(#free_slots)), target)
+        if #free_slots >= (symmetry and 2 or 1) and not mirrored_pairs[target] then
+            -- Assign primary LFO
+            local slot1 = table.remove(free_slots, math.random(#free_slots))
+            randomize_lfo(slot1, target)
+            
+            if symmetry and not target:match("volume$") then
+                -- Find mirrored parameter
+                local mirrored_target = target:gsub("^(%d)(.*)", function(num, rest)
+                    return (tonumber(num) % 2) + 1 .. rest
+                end)
+                
+                -- Find slot for mirrored LFO
+                if #free_slots > 0 then
+                    local slot2 = table.remove(free_slots, math.random(#free_slots))
+                    randomize_lfo(slot2, mirrored_target)
+                    
+                    -- Mirror LFO settings
+                    lfo[slot2].freq = lfo[slot1].freq
+                    lfo[slot2].waveform = lfo[slot1].waveform
+                    lfo[slot2].depth = lfo[slot1].depth
+                    
+                    -- Special handling for pan
+                    if target:match("pan$") then
+                        -- Invert phase by 180 degrees (0.5 in 0-1 range)
+                        lfo[slot2].phase = (lfo[slot1].phase + 0.5) % 1.0
+                        -- Invert offset
+                        lfo[slot2].offset = -lfo[slot1].offset
+                        params:set(slot2.."offset", -params:get(slot1.."offset"))
+                    else
+                        -- Keep phase and offset identical
+                        lfo[slot2].phase = lfo[slot1].phase
+                        lfo[slot2].offset = lfo[slot1].offset
+                        params:set(slot2.."offset", params:get(slot1.."offset"))
+                    end
+                    
+                    -- Update other parameters
+                    params:set(slot2.."lfo_freq", params:get(slot1.."lfo_freq"))
+                    params:set(slot2.."lfo_shape", params:get(slot1.."lfo_shape"))
+                    params:set(slot2.."lfo_depth", params:get(slot1.."lfo_depth"))
+                    
+                    mirrored_pairs[mirrored_target] = true
+                end
+            end
+            mirrored_pairs[target] = true
         end
     end
 end
@@ -337,7 +425,7 @@ function lfo.init()
     params:add_control(i .. "lfo_freq", i .. " freq", controlspec.new(0.01, 2.00, "lin", 0.01, 0.05, ""))
     params:set_action(i .. "lfo_freq", function(value)
       lfo[i].base_freq = value
-      lfo[i].freq = value * (params:get("global_lfo_freq_scale") or 1.0)
+      lfo[i].freq = value * params:get("global_lfo_freq_scale")
     end)
     params:add_option(i .. "lfo", i .. " LFO", { "off", "on" }, 1)
   end

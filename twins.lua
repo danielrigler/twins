@@ -100,6 +100,15 @@ local function is_lfo_active_for_param(param_name)
     return false, nil
 end
 
+local function stop_interpolations()
+    for i = 1, 2 do
+        if randomize_metro[i] then 
+            randomize_metro[i]:stop() 
+            active_controlled_params = {} -- Clear any active controlled params
+        end
+    end
+end
+
 local last_random_sample = nil  
 local function scan_audio_files(dir)
     local files = {}
@@ -244,8 +253,24 @@ local function setup_params()
     params:add_option("monobass_mix", "Mono Bass", {"off", "on"}, 1) params:set_action("monobass_mix", function(x) engine.monobass_mix(x-1) end)
 
     params:add_group("LFOs", 118)
-    params:add_binary("randomize_lfos", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_lfos", function() lfo.clearLFOs("1") lfo.clearLFOs("2") lfo.randomize_lfos("1", params:get("allow_volume_lfos") == 2)  lfo.randomize_lfos("2", params:get("allow_volume_lfos") == 2) if randomize_metro[1] then randomize_metro[1]:stop() end if randomize_metro[2] then randomize_metro[2]:stop() end end)
-    params:add_control("global_lfo_freq_scale", "Freq Scale", controlspec.new(0.1, 10, "exp", 0.01, 1.0, "x")) params:set_action("global_lfo_freq_scale", function(value) for i = 1, 16 do lfo[i].base_freq = params:get(i.. "lfo_freq") lfo[i].freq = lfo[i].base_freq * value end end)
+    params:add_binary("randomize_lfos", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_lfos", function() lfo.clearLFOs() lfo.randomize_lfos("1", params:get("allow_volume_lfos") == 2)  lfo.randomize_lfos("2", params:get("allow_volume_lfos") == 2) if randomize_metro[1] then randomize_metro[1]:stop() end if randomize_metro[2] then randomize_metro[2]:stop() end end)
+    params:add_control("global_lfo_freq_scale", "Freq Scale", controlspec.new(0.1, 10, "exp", 0.01, 1.0, "x"))
+params:set_action("global_lfo_freq_scale", function(value)
+    -- Store current phase relationships
+    local phase_ref = {}
+    for i = 1, 16 do
+        phase_ref[i] = lfo[i].phase
+    end
+    
+    -- Apply new frequency scale
+    for i = 1, 16 do
+        local base_freq = params:get(i.."lfo_freq") or 0.05
+        lfo[i].base_freq = base_freq
+        lfo[i].freq = base_freq * value
+        -- Restore phase relationship
+        lfo[i].phase = phase_ref[i]
+    end
+end)
     params:add_binary("lfo.assign_to_current_row", "Assign to Selection", "trigger", 0) params:set_action("lfo.assign_to_current_row", function() lfo.assign_to_current_row(current_mode, current_filter_mode) end)
     params:add_binary("lfo_pause", "Pause LFOs", "toggle", 0) params:set_action("lfo_pause", function(value) lfo.set_pause(value == 1) end)
     params:add_binary("ClearLFOs", "Clear All LFOs", "trigger", 0) params:set_action("ClearLFOs", function() lfo.clearLFOs() end)
@@ -341,17 +366,26 @@ local function randomize(n)
       size = {min = "min_size", max = "max_size", lock = params:get(n.."lock_size")==1, param_name = n.."size"},
       density = {min = "min_density", max = "max_density", lock = params:get(n.."lock_density")==1, param_name = n.."density"},
       spread = {min = "min_spread", max = "max_spread", lock = params:get(n.."lock_spread")==1, param_name = n.."spread"},
-      pitch = {lock = params:get(n.."lock_pitch")==1, param_name = n.."pitch"}}
-    local current_pitch = params:get(n .. "pitch")
-    local min_pitch = math.max(params:get("min_pitch"), current_pitch - 48)
-    local max_pitch = math.min(params:get("max_pitch"), current_pitch + 48)
-    local base_pitch = params:get(n == 1 and "2pitch" or "1pitch")
+      pitch = {lock = params:get(n.."lock_pitch")==1, param_name = n.."pitch"}
+    }
+
+    local targets = {}
+    local symmetry = params:get("symmetry") == 1
+    local other_track = n == 1 and 2 or 1
+
+    -- Handle pitch instantly (no interpolation)
     if param_config.pitch.lock and not active_controlled_params[param_config.pitch.param_name] then
+        local current_pitch = params:get(n .. "pitch")
+        local min_pitch = math.max(params:get("min_pitch"), current_pitch - 48)
+        local max_pitch = math.min(params:get("max_pitch"), current_pitch + 48)
+        local base_pitch = params:get(n == 1 and "2pitch" or "1pitch")
+        
         if min_pitch < max_pitch and not is_lfo_active_for_param(param_config.pitch.param_name) then
             local weighted_intervals = {[-12] = 3, [-7] = 2, [-5] = 2, [-3] = 1, [0] = 2, [3] = 1, [5] = 2, [7] = 2, [12] = 3}
             local larger_intervals = {-24, -19, -17, -15, 15, 17, 19, 24}
             local valid_intervals = {}
             local total_weight = 0
+            
             for interval, weight in pairs(weighted_intervals) do
                 local candidate_pitch = base_pitch + interval
                 if candidate_pitch >= min_pitch and candidate_pitch <= max_pitch then
@@ -359,6 +393,7 @@ local function randomize(n)
                     total_weight = total_weight + weight
                 end
             end
+            
             if #valid_intervals > 0 then
                 local random_weight = math.random(total_weight)
                 local cumulative_weight = 0
@@ -366,6 +401,9 @@ local function randomize(n)
                     cumulative_weight = cumulative_weight + v.weight
                     if random_weight <= cumulative_weight then
                         params:set(param_config.pitch.param_name, base_pitch + v.interval)
+                        if symmetry then
+                            params:set(other_track.."pitch", base_pitch + v.interval)
+                        end
                         break
                     end
                 end
@@ -374,6 +412,9 @@ local function randomize(n)
                     local candidate_pitch = base_pitch + interval
                     if candidate_pitch >= min_pitch and candidate_pitch <= max_pitch then
                         params:set(param_config.pitch.param_name, candidate_pitch)
+                        if symmetry then
+                            params:set(other_track.."pitch", candidate_pitch)
+                        end
                         break
                     end
                 end
@@ -381,14 +422,23 @@ local function randomize(n)
         end
     end
 
-    local targets = {}
     for param, config in pairs(param_config) do
         if param ~= "pitch" then
             if config.lock and not active_controlled_params[config.param_name] then
                 local min_val = config.min and params:get(config.min) or config.min
                 local max_val = config.max and params:get(config.max) or config.max
-                    if min_val < max_val and not is_lfo_active_for_param(config.param_name) then
-                    targets[config.param_name] = random_float(min_val, max_val)
+                if min_val < max_val and not is_lfo_active_for_param(config.param_name) then
+                    local target_value = random_float(min_val, max_val)
+                    targets[config.param_name] = target_value
+                    
+                    if symmetry then
+                        -- Special handling for pan (invert value)
+                        if param == "pan" then
+                            targets[other_track.."pan"] = -target_value
+                        else
+                            targets[other_track..param] = target_value
+                        end
+                    end
                 end
             end
         end
@@ -450,6 +500,7 @@ function enc(n, d)
         end
     end
     local function handle_param_adjustment(track, config, delta_multiplier)
+        stop_interpolations()
         local param_name = track .. config.param
         if config.has_lock and params:get(track .. "lock_" .. config.param) == 2 then
             return
