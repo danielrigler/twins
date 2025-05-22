@@ -316,7 +316,7 @@ local function setup_params()
     
     params:add_group("Other", 2)
     params:add_binary("dry_mode", "Dry Mode", "toggle", 0) params:set_action("dry_mode", function(x) drymode.toggle_dry_mode() end)
-    params:add_option("steps", "Transition Time", {"short", "medium", "long"}, 2) params:set_action("steps", function(value) for i = 1, 2 do if randomize_metro[i] then randomize_metro[i]:stop() end end lfo.cleanup() steps = ({20, 400, 5000})[value] end)
+    params:add_option("steps", "Transition Time", {"short", "medium", "long"}, 2) params:set_action("steps", function(value) for i = 1, 2 do if randomize_metro[i] then randomize_metro[i]:stop() end end lfo.cleanup() steps = ({20, 400, 800})[value] end)
     
     for i = 1, 2 do
       params:add_taper(i.. "volume", i.. " volume", -70, 20, 0, 0, "dB") params:set_action(i.. "volume", function(value) if value == -70 then engine.volume(i, 0) else engine.volume(i, math.pow(10, value / 20)) end end)
