@@ -70,6 +70,7 @@ alloc {
             t_reset_pos=0,
             granular_gain=1,
             pitch_mode=0,
+            trig_mode=0,
             subharmonics_1=0, 
             subharmonics_2=0,
             subharmonics_3=0,
@@ -92,16 +93,15 @@ alloc {
             var overtone_1_vol = overtones_1 * invDenom;
             var overtone_2_vol = overtones_2 * invDenom;
             var lagPitchOffset = Lag.kr(pitch_offset);
-            var trig_rnd = LFNoise1.kr(density);
-            var grain_direction = Select.kr(pitch_mode, [1, Select.kr(speed.abs > 0.001, [1, speed.sign])]) * ((trig_rnd.range(0,1) < direction_mod).linlin(0,1,1,-1));
+            var grain_direction = Select.kr(pitch_mode, [1, Select.kr(speed.abs > 0.001, [1, speed.sign])]) * ((LFNoise1.kr(density).range(0,1) < direction_mod).linlin(0,1,1,-1));
             var low, high;
             var positive_intervals = [12, 24], negative_intervals = [-12, -24];
             var rand_val, interval_plus, interval_minus, final_interval;
             var mid, side;
             
             speed = Lag.kr(speed);
-            density_mod = density * (2**(trig_rnd * density_mod_amt));
-            grain_trig = Impulse.kr(density_mod);
+            density_mod = density * (2**(LFNoise1.kr(density) * density_mod_amt));
+            grain_trig = Select.kr(trig_mode, [Impulse.kr(density_mod), Dust.kr(density_mod)]);
             buf_dur = BufDur.kr(buf_l);
             jitter_sig = TRand.kr(trig: grain_trig, lo: (speed < 0) * buf_dur.reciprocal.neg * jitter, hi: (speed >= 0) * buf_dur.reciprocal * jitter);
             buf_pos = Phasor.kr(trig: t_reset_pos, rate: buf_dur.reciprocal / ControlRate.ir * speed, resetPos: pos);
@@ -109,7 +109,7 @@ alloc {
             dry_sig = [PlayBuf.ar(1, buf_l, speed, startPos: pos * BufFrames.kr(buf_l), trigger: t_reset_pos, loop: 1), PlayBuf.ar(1, buf_r, speed, startPos: pos * BufFrames.kr(buf_r), trigger: t_reset_pos, loop: 1)];
             dry_sig = Balance2.ar(dry_sig[0], dry_sig[1], pan);
             
-            rand_val = trig_rnd.range(0, 1);
+            rand_val = LFNoise1.kr(density).range(0, 1);
             base_pitch = Select.kr(pitch_mode, [speed * lagPitchOffset, lagPitchOffset]);
             interval_plus = (rand_val < pitch_random_plus) * TChoose.kr(grain_trig, positive_intervals);
             interval_minus = (rand_val < pitch_random_minus) * TChoose.kr(grain_trig, negative_intervals);
@@ -128,7 +128,7 @@ alloc {
                 sig_l + ~grainBufFunc.(buf_l, grain_pitch * mult, grain_size, [overtone_1_vol, overtone_2_vol][i]),
                 sig_r + ~grainBufFunc.(buf_r, grain_pitch * mult, grain_size, [overtone_1_vol, overtone_2_vol][i])]};
 
-            pan_sig = Lag.kr(TRand.kr(trig: grain_trig, lo: 0, hi: spread)) * (ToggleFF.kr(grain_trig) * 2 - 1);
+            pan_sig = Lag.kr(TRand.kr(trig: grain_trig, lo: spread.neg, hi: spread));
             granular_sig = Balance2.ar(sig_l, sig_r, pan + pan_sig);
             sig_mix = (dry_sig * (1 - granular_gain)) + (granular_sig * granular_gain);
             
@@ -161,12 +161,12 @@ alloc {
         }).add;  
 
         SynthDef(\shimmer, {
-            arg bus, mix=0.0, lowpass=13000, hipass=1400, pitchv=0.02, fb=0.0, fbDelay=0.15, fbLowpass=10000;
+            arg bus, mix=0.0, lowpass=13000, hipass=1400, pitchv=0.02, fb=0.0, fbDelay=0.15;
             var orig = In.ar(bus, 2);
             var hpf = HPF.ar(orig, hipass);
-            var pit = LPF.ar(PitchShift.ar(hpf*2, 0.17, 2, pitchv, 1, mul:2), lowpass);
+            var pit = LPF.ar(PitchShift.ar(hpf*2, 0.5, 2, pitchv, 1, mul:2), lowpass);
             var fbSig = LocalIn.ar(2);
-            var fbProcessed = LPF.ar(fbSig, fbLowpass) * fb;
+            var fbProcessed = LPF.ar(fbSig, 10000) * fb;
             pit = pit + fbProcessed;
             LocalOut.ar(DelayC.ar(pit, 0.5, fbDelay));
             ReplaceOut.ar(bus, XFade2.ar(orig, orig + pit, mix * 2 - 1));
@@ -182,7 +182,7 @@ alloc {
         SynthDef(\tape, {
             arg bus, mix=0.0;
             var orig = In.ar(bus, 2);
-            var wet = AnalogTape.ar(orig, 0.9, 0.9, 0.9, 2, 0);
+            var wet = AnalogTape.ar(orig, 0.89, 0.89, 0.89, 2, 0);
             ReplaceOut.ar(bus, XFade2.ar(orig, wet, mix * 2 - 1));
         }).add;
         
@@ -216,8 +216,7 @@ alloc {
         }).add;
         
         SynthDef(\jpverb, {
-            arg bus, mix=0.0, t60, damp, rsize, earlyDiff, modDepth, modFreq, 
-            low, mid, high, lowcut, highcut;
+            arg bus, mix=0.0, t60, damp, rsize, earlyDiff, modDepth, modFreq, low, mid, high, lowcut, highcut;
             var dry = In.ar(bus, 2);
             var wet = JPverb.ar(dry, t60, damp, rsize, earlyDiff, modDepth, modFreq, low, mid, high, lowcut, highcut);
             ReplaceOut.ar(bus, XFade2.ar(dry, wet, mix * 2 - 1));
@@ -309,6 +308,7 @@ alloc {
         
         this.addCommand("granular_gain", "if", { arg msg; var voice = msg[1] - 1; var gain = msg[2]; voices[voice].set(\granular_gain, gain); });
         this.addCommand("density_mod_amt", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\density_mod_amt, msg[2]); });
+        this.addCommand("trig_mode", "ii", { arg msg; var voice = msg[1] - 1; voices[voice].set(\trig_mode, msg[2]); });
         this.addCommand("subharmonics_1", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\subharmonics_1, msg[2]); });
         this.addCommand("subharmonics_2", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\subharmonics_2, msg[2]); });
         this.addCommand("subharmonics_3", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\subharmonics_3, msg[2]); });
