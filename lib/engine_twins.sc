@@ -17,6 +17,7 @@ Engine_twins : CroneEngine {
     var <voices;
     var mixBus;
     var bufSine;
+    var pg;
     
     *new { arg context, doneCallback;
         ^super.new(context, doneCallback);
@@ -85,8 +86,8 @@ alloc {
             smoothbass=2,
             pitch_random_plus=0, pitch_random_minus=0;
  
-            var grain_trig, jitter_sig, buf_dur, pan_sig, buf_pos, pos_sig, sig_l, sig_r, sig_mix, density_mod, dry_sig, granular_sig, base_pitch, grain_pitch, shaped, grain_size;
-            var invDenom = 2 / (1 + subharmonics_1 + subharmonics_2 + subharmonics_3 + overtones_1 + overtones_2);
+            var grain_trig, jitter_sig1, jitter_sig2, jitter_sig3, jitter_sig4, jitter_sig5, jitter_sig6, buf_dur, pan_sig, buf_pos, pos_sig, sig_l, sig_r, sig_mix, density_mod, dry_sig, granular_sig, base_pitch, grain_pitch, shaped, grain_size;
+            var invDenom = 1.5 / (1 + subharmonics_1 + subharmonics_2 + subharmonics_3 + overtones_1 + overtones_2);
             var subharmonic_1_vol = subharmonics_1 * invDenom;
             var subharmonic_2_vol = subharmonics_2 * invDenom;
             var subharmonic_3_vol = subharmonics_3 * invDenom;
@@ -96,37 +97,43 @@ alloc {
             var grain_direction = Select.kr(pitch_mode, [1, Select.kr(speed.abs > 0.001, [1, speed.sign])]) * ((LFNoise1.kr(density).range(0,1) < direction_mod).linlin(0,1,1,-1));
             var low, high;
             var positive_intervals = [12, 24], negative_intervals = [-12, -24];
-            var rand_val, interval_plus, interval_minus, final_interval;
+            var interval_plus, interval_minus, final_interval;
             var mid, side;
             
             speed = Lag.kr(speed);
             density_mod = density * (2**(LFNoise1.kr(density) * density_mod_amt));
             grain_trig = Select.kr(trig_mode, [Impulse.kr(density_mod), Dust.kr(density_mod)]);
             buf_dur = BufDur.kr(buf_l);
-            jitter_sig = TRand.kr(trig: grain_trig, lo: (speed < 0) * buf_dur.reciprocal.neg * jitter, hi: (speed >= 0) * buf_dur.reciprocal * jitter);
+            
+            #jitter_sig1, jitter_sig2, jitter_sig3, jitter_sig4, jitter_sig5, jitter_sig6 = {TRand.kr(trig: grain_trig, lo: buf_dur.reciprocal.neg * jitter, hi: buf_dur.reciprocal * jitter) }.dup(6);            
             buf_pos = Phasor.kr(trig: t_reset_pos, rate: buf_dur.reciprocal / ControlRate.ir * speed, resetPos: pos);
             pos_sig = Wrap.kr(buf_pos);
             dry_sig = [PlayBuf.ar(1, buf_l, speed, startPos: pos * BufFrames.kr(buf_l), trigger: t_reset_pos, loop: 1), PlayBuf.ar(1, buf_r, speed, startPos: pos * BufFrames.kr(buf_r), trigger: t_reset_pos, loop: 1)];
             dry_sig = Balance2.ar(dry_sig[0], dry_sig[1], pan);
             
-            rand_val = LFNoise1.kr(density).range(0, 1);
             base_pitch = Select.kr(pitch_mode, [speed * lagPitchOffset, lagPitchOffset]);
-            interval_plus = (rand_val < pitch_random_plus) * TChoose.kr(grain_trig, positive_intervals);
-            interval_minus = (rand_val < pitch_random_minus) * TChoose.kr(grain_trig, negative_intervals);
+            interval_plus = (LFNoise1.kr(density).range(0, 1) < pitch_random_plus) * TChoose.kr(grain_trig, positive_intervals);
+            interval_minus = (LFNoise1.kr(density).range(0, 1) < pitch_random_minus) * TChoose.kr(grain_trig, negative_intervals);
             final_interval = interval_plus + interval_minus;
 
             grain_pitch = base_pitch * (2 ** (final_interval/12));
             grain_size = size * (1 + TRand.kr(trig: grain_trig, lo: size_variation.neg, hi: size_variation));
 
-            ~grainBufFunc = {|buf, pitch, size, vol| GrainBuf.ar(1, grain_trig, size, buf, pitch * grain_direction, pos_sig + jitter_sig, 2, mul: vol)};
-            ~processGrains = { |buf_l, buf_r, pitch, size, vol| [~grainBufFunc.(buf_l, pitch, size, vol),  ~grainBufFunc.(buf_r, pitch, size, vol)]};
-            #sig_l, sig_r = ~processGrains.(buf_l, buf_r, grain_pitch, grain_size, 0.5 * invDenom);
-            [1/2, 1/4, 1/8].do { |div, i| #sig_l, sig_r = [
-                sig_l + ~grainBufFunc.(buf_l, grain_pitch * div, grain_size * smoothbass, [subharmonic_1_vol, subharmonic_2_vol, subharmonic_3_vol][i]),
-                sig_r + ~grainBufFunc.(buf_r, grain_pitch * div, grain_size * smoothbass, [subharmonic_1_vol, subharmonic_2_vol, subharmonic_3_vol][i])]};
-            [2, 4].do { |mult, i| #sig_l, sig_r = [
-                sig_l + ~grainBufFunc.(buf_l, grain_pitch * mult, grain_size, [overtone_1_vol, overtone_2_vol][i]),
-                sig_r + ~grainBufFunc.(buf_r, grain_pitch * mult, grain_size, [overtone_1_vol, overtone_2_vol][i])]};
+            ~grainBufFunc = { |buf, pitch, size, vol, dir, pos, jitter| GrainBuf.ar(1, grain_trig, size, buf, pitch * dir, pos + jitter, 2, mul: vol)};
+            ~processGrains = { |buf_l, buf_r, pitch, size, vol, dir, pos, jitter| [~grainBufFunc.(buf_l, pitch, size, vol, dir, pos, jitter), ~grainBufFunc.(buf_r, pitch, size, vol, dir, pos, jitter)]};
+            #sig_l, sig_r = ~processGrains.(buf_l, buf_r, grain_pitch, grain_size, invDenom, grain_direction, pos_sig, jitter_sig1);
+            [1/2, 1/4, 1/8].do { |div, i|
+                var vol = [subharmonic_1_vol, subharmonic_2_vol, subharmonic_3_vol][i];
+                var jitter = [jitter_sig2, jitter_sig3, jitter_sig4][i];
+                #sig_l, sig_r = [
+                    sig_l + ~grainBufFunc.(buf_l, grain_pitch * div, grain_size * smoothbass, vol, grain_direction, pos_sig, jitter),
+                    sig_r + ~grainBufFunc.(buf_r, grain_pitch * div, grain_size * smoothbass, vol, grain_direction, pos_sig, jitter)];};
+            [2, 4].do { |mult, i|
+                var vol = [overtone_1_vol, overtone_2_vol][i];
+                var jitter = [jitter_sig5, jitter_sig6][i];
+                #sig_l, sig_r = [
+                    sig_l + ~grainBufFunc.(buf_l, grain_pitch * mult, grain_size, vol, grain_direction, pos_sig, jitter),
+                    sig_r + ~grainBufFunc.(buf_r, grain_pitch * mult, grain_size, vol, grain_direction, pos_sig, jitter)];};
 
             pan_sig = Lag.kr(TRand.kr(trig: grain_trig, lo: spread.neg, hi: spread));
             granular_sig = Balance2.ar(sig_l, sig_r, pan + pan_sig);
@@ -161,13 +168,14 @@ alloc {
         }).add;  
 
         SynthDef(\shimmer, {
-            arg bus, mix=0.0, lowpass=13000, hipass=1400, pitchv=0.02, fb=0.0, fbDelay=0.15;
+            arg bus, mix=0.0, lowpass=13000, hipass=1400, pitchv=0.02, fb=0.0, fbDelay=0.15, o2=1;
             var orig = In.ar(bus, 2);
             var hpf = HPF.ar(orig, hipass);
-            var pit = LPF.ar(PitchShift.ar(hpf*2, 0.5, 2, pitchv, 1, mul:2), lowpass);
+            var pit = PitchShift.ar(hpf, 0.5, 2, pitchv, 1, mul:4);
+            var pit2 = PitchShift.ar(hpf, 0.4, 4, pitchv, 1, mul:2.5*o2);
             var fbSig = LocalIn.ar(2);
-            var fbProcessed = LPF.ar(fbSig, 10000) * fb;
-            pit = pit + fbProcessed;
+            var fbProcessed = fbSig * fb;
+            pit = LPF.ar((pit + pit2 + fbProcessed),lowpass);
             LocalOut.ar(DelayC.ar(pit, 0.5, fbDelay));
             ReplaceOut.ar(bus, XFade2.ar(orig, orig + pit, mix * 2 - 1));
         }).add;
@@ -230,12 +238,14 @@ alloc {
 
         context.server.sync;
         
+        pg = ParGroup.head(context.xg);
+        
         voices = Array.fill(nvoices, { arg i;
             Synth.new(\synth, [
                 \out, mixBus.index, 
                 \buf_l, buffersL[i],
                 \buf_r, buffersR[i],
-            ]);
+            ], target: pg);
         });
         
         context.server.sync;
@@ -328,6 +338,7 @@ alloc {
         this.addCommand("pitchv", "f", { arg msg; shimmerEffect.set(\pitchv, msg[1]); });
         this.addCommand("fb", "f", { arg msg; shimmerEffect.set(\fb, msg[1]); });
         this.addCommand("fbDelay", "f", { arg msg; shimmerEffect.set(\fbDelay, msg[1]); });
+        this.addCommand("o2", "i", { arg msg; shimmerEffect.set(\o2, msg[1]); });
         
         this.addCommand("read", "is", { arg msg; this.readBuf(msg[1] - 1, msg[2]); });
         this.addCommand("seek", "if", { arg msg; var voice = msg[1] - 1; var pos = msg[2]; voices[voice].set(\pos, pos); voices[voice].set(\t_reset_pos, 1); });

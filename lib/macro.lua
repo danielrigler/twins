@@ -7,7 +7,7 @@ local TARGET_DEPTH_PERCENT = 15
 local param_ranges = {
     speed = {min = -1.99, max = 1.99},
     jitter = {min = 0, max = 1999},
-    size = {min = 100, max = 599},
+    size = {min = 150, max = 599},
     density = {min = 0.1, max = 49},
     spread = {min = 0, max = 99}
 }
