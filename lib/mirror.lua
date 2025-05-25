@@ -1,9 +1,5 @@
 local Mirror = {}
 
-function Mirror.init(lfo_ref)
-    Mirror.lfo = lfo_ref
-end
-
 local function param_exists(name)
     return params.lookup[name] ~= nil
 end
@@ -22,7 +18,7 @@ local function clear_destination_lfos(to_track)
     for lfo_num = 1, 16 do
         local target_index = safe_get(lfo_num.."lfo_target") or 0
         if target_index > 0 then
-            local target_name = Mirror.lfo.lfo_targets[target_index] or ""
+            local target_name = lfo.lfo_targets[target_index] or ""
             if target_name:match("^"..to_track) then
                 params:set(lfo_num.."lfo", 1)  -- Disable LFO
             end
@@ -49,7 +45,7 @@ function Mirror.copy_voice_params(from_track, to_track, mirror_pan)
     for lfo_num = 1, 16 do
         if safe_get(lfo_num.."lfo") == 2 then
             local target_index = safe_get(lfo_num.."lfo_target") or 0
-            if target_index > 0 and (Mirror.lfo.lfo_targets[target_index] or ""):match("^"..from_track.."volume$") then
+            if target_index > 0 and (lfo.lfo_targets[target_index] or ""):match("^"..from_track.."volume$") then
                 volume_has_lfo = true
                 break
             end
@@ -77,7 +73,7 @@ function Mirror.copy_voice_params(from_track, to_track, mirror_pan)
         if safe_get(src_lfo.."lfo") == 2 then  -- Only active LFOs
             local src_target_index = safe_get(src_lfo.."lfo_target") or 0
             if src_target_index > 0 then
-                local src_target_name = Mirror.lfo.lfo_targets[src_target_index] or ""
+                local src_target_name = lfo.lfo_targets[src_target_index] or ""
                 local src_track_prefix, src_param_name = src_target_name:match("^(%d+)(.+)$")
                 
                 if src_track_prefix == from_track then
@@ -85,7 +81,7 @@ function Mirror.copy_voice_params(from_track, to_track, mirror_pan)
                     local dest_target_name = to_track..src_param_name
                     local dest_target_index = nil
                     
-                    for idx, target in ipairs(Mirror.lfo.lfo_targets) do
+                    for idx, target in ipairs(lfo.lfo_targets) do
                         if target == dest_target_name then
                             dest_target_index = idx
                             break
@@ -111,11 +107,11 @@ function Mirror.copy_voice_params(from_track, to_track, mirror_pan)
                             
                             -- Get the ACTUAL current phase from running LFO
                             local current_phase = 0
-                            if Mirror.lfo[src_lfo] then
-                                current_phase = Mirror.lfo[src_lfo].phase or 0
+                            if lfo[src_lfo] then
+                                current_phase = lfo[src_lfo].phase or 0
                                 -- For smoother sync, capture the exact fractional phase
-                                if Mirror.lfo[src_lfo].clock and Mirror.lfo[src_lfo].period then
-                                    current_phase = (Mirror.lfo[src_lfo].clock % Mirror.lfo[src_lfo].period) / Mirror.lfo[src_lfo].period
+                                if lfo[src_lfo].clock and lfo[src_lfo].period then
+                                    current_phase = (lfo[src_lfo].clock % lfo[src_lfo].period) / lfo[src_lfo].period
                                 end
                             end
                             
@@ -141,14 +137,14 @@ function Mirror.copy_voice_params(from_track, to_track, mirror_pan)
                             safe_set(dest_lfo.."lfo", 2)  -- Activate last
                             
                             -- Force immediate engine update with perfect phase sync
-                            if Mirror.lfo[dest_lfo] then
-                                Mirror.lfo[dest_lfo].target = dest_target_index
-                                Mirror.lfo[dest_lfo].shape = src_shape
-                                Mirror.lfo[dest_lfo].freq = src_freq
-                                Mirror.lfo[dest_lfo].depth = src_depth
-                                Mirror.lfo[dest_lfo].offset = src_offset
-                                Mirror.lfo[dest_lfo].phase = current_phase
-                                Mirror.lfo[dest_lfo].clock = current_phase * (1/src_freq)  -- Set exact position in cycle
+                            if lfo[dest_lfo] then
+                                lfo[dest_lfo].target = dest_target_index
+                                lfo[dest_lfo].shape = src_shape
+                                lfo[dest_lfo].freq = src_freq
+                                lfo[dest_lfo].depth = src_depth
+                                lfo[dest_lfo].offset = src_offset
+                                lfo[dest_lfo].phase = current_phase
+                                lfo[dest_lfo].clock = current_phase * (1/src_freq)  -- Set exact position in cycle
                             end
                         end
                     end

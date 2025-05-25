@@ -127,8 +127,8 @@ local function randomize_eq_params(i)
   if params:get("lock_eq") == 2 then return end
   safe_metro_stop(randomize_metro)
     -- EQ
-    if math.random() <= 0.5 then targets[i.."eq_low_gain"] = 0 else targets[i.."eq_low_gain"] = random_float(-0.3, 0.25) end
-    if math.random() <= 0.4 then targets[i.."eq_high_gain"] = 0 else targets[i.."eq_high_gain"] = random_float(0.05, 0.4) end
+    if math.random() <= 0.5 then targets[i.."eq_low_gain"] = 0 else targets[i.."eq_low_gain"] = random_float(-0.4, 0.4) end
+    if math.random() <= 0.4 then targets[i.."eq_high_gain"] = 0.2 else targets[i.."eq_high_gain"] = random_float(-0.1, 0.45) end
 
     for param, _ in pairs(targets) do
         active_interpolations[param] = true

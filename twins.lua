@@ -40,17 +40,14 @@ delay = include("lib/delay")
 local randpara = include("lib/randpara")
 local lfo = include("lib/lfo")
 local Mirror = include("lib/mirror")
-local macro = include("lib/macro")
-macro.set_lfo_reference(lfo)
-local drymode = include("lib/drymode")
-drymode.set_lfo_reference(lfo)
-installer_ = include("lib/scinstaller/scinstaller")
-installer = installer_:new{requirements = {"AnalogTape", "AnalogChew", "AnalogLoss", "AnalogDegrade"}, 
+local macro = include("lib/macro") macro.set_lfo_reference(lfo)
+local drymode = include("lib/drymode") drymode.set_lfo_reference(lfo)
+installer_ = include("lib/scinstaller/scinstaller") installer = installer_:new{requirements = {"AnalogTape", "AnalogChew", "AnalogLoss", "AnalogDegrade"}, 
   zip = "https://github.com/schollz/portedplugins/releases/download/v0.4.6/PortedPlugins-RaspberryPi.zip"}
 engine.name = installer:ready() and 'twins' or nil
 local ui_metro
 local randomize_metro = { [1] = nil, [2] = nil }
-local key1_pressed, key2_pressed, key3_pressed = false
+local key_state = {} for n = 1, 3 do key_state[n] = false end
 local current_mode = "speed"
 local current_filter_mode = "lpf"
 local manual_adjustments = {}
@@ -258,21 +255,13 @@ local function setup_params()
     params:add_binary("randomize_lfos", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_lfos", function() lfo.clearLFOs() lfo.randomize_lfos("1", params:get("allow_volume_lfos") == 2)  lfo.randomize_lfos("2", params:get("allow_volume_lfos") == 2) if randomize_metro[1] then randomize_metro[1]:stop() end if randomize_metro[2] then randomize_metro[2]:stop() end end)
     params:add_control("global_lfo_freq_scale", "Freq Scale", controlspec.new(0.1, 10, "exp", 0.01, 1.0, "x"))
     params:set_action("global_lfo_freq_scale", function(value)
-    -- Store current phase relationships
-    local phase_ref = {}
-    for i = 1, 16 do
-        phase_ref[i] = lfo[i].phase
-    end
-    
-    -- Apply new frequency scale
-    for i = 1, 16 do
-        local base_freq = params:get(i.."lfo_freq") or 0.05
-        lfo[i].base_freq = base_freq
-        lfo[i].freq = base_freq * value
-        -- Restore phase relationship
-        lfo[i].phase = phase_ref[i]
-    end
-    end)
+      local phase_ref = {} for i = 1, 16 do phase_ref[i] = lfo[i].phase end
+      for i = 1, 16 do
+          local base_freq = params:get(i.."lfo_freq") or 0.05
+          lfo[i].base_freq = base_freq
+          lfo[i].freq = base_freq * value
+          lfo[i].phase = phase_ref[i]
+      end end)
     params:add_binary("lfo.assign_to_current_row", "Assign to Selection", "trigger", 0) params:set_action("lfo.assign_to_current_row", function() lfo.assign_to_current_row(current_mode, current_filter_mode) end)
     params:add_binary("lfo_pause", "Pause LFOs", "toggle", 0) params:set_action("lfo_pause", function(value) lfo.set_pause(value == 1) end)
     params:add_binary("ClearLFOs", "Clear All LFOs", "trigger", 0) params:set_action("ClearLFOs", function() lfo.clearLFOs() end)
@@ -368,26 +357,20 @@ local function randomize(n)
       size = {min = "min_size", max = "max_size", lock = params:get(n.."lock_size")==1, param_name = n.."size"},
       density = {min = "min_density", max = "max_density", lock = params:get(n.."lock_density")==1, param_name = n.."density"},
       spread = {min = "min_spread", max = "max_spread", lock = params:get(n.."lock_spread")==1, param_name = n.."spread"},
-      pitch = {lock = params:get(n.."lock_pitch")==1, param_name = n.."pitch"}
-    }
-
+      pitch = {lock = params:get(n.."lock_pitch")==1, param_name = n.."pitch"}}
     local targets = {}
     local symmetry = params:get("symmetry") == 1
     local other_track = n == 1 and 2 or 1
-
-    -- Handle pitch instantly (no interpolation)
     if param_config.pitch.lock and not active_controlled_params[param_config.pitch.param_name] then
         local current_pitch = params:get(n .. "pitch")
         local min_pitch = math.max(params:get("min_pitch"), current_pitch - 48)
         local max_pitch = math.min(params:get("max_pitch"), current_pitch + 48)
         local base_pitch = params:get(n == 1 and "2pitch" or "1pitch")
-        
         if min_pitch < max_pitch and not is_lfo_active_for_param(param_config.pitch.param_name) then
             local weighted_intervals = {[-12] = 3, [-7] = 2, [-5] = 2, [-3] = 1, [0] = 2, [3] = 1, [5] = 2, [7] = 2, [12] = 3}
             local larger_intervals = {-24, -19, -17, -15, 15, 17, 19, 24}
             local valid_intervals = {}
             local total_weight = 0
-            
             for interval, weight in pairs(weighted_intervals) do
                 local candidate_pitch = base_pitch + interval
                 if candidate_pitch >= min_pitch and candidate_pitch <= max_pitch then
@@ -395,7 +378,6 @@ local function randomize(n)
                     total_weight = total_weight + weight
                 end
             end
-            
             if #valid_intervals > 0 then
                 local random_weight = math.random(total_weight)
                 local cumulative_weight = 0
@@ -423,7 +405,6 @@ local function randomize(n)
             end
         end
     end
-
     for param, config in pairs(param_config) do
         if param ~= "pitch" then
             if config.lock and not active_controlled_params[config.param_name] then
@@ -432,9 +413,7 @@ local function randomize(n)
                 if min_val < max_val and not is_lfo_active_for_param(config.param_name) then
                     local target_value = random_float(min_val, max_val)
                     targets[config.param_name] = target_value
-                    
                     if symmetry then
-                        -- Special handling for pan (invert value)
                         if param == "pan" then
                             targets[other_track.."pan"] = -target_value
                         else
@@ -445,7 +424,6 @@ local function randomize(n)
             end
         end
     end
-
     randomize_metro[n].time = 1/30
     randomize_metro[n].event = function(count)
         local tolerance = 0.01
@@ -476,7 +454,6 @@ function init() if not installer:ready() then clock.run(function() while true do
     setup_ui_metro()
     setup_params()
     setup_engine()
-    Mirror.init(lfo)
 end
 
 local function wrap_value(value, min, max)
@@ -491,6 +468,17 @@ end
 
 function enc(n, d)
     if not installer:ready() then return end
+    local param_modes = {
+        speed = {param = "speed", delta = 0.5, has_lock = true},
+        seek = {param = "seek", delta = 1, wrap = {0, 100}, engine = true, has_lock = true},
+        pan = {param = "pan", delta = 5, has_lock = true, invert = true},
+        lpf = {param = "cutoff", delta = 1, has_lock = false},
+        hpf = {param = "hpf", delta = 1, has_lock = false},
+        jitter = {param = "jitter", delta = 2, has_lock = true},
+        size = {param = "size", delta = 2, has_lock = true},
+        density = {param = "density", delta = 2, has_lock = true},
+        spread = {param = "spread", delta = 2, has_lock = true},
+        pitch = {param = "pitch", delta = 1, has_lock = true} }
     local function disable_lfos_for_param(param_name)
         local base_param = param_name:sub(2)
         for track = 1, 2 do
@@ -539,17 +527,6 @@ function enc(n, d)
             params:delta(param_name, config.delta * delta_multiplier * d)
         end
     end
-    local param_modes = {
-        speed = {param = "speed", delta = 0.5, has_lock = true, action = function(track, value) engine.speed(track, math.abs(value) < 0.01 and 0 or value) end},
-        seek = {param = "seek", delta = 1, wrap = {0, 100}, engine = true, has_lock = true},
-        pan = {param = "pan", delta = 5, has_lock = true, invert = true},
-        lpf = {param = "cutoff", delta = 1, has_lock = false},
-        hpf = {param = "hpf", delta = 1, has_lock = false},
-        jitter = {param = "jitter", delta = 2, has_lock = true},
-        size = {param = "size", delta = 2, has_lock = true},
-        density = {param = "density", delta = 2, has_lock = true},
-        spread = {param = "spread", delta = 2, has_lock = true},
-        pitch = {param = "pitch", delta = 1, has_lock = true} }
     local enc_actions = {
         [1] = function()
             local is_active1, lfo_index1 = is_lfo_active_for_param("1volume")
@@ -557,22 +534,22 @@ function enc(n, d)
             local lfo_delta = 0.75 * d
             if is_active1 or is_active2 then
                 if is_active1 and is_active2 then
-                    params:delta(lfo_index1 .. "offset", key1_pressed and lfo_delta or lfo_delta)
-                    params:delta(lfo_index2 .. "offset", key1_pressed and -lfo_delta or lfo_delta)
+                    params:delta(lfo_index1 .. "offset", key_state[1] and lfo_delta or lfo_delta)
+                    params:delta(lfo_index2 .. "offset", key_state[1] and -lfo_delta or lfo_delta)
                 elseif is_active1 then
                     params:delta(lfo_index1 .. "offset", lfo_delta)
-                    params:delta("2volume", key1_pressed and -3 * d or 3 * d)
+                    params:delta("2volume", key_state[1] and -3 * d or 3 * d)
                 else
-                    params:delta(lfo_index2 .. "offset", key1_pressed and -lfo_delta or lfo_delta)
-                    params:delta("1volume", key1_pressed and 3 * d or 3 * d)
+                    params:delta(lfo_index2 .. "offset", key_state[1] and -lfo_delta or lfo_delta)
+                    params:delta("1volume", key_state[1] and 3 * d or 3 * d)
                 end
             else
                 params:delta("1volume", 3 * d)
-                params:delta("2volume", key1_pressed and -3 * d or 3 * d)
+                params:delta("2volume", key_state[1] and -3 * d or 3 * d)
             end
         end,
         [2] = function()
-            if key1_pressed then
+            if key_state[1] then
                 if params:get("symmetry") == 1 then
                     disable_lfos_for_param("1volume")
                 else
@@ -586,7 +563,7 @@ function enc(n, d)
             end
         end,
         [3] = function()
-            if key1_pressed then
+            if key_state[1] then
                 if params:get("symmetry") == 1 then
                     disable_lfos_for_param("2volume")
                 else
@@ -605,12 +582,9 @@ end
 
 function key(n, z)
     if not installer:ready() then installer:key(n, z) return end
-    if n == 1 then key1_pressed = z == 1
-      elseif n == 2 then key2_pressed = z == 1
-      elseif n == 3 then key3_pressed = z == 1
-    end
+    key_state[n] = z == 1 and true or false
     if z == 1 then
-        if key1_pressed then
+        if key_state[1] then
             if n == 2 then
                 lfo.clearLFOs(1)
                 lfo.randomize_lfos("1", params:get("allow_volume_lfos") == 2)
@@ -625,7 +599,7 @@ function key(n, z)
                 return
             end
         end
-        if not key1_pressed then
+        if not key_state[1] then
             if n == 2 then
                 local modes = {"pitch", "spread", "density", "size", "jitter", "lpf", "pan", "seek", "speed"}
                 local current_index = table.find(modes, current_mode) or 1
@@ -637,7 +611,7 @@ function key(n, z)
             end
         end
     end
-    if key2_pressed and key3_pressed then
+    if key_state[2] and key_state[3] then
         if current_mode == "lpf" or current_mode == "hpf" then
             current_filter_mode = current_filter_mode == "lpf" and "hpf" or "lpf"
         else
@@ -646,7 +620,6 @@ function key(n, z)
             if param_name and table.find(lockable_params, param_name) then
                 local is_locked1 = params:get("1lock_" .. param_name) == 2
                 local is_locked2 = params:get("2lock_" .. param_name) == 2
-                
                 if is_locked1 ~= is_locked2 then
                     params:set("1lock_" .. param_name, 1)
                     params:set("2lock_" .. param_name, 1)
@@ -841,7 +814,6 @@ function redraw()
         draw_if_locked(92, 2)
     end
     screen.level(6)
-    -- Draw volume bars
     for i, x in ipairs({0, 127}) do
         local track = tostring(i)
         if is_audio_loaded(track) then
@@ -850,7 +822,6 @@ function redraw()
             screen.rect(x, 64 - height, 1, height)
         end
     end
-    -- Draw pan indicators
     for i, center_start in ipairs({52, 93}) do
         local track = tostring(i)
         if is_audio_loaded(track) then

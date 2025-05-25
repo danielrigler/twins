@@ -26,7 +26,7 @@ function sc.init()
     softcut.position(i,1)
     softcut.enable(i,1)
 
-    softcut.filter_dry(i,0.25);
+    softcut.filter_dry(i,0.2);
     softcut.filter_fc(i,1200);
     softcut.filter_lp(i,0);
     softcut.filter_bp(i,1.0);
