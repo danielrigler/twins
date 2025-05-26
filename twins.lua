@@ -6,7 +6,7 @@
 --           by: @dddstudio                       
 --
 --                          
---                           v0.30
+--                           v0.31
 -- E1: Master Volume
 -- K1+E2/E3: Volume 1/2
 -- K1+E1: Crossfade Volumes
@@ -36,7 +36,6 @@
 --
 --                    Daniel Rigler
 
-delay = include("lib/delay")
 local randpara = include("lib/randpara")
 local lfo = include("lib/lfo")
 local Mirror = include("lib/mirror")
@@ -56,10 +55,13 @@ local animation_y = -64
 local animation_speed = 200
 local animation_complete = false
 local animation_start_time = nil
+local initital_monitor_level
+local initital_reverb_onoff
+local initital_compressor_onoff
 
 local function is_audio_loaded(track_num)
     local file_path = params:get(track_num .. "sample")
-    return file_path and file_path ~= "" and file_path ~= "none" and file_path ~= "-"
+    return (file_path and file_path ~= "" and file_path ~= "none" and file_path ~= "-")
 end
 
 local function random_float(l, h)
@@ -127,6 +129,7 @@ local function scan_audio_files(dir)
 end
 
 local function load_random_tape_file(track_num)
+    if params:get(track_num .. "live_input") == 1 then return false end
     local audio_files = scan_audio_files(_path.tape)
     if #audio_files == 0 then return false end
     if last_random_sample and math.random() < 0.5 and tab.contains(audio_files, last_random_sample) then
@@ -150,7 +153,7 @@ local function setup_params()
         manual_adjustments["1"..param] = {active = false, value = 0}
         manual_adjustments["2"..param] = {active = false, value = 0}
     end
-    params:add_separator("Samples")
+    params:add_separator("Input")
     for i = 1, 2 do
         params:add_file(i.. "sample", "Sample " ..i)
         params:set_action(i.. "sample", function(file)
@@ -163,9 +166,14 @@ local function setup_params()
             end
         end)
     end
-    params:add_binary("randomize_params", "Random Tapes", "trigger", 0) 
-    params:set_action("randomize_params", function() load_random_tape_file(1) load_random_tape_file(2) end)
-    
+    params:add_binary("randomtapes", "Random Tapes", "trigger", 0) params:set_action("randomtapes", function() load_random_tape_file(1) load_random_tape_file(2) end)
+    for i = 1, 2 do
+        params:add_binary(i.."live_input", "Live " ..i .." ●", "toggle", 0)
+        params:set_action(i.."live_input", function(value)
+            engine.set_live_input(i, value)
+        end)
+    end
+
     params:add_separator("Settings")
     params:add_group("Granular", 33)
     for i = 1, 2 do
@@ -190,7 +198,12 @@ local function setup_params()
     params:add_option("lock_granular", "Lock Parameters", {"off", "on"}, 1)
 
     params:add_group("Delay", 6)
-    delay.init()
+    params:add_control("delay_mix", "Mix", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("delay_mix", function(x) engine.delay_mix(x/100) end)
+    params:add_control("delay_time", "Time", controlspec.new(0.15, 4, "exp", 0.01, 0.5, "s")) params:set_action("delay_time", function(x) engine.delay_time(x) end)
+    params:add_control("delay_feedback", "Feedback", controlspec.new(0, 100, "lin", 1, 80, "%")) params:set_action("delay_feedback", function(x) engine.delay_feedback(x/100) end)
+    params:add_control("delayLPF", "Filter", controlspec.new(20, 20000, "lin", 1, 3500, "Hz")) params:set_action("delayLPF", function(x) engine.delayLPF(x) end)
+    params:add_separator("   ")
+    params:add_option("lock_delay", "Lock Parameters", {"off", "on"}, 1)
 
     params:add_group("Reverb", 15)
     params:add_taper("reverb_mix", "Mix", 0, 100, 0.0, 0, "%") params:set_action("reverb_mix", function(value) engine.reverb_mix(value / 100) end)
@@ -263,8 +276,8 @@ local function setup_params()
           lfo[i].phase = phase_ref[i]
       end end)
     params:add_binary("lfo.assign_to_current_row", "Assign to Selection", "trigger", 0) params:set_action("lfo.assign_to_current_row", function() lfo.assign_to_current_row(current_mode, current_filter_mode) end)
-    params:add_binary("lfo_pause", "Pause LFOs", "toggle", 0) params:set_action("lfo_pause", function(value) lfo.set_pause(value == 1) end)
-    params:add_binary("ClearLFOs", "Clear All LFOs", "trigger", 0) params:set_action("ClearLFOs", function() lfo.clearLFOs() end)
+    params:add_binary("lfo_pause", "Pause ⏸︎", "toggle", 0) params:set_action("lfo_pause", function(value) lfo.set_pause(value == 1) end)
+    params:add_binary("ClearLFOs", "Clear All", "trigger", 0) params:set_action("ClearLFOs", function() lfo.clearLFOs() end)
     params:add_option("allow_volume_lfos", "Allow Volume LFOs", {"no", "yes"}, 2)
     lfo.init()
 
@@ -447,10 +460,15 @@ end
 local function setup_engine()
     randomize(1)
     randomize(2)
-    audio.level_adc(0)
 end
 
 function init() if not installer:ready() then clock.run(function() while true do redraw() clock.sleep(1 / 10) end end) do return end end
+    initital_monitor_level = params:get('monitor_level')
+    params:set('monitor_level', -math.huge)
+    initital_reverb_onoff = params:get('reverb')
+    params:set('reverb', 1)
+    initital_compressor_onoff = params:get('compressor')
+    params:set('compressor', 1)
     setup_ui_metro()
     setup_params()
     setup_engine()
@@ -816,20 +834,16 @@ function redraw()
     screen.level(6)
     for i, x in ipairs({0, 127}) do
         local track = tostring(i)
-        if is_audio_loaded(track) then
             local volume = params:get(track.."volume")
             local height = util.linlin(-60, 20, 0, 64, volume)
             screen.rect(x, 64 - height, 1, height)
-        end
     end
     for i, center_start in ipairs({52, 93}) do
         local track = tostring(i)
-        if is_audio_loaded(track) then
             local pan = params:get(track.."pan")
             local center_end = center_start + 25
             local pos = util.linlin(-100, 100, center_start, center_end, pan)
             screen.rect(pos - 1, 0, 4, 1)
-        end
     end
     screen.fill()
     screen.level(1)
@@ -846,4 +860,7 @@ function cleanup()
     if randomize_metro[i] then randomize_metro[i]:stop() end
   end
   lfo.cleanup()
+  params:set('monitor_level', initital_monitor_level)
+  params:set('reverb', initital_reverb_onoff)
+  params:set('compressor', initital_compressor_onoff)
 end

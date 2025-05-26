@@ -15,7 +15,7 @@ function drymode.toggle_dry_mode()
             granular_gain = {params:get("1granular_gain"), params:get("2granular_gain")},
             speed = {params:get("1speed"), params:get("2speed")},
             reverb_mix = params:get("reverb_mix"),
-            delay_h = params:get("delay_h"),
+            delay_mix = params:get("delay_mix"),
             shimmer_mix = params:get("shimmer_mix"),
             tape_mix = params:get("tape_mix"),
             eq_low_gain = {params:get("1eq_low_gain"), params:get("2eq_low_gain")},
@@ -96,7 +96,7 @@ function drymode.toggle_dry_mode()
             params:set(i.."hpf", 20)
         end
         params:set("reverb_mix", 0)
-        params:set("delay_h", 0)
+        params:set("delay_mix", 0)
         params:set("shimmer_mix", 0)
         params:set("tape_mix", 1)
         params:set("Width", 100)
@@ -117,7 +117,7 @@ function drymode.toggle_dry_mode()
                 params:set(i.."hpf", prev_settings.hpf[i])
             end
             params:set("reverb_mix", prev_settings.reverb_mix)
-            params:set("delay_h", prev_settings.delay_h)
+            params:set("delay_mix", prev_settings.delay_mix)
             params:set("shimmer_mix", prev_settings.shimmer_mix)
             params:set("tape_mix", prev_settings.tape_mix)
             params:set("Width", prev_settings.Width)

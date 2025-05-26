@@ -1,6 +1,7 @@
 Engine_twins : CroneEngine {
     classvar nvoices = 2;
 
+    var delayEffect;
     var jpverbEffect;
     var shimmerEffect;
     var tapeEffect;
@@ -18,7 +19,10 @@ Engine_twins : CroneEngine {
     var mixBus;
     var bufSine;
     var pg;
-    
+    var <liveInputBuffersL;
+    var <liveInputBuffersR;
+    var <liveInputRecorders;
+
     *new { arg context, doneCallback;
         ^super.new(context, doneCallback);
     }
@@ -57,6 +61,14 @@ alloc {
             Buffer.alloc(context.server, context.server.sampleRate * 1);
         });
         
+        liveInputBuffersL = Array.fill(nvoices, {
+            Buffer.alloc(context.server, context.server.sampleRate * 8);
+        });
+        
+        liveInputBuffersR = Array.fill(nvoices, {
+            Buffer.alloc(context.server, context.server.sampleRate * 8);
+        });
+
         bufSine = Buffer.alloc(context.server, 1024 * 16, 1);
         bufSine.sine2([2], [0.5], false);
         wobbleBuffer = Buffer.alloc(context.server, 48000 * 5, 2);
@@ -150,6 +162,14 @@ alloc {
 
             Out.ar(out, sig_mix * gain);
         }).add;
+        
+        SynthDef(\liveInputRecorder, {
+            arg bufL, bufR;
+            var in = SoundIn.ar([0, 1]);
+            var phasor = Phasor.ar(0, 1, 0, BufFrames.kr(bufL));
+            BufWr.ar(in[0], bufL, phasor);
+            BufWr.ar(in[1], bufR, phasor);
+        }).add;
 
         SynthDef(\width, {
             arg bus, width=1.0;
@@ -177,21 +197,21 @@ alloc {
             var fbProcessed = fbSig * fb;
             pit = LPF.ar((pit + pit2 + fbProcessed),lowpass);
             LocalOut.ar(DelayC.ar(pit, 0.5, fbDelay));
-            ReplaceOut.ar(bus, XFade2.ar(orig, orig + pit, mix * 2 - 1));
+            ReplaceOut.ar(bus, LinXFade2.ar(orig, orig + pit, mix * 2 - 1));
         }).add;
         
         SynthDef(\sine, {
             arg bus, mix=0.0, sine_drive;
             var orig = In.ar(bus, 2);
             var shaped = Shaper.ar(bufSine, orig * sine_drive);
-            ReplaceOut.ar(bus, XFade2.ar(orig, shaped, mix * 2 - 1));
+            ReplaceOut.ar(bus, LinXFade2.ar(orig, shaped, mix * 2 - 1));
         }).add;
         
         SynthDef(\tape, {
             arg bus, mix=0.0;
             var orig = In.ar(bus, 2);
             var wet = AnalogTape.ar(orig, 0.89, 0.89, 0.89, 2, 0);
-            ReplaceOut.ar(bus, XFade2.ar(orig, wet, mix * 2 - 1));
+            ReplaceOut.ar(bus, LinXFade2.ar(orig, wet, mix * 2 - 1));
         }).add;
         
         SynthDef(\wobble, {
@@ -205,14 +225,14 @@ alloc {
             BufWr.ar(dry, wobbleBuffer, pw);
             pr = DelayL.ar(Phasor.ar(0, BufRateScale.kr(wobbleBuffer)*rate, 0, BufFrames.kr(wobbleBuffer)), 0.2, 0.2);
             wet = BufRd.ar(2, wobbleBuffer, pr, interpolation:4);
-            ReplaceOut.ar(bus, XFade2.ar(dry, wet, mix * 2 - 1));
+            ReplaceOut.ar(bus, LinXFade2.ar(dry, wet, mix * 2 - 1));
         }).add;
         
         SynthDef(\chew, {
             arg bus, mix=0.0, chew_depth=0.5, chew_freq=0.5, chew_variance=0.5;
             var orig = In.ar(bus, 2);
             var wet = AnalogChew.ar(orig, chew_depth, chew_freq, chew_variance);
-            ReplaceOut.ar(bus, XFade2.ar(orig, wet, mix * 2 - 1));
+            ReplaceOut.ar(bus, LinXFade2.ar(orig, wet, mix * 2 - 1));
         }).add;
 
         SynthDef(\lossdegrade, {
@@ -220,14 +240,26 @@ alloc {
             var sig = In.ar(bus, 2);
             var loss = AnalogLoss.ar(sig,0.4,0.38,0.5,1);
             var degrade = AnalogDegrade.ar(loss,0.3,0.3,0.5,0.5);
-            ReplaceOut.ar(bus, XFade2.ar(sig, degrade, mix * 2 - 1));
+            ReplaceOut.ar(bus, LinXFade2.ar(sig, degrade, mix * 2 - 1));
         }).add;
-        
+
+        SynthDef(\delay, {
+            arg bus, mix=0.0, time, feedback, delayLPF=3500;
+            var sig = In.ar(bus, 2);
+            var fb = LocalIn.ar(2);
+            var fbInput = [sig[0] + (fb[1] * feedback), sig[1] + (fb[0] * feedback)];
+            var delayed = DelayC.ar(fbInput, 4.0, time);
+            var processed = delayed.collect { |x| LPF.ar(HPF.ar(x, 30).softclip, delayLPF) };
+            LocalOut.ar(processed);
+            processed = [(processed[0] * 1.25) - (processed[1] * 0.25), (processed[1] * 1.25) - (processed[0] * 0.25)];
+            ReplaceOut.ar(bus, LinXFade2.ar(sig, sig + processed, mix * 2 - 1));
+        }).add;
+
         SynthDef(\jpverb, {
             arg bus, mix=0.0, t60, damp, rsize, earlyDiff, modDepth, modFreq, low, mid, high, lowcut, highcut;
             var dry = In.ar(bus, 2);
             var wet = JPverb.ar(dry, t60, damp, rsize, earlyDiff, modDepth, modFreq, low, mid, high, lowcut, highcut);
-            ReplaceOut.ar(bus, XFade2.ar(dry, wet, mix * 2 - 1));
+            ReplaceOut.ar(bus, LinXFade2.ar(dry, wet, mix * 2 - 1));
         }).add;
         
         SynthDef(\output, {
@@ -247,6 +279,8 @@ alloc {
                 \buf_r, buffersR[i],
             ], target: pg);
         });
+        
+        liveInputRecorders = Array.fill(nvoices, { nil });
         
         context.server.sync;
 
@@ -286,6 +320,11 @@ alloc {
         ], context.xg, 'addToTail');
 
         lossdegradeEffect = Synth.new(\lossdegrade, [
+            \bus, mixBus.index,
+            \mix, 0.0
+        ], context.xg, 'addToTail');
+        
+        delayEffect = Synth.new(\delay, [
             \bus, mixBus.index,
             \mix, 0.0
         ], context.xg, 'addToTail');
@@ -370,12 +409,44 @@ alloc {
 
         this.addCommand("width", "f", { arg msg; var width = msg[1]; widthEffect.set(\width, width); widthEffect.run(width != 1); });
         this.addCommand("monobass_mix", "f", { arg msg; var mix = msg[1]; monobassEffect.set(\mix, mix); monobassEffect.run(mix > 0); });
+        
+        this.addCommand("delay_mix", "f", { arg msg; var mix = msg[1]; delayEffect.set(\mix, mix); delayEffect.run(mix > 0); });
+        this.addCommand("delay_time", "f", { arg msg; var delayTime = msg[1]; delayEffect.set(\time, delayTime); });
+        this.addCommand("delay_feedback", "f", { arg msg; var delayFeedback = msg[1]; delayEffect.set(\feedback, delayFeedback); });
+        this.addCommand("delayLPF", "f", { arg msg; var delayLPF = msg[1]; delayEffect.set(\delayLPF, delayLPF); });
+
+        this.addCommand("set_live_input", "ii", { arg msg;
+            var voice = msg[1] - 1;
+            var enable = msg[2];
+            if (enable == 1) {
+                if (liveInputRecorders[voice].notNil) { 
+                    liveInputRecorders[voice].free; 
+                };
+                liveInputRecorders[voice] = Synth.new(\liveInputRecorder, [
+                    \bufL, liveInputBuffersL[voice],
+                    \bufR, liveInputBuffersR[voice]
+                ], context.xg, 'addToHead');
+                voices[voice].set(
+                    \buf_l, liveInputBuffersL[voice],
+                    \buf_r, liveInputBuffersR[voice],
+                    \t_reset_pos, 1
+                );
+            } {
+                if (liveInputRecorders[voice].notNil) { 
+                    liveInputRecorders[voice].free; 
+                };
+                liveInputRecorders[voice] = nil;
+            };
+        });
     }
 
     free {
         voices.do({ arg voice; voice.free; });
         buffersL.do({ arg b; b.free; });
         buffersR.do({ arg b; b.free; });
+        liveInputBuffersL.do({ arg b; b.free; });
+        liveInputBuffersR.do({ arg b; b.free; });
+        liveInputRecorders.do({ arg s; if (s.notNil) { s.free; }; });
         wobbleBuffer.free;
         mixBus.free;
         bufSine.free;
@@ -389,5 +460,6 @@ alloc {
         sineEffect.free;
         wobbleEffect.free;
         outputSynth.free;
+        delayEffect.free;
     }
 }
