@@ -72,7 +72,7 @@ local function randomize_jpverb_params(steps)
   if params:get("lock_reverb") == 2 then return end
   safe_metro_stop(randomize_metro)
   -- JPVERB
-  if math.random() <= 0.5 then targets["t60"] = 4 else targets["t60"] = random_float(2.6, 6) end
+  if math.random() <= 0.5 then targets["t60"] = 4 else targets["t60"] = random_float(2, 6) end
   if math.random() <= 0.6 then targets["damp"] = 0 else targets["damp"] = random_float(0, 15) end
   if math.random() <= 0.3 then targets["rsize"] = 1 else targets["rsize"] = random_float(1, 3) end
   if math.random() <= 0.6 then targets["earlyDiff"] = 70.7 else targets["earlyDiff"] = random_float(70.7, 90) end
