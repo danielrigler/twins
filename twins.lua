@@ -732,7 +732,7 @@ local function draw_param_row(y, label, param1, param2, is_density, is_pitch, is
     end
     draw_param_value(51, param1, is_locked1)
     draw_param_value(92, param2, is_locked2)
-    if not is_pitch then
+    if not is_pitch and param_name ~= "seek" then
         local function draw_value_bar(x, param)
             local bar_width = 30
             local bar_height = 1
@@ -769,10 +769,12 @@ end
 
 function redraw()
     if not installer:ready() then installer:redraw() do return end end
-    local current_time = util.time()
-    for param, adjustment in pairs(manual_adjustments) do
-        if adjustment and adjustment.time and (current_time - adjustment.time > manual_adjustment_duration) then
-            adjustment.active = false
+    if next(manual_adjustments) ~= nil then
+        local current_time = util.time()
+        for param, adjustment in pairs(manual_adjustments) do
+            if adjustment and adjustment.time and (current_time - adjustment.time > manual_adjustment_duration) then
+                adjustment.active = false
+            end
         end
     end
     screen.clear()
@@ -780,32 +782,84 @@ function redraw()
     screen.translate(0, animation_y)
     local current_mode = current_mode
     local current_filter_mode = current_filter_mode
-    local param_rows = {
-        {y = 11, label = "jitter:    ", mode = "jitter", param1 = "1jitter", param2 = "2jitter", hz = false, st = false},
-        {y = 21, label = "size:     ", mode = "size", param1 = "1size", param2 = "2size", hz = false, st = false},
-        {y = 31, label = "density:  ", mode = "density", param1 = "1density", param2 = "2density", hz = true, st = false},
-        {y = 41, label = "spread:   ", mode = "spread", param1 = "1spread", param2 = "2spread", hz = false, st = false},
-        {y = 51, label = "pitch:    ", mode = "pitch", param1 = "1pitch", param2 = "2pitch", hz = false, st = true}}
-    local bottom_labels = {seek = "seek:     ",pan = "pan:      ",lpf = current_filter_mode == "lpf" and "lpf:      " or "hpf:      ",speed = "speed:    "}
-    for _, row in ipairs(param_rows) do
-        draw_param_row(row.y, row.label, row.param1, row.param2, row.hz, row.st, current_mode == row.mode)
-    end
-    screen.move(5, 61)
-    screen.level(15)
-    screen.text(bottom_labels[current_mode] or "speed:    ")
-    if current_mode == "seek" then
-        draw_progress_bar(51, 63, 30, params:get("1seek"), 0, 100, false)
-        draw_progress_bar(92, 63, 30, params:get("2seek"), 0, 100, false)
-    elseif current_mode == "lpf" or current_mode == "hpf" then
-        local param1 = current_filter_mode == "lpf" and "1cutoff" or "1hpf"
-        local param2 = current_filter_mode == "lpf" and "2cutoff" or "2hpf"
-        draw_progress_bar(51, 63, 30, params:get(param1), 20, 20000, true)
-        draw_progress_bar(92, 63, 30, params:get(param2), 20, 20000, true)
-    end
     local is_highlighted = current_mode == "seek" or current_mode == "lpf" or current_mode == "hpf" or current_mode == "speed" or current_mode == "pan"
-    local function draw_bottom_value(x, track)
+    local highlight_level = 15
+    local normal_level = 1
+    local dim_level = 6
+    local param_rows = {
+        {y = 11, label = "jitter:    ", mode = "jitter", param1 = "1jitter", param2 = "2jitter"},
+        {y = 21, label = "size:     ", mode = "size", param1 = "1size", param2 = "2size"},
+        {y = 31, label = "density:  ", mode = "density", param1 = "1density", param2 = "2density", hz = true},
+        {y = 41, label = "spread:   ", mode = "spread", param1 = "1spread", param2 = "2spread"},
+        {y = 51, label = "pitch:    ", mode = "pitch", param1 = "1pitch", param2 = "2pitch", st = true}}
+    for _, row in ipairs(param_rows) do
+        local param_name = string.match(row.label, "%a+")
+        local is_highlighted_row = current_mode == row.mode
+        local text_level = is_highlighted_row and highlight_level or normal_level
+        screen.level(highlight_level)
+        screen.move(5, row.y)
+        screen.text(row.label)
+        for i, param in ipairs({row.param1, row.param2}) do
+            local x = i == 1 and 51 or 92
+            local track = i == 1 and 1 or 2
+            local is_locked = is_param_locked(track, param_name)
+            if is_locked then
+                draw_l_shape(x, row.y, true)
+            end
+            screen.move(x, row.y)
+            screen.level(text_level)
+            if row.hz then
+                screen.text(format_density(params:get(param)))
+            elseif row.st then
+                screen.text(format_pitch(params:get(param)))
+            elseif param_name == "spread" then
+                screen.text(string.format("%.0f%%", params:get(param)))
+            else
+                screen.text(params:string(param))
+            end
+            if not row.st and param_name ~= "seek" then
+                local min_val, max_val = lfo.get_parameter_range(param)
+                screen.level(dim_level)
+                if manual_adjustments[param] and manual_adjustments[param].active then
+                    local bar_value = util.linlin(min_val, max_val, 0, 30, manual_adjustments[param].value)
+                    screen.rect(x, row.y + 1, bar_value, 1)
+                else
+                    local lfo_mod = get_lfo_modulation(param)
+                    if lfo_mod then
+                        local bar_value = util.linlin(min_val, max_val, 0, 30, lfo_mod)
+                        screen.rect(x, row.y + 1, bar_value, 1)
+                    end
+                end
+                screen.fill()
+            end
+        end
+    end
+    local bottom_label = (current_mode == "lpf" or current_mode == "hpf") and (current_filter_mode == "lpf" and "lpf:      " or "hpf:      ") 
+                       or (current_mode == "seek" and "seek:     ") 
+                       or (current_mode == "pan" and "pan:      ") 
+                       or "speed:    "
+    screen.move(5, 61)
+    screen.level(highlight_level)
+    screen.text(bottom_label)
+    if current_mode == "seek" then
+        for i, track in ipairs({1, 2}) do
+            local x = i == 1 and 51 or 92
+            local value = params:get(track.."seek")
+            screen.level(dim_level)
+            screen.rect(x, 63, util.linlin(0, 100, 0, 30, value), 1)
+            screen.fill()
+        end
+    elseif current_mode == "lpf" or current_mode == "hpf" then
+        for i, track in ipairs({1, 2}) do
+            local x = i == 1 and 51 or 92
+            local param = current_filter_mode == "lpf" and track.."cutoff" or track.."hpf"
+            draw_progress_bar(x, 63, 30, params:get(param), 20, 20000, true)
+        end
+    end
+    for i, track in ipairs({1, 2}) do
+        local x = i == 1 and 51 or 92
         screen.move(x, 61)
-        screen.level(is_highlighted and 15 or 1)
+        screen.level(is_highlighted and highlight_level or normal_level)
         if current_mode == "seek" then
             screen.text(format_seek(params:get(track.."seek")))
         elseif current_mode == "pan" then
@@ -818,35 +872,34 @@ function redraw()
             screen.text(format_speed(params:get(track.."speed")))
         end
     end
-    draw_bottom_value(51, "1")
-    draw_bottom_value(92, "2")
-    local show_speed_lock = current_mode == "speed" or current_mode == "jitter" or current_mode == "size" or current_mode == "density" or current_mode == "spread" or current_mode == "pitch"
-    if current_mode == "pan" or current_mode == "seek" or show_speed_lock then
-        local param_type = show_speed_lock and "speed" or current_mode
-        local function draw_if_locked(x, track)
+    if current_mode == "pan" or current_mode == "seek" or 
+       current_mode == "speed" or current_mode == "jitter" or 
+       current_mode == "size" or current_mode == "density" or 
+       current_mode == "spread" or current_mode == "pitch" then
+        local param_type = (current_mode == "pan" or current_mode == "seek") and current_mode or "speed"
+        for i, track in ipairs({1, 2}) do
+            local x = i == 1 and 51 or 92
             if is_param_locked(track, param_type) then
                 draw_l_shape(x, 61, true)
             end
         end
-        draw_if_locked(51, 1)
-        draw_if_locked(92, 2)
     end
-    screen.level(6)
-    for i, x in ipairs({0, 127}) do
-        local track = tostring(i)
-            local volume = params:get(track.."volume")
-            local height = util.linlin(-60, 20, 0, 64, volume)
-            screen.rect(x, 64 - height, 1, height)
+    screen.level(dim_level)
+    for i, track in ipairs({1, 2}) do
+        local x = i == 1 and 0 or 127
+        local volume = params:get(track.."volume")
+        local height = util.linlin(-60, 20, 0, 64, volume)
+        screen.rect(x, 64 - height, 1, height)
     end
-    for i, center_start in ipairs({52, 93}) do
-        local track = tostring(i)
-            local pan = params:get(track.."pan")
-            local center_end = center_start + 25
-            local pos = util.linlin(-100, 100, center_start, center_end, pan)
-            screen.rect(pos - 1, 0, 4, 1)
+    for i, track in ipairs({1, 2}) do
+        local center_start = i == 1 and 52 or 93
+        local center_end = center_start + 25
+        local pan = params:get(track.."pan")
+        local pos = util.linlin(-100, 100, center_start, center_end, pan)
+        screen.rect(pos - 1, 0, 4, 1)
     end
     screen.fill()
-    screen.level(1)
+    screen.level(normal_level)
     if params:get("dry_mode") == 1 then screen.pixel(6, 0) screen.pixel(10, 0) screen.pixel(14, 0) end 
     if params:get("symmetry") == 1 then screen.pixel(6, 0) screen.pixel(8, 0) screen.pixel(10, 0) end
     screen.fill()
