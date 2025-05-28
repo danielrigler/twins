@@ -510,32 +510,24 @@ function enc(n, d)
     local function handle_param_adjustment(track, config, delta_multiplier)
         stop_interpolations()
         local param_name = track .. config.param
-        if config.has_lock and params:get(track .. "lock_" .. config.param) == 2 then
-            return
-        end
         if params:get("symmetry") == 1 then
             disable_lfos_for_param(param_name)
+            local other_track = track == 1 and 2 or 1
+            local other_param_name = other_track .. config.param
+            local delta = config.invert and -d or d
+            if config.wrap then
+                local current_val = params:get(other_param_name)
+                local new_val = wrap_value(current_val + delta, config.wrap[1], config.wrap[2])
+                params:set(other_param_name, new_val)
+                if config.engine then engine.seek(other_track, new_val / 100) end
+            else
+                params:delta(other_param_name, config.delta * (config.invert and -delta_multiplier or delta_multiplier) * d)
+            end
         else
             local is_active, lfo_index = is_lfo_active_for_param(param_name)
             if is_active then params:set(lfo_index .. "lfo", 1) end
         end
         manual_adjustments[param_name] = {active = true, value = params:get(param_name), time = util.time()}
-        if params:get("symmetry") == 1 then
-            local other_track = track == 1 and 2 or 1
-            local other_param_name = other_track .. config.param
-            
-            if not config.has_lock or params:get(other_track .. "lock_" .. config.param) ~= 2 then
-                local delta = config.invert and -d or d
-                if config.wrap then
-                    local current_val = params:get(other_param_name)
-                    local new_val = wrap_value(current_val + delta, config.wrap[1], config.wrap[2])
-                    params:set(other_param_name, new_val)
-                    if config.engine then engine.seek(other_track, new_val / 100) end
-                else
-                    params:delta(other_param_name, config.delta * (config.invert and -delta_multiplier or delta_multiplier) * d)
-                end
-            end
-        end
         if config.wrap then
             local current_val = params:get(param_name)
             local new_val = wrap_value(current_val + d, config.wrap[1], config.wrap[2])
