@@ -2,6 +2,7 @@ Engine_twins : CroneEngine {
     classvar nvoices = 2;
 
     var delayEffect;
+    var saturationEffect;
     var jpverbEffect;
     var shimmerEffect;
     var tapeEffect;
@@ -242,6 +243,15 @@ alloc {
             var degrade = AnalogDegrade.ar(loss,0.3,0.3,0.5,0.5);
             ReplaceOut.ar(bus, LinXFade2.ar(sig, degrade, mix * 2 - 1));
         }).add;
+        
+        SynthDef(\saturation, {
+            arg bus, drive=0.0;
+            var dry, wet, shaped;
+            dry = In.ar(bus, 2);
+            wet = dry * (drive * 10 + 1);
+            shaped = wet.tanh * 0.5;
+            ReplaceOut.ar(bus, LinXFade2.ar(dry, shaped, drive * 2 - 1));
+        }).add;
 
         SynthDef(\delay, {
             arg bus, mix=0.0, time, feedback, delayLPF=3500;
@@ -324,6 +334,11 @@ alloc {
             \mix, 0.0
         ], context.xg, 'addToTail');
         
+        saturationEffect = Synth.new(\saturation, [
+            \bus, mixBus.index,
+            \drive, 0.0
+        ], context.xg, 'addToTail');
+        
         delayEffect = Synth.new(\delay, [
             \bus, mixBus.index,
             \mix, 0.0
@@ -392,6 +407,7 @@ alloc {
         this.addCommand("tape_mix", "f", { arg msg; var mix = msg[1]; tapeEffect.set(\mix, mix); tapeEffect.run(mix > 0); });
         this.addCommand("sine_mix", "f", { arg msg; var mix = msg[1]; sineEffect.set(\mix, mix); sineEffect.run(mix > 0); });
         this.addCommand("sine_drive", "f", { arg msg; sineEffect.set(\sine_drive, msg[1]); });
+        this.addCommand("drive", "f", { arg msg; var drive = msg[1]; saturationEffect.set(\drive, drive); saturationEffect.run(drive > 0); });
         this.addCommand("wobble_mix", "f", { arg msg; var mix = msg[1]; wobbleEffect.set(\mix, mix); wobbleEffect.run(mix > 0); });
         this.addCommand("wobble_amp", "f", { arg msg; wobbleEffect.set(\wobble_amp, msg[1]); });
         this.addCommand("wobble_rpm", "f", { arg msg; wobbleEffect.set(\wobble_rpm, msg[1]); });
@@ -452,6 +468,7 @@ alloc {
         bufSine.free;
         jpverbEffect.free;
         shimmerEffect.free;
+        saturationEffect.free;
         tapeEffect.free;
         chewEffect.free;
         widthEffect.free;

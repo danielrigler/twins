@@ -18,6 +18,7 @@ function drymode.toggle_dry_mode()
             delay_mix = params:get("delay_mix"),
             shimmer_mix = params:get("shimmer_mix"),
             tape_mix = params:get("tape_mix"),
+            drive = params:get("drive"),
             eq_low_gain = {params:get("1eq_low_gain"), params:get("2eq_low_gain")},
             eq_high_gain = {params:get("1eq_high_gain"), params:get("2eq_high_gain")},
             cutoff = {params:get("1cutoff"), params:get("2cutoff")},
@@ -99,6 +100,7 @@ function drymode.toggle_dry_mode()
         params:set("delay_mix", 0)
         params:set("shimmer_mix", 0)
         params:set("tape_mix", 1)
+        params:set("drive", 0)
         params:set("Width", 100)
         params:set("monobass_mix", 1)
         params:set("sine_mix", 0)
@@ -120,6 +122,7 @@ function drymode.toggle_dry_mode()
             params:set("delay_mix", prev_settings.delay_mix)
             params:set("shimmer_mix", prev_settings.shimmer_mix)
             params:set("tape_mix", prev_settings.tape_mix)
+            params:set("drive", prev_settings.drive)
             params:set("Width", prev_settings.Width)
             params:set("monobass_mix", prev_settings.monobass_mix)
             params:set("sine_mix", prev_settings.sine_mix)
