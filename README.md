@@ -4,21 +4,19 @@ A randomized dual granular sample player for Monome Norns.
 
 ![100%](https://llllllll.co/uploads/default/original/3X/3/c/3c5256be810b01e9d48ec62541b852443f9cdf44.png)
 
-Inspired by @cfd90's Twine and contains influence and code from a lot of other norns users. I'm very grateful for the work of @infinitedigits, @justmat, @artfwo, @Nuno_Zimas and @sonoCircuit. I'm new to programming and had a lot of fun hacking this together. Tried to create something which is highly playable and controllable without any external gadgets. My main goal was building a tool for creating nice ambient soundscapes.
+Inspired by @cfd90's Twine and contains influence and code from a lot of other norns users. I'm grateful for the work of @infinitedigits, @justmat, @artfwo, @Nuno_Zimas and @sonoCircuit. Tried to create something which is highly playable and controllable without any external gadgets. My main goal was building a tool for creating nice ambient soundscapes. 
+
+This is basically Twine on steroids. It contains a lot of effects and extra granular parameters. Actually you can turn off granular processing and use this as a normal sample player with effects. Live input processing is also possible. Let me know if you find this useful. 
 
 **Some of the new features:**
-* Reverb and delay
+* Reverb, delay, tape effects, shimmer, EQ, filters, etc
 * Flexible volume control
-* Tape effects, shimmer, EQ
-* Lots of extra granular parameters
-* Increased parameter ranges
+* Extra granular parameters, increased parameter ranges
 * Smooth transition interpolation
 * Freely assignable LFOs with randomization
-* Navigation with parameter locking
-* Symmetry / mirroring
-* Live input
-* High-pass and low-pass filters
-+lots of other usability tweaks and features.
+* On screen navigation with parameter locking
+* Symmetry mode and mirroring
+* Live input processing
 
 ### Requirements
 norns / norns shield  
@@ -45,10 +43,10 @@ install from Maiden Project Manager, or from Maiden REPL:
 do not forget to restart.
 
 ### Version history
-* **v0.31** - Live input, rebuilt delay, tweaks
-* **v0.30** - Symmetry, dry mode, actions (less+/more-, LFO pause)
+* **v0.31** - Live input, rebuilt delay, tape saturation.
+* **v0.30** - Symmetry, dry mode, actions.
 * **v0.29** - Optimizations and tweaks.
-* **v0.28** - Shimmer update. 
+* **v0.28** - Shimmer update.
 * **v0.26** - Swith to JPverb. Locking improvements. 
 * **v0.25** - Improved shimmer. Small tweaks and fixes. 
 * **v0.24** - Added tape wobble. 
