@@ -172,15 +172,6 @@ alloc {
             BufWr.ar(in[1], bufR, phasor);
         }).add;
 
-        SynthDef(\width, {
-            arg bus, width=1.0;
-            var sig = In.ar(bus, 2);
-            var mid = (sig[0] + sig[1]) * 0.5;
-            var side = (sig[0] - sig[1]) * 0.5 * width;
-            sig = [mid + side, mid - side];
-            ReplaceOut.ar(bus, sig);
-        }).add;  
-
         SynthDef(\monobass, {
             arg bus, mix=0.0;
             var sig = In.ar(bus, 2);
@@ -272,6 +263,15 @@ alloc {
             ReplaceOut.ar(bus, LinXFade2.ar(dry, wet, mix * 2 - 1));
         }).add;
         
+        SynthDef(\width, {
+            arg bus, width=1.0;
+            var sig = In.ar(bus, 2);
+            var mid = (sig[0] + sig[1]) * 0.5;
+            var side = (sig[0] - sig[1]) * 0.5 * width;
+            sig = [mid + side, mid - side];
+            ReplaceOut.ar(bus, sig);
+        }).add;         
+        
         SynthDef(\output, {
             arg in, out;
             var sig = In.ar(in, 2);
@@ -294,65 +294,19 @@ alloc {
         
         context.server.sync;
 
-        widthEffect = Synth.new(\width, [
-            \bus, mixBus.index,
-            \width, 1.0
-        ], context.xg, 'addToTail');
-        
-        monobassEffect = Synth.new(\monobass, [
-            \bus, mixBus.index,
-            \mix, 0.0
-        ], context.xg, 'addToTail');
-        
-        shimmerEffect = Synth.new(\shimmer, [
-            \bus, mixBus.index,
-            \mix, 0.0
-        ], context.xg, 'addToTail');    
+        monobassEffect = Synth.new(\monobass, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
+        shimmerEffect = Synth.new(\shimmer, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');    
+        sineEffect = Synth.new(\sine, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');  
+        tapeEffect = Synth.new(\tape, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');  
+        wobbleEffect = Synth.new(\wobble, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
+        chewEffect = Synth.new(\chew, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
+        lossdegradeEffect = Synth.new(\lossdegrade, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
+        saturationEffect = Synth.new(\saturation, [\bus, mixBus.index, \drive, 0.0], context.xg, 'addToTail');
+        delayEffect = Synth.new(\delay, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
+        jpverbEffect = Synth.new(\jpverb, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
+        widthEffect = Synth.new(\width, [\bus, mixBus.index, \width, 1.0], context.xg, 'addToTail');
+        outputSynth = Synth.new(\output, [\in, mixBus.index,\out, context.out_b.index], context.xg, 'addToTail');   
 
-        sineEffect = Synth.new(\sine, [
-            \bus, mixBus.index,
-            \mix, 0.0
-        ], context.xg, 'addToTail');  
-
-        tapeEffect = Synth.new(\tape, [
-            \bus, mixBus.index,
-            \mix, 0.0
-        ], context.xg, 'addToTail');  
-        
-        wobbleEffect = Synth.new(\wobble, [
-            \bus, mixBus.index,
-            \mix, 0.0,
-        ], context.xg, 'addToTail');
-        
-        chewEffect = Synth.new(\chew, [
-            \bus, mixBus.index,
-            \mix, 0.0
-        ], context.xg, 'addToTail');
-
-        lossdegradeEffect = Synth.new(\lossdegrade, [
-            \bus, mixBus.index,
-            \mix, 0.0
-        ], context.xg, 'addToTail');
-        
-        saturationEffect = Synth.new(\saturation, [
-            \bus, mixBus.index,
-            \drive, 0.0
-        ], context.xg, 'addToTail');
-        
-        delayEffect = Synth.new(\delay, [
-            \bus, mixBus.index,
-            \mix, 0.0
-        ], context.xg, 'addToTail');
-        
-        jpverbEffect = Synth.new(\jpverb, [
-            \bus, mixBus.index,
-            \mix, 0.0
-        ], context.xg, 'addToTail');
-        
-        outputSynth = Synth.new(\output, [
-            \in, mixBus.index,
-            \out, context.out_b.index
-        ], context.xg, 'addToTail');   
 
         this.addCommand("reverb_mix", "f", { arg msg; var mix = msg[1]; jpverbEffect.set(\mix, mix); jpverbEffect.run(mix > 0); });
         this.addCommand("t60", "f", { arg msg; jpverbEffect.set(\t60, msg[1]); });
