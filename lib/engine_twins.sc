@@ -60,6 +60,37 @@ readBuf { arg i, path;
     });
 }
 
+unloadAll {
+    nvoices.do({ arg i;
+        var newBufL = Buffer.alloc(context.server, context.server.sampleRate * 1);
+        var newBufR = Buffer.alloc(context.server, context.server.sampleRate * 1);
+        
+        if(buffersL[i].notNil, { buffersL[i].free; });
+        if(buffersR[i].notNil, { buffersR[i].free; });
+        
+        buffersL.put(i, newBufL);
+        buffersR.put(i, newBufR);
+        
+        if(voices[i].notNil, {
+            voices[i].set(
+                \buf_l, newBufL,
+                \buf_r, newBufR,
+                \t_reset_pos, 1
+            );
+        });
+        
+        liveInputBuffersL[i].zero;
+        liveInputBuffersR[i].zero;
+        
+        if(liveInputRecorders[i].notNil, {
+            liveInputRecorders[i].free;
+            liveInputRecorders[i] = nil;
+        });
+    });
+    
+    wobbleBuffer.zero;
+}
+
 alloc {
         buffersL = Array.fill(nvoices, { arg i;
             Buffer.alloc(context.server, context.server.sampleRate * 1);
@@ -507,6 +538,7 @@ alloc {
         
         this.addCommand("isMono", "ii", { arg msg; var voice = msg[1] - 1; voices[voice].set(\isMono, msg[2]); });
         this.addCommand("live_mono", "ii", { arg msg; var voice = msg[1] - 1; var mono = msg[2]; if(liveInputRecorders[voice].notNil, {liveInputRecorders[voice].set(\isMono, mono); }); });
+        this.addCommand("unload_all", "", {this.unloadAll(); });
     }
 
     free {

@@ -233,7 +233,7 @@ local function setup_params()
         end)
     end
 
-    params:add_option("isMono", "Live Input Mode", {"stereo", "mono"}, 1)
+    params:add_option("isMono", "Input Mode", {"stereo", "mono"}, 1)
     params:set_action("isMono", function(value)
         local monoValue = value - 1
         for i = 1, 2 do
@@ -391,8 +391,9 @@ local function setup_params()
     params:add_binary("macro_more", "More+", "trigger", 0) params:set_action("macro_more", function() macro.macro_more() end)
     params:add_binary("macro_less", "Less-", "trigger", 0) params:set_action("macro_less", function() macro.macro_less() end)
     
-    params:add_group("Other", 2)
+    params:add_group("Other", 3)
     params:add_binary("dry_mode", "Dry Mode", "toggle", 0) params:set_action("dry_mode", function(x) drymode.toggle_dry_mode() end)
+    params:add_binary("unload_all", "Unload All Audio", "trigger", 0) params:set_action("unload_all", function() engine.unload_all() params:set("1sample", "-") params:set("2sample", "-") params:set("1live_input", 0) params:set("2live_input", 0) params:set("1live_direct", 0) params:set("2live_direct", 0) end)
     params:add_option("steps", "Transition Time", {"short", "medium", "long"}, 2) params:set_action("steps", function(value) for i = 1, 2 do if randomize_metro[i] then randomize_metro[i]:stop() end end lfo.cleanup() steps = ({20, 400, 800})[value] end)
     
     for i = 1, 2 do
