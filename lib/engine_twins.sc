@@ -125,11 +125,9 @@ alloc {
             overtones_1=0, 
             overtones_2=0, 
             cutoff=20000, hpf=20,
-            sine_drive=1, sine_wet=0,
             direction_mod=0,
             size_variation=0,
             low_gain=0, high_gain=0,
-            width=1,
             smoothbass=1,
             pitch_random_plus=0, pitch_random_minus=0;
  
@@ -145,7 +143,6 @@ alloc {
             var low, high;
             var positive_intervals = [12, 24], negative_intervals = [-12, -24];
             var interval_plus, interval_minus, final_interval;
-            var mid, side;
             
             speed = Lag.kr(speed);
             density_mod = density * (2**(LFNoise1.kr(density) * density_mod_amt));
@@ -199,8 +196,8 @@ alloc {
         }).add;
         
         SynthDef(\liveDirect, {
-            arg out, pan=0, gain, cutoff=20000, hpf=20, low_gain=0, high_gain=0, width=1, isMono;
-            var mid, side, low, high;
+            arg out, pan=0, gain, cutoff=20000, hpf=20, low_gain=0, high_gain=0, isMono;
+            var low, high;
             var sig = SoundIn.ar([0, 1]);
             sig = Select.ar(isMono, [sig, [sig[0], sig[0]] ]);
             low = BLowShelf.ar(sig, 130, 6, low_gain);
@@ -209,9 +206,6 @@ alloc {
             sig = HPF.ar(sig, Lag.kr(hpf));
             sig = MoogFF.ar(sig, Lag.kr(cutoff), 0.1);
             sig = Balance2.ar(sig[0], sig[1], Lag.kr(pan));
-            mid = (sig[0] + sig[1]) * 0.5;
-            side = (sig[0] - sig[1]) * 0.5 * width;
-            sig = [mid + side, mid - side];
             sig = Compander.ar(sig, sig, 0.4, 1, 0.5, 0.03, 0.3) * 0.7;
             Out.ar(out, sig * gain);
         }).add;
@@ -454,7 +448,7 @@ alloc {
                 if (liveInputRecorders[voice].notNil) { 
                     liveInputRecorders[voice].free; };
                 liveInputRecorders[voice] = nil;};
-          });
+        });
         
         this.addCommand("live_direct", "ii", { arg msg;
             var voice = msg[1] - 1;
@@ -465,19 +459,17 @@ alloc {
                 if (liveInputRecorders[voice].notNil, { liveInputRecorders[voice].free; });
                 voices[voice] = Synth.new(\liveDirect, [
                     \out, mixBus.index,
-                    \pan, 0,
-                    \spread, 0,
-                    \gain, 1,
-                    \cutoff, 20000,
-                    \hpf, 20,
-                    \low_gain, 0,
-                    \high_gain, 0,
-                    \width, 1
+                    \pan, currentPan[voice] ? 0,
+                    \spread, currentSpread[voice] ? 0,
+                    \gain, currentVolume[voice] ? 1,
+                    \cutoff, currentCutoff[voice] ? 20000,
+                    \hpf, currentHpf[voice] ? 20,
+                    \low_gain, currentLowGain[voice] ? 0,
+                    \high_gain, currentHighGain[voice] ? 0
                 ], target: pg);
             }, {
                 if (voices[voice].notNil, { voices[voice].free; });
                 currentParams = Dictionary.newFrom([
-                    \pos, 0,
                     \speed, currentSpeed[voice] ? 0.1,
                     \jitter, currentJitter[voice] ? 0.25,
                     \size, currentSize[voice] ? 0.1,
