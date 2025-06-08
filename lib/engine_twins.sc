@@ -30,6 +30,7 @@ Engine_twins : CroneEngine {
     var currentPitchMode, currentTrigMode, currentDirectionMod;
     var currentSizeVariation, currentPitchRandomPlus, currentPitchRandomMinus;
     var currentSmoothbass, currentLowGain, currentHighGain;
+    var liveBufferMix = 1.0;
 
     *new { arg context, doneCallback;
         ^super.new(context, doneCallback);
@@ -64,13 +65,10 @@ unloadAll {
     nvoices.do({ arg i;
         var newBufL = Buffer.alloc(context.server, context.server.sampleRate * 1);
         var newBufR = Buffer.alloc(context.server, context.server.sampleRate * 1);
-        
         if(buffersL[i].notNil, { buffersL[i].free; });
         if(buffersR[i].notNil, { buffersR[i].free; });
-        
         buffersL.put(i, newBufL);
         buffersR.put(i, newBufR);
-        
         if(voices[i].notNil, {
             voices[i].set(
                 \buf_l, newBufL,
@@ -78,17 +76,34 @@ unloadAll {
                 \t_reset_pos, 1
             );
         });
-        
         liveInputBuffersL[i].zero;
         liveInputBuffersR[i].zero;
-        
         if(liveInputRecorders[i].notNil, {
             liveInputRecorders[i].free;
             liveInputRecorders[i] = nil;
         });
     });
-    
     wobbleBuffer.zero;
+}
+
+saveLiveBufferToTape { arg voice, filename;
+    var path = "/home/we/dust/audio/tape/" ++ filename;
+    var bufL = liveInputBuffersL[voice];
+    var bufR = liveInputBuffersR[voice];
+    var interleaved = Buffer.alloc(context.server, bufL.numFrames, 2);
+    bufL.loadToFloatArray(action: { |leftData|
+        bufR.loadToFloatArray(action: { |rightData|
+            var interleavedData = Array.new(leftData.size * 2);
+            leftData.size.do { |i|
+                interleavedData.add(leftData[i]);
+                interleavedData.add(rightData[i]); };
+            interleaved.loadCollection(interleavedData, action: {
+                interleaved.write(path, "WAV", "float");
+                this.readBuf(voice, path);
+                interleaved.free;
+            });
+        });
+    });
 }
 
 alloc {
@@ -144,23 +159,22 @@ alloc {
       
         SynthDef(\synth, {
             arg out, buf_l, buf_r,
-            pos=0, speed=1, jitter=0,
-            size=0.1, density=20, density_mod_amt=0, pitch_offset=0, pan=0, spread=0, gain=1,
-            t_reset_pos=0,
-            granular_gain=1,
-            pitch_mode=0,
-            trig_mode=0,
-            subharmonics_1=0, 
-            subharmonics_2=0,
-            subharmonics_3=0,
-            overtones_1=0, 
-            overtones_2=0, 
-            cutoff=20000, hpf=20,
-            direction_mod=0,
-            size_variation=0,
-            low_gain=0, high_gain=0,
-            smoothbass=1,
-            pitch_random_plus=0, pitch_random_minus=0;
+            pos, speed, jitter, size, density, density_mod_amt, pitch_offset, pan, spread, gain,
+            t_reset_pos,
+            granular_gain,
+            pitch_mode,
+            trig_mode,
+            subharmonics_1, 
+            subharmonics_2,
+            subharmonics_3,
+            overtones_1, 
+            overtones_2, 
+            cutoff, hpf,
+            direction_mod,
+            size_variation,
+            low_gain, high_gain,
+            smoothbass,
+            pitch_random_plus, pitch_random_minus;
  
             var grain_trig, jitter_sig1, jitter_sig2, jitter_sig3, jitter_sig4, jitter_sig5, jitter_sig6, buf_dur, pan_sig, buf_pos, pos_sig, sig_l, sig_r, sig_mix, density_mod, dry_sig, granular_sig, base_pitch, grain_pitch, shaped, grain_size;
             var invDenom = 1.5 / (1 + subharmonics_1 + subharmonics_2 + subharmonics_3 + overtones_1 + overtones_2);
@@ -227,7 +241,7 @@ alloc {
         }).add;
         
         SynthDef(\liveDirect, {
-            arg out, pan=0, gain, cutoff=20000, hpf=20, low_gain=0, high_gain=0, isMono;
+            arg out, pan, gain, cutoff, hpf, low_gain, high_gain, isMono;
             var low, high;
             var sig = SoundIn.ar([0, 1]);
             sig = Select.ar(isMono, [sig, [sig[0], sig[0]] ]);
@@ -242,12 +256,18 @@ alloc {
         }).add;
         
         SynthDef(\liveInputRecorder, {
-            arg bufL, bufR, isMono=0;
+            arg bufL, bufR, isMono=0, mix=1.0;
             var in = SoundIn.ar([0, 1]);
             var phasor = Phasor.ar(0, 1, 0, BufFrames.kr(bufL));
+            var oldL = BufRd.ar(1, bufL, phasor);
+            var oldR = BufRd.ar(1, bufR, phasor);
+            var mixLag, mixedL, mixedR;
             in = Select.ar(isMono, [in, [Mix.ar(in), Mix.ar(in)]]);
-            BufWr.ar(in[0], bufL, phasor);
-            BufWr.ar(in[1], bufR, phasor);
+            mixLag = Lag.kr(mix, 0.1);
+            mixedL = (oldL * (1 - mixLag)) + (in[0] * mixLag);
+            mixedR = (oldR * (1 - mixLag)) + (in[1] * mixLag);
+            BufWr.ar(mixedL, bufL, phasor);
+            BufWr.ar(mixedR, bufR, phasor);
         }).add;
 
         SynthDef(\monobass, {
@@ -464,21 +484,34 @@ alloc {
         this.addCommand("set_live_input", "ii", { arg msg;
             var voice = msg[1] - 1;
             var enable = msg[2];
-            if (enable == 1) {
-                if (liveInputRecorders[voice].notNil) { 
-                    liveInputRecorders[voice].free; };
+            if (enable == 1, {
+                if (liveInputRecorders[voice].notNil, { 
+                    liveInputRecorders[voice].free; 
+                });
                 liveInputRecorders[voice] = Synth.new(\liveInputRecorder, [
                     \bufL, liveInputBuffersL[voice],
-                    \bufR, liveInputBuffersR[voice]
+                    \bufR, liveInputBuffersR[voice],
+                    \mix, liveBufferMix
                 ], context.xg, 'addToHead');
                 voices[voice].set(
                     \buf_l, liveInputBuffersL[voice],
                     \buf_r, liveInputBuffersR[voice],
                     \t_reset_pos, 1);
-            } {
-                if (liveInputRecorders[voice].notNil) { 
-                    liveInputRecorders[voice].free; };
-                liveInputRecorders[voice] = nil;};
+            }, {
+                if (liveInputRecorders[voice].notNil, { 
+                    liveInputRecorders[voice].free; 
+                });
+                liveInputRecorders[voice] = nil;
+            });
+        });
+        
+        this.addCommand("live_buffer_mix", "f", { arg msg; 
+            liveBufferMix = msg[1]; 
+            liveInputRecorders.do({ arg recorder;
+                if (recorder.notNil, {
+                    recorder.set(\mix, liveBufferMix);
+                });
+            });
         });
         
         this.addCommand("live_direct", "ii", { arg msg;
@@ -539,6 +572,7 @@ alloc {
         this.addCommand("isMono", "ii", { arg msg; var voice = msg[1] - 1; voices[voice].set(\isMono, msg[2]); });
         this.addCommand("live_mono", "ii", { arg msg; var voice = msg[1] - 1; var mono = msg[2]; if(liveInputRecorders[voice].notNil, {liveInputRecorders[voice].set(\isMono, mono); }); });
         this.addCommand("unload_all", "", {this.unloadAll(); });
+        this.addCommand("save_live_buffer", "is", { arg msg; var voice = msg[1] - 1; var filename = msg[2]; var bufL = liveInputBuffersL[voice]; var bufR = liveInputBuffersR[voice]; this.saveLiveBufferToTape(voice, filename); });
     }
 
     free {

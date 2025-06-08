@@ -191,7 +191,7 @@ local function setup_params()
     end
     params:add_binary("randomtapes", "Random Tapes", "trigger", 0) params:set_action("randomtapes", function() load_random_tape_file(1) load_random_tape_file(2) end)
 
-    params:add_group("Live!", 5)
+    params:add_group("Live!", 8)
     for i = 1, 2 do
         params:add_binary(i.."live_input", "Live Buffer "..i.." ● ►", "toggle", 0)
         params:set_action(i.."live_input", function(value)
@@ -206,6 +206,10 @@ local function setup_params()
             end
         end)
     end
+
+    params:add_control("live_buffer_mix", "Overdub", controlspec.new(0, 100, "lin", 1, 100, "%")) params:set_action("live_buffer_mix", function(value) engine.live_buffer_mix(value / 100) end)
+    params:add{type = "trigger", id = "save_live_buffer1", name = "Buffer1 to Tape", action = function() local timestamp = os.date("%Y%m%d_%H%M%S") local filename = "live1_"..timestamp..".wav" engine.save_live_buffer(1, filename) end}
+    params:add{type = "trigger", id = "save_live_buffer2", name = "Buffer2 to Tape", action = function() local timestamp = os.date("%Y%m%d_%H%M%S") local filename = "live2_"..timestamp..".wav" engine.save_live_buffer(2, filename) end}
 
     for i = 1, 2 do
         params:add_binary(i.."live_direct", "Direct "..i.." ►", "toggle", 0)
@@ -273,7 +277,7 @@ local function setup_params()
     params:add_control("delay_mix", "Mix", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("delay_mix", function(x) engine.delay_mix(x/100) end)
     params:add_control("delay_time", "Time", controlspec.new(0.15, 4, "exp", 0.01, 0.5, "s")) params:set_action("delay_time", function(x) engine.delay_time(x) end)
     params:add_control("delay_feedback", "Feedback", controlspec.new(0, 100, "lin", 1, 80, "%")) params:set_action("delay_feedback", function(x) engine.delay_feedback(x/100) end)
-    params:add_control("delayLPF", "Filter", controlspec.new(20, 20000, "lin", 1, 3500, "Hz")) params:set_action("delayLPF", function(x) engine.delayLPF(x) end)
+    params:add_control("delayLPF", "Filter", controlspec.new(20, 20000, "lin", 1, 3000, "Hz")) params:set_action("delayLPF", function(x) engine.delayLPF(x) end)
     params:add_separator("   ")
     params:add_option("lock_delay", "Lock Parameters", {"off", "on"}, 1)
 
