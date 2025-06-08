@@ -35,7 +35,7 @@ _some features might require a pi4 based unit._
 ### Discussion
 **[FORUM](https://llllllll.co/t/twins/71052)**
 ### Download
-**v0.31**
+**v0.32**
 install from Maiden Project Manager, or from Maiden REPL:
 ```
 ;install https://github.com/danielrigler/twins
@@ -43,7 +43,8 @@ install from Maiden Project Manager, or from Maiden REPL:
 do not forget to restart.
 
 ### Version history
-* **v0.31** - Live input, rebuilt delay, tape saturation.
+* **v0.32** - Live mode tweaks, tape saturation.
+* **v0.31** - Live mode, rebuilt delay.
 * **v0.30** - Symmetry, dry mode, actions.
 * **v0.29** - Optimizations and tweaks.
 * **v0.28** - Shimmer update.
