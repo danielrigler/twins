@@ -191,7 +191,7 @@ local function setup_params()
     end
     params:add_binary("randomtapes", "Random Tapes", "trigger", 0) params:set_action("randomtapes", function() load_random_tape_file(1) load_random_tape_file(2) end)
 
-    params:add_group("Live!", 8)
+    params:add_group("Live!", 10)
     for i = 1, 2 do
         params:add_binary(i.."live_input", "Live Buffer "..i.." ● ►", "toggle", 0)
         params:set_action(i.."live_input", function(value)
@@ -208,6 +208,7 @@ local function setup_params()
     end
 
     params:add_control("live_buffer_mix", "Overdub", controlspec.new(0, 100, "lin", 1, 100, "%")) params:set_action("live_buffer_mix", function(value) engine.live_buffer_mix(value / 100) end)
+    params:add_control("live_buffer_length", "Buffer Length", controlspec.new(0.1, 60, "lin", 0.1, 8, "s")) params:set_action("live_buffer_length", function(value) engine.live_buffer_length(value) end)
     params:add{type = "trigger", id = "save_live_buffer1", name = "Buffer1 to Tape", action = function() local timestamp = os.date("%Y%m%d_%H%M%S") local filename = "live1_"..timestamp..".wav" engine.save_live_buffer(1, filename) end}
     params:add{type = "trigger", id = "save_live_buffer2", name = "Buffer2 to Tape", action = function() local timestamp = os.date("%Y%m%d_%H%M%S") local filename = "live2_"..timestamp..".wav" engine.save_live_buffer(2, filename) end}
 
@@ -237,9 +238,7 @@ local function setup_params()
         end)
     end
 
-    params:add_option("isMono", "Input Mode", {"stereo", "mono"}, 1)
-    params:set_action("isMono", function(value)
-        local monoValue = value - 1
+    params:add_option("isMono", "Input Mode", {"stereo", "mono"}, 1) params:set_action("isMono", function(value) local monoValue = value - 1
         for i = 1, 2 do
             if params:get(i.."live_direct") == 1 then
                 engine.isMono(i, monoValue)
@@ -249,6 +248,7 @@ local function setup_params()
             end
         end
     end)
+    params:add_binary("dry_mode2", "Dry Mode", "toggle", 0) params:set_action("dry_mode2", function(x) drymode.toggle_dry_mode2() end)
 
     params:add_separator("Settings")
     params:add_group("Granular", 33)

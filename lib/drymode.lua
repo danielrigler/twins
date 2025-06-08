@@ -168,4 +168,25 @@ function drymode.toggle_dry_mode()
     end
 end
 
+function drymode.toggle_dry_mode2()
+    dry_mode_state2 = not dry_mode_state2
+    if not dry_mode_state2 then
+        prev_settings = {
+            granular_gain = {params:get("1granular_gain"), params:get("2granular_gain")},
+            speed = {params:get("1speed"), params:get("2speed")}
+        }
+        for i = 1, 2 do
+            params:set(i.."granular_gain", 0)
+            params:set(i.."speed", 1.0)
+        end
+    else
+        if next(prev_settings) ~= nil then
+            for i = 1, 2 do
+                params:set(i.."granular_gain", prev_settings.granular_gain[i])
+                params:set(i.."speed", prev_settings.speed[i])
+            end
+        end
+    end
+end
+
 return drymode

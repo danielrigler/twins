@@ -62,9 +62,9 @@ readBuf { arg i, path;
 }
 
 unloadAll {
-    nvoices.do({ arg i;
-        var newBufL = Buffer.alloc(context.server, context.server.sampleRate * 1);
-        var newBufR = Buffer.alloc(context.server, context.server.sampleRate * 1);
+    nvoices.do({ arg i, live_buffer_length;
+        var newBufL = Buffer.alloc(context.server, context.server.sampleRate * live_buffer_length);
+        var newBufR = Buffer.alloc(context.server, context.server.sampleRate * live_buffer_length);
         if(buffersL[i].notNil, { buffersL[i].free; });
         if(buffersR[i].notNil, { buffersR[i].free; });
         buffersL.put(i, newBufL);
@@ -256,16 +256,15 @@ alloc {
         }).add;
         
         SynthDef(\liveInputRecorder, {
-            arg bufL, bufR, isMono=0, mix=1.0;
+            arg bufL, bufR, isMono=0, mix;
             var in = SoundIn.ar([0, 1]);
             var phasor = Phasor.ar(0, 1, 0, BufFrames.kr(bufL));
             var oldL = BufRd.ar(1, bufL, phasor);
             var oldR = BufRd.ar(1, bufR, phasor);
-            var mixLag, mixedL, mixedR;
+            var mixedL, mixedR;
             in = Select.ar(isMono, [in, [Mix.ar(in), Mix.ar(in)]]);
-            mixLag = Lag.kr(mix, 0.1);
-            mixedL = (oldL * (1 - mixLag)) + (in[0] * mixLag);
-            mixedR = (oldR * (1 - mixLag)) + (in[1] * mixLag);
+            mixedL = XFade2.ar(oldL, in[0], mix * 2 - 1);
+            mixedR = XFade2.ar(oldR, in[1], mix * 2 - 1);
             BufWr.ar(mixedL, bufL, phasor);
             BufWr.ar(mixedR, bufR, phasor);
         }).add;
@@ -573,6 +572,24 @@ alloc {
         this.addCommand("live_mono", "ii", { arg msg; var voice = msg[1] - 1; var mono = msg[2]; if(liveInputRecorders[voice].notNil, {liveInputRecorders[voice].set(\isMono, mono); }); });
         this.addCommand("unload_all", "", {this.unloadAll(); });
         this.addCommand("save_live_buffer", "is", { arg msg; var voice = msg[1] - 1; var filename = msg[2]; var bufL = liveInputBuffersL[voice]; var bufR = liveInputBuffersR[voice]; this.saveLiveBufferToTape(voice, filename); });
+        this.addCommand("live_buffer_length", "f", { arg msg; var length = msg[1];
+            liveInputBuffersL.do({ arg buf; buf.free; });
+            liveInputBuffersR.do({ arg buf; buf.free; });
+            liveInputBuffersL = Array.fill(nvoices, {Buffer.alloc(context.server, context.server.sampleRate * length);});
+            liveInputBuffersR = Array.fill(nvoices, {Buffer.alloc(context.server, context.server.sampleRate * length);});
+            liveInputRecorders.do({ arg recorder, i;
+                if (recorder.notNil, {recorder.free;
+                    liveInputRecorders[i] = Synth.new(\liveInputRecorder, [
+                        \bufL, liveInputBuffersL[i],
+                        \bufR, liveInputBuffersR[i],
+                        \mix, liveBufferMix
+                    ], context.xg, 'addToHead');
+                    voices[i].set(
+                        \buf_l, liveInputBuffersL[i],
+                        \buf_r, liveInputBuffersR[i],
+                        \t_reset_pos, 1);
+        }); }); });
+
     }
 
     free {
