@@ -409,9 +409,9 @@ local function setup_params()
       params:add_option(i.. "lock_density", i.. " lock density", {"off", "on"}, 1)
       params:add_option(i.. "lock_spread", i.. " lock spread", {"off", "on"}, 1)
       params:add_option(i.. "lock_pitch", i.. " lock pitch", {"off", "on"}, 1)
-      params:add_option(i.. "lock_pan", i.. " lock pan", {"off", "on"}, 1)
-      params:add_option(i.. "lock_seek", i.. " lock seek", {"off", "on"}, 1)
       params:add_option(i.. "lock_speed", i.. " lock speed", {"off", "on"}, 1)
+      params:add_option(i.. "lock_seek", i.. " lock seek", {"off", "on"}, 1)
+      params:add_option(i.. "lock_pan", i.. " lock pan", {"off", "on"}, 1)
     end
 
     params:add_group("Symmetry", 3)
@@ -950,7 +950,7 @@ function redraw()
     end
     
     -- Draw parameter locks (skip if in direct live mode)
-    if (current_mode ~= "lpf" or current_mode ~= "hpf") then
+    if (current_mode ~= "lpf" and current_mode ~= "hpf") then
         local param_type = (current_mode == "pan" or current_mode == "seek") and current_mode or "speed"
         for i, track in ipairs({1, 2}) do
             if not is_direct_live(track) then
