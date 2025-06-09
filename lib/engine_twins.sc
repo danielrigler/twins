@@ -24,7 +24,7 @@ Engine_twins : CroneEngine {
     var <liveInputBuffersR;
     var <liveInputRecorders;
     var currentSpeed, currentJitter, currentSize, currentDensity, currentDensityModAmt, currentPitch, currentPan, currentSpread;
-    var currentVolume, currentGranularGain, currentCutoff, currentHpf;
+    var currentVolume, currentGranularGain, currentCutoff, currentHpf, currentlpfgain;
     var currentSubharmonics1, currentSubharmonics2, currentSubharmonics3;
     var currentOvertones1, currentOvertones2;
     var currentPitchMode, currentTrigMode, currentDirectionMod;
@@ -139,7 +139,8 @@ alloc {
         currentSpread = [0, 0];            
         currentVolume = [1, 1];            
         currentGranularGain = [1, 1];     
-        currentCutoff = [20000, 20000];    
+        currentCutoff = [20000, 20000];
+        currentlpfgain = [0.1, 0.1];
         currentHpf = [20, 20];             
         currentSubharmonics1 = [0, 0];    
         currentSubharmonics2 = [0, 0];      
@@ -169,7 +170,7 @@ alloc {
             subharmonics_3,
             overtones_1, 
             overtones_2, 
-            cutoff, hpf,
+            cutoff, hpf, lpfgain=0.1,
             direction_mod,
             size_variation,
             low_gain, high_gain,
@@ -233,7 +234,7 @@ alloc {
             sig_mix = low + high;
             
             sig_mix = HPF.ar(sig_mix, Lag.kr(hpf));
-            sig_mix = MoogFF.ar(sig_mix, Lag.kr(cutoff), 0.1);
+            sig_mix = MoogFF.ar(sig_mix, Lag.kr(cutoff), lpfgain);
 
             sig_mix = Compander.ar(sig_mix, sig_mix, 0.4, 1, 0.5, 0.03, 0.3) * 0.7;
 
@@ -241,7 +242,7 @@ alloc {
         }).add;
         
         SynthDef(\liveDirect, {
-            arg out, pan, gain, cutoff, hpf, low_gain, high_gain, isMono;
+            arg out, pan, gain, cutoff, hpf, low_gain, high_gain, isMono, lpfgain=0.1;
             var low, high;
             var sig = SoundIn.ar([0, 1]);
             sig = Select.ar(isMono, [sig, [sig[0], sig[0]] ]);
@@ -249,7 +250,7 @@ alloc {
             high = BHiShelf.ar(sig, 3900, 6, high_gain);
             sig = low + high;
             sig = HPF.ar(sig, Lag.kr(hpf));
-            sig = MoogFF.ar(sig, Lag.kr(cutoff), 0.1);
+            sig = MoogFF.ar(sig, Lag.kr(cutoff), lpfgain);
             sig = Balance2.ar(sig[0], sig[1], Lag.kr(pan));
             sig = Compander.ar(sig, sig, 0.4, 1, 0.5, 0.03, 0.3) * 0.7;
             Out.ar(out, sig * gain);
@@ -418,7 +419,9 @@ alloc {
         this.addCommand("highcut", "f", { arg msg; jpverbEffect.set(\highcut, msg[1]); });
         
         this.addCommand("cutoff", "if", { arg msg; var voice = msg[1] - 1; currentCutoff[voice] = msg[2]; voices[voice].set(\cutoff, msg[2]); });
+        this.addCommand("lpfgain", "if", { arg msg; var voice = msg[1] - 1; currentlpfgain[voice] = msg[2]; voices[voice].set(\lpfgain, msg[2]); });
         this.addCommand("hpf", "if", { arg msg; var voice = msg[1] - 1; currentHpf[voice] = msg[2]; voices[voice].set(\hpf, msg[2]); });
+        
         this.addCommand("granular_gain", "if", { arg msg; var voice = msg[1] - 1; currentGranularGain[voice] = msg[2]; voices[voice].set(\granular_gain, msg[2]); });
         this.addCommand("density_mod_amt", "if", { arg msg; var voice = msg[1] - 1; currentDensityModAmt[voice] = msg[2]; voices[voice].set(\density_mod_amt, msg[2]); });
         this.addCommand("trig_mode", "ii", { arg msg; var voice = msg[1] - 1; currentTrigMode[voice] = msg[2]; voices[voice].set(\trig_mode, msg[2]); });
@@ -526,6 +529,7 @@ alloc {
                     \spread, currentSpread[voice] ? 0,
                     \gain, currentVolume[voice] ? 1,
                     \cutoff, currentCutoff[voice] ? 20000,
+                    \lpfgain, currentlpfgain[voice] ? 0.1,
                     \hpf, currentHpf[voice] ? 20,
                     \low_gain, currentLowGain[voice] ? 0,
                     \high_gain, currentHighGain[voice] ? 0
@@ -543,6 +547,7 @@ alloc {
                     \gain, currentVolume[voice] ? 1,
                     \granular_gain, currentGranularGain[voice] ? 1,
                     \cutoff, currentCutoff[voice] ? 20000,
+                    \lpfgain, currentlpfgain[voice] ? 0.1,
                     \hpf, currentHpf[voice] ? 20,
                     \subharmonics_1, currentSubharmonics1[voice] ? 0,
                     \subharmonics_2, currentSubharmonics2[voice] ? 0,
