@@ -30,6 +30,7 @@ Engine_twins : CroneEngine {
     var currentPitchMode, currentTrigMode, currentDirectionMod;
     var currentSizeVariation, currentPitchRandomPlus, currentPitchRandomMinus;
     var currentSmoothbass, currentLowGain, currentHighGain;
+    var currentProbability;
     var liveBufferMix = 1.0;
 
     *new { arg context, doneCallback;
@@ -157,6 +158,7 @@ alloc {
         currentDensityModAmt = [0, 0];
         currentLowGain = [0, 0];
         currentHighGain = [0, 0];
+        currentProbability = [100, 100];
       
         SynthDef(\synth, {
             arg out, buf_l, buf_r,
@@ -175,7 +177,8 @@ alloc {
             size_variation,
             low_gain, high_gain,
             smoothbass,
-            pitch_random_plus, pitch_random_minus;
+            pitch_random_plus, pitch_random_minus,
+            probability;
  
             var grain_trig, jitter_sig1, jitter_sig2, jitter_sig3, jitter_sig4, jitter_sig5, jitter_sig6, buf_dur, pan_sig, buf_pos, pos_sig, sig_l, sig_r, sig_mix, density_mod, dry_sig, granular_sig, base_pitch, grain_pitch, shaped, grain_size;
             var invDenom = 1.5 / (1 + subharmonics_1 + subharmonics_2 + subharmonics_3 + overtones_1 + overtones_2);
@@ -189,13 +192,15 @@ alloc {
             var low, high;
             var positive_intervals = [12, 24], negative_intervals = [-12, -24];
             var interval_plus, interval_minus, final_interval;
+            var base_trig;
             
             speed = Lag.kr(speed);
             density_mod = density * (2**(LFNoise1.kr(density) * density_mod_amt));
-            grain_trig = Select.kr(trig_mode, [Impulse.kr(density_mod), Dust.kr(density_mod)]);
+            base_trig = Select.kr(trig_mode, [Impulse.kr(density_mod), Dust.kr(density_mod)]);
+            grain_trig = base_trig * (TRand.kr(trig: base_trig, lo: 0, hi: 1) < probability);
             buf_dur = BufDur.kr(buf_l);
             
-            #jitter_sig1, jitter_sig2, jitter_sig3, jitter_sig4, jitter_sig5, jitter_sig6 = {TRand.kr(trig: grain_trig, lo: buf_dur.reciprocal.neg * jitter, hi: buf_dur.reciprocal * jitter) }.dup(6);            
+            #jitter_sig1, jitter_sig2, jitter_sig3 = {TRand.kr(trig: grain_trig, lo: buf_dur.reciprocal.neg * jitter, hi: buf_dur.reciprocal * jitter) }.dup(3);            
             buf_pos = Phasor.kr(trig: t_reset_pos, rate: buf_dur.reciprocal / ControlRate.ir * speed, resetPos: pos);
             pos_sig = Wrap.kr(buf_pos);
             dry_sig = [PlayBuf.ar(1, buf_l, speed, startPos: pos * BufFrames.kr(buf_l), trigger: t_reset_pos, loop: 1), PlayBuf.ar(1, buf_r, speed, startPos: pos * BufFrames.kr(buf_r), trigger: t_reset_pos, loop: 1)];
@@ -207,23 +212,21 @@ alloc {
             final_interval = interval_plus + interval_minus;
 
             grain_pitch = base_pitch * (2 ** (final_interval/12));
-            grain_size = size * (1 + TRand.kr(trig: grain_trig, lo: size_variation.neg, hi: size_variation));
+            grain_size = size * (1 + TRand.kr(trig: grain_trig, lo: size_variation.neg, hi: size_variation)); 
 
             ~grainBufFunc = { |buf, pitch, size, vol, dir, pos, jitter| GrainBuf.ar(1, grain_trig, size, buf, pitch * dir, pos + jitter, 2, mul: vol)};
             ~processGrains = { |buf_l, buf_r, pitch, size, vol, dir, pos, jitter| [~grainBufFunc.(buf_l, pitch, size, vol, dir, pos, jitter), ~grainBufFunc.(buf_r, pitch, size, vol, dir, pos, jitter)]};
             #sig_l, sig_r = ~processGrains.(buf_l, buf_r, grain_pitch, grain_size, invDenom, grain_direction, pos_sig, jitter_sig1);
             [1/2, 1/4, 1/8].do { |div, i|
                 var vol = [subharmonic_1_vol, subharmonic_2_vol, subharmonic_3_vol][i];
-                var jitter = [jitter_sig2, jitter_sig3, jitter_sig4][i];
                 #sig_l, sig_r = [
-                    sig_l + ~grainBufFunc.(buf_l, grain_pitch * div, grain_size * smoothbass, vol, grain_direction, pos_sig, jitter),
-                    sig_r + ~grainBufFunc.(buf_r, grain_pitch * div, grain_size * smoothbass, vol, grain_direction, pos_sig, jitter)];};
+                    sig_l + ~grainBufFunc.(buf_l, grain_pitch * div, grain_size * smoothbass, vol, grain_direction, pos_sig, jitter_sig2),
+                    sig_r + ~grainBufFunc.(buf_r, grain_pitch * div, grain_size * smoothbass, vol, grain_direction, pos_sig, jitter_sig2)];};
             [2, 4].do { |mult, i|
                 var vol = [overtone_1_vol, overtone_2_vol][i];
-                var jitter = [jitter_sig5, jitter_sig6][i];
                 #sig_l, sig_r = [
-                    sig_l + ~grainBufFunc.(buf_l, grain_pitch * mult, grain_size, vol, grain_direction, pos_sig, jitter),
-                    sig_r + ~grainBufFunc.(buf_r, grain_pitch * mult, grain_size, vol, grain_direction, pos_sig, jitter)];};
+                    sig_l + ~grainBufFunc.(buf_l, grain_pitch * mult, grain_size, vol, grain_direction, pos_sig, jitter_sig3),
+                    sig_r + ~grainBufFunc.(buf_r, grain_pitch * mult, grain_size, vol, grain_direction, pos_sig, jitter_sig3)];};
 
             pan_sig = Lag.kr(TRand.kr(trig: grain_trig, lo: spread.neg, hi: spread));
             granular_sig = Balance2.ar(sig_l, sig_r, pan + pan_sig);
@@ -562,7 +565,8 @@ alloc {
                     \pitch_random_minus, currentPitchRandomMinus[voice] ? 0,
                     \smoothbass, currentSmoothbass[voice] ? 1,
                     \low_gain, currentLowGain[voice] ? 0,
-                    \high_gain, currentHighGain[voice] ? 0
+                    \high_gain, currentHighGain[voice] ? 0,
+                    \probability, currentProbability[voice] ? 100
                 ]);
                 voices[voice] = Synth.new(\synth, [
                     \out, mixBus.index, 
@@ -594,7 +598,8 @@ alloc {
                         \buf_r, liveInputBuffersR[i],
                         \t_reset_pos, 1);
         }); }); });
-
+        this.addCommand("probability", "if", { arg msg; var voice = msg[1] - 1; currentProbability[voice] = msg[2]; voices[voice].set(\probability, msg[2]);
+});
     }
 
     free {

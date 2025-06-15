@@ -96,6 +96,7 @@ local function randomize_granular_params(i)
     -- GRANULAR
     if math.random() <= 0.5 then targets[i .. "direction_mod"] = 0 else targets[i .. "direction_mod"] = math.random(0, 20) end
     if math.random() <= 0.5 then targets[i .. "size_variation"] = 0 else targets[i .. "size_variation"] = math.random(0, 40) end
+    if math.random() <= 0.6 then targets[i .. "probability"] = 100 else targets[i .. "probability"] = math.random(93, 100) end
     if math.random() <= 0.5 then targets[i .. "density_mod_amt"] = 0 else targets[i .. "density_mod_amt"] = math.random(0, 75) end
     if math.random() <= 0.6 then targets[i .. "subharmonics_1"] = 0 else targets[i .. "subharmonics_1"] = random_float(0, 0.5) end
     if math.random() <= 0.6 then targets[i .. "subharmonics_2"] = 0 else targets[i .. "subharmonics_2"] = random_float(0, 0.5) end
