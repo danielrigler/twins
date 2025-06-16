@@ -27,7 +27,7 @@ function drymode.toggle_dry_mode()
             monobass_mix = params:get("monobass_mix"),
             sine_mix = params:get("sine_mix"),
             wobble_mix = params:get("wobble_mix"),
-            chew_mix = params:get("chew_mix"),
+            chew_depth = params:get("chew_depth"),
             lossdegrade_mix = params:get("lossdegrade_mix"),
             -- Store complete LFO states
             speed_lfos = {},
@@ -105,7 +105,7 @@ function drymode.toggle_dry_mode()
         params:set("monobass_mix", 1)
         params:set("sine_mix", 0)
         params:set("wobble_mix", 0)
-        params:set("chew_mix", 0)
+        params:set("chew_depth", 0)
         params:set("lossdegrade_mix", 0)
     else
         -- Restore previous settings
@@ -127,7 +127,7 @@ function drymode.toggle_dry_mode()
             params:set("monobass_mix", prev_settings.monobass_mix)
             params:set("sine_mix", prev_settings.sine_mix)
             params:set("wobble_mix", prev_settings.wobble_mix)
-            params:set("chew_mix", prev_settings.chew_mix)
+            params:set("chew_depth", prev_settings.chew_depth)
             params:set("lossdegrade_mix", prev_settings.lossdegrade_mix)
             
             if prev_settings.pan then

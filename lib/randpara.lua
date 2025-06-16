@@ -161,10 +161,7 @@ local function randomize_tape_params()
     if math.random() <= 0.5 then targets["flutter_amp"] = 15 else targets["flutter_amp"] = math.random(1, 20) end
     if math.random() <= 0.5 then targets["flutter_freq"] = 6 else targets["flutter_freq"] = math.random(2, 10) end
     if math.random() <= 0.5 then targets["flutter_var"] = 2 else targets["flutter_var"] = math.random(1, 5) end
-    if math.random() <= 0.3 then targets["chew_depth"] = 50 else targets["chew_depth"] = math.random(10, 80) end
-    if math.random() <= 0.3 then targets["chew_freq"] = 50 else targets["chew_depth"] = math.random(20, 70) end
-    if math.random() <= 0.3 then targets["chew_variance"] = 50 else targets["chew_variance"] = math.random(10, 80) end
-   
+    
     for param, _ in pairs(targets) do
         active_interpolations[param] = true
     end

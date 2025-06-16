@@ -338,7 +338,7 @@ local function setup_params()
     params:add_separator("        ")
     params:add_option("lock_shimmer", "Lock Parameters", {"off", "on"}, 1)
     
-    params:add_group("Tape", 18)
+    params:add_group("Tape", 17)
     params:add_option("tape_mix", "Analog Tape", {"off", "on"}, 1) params:set_action("tape_mix", function(x) engine.tape_mix(x-1) end)
     params:add_control("sine_mix", "Shaper", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("sine_mix", function(value) engine.sine_mix(value / 100) end)
     params:add_control("sine_drive", "Shaper Drive", controlspec.new(0, 100, "lin", 1, 17, "%")) params:set_action("sine_drive", function(value) engine.sine_drive(value/20) end)
@@ -349,10 +349,9 @@ local function setup_params()
     params:add{type = "control", id = "flutter_amp", name = "Flutter Depth", controlspec = controlspec.new(0, 100, "lin", 1, 35, "%"), action = function(value) engine.flutter_amp(value/100) end}
     params:add{type = "control", id = "flutter_freq", name = "Flutter Speed", controlspec = controlspec.new(3, 30, "lin", 0.01, 6, "Hz"), action = function(value) engine.flutter_freq(value) end}
     params:add{type = "control", id = "flutter_var", name = "Flutter Var.", controlspec = controlspec.new(0.1, 10, "lin", 0.01, 2, "Hz"), action = function(value) engine.flutter_var(value) end}
-    params:add{type = "control", id = "chew_mix", name = "Chew", controlspec = controlspec.new(0, 100, "lin", 1, 0, "%"), action = function(value) engine.chew_mix(value/100) end}
-    params:add{type = "control", id = "chew_depth", name = "Chew Depth", controlspec = controlspec.new(0, 100, "lin", 1, 50, "%"), action = function(value) engine.chew_depth(value/100) end}
-    params:add{type = "control", id = "chew_freq", name = "Chew Freq.", controlspec = controlspec.new(0, 75, "lin", 1, 50, "%"), action = function(value) engine.chew_freq(value/100) end}
-    params:add{type = "control", id = "chew_variance", name = "Chew Var.", controlspec = controlspec.new(0, 100, "lin", 1, 50, "%"), action = function(value) engine.chew_variance(value/100) end}
+    params:add{type = "control", id = "chew_depth", name = "Chew Depth", controlspec = controlspec.new(0, 50, "lin", 1, 0, "%"), action = function(value) engine.chew_depth(value/100) end}
+    params:add{type = "control", id = "chew_freq", name = "Chew Freq.", controlspec = controlspec.new(0, 60, "lin", 1, 50, "%"), action = function(value) engine.chew_freq(value/100) end}
+    params:add{type = "control", id = "chew_variance", name = "Chew Var.", controlspec = controlspec.new(0, 60, "lin", 1, 50, "%"), action = function(value) engine.chew_variance(value/100) end}
     params:add_control("lossdegrade_mix", "Loss / Degrade", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("lossdegrade_mix", function(value) engine.lossdegrade_mix(value / 100) end)
     params:add_separator("    ")
     params:add_binary("randomize_tape", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_tape", function() randpara.randomize_tape_params(steps) end)

@@ -322,10 +322,10 @@ alloc {
         }).add;
         
         SynthDef(\chew, {
-            arg bus, mix=0.0, chew_depth=0.5, chew_freq=0.5, chew_variance=0.5;
+            arg bus, chew_depth=0.0, chew_freq=0.5, chew_variance=0.5;
             var orig = In.ar(bus, 2);
             var wet = AnalogChew.ar(orig, chew_depth, chew_freq, chew_variance);
-            ReplaceOut.ar(bus, LinXFade2.ar(orig, wet, mix * 2 - 1));
+            ReplaceOut.ar(bus, wet);
         }).add;
 
         SynthDef(\lossdegrade, {
@@ -400,7 +400,7 @@ alloc {
         sineEffect = Synth.new(\sine, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');  
         tapeEffect = Synth.new(\tape, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');  
         wobbleEffect = Synth.new(\wobble, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
-        chewEffect = Synth.new(\chew, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
+        chewEffect = Synth.new(\chew, [\bus, mixBus.index, \chew_depth, 0.0], context.xg, 'addToTail');
         lossdegradeEffect = Synth.new(\lossdegrade, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
         saturationEffect = Synth.new(\saturation, [\bus, mixBus.index, \drive, 0.0], context.xg, 'addToTail');
         delayEffect = Synth.new(\delay, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
@@ -469,8 +469,7 @@ alloc {
         this.addCommand("flutter_amp", "f", { arg msg; wobbleEffect.set(\flutter_amp, msg[1]); });
         this.addCommand("flutter_freq", "f", { arg msg; wobbleEffect.set(\flutter_freq, msg[1]); });
         this.addCommand("flutter_var", "f", { arg msg; wobbleEffect.set(\flutter_var, msg[1]); });
-        this.addCommand("chew_mix", "f", { arg msg; var mix = msg[1]; chewEffect.set(\mix, mix); chewEffect.run(mix > 0); });
-        this.addCommand("chew_depth", "f", { arg msg; chewEffect.set(\chew_depth, msg[1]); });
+        this.addCommand("chew_depth", "f", { arg msg; var chew_depth = msg[1]; chewEffect.set(\chew_depth, chew_depth); chewEffect.run(chew_depth > 0); });
         this.addCommand("chew_freq", "f", { arg msg; chewEffect.set(\chew_freq, msg[1]); });
         this.addCommand("chew_variance", "f", { arg msg; chewEffect.set(\chew_variance, msg[1]); });
         this.addCommand("lossdegrade_mix", "f", { arg msg; var mix = msg[1]; lossdegradeEffect.set(\mix, mix); lossdegradeEffect.run(mix > 0); });
