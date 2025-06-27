@@ -841,16 +841,17 @@ function redraw()
     screen.save()
     screen.translate(0, animation_y)
     local highlight_level = 15
-    local normal_level = 1
+    local normal_level = 15
     local dim_level = 6
+    local value_level = 1
     
     -- Draw the top parameter rows (jitter, size, density, spread, pitch)
     for _, row in ipairs(param_rows) do
         local param_name = string.match(row.label, "%a+")
         local is_highlighted_row = current_mode == row.mode
         
-        -- Draw label
-        screen.level(is_highlighted_row and highlight_level or normal_level)
+        -- Draw label (always bright)
+        screen.level(normal_level)
         screen.move(5, row.y)
         screen.text(row.label)
         
@@ -865,9 +866,9 @@ function redraw()
                 draw_l_shape(x, row.y, true)
             end
             
-            -- Draw parameter value
+            -- Draw parameter value (bright when highlighted)
             screen.move(x, row.y)
-            screen.level(is_highlighted_row and highlight_level or normal_level)
+            screen.level(is_highlighted_row and highlight_level or value_level)
             
             if row.hz then
                 screen.text(format_density(params:get(param)))
@@ -897,6 +898,7 @@ function redraw()
             end
         end
     end
+    
     -- Draw the bottom row (speed/seek/pan/lpf/hpf)
     local bottom_label = (current_mode == "lpf" or current_mode == "hpf") and (current_filter_mode == "lpf" and "lpf:      " or "hpf:      ") 
                        or (current_mode == "seek" and "seek:     ") 
@@ -907,13 +909,13 @@ function redraw()
     local show_direct = not (current_mode == "pan" or current_mode == "lpf" or current_mode == "hpf")
     
     screen.move(5, 61)
-    screen.level(is_bottom_row_active and highlight_level or normal_level)
+    screen.level(normal_level)
     screen.text(bottom_label)
     
     -- Handle different display modes for the bottom row
     for i, track in ipairs({1, 2}) do
         local x = i == 1 and 51 or 92
-        local text_level = is_bottom_row_active and highlight_level or normal_level
+        local text_level = is_bottom_row_active and highlight_level or value_level  -- Changed from normal_level to value_level
         
         -- Show "direct" only when not viewing pan/lpf/hpf and in direct live mode
         if is_direct_live(track) and show_direct then
