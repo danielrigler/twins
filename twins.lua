@@ -302,11 +302,12 @@ local function setup_params()
     params:add_binary("randomize_granular", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_granular", function() randpara.randomize_granular_params(1) randpara.randomize_granular_params(2) end)
     params:add_option("lock_granular", "Lock Parameters", {"off", "on"}, 1)
 
-    params:add_group("Delay", 6)
+    params:add_group("Delay", 7)
     params:add_control("delay_mix", "Mix", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("delay_mix", function(x) engine.delay_mix(x/100) end)
     params:add_control("delay_time", "Time", controlspec.new(0.15, 4, "exp", 0.01, 0.5, "s")) params:set_action("delay_time", function(x) engine.delay_time(x) end)
     params:add_control("delay_feedback", "Feedback", controlspec.new(0, 100, "lin", 1, 80, "%")) params:set_action("delay_feedback", function(x) engine.delay_feedback(x/100) end)
     params:add_control("delayLPF", "Filter", controlspec.new(20, 20000, "lin", 1, 3000, "Hz")) params:set_action("delayLPF", function(x) engine.delayLPF(x) end)
+    params:add_taper("stereo", "Ping-Pong", 0, 100, 0, 0, "%") params:set_action("stereo", function(value) engine.stereo(value / 100) end)
     params:add_separator("   ")
     params:add_option("lock_delay", "Lock Parameters", {"off", "on"}, 1)
 
@@ -338,10 +339,9 @@ local function setup_params()
     params:add_separator("        ")
     params:add_option("lock_shimmer", "Lock Parameters", {"off", "on"}, 1)
     
-    params:add_group("Tape", 17)
+    params:add_group("Tape", 16)
     params:add_option("tape_mix", "Analog Tape", {"off", "on"}, 1) params:set_action("tape_mix", function(x) engine.tape_mix(x-1) end)
-    params:add_control("sine_mix", "Shaper", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("sine_mix", function(value) engine.sine_mix(value / 100) end)
-    params:add_control("sine_drive", "Shaper Drive", controlspec.new(0, 100, "lin", 1, 17, "%")) params:set_action("sine_drive", function(value) engine.sine_drive(value/20) end)
+    params:add_control("sine_drive", "Shaper Drive", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("sine_drive", function(value) engine.sine_drive((10+value)/20) end)
     params:add_control("drive", "Saturation", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("drive", function(x) engine.drive(x/100) end)
     params:add{type = "control", id = "wobble_mix", name = "Wobble", controlspec = controlspec.new(0, 100, "lin", 1, 0, "%"), action = function(value) engine.wobble_mix(value/100) end}
     params:add{type = "control", id = "wobble_amp", name = "Wow Depth", controlspec = controlspec.new(0, 100, "lin", 1, 20, "%"), action = function(value) engine.wobble_amp(value/100) end}
@@ -365,12 +365,19 @@ local function setup_params()
     params:add_separator("     ")
     params:add_option("lock_eq", "Lock Parameters", {"off", "on"}, 1)
     
+    params:add_group("Filters", 6)
+    for i = 1, 2 do
+      params:add_control(i.."cutoff",i.." LPF Cutoff",controlspec.new(20,20000,"exp",0,20000,"Hz")) params:set_action(i.."cutoff",function(value) engine.cutoff(i,value) end)
+      params:add_taper(i.."lpfgain", i.." LPF Resonance", 0, 4, 0.1, 3, "") params:set_action(i.."lpfgain", function(value) engine.lpfgain(i, value) end)
+      params:add_control(i.."hpf",i.." HPF Cutoff",controlspec.new(20,20000,"exp",0,20,"Hz")) params:set_action(i.."hpf",function(value) engine.hpf(i,value) end)
+    end
+    
     params:add_group("Stereo", 2)
     params:add_control("Width", "Stereo Width", controlspec.new(0, 200, "lin", 0.01, 100, "%")) params:set_action("Width", function(value) engine.width(value / 100) end)
     params:add_option("monobass_mix", "Mono Bass", {"off", "on"}, 1) params:set_action("monobass_mix", function(x) engine.monobass_mix(x-1) end)
 
     params:add_group("LFOs", 118)
-    params:add_binary("randomize_lfos", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_lfos", function() lfo.clearLFOs() lfo.randomize_lfos("1", params:get("allow_volume_lfos") == 2)  lfo.randomize_lfos("2", params:get("allow_volume_lfos") == 2) if randomize_metro[1] then randomize_metro[1]:stop() end if randomize_metro[2] then randomize_metro[2]:stop() end end)
+    params:add_binary("randomize_lfos", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_lfos", function() lfo.clearLFOs() if randomize_metro[1] then randomize_metro[1]:stop() end if randomize_metro[2] then randomize_metro[2]:stop() end lfo.randomize_lfos("1", params:get("allow_volume_lfos") == 2)  lfo.randomize_lfos("2", params:get("allow_volume_lfos") == 2) end)
     params:add_control("global_lfo_freq_scale", "Freq Scale", controlspec.new(0.1, 10, "exp", 0.01, 1.0, "x"))
     params:set_action("global_lfo_freq_scale", function(value)
       local phase_ref = {} for i = 1, 16 do phase_ref[i] = lfo[i].phase end
@@ -423,15 +430,12 @@ local function setup_params()
     params:add_binary("macro_more", "More+", "trigger", 0) params:set_action("macro_more", function() macro.macro_more() end)
     params:add_binary("macro_less", "Less-", "trigger", 0) params:set_action("macro_less", function() macro.macro_less() end)
     
-    params:add_group("Other", 4)
+    params:add_group("Other", 3)
     params:add_binary("dry_mode", "Dry Mode", "toggle", 0) params:set_action("dry_mode", function(x) drymode.toggle_dry_mode() end)
     params:add_binary("unload_all", "Unload All Audio", "trigger", 0) params:set_action("unload_all", function() engine.unload_all() params:set("1sample", "-") params:set("2sample", "-") params:set("1live_input", 0) params:set("2live_input", 0) params:set("1live_direct", 0) params:set("2live_direct", 0) end)
-    params:add_taper("lpfgain", "LPF Resonance Gain", 0, 4, 0.1, 3, "") params:set_action("lpfgain", function(value) engine.lpfgain(1, value) engine.lpfgain(2, value) end)
-    params:add_option("steps", "Transition Time", {"short", "medium", "long"}, 2) params:set_action("steps", function(value) for i = 1, 2 do if randomize_metro[i] then randomize_metro[i]:stop() end end lfo.cleanup() steps = ({20, 400, 800})[value] end)
-    
+    params:add_option("steps", "Transition Time", {"short", "medium", "long"}, 2) params:set_action("steps", function(value) lfo.cleanup() steps = ({20, 400, 800})[value] end)
+
     for i = 1, 2 do
-      params:add_control(i.."cutoff",i.." Cutoff",controlspec.new(20,20000,"exp",0,20000,"Hz")) params:set_action(i.."cutoff",function(value) engine.cutoff(i,value) end) params:hide(i.. "cutoff")
-      params:add_control(i.."hpf",i.." hpf",controlspec.new(20,20000,"exp",0,20,"Hz")) params:set_action(i.."hpf",function(value) engine.hpf(i,value) end) params:hide(i.. "hpf")
       params:add_taper(i.. "volume", i.. " volume", -70, 20, -5, 0, "dB") params:set_action(i.. "volume", function(value) if value == -70 then engine.volume(i, 0) else engine.volume(i, math.pow(10, value / 20)) end end) params:hide(i.. "volume")
       params:add_taper(i.. "pan", i.. " pan", -100, 100, 0, 0, "%") params:set_action(i.. "pan", function(value) engine.pan(i, value / 100)  end) params:hide(i.. "pan")
       params:add_taper(i.. "speed", i.. " speed", -2, 2, 0.10, 0) params:set_action(i.. "speed", function(value) if math.abs(value) < 0.01 then engine.speed(i, 0) else engine.speed(i, value) end end) params:hide(i.. "speed")

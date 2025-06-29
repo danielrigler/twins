@@ -294,16 +294,16 @@ alloc {
         }).add;
         
         SynthDef(\sine, {
-            arg bus, mix=0.0, sine_drive;
+            arg bus, sine_drive=0.0;
             var orig = In.ar(bus, 2);
             var shaped = Shaper.ar(bufSine, orig * sine_drive);
-            ReplaceOut.ar(bus, LinXFade2.ar(orig, shaped, mix * 2 - 1));
+            ReplaceOut.ar(bus, shaped);
         }).add;
         
         SynthDef(\tape, {
             arg bus, mix=0.0;
             var orig = In.ar(bus, 2);
-            var wet = AnalogTape.ar(orig, 0.89, 0.89, 0.89, 2, 0);
+            var wet = AnalogTape.ar(orig, 0.9, 0.9, 0.9, 2, 0);
             ReplaceOut.ar(bus, LinXFade2.ar(orig, wet, mix * 2 - 1));
         }).add;
         
@@ -341,20 +341,24 @@ alloc {
             var dry, wet, shaped;
             dry = In.ar(bus, 2);
             wet = dry * (drive * 10 + 1);
-            shaped = wet.tanh * 0.5;
+            shaped = wet.tanh * 0.3;
             ReplaceOut.ar(bus, LinXFade2.ar(dry, shaped, drive * 2 - 1));
         }).add;
 
         SynthDef(\delay, {
-            arg bus, mix=0.0, time, feedback, delayLPF=3500;
+            arg bus, mix=0.0, time=0.5, feedback=0.5, delayLPF=3500, stereo=1;
             var sig = In.ar(bus, 2);
             var fb = LocalIn.ar(2);
             var fbInput = [sig[0] + (fb[1] * feedback), sig[1] + (fb[0] * feedback)];
-            var delayed = DelayC.ar(fbInput, 4.0, time);
-            var processed = delayed.collect { |x| LPF.ar(HPF.ar(x, 30).softclip, delayLPF) };
-            LocalOut.ar(processed);
-            processed = [(processed[0] * 1.25) - (processed[1] * 0.25), (processed[1] * 1.25) - (processed[0] * 0.25)];
-            ReplaceOut.ar(bus, LinXFade2.ar(sig, sig + processed, mix * 2 - 1));
+            var delayedL = DelayC.ar(fbInput[0], 4.0, time);
+            var delayedR = DelayC.ar(fbInput[1], 4.0, time);
+            var processedL = LPF.ar(delayedL, delayLPF);
+            var processedR = LPF.ar(delayedR, delayLPF);  
+            var panPos = LFPar.kr(1/(time*2), iphase: 0).range(-1, 1) * stereo;
+            var outputL = processedL * panPos.max(0) + (processedL * (1-stereo));
+            var outputR = processedR * panPos.min(0).neg + (processedR * (1-stereo));
+            LocalOut.ar([outputL, outputR].tanh);
+            ReplaceOut.ar(bus, LinXFade2.ar(sig, sig + [outputL, outputR], mix * 2 - 1));
         }).add;
 
         SynthDef(\jpverb, {
@@ -397,13 +401,13 @@ alloc {
 
         monobassEffect = Synth.new(\monobass, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
         shimmerEffect = Synth.new(\shimmer, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');    
-        sineEffect = Synth.new(\sine, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');  
+        sineEffect = Synth.new(\sine, [\bus, mixBus.index, \sine_drive, 0.0], context.xg, 'addToTail');  
         tapeEffect = Synth.new(\tape, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');  
         wobbleEffect = Synth.new(\wobble, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
         chewEffect = Synth.new(\chew, [\bus, mixBus.index, \chew_depth, 0.0], context.xg, 'addToTail');
         lossdegradeEffect = Synth.new(\lossdegrade, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
-        saturationEffect = Synth.new(\saturation, [\bus, mixBus.index, \drive, 0.0], context.xg, 'addToTail');
         delayEffect = Synth.new(\delay, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
+        saturationEffect = Synth.new(\saturation, [\bus, mixBus.index, \drive, 0.0], context.xg, 'addToTail');
         jpverbEffect = Synth.new(\jpverb, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
         widthEffect = Synth.new(\width, [\bus, mixBus.index, \width, 1.0], context.xg, 'addToTail');
         outputSynth = Synth.new(\output, [\in, mixBus.index,\out, context.out_b.index], context.xg, 'addToTail');   
@@ -460,8 +464,7 @@ alloc {
         this.addCommand("volume", "if", { arg msg; var voice = msg[1] - 1; currentVolume[voice] = msg[2]; voices[voice].set(\gain, msg[2]); });
 
         this.addCommand("tape_mix", "f", { arg msg; var mix = msg[1]; tapeEffect.set(\mix, mix); tapeEffect.run(mix > 0); });
-        this.addCommand("sine_mix", "f", { arg msg; var mix = msg[1]; sineEffect.set(\mix, mix); sineEffect.run(mix > 0); });
-        this.addCommand("sine_drive", "f", { arg msg; sineEffect.set(\sine_drive, msg[1]); });
+        this.addCommand("sine_drive", "f", { arg msg; var sine_drive = msg[1]; sineEffect.set(\sine_drive, sine_drive); sineEffect.run(sine_drive > 0); });
         this.addCommand("drive", "f", { arg msg; var drive = msg[1]; saturationEffect.set(\drive, drive); saturationEffect.run(drive > 0); });
         this.addCommand("wobble_mix", "f", { arg msg; var mix = msg[1]; wobbleEffect.set(\mix, mix); wobbleEffect.run(mix > 0); });
         this.addCommand("wobble_amp", "f", { arg msg; wobbleEffect.set(\wobble_amp, msg[1]); });
@@ -484,6 +487,8 @@ alloc {
         this.addCommand("delay_time", "f", { arg msg; var delayTime = msg[1]; delayEffect.set(\time, delayTime); });
         this.addCommand("delay_feedback", "f", { arg msg; var delayFeedback = msg[1]; delayEffect.set(\feedback, delayFeedback); });
         this.addCommand("delayLPF", "f", { arg msg; var delayLPF = msg[1]; delayEffect.set(\delayLPF, delayLPF); });
+        this.addCommand("sat", "f", { arg msg; var sat = msg[1]; delayEffect.set(\sat, sat); });
+        this.addCommand("stereo", "f", { arg msg; var stereo = msg[1]; delayEffect.set(\stereo, stereo); });
 
         this.addCommand("set_live_input", "ii", { arg msg;
             var voice = msg[1] - 1;

@@ -155,7 +155,6 @@ local function randomize_tape_params()
   if params:get("lock_tape") == 2 then return end
   safe_metro_stop(randomize_metro)
     -- TAPE
-    if math.random() <= 0.6 then targets["sine_drive"] = 17 else targets["sine_drive"] = math.random(0, 30) end
     if math.random() <= 0.5 then targets["wobble_amp"] = 10 else targets["wobble_amp"] = math.random(1, 15) end
     if math.random() <= 0.7 then targets["wobble_rpm"] = 33 else targets["wobble_rpm"] = math.random(30, 70) end
     if math.random() <= 0.5 then targets["flutter_amp"] = 15 else targets["flutter_amp"] = math.random(1, 20) end

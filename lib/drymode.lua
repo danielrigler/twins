@@ -25,7 +25,7 @@ function drymode.toggle_dry_mode()
             hpf = {params:get("1hpf"), params:get("2hpf")},
             Width = params:get("Width"),
             monobass_mix = params:get("monobass_mix"),
-            sine_mix = params:get("sine_mix"),
+            sine_drive = params:get("sine_drive"),
             wobble_mix = params:get("wobble_mix"),
             chew_depth = params:get("chew_depth"),
             lossdegrade_mix = params:get("lossdegrade_mix"),
@@ -103,7 +103,6 @@ function drymode.toggle_dry_mode()
         params:set("drive", 0)
         params:set("Width", 100)
         params:set("monobass_mix", 1)
-        params:set("sine_mix", 0)
         params:set("wobble_mix", 0)
         params:set("chew_depth", 0)
         params:set("lossdegrade_mix", 0)
@@ -125,7 +124,7 @@ function drymode.toggle_dry_mode()
             params:set("drive", prev_settings.drive)
             params:set("Width", prev_settings.Width)
             params:set("monobass_mix", prev_settings.monobass_mix)
-            params:set("sine_mix", prev_settings.sine_mix)
+            params:set("sine_drive", prev_settings.sine_drive)
             params:set("wobble_mix", prev_settings.wobble_mix)
             params:set("chew_depth", prev_settings.chew_depth)
             params:set("lossdegrade_mix", prev_settings.lossdegrade_mix)
