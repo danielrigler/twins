@@ -73,7 +73,7 @@ local function randomize_jpverb_params(steps)
   safe_metro_stop(randomize_metro)
   -- JPVERB
   if math.random() <= 0.5 then targets["t60"] = 4 else targets["t60"] = random_float(2, 6) end
-  if math.random() <= 0.6 then targets["damp"] = 0 else targets["damp"] = random_float(0, 15) end
+  if math.random() <= 0.6 then targets["damp"] = 0 else targets["damp"] = random_float(0, 20) end
   if math.random() <= 0.3 then targets["rsize"] = 1 else targets["rsize"] = random_float(1, 3) end
   if math.random() <= 0.6 then targets["earlyDiff"] = 70.7 else targets["earlyDiff"] = random_float(70.7, 90) end
   if math.random() <= 0.6 then targets["modDepth"] = 10 else targets["modDepth"] = math.random(10, 90) end
@@ -96,13 +96,14 @@ local function randomize_granular_params(i)
     -- GRANULAR
     if math.random() <= 0.5 then targets[i .. "direction_mod"] = 0 else targets[i .. "direction_mod"] = math.random(0, 20) end
     if math.random() <= 0.5 then targets[i .. "size_variation"] = 0 else targets[i .. "size_variation"] = math.random(0, 40) end
-    if math.random() <= 0.6 then targets[i .. "probability"] = 100 else targets[i .. "probability"] = math.random(93, 100) end
     if math.random() <= 0.5 then targets[i .. "density_mod_amt"] = 0 else targets[i .. "density_mod_amt"] = math.random(0, 75) end
     if math.random() <= 0.6 then targets[i .. "subharmonics_1"] = 0 else targets[i .. "subharmonics_1"] = random_float(0, 0.5) end
     if math.random() <= 0.6 then targets[i .. "subharmonics_2"] = 0 else targets[i .. "subharmonics_2"] = random_float(0, 0.5) end
     if math.random() <= 0.6 then targets[i .. "subharmonics_3"] = 0 else targets[i .. "subharmonics_3"] = random_float(0, 0.5) end
     if math.random() <= 0.6 then targets[i .. "overtones_1"] = 0 else targets[i .. "overtones_1"] = random_float(0, 0.6) end
     if math.random() <= 0.6 then targets[i .. "overtones_2"] = 0 else targets[i .. "overtones_2"] = random_float(0, 0.6) end
+    if math.random() <= 0.8 then targets[i .. "pitch_random_plus"] = 0 else targets[i .. "pitch_random_plus"] = math.random(0, 25) end
+    if math.random() <= 0.8 then targets[i .. "pitch_random_minus"] = 0 else targets[i .. "pitch_random_minus"] = math.random(0, 25) end
 
     for param, _ in pairs(targets) do
         active_interpolations[param] = true
@@ -114,9 +115,13 @@ local function randomize_shimmer_params()
   if params:get("lock_shimmer") == 2 then return end
   safe_metro_stop(randomize_metro)
     -- SHIMMER
-    if math.random() <= 0.85 then targets["pitchv"] = 0.0 else targets["pitchv"] = math.random(0, 3) end
+    if math.random() <= 0.8 then targets["shimmer_mix"] = 0.0 else targets["shimmer_mix"] = math.random(0, 15) end
+    if math.random() <= 0.9 then params:set("o2", 1)  else params:set("o2", 2) end
+    if math.random() <= 0.5 then targets["pitchv"] = 0.0 else targets["pitchv"] = math.random(0, 2) end
     if math.random() <= 0.5 then targets["lowpass"] = 13000 else targets["lowpass"] = math.random(6000, 15000) end
-    if math.random() <= 0.4 then targets["hipass"] = 1300 else targets["hipass"] = math.random(20, 1300) end
+    if math.random() <= 0.5 then targets["hipass"] = 1300 else targets["hipass"] = math.random(400, 1500) end
+    if math.random() <= 0.7 then targets["fb"] = 15 else targets["fb"] = math.random(10, 25) end
+    if math.random() <= 0.7 then targets["fbDelay"] = 0.2 else targets["fbDelay"] = random_float(0.15, 0.35) end
   
     for param, _ in pairs(targets) do
         active_interpolations[param] = true
@@ -128,7 +133,7 @@ local function randomize_eq_params(i)
   if params:get("lock_eq") == 2 then return end
   safe_metro_stop(randomize_metro)
     -- EQ
-    if math.random() <= 0.5 then targets[i.."eq_low_gain"] = 0 else targets[i.."eq_low_gain"] = random_float(-0.4, 0.4) end
+    if math.random() <= 0.5 then targets[i.."eq_low_gain"] = 0 else targets[i.."eq_low_gain"] = random_float(-0.4, 0.3) end
     if math.random() <= 0.4 then targets[i.."eq_high_gain"] = 0.2 else targets[i.."eq_high_gain"] = random_float(-0.1, 0.45) end
 
     for param, _ in pairs(targets) do
@@ -144,6 +149,8 @@ local function randomize_delay_params()
     if math.random() <= 0.4 then targets["delay_mix"] = 0 else targets["delay_mix"] = math.random(0, 70) end
     if math.random() <= 0.5 then params:set("delay_time", 0.5) else params:set("delay_time", random_float(0.3, 0.7)) end
     if math.random() <= 0.5 then targets["delay_feedback"] = math.random(20, 75) end
+    if math.random() <= 0.5 then targets["stereo"] = 0 else targets["stereo"] = math.random(0, 40) end
+    if math.random() <= 0.6 then targets["delayLPF"] = 3000 else targets["delayLPF"] = math.random(2500, 4500) end
 
     for param, _ in pairs(targets) do
         active_interpolations[param] = true
@@ -155,11 +162,11 @@ local function randomize_tape_params()
   if params:get("lock_tape") == 2 then return end
   safe_metro_stop(randomize_metro)
     -- TAPE
-    if math.random() <= 0.5 then targets["wobble_amp"] = 10 else targets["wobble_amp"] = math.random(1, 15) end
-    if math.random() <= 0.7 then targets["wobble_rpm"] = 33 else targets["wobble_rpm"] = math.random(30, 70) end
-    if math.random() <= 0.5 then targets["flutter_amp"] = 15 else targets["flutter_amp"] = math.random(1, 20) end
-    if math.random() <= 0.5 then targets["flutter_freq"] = 6 else targets["flutter_freq"] = math.random(2, 10) end
-    if math.random() <= 0.5 then targets["flutter_var"] = 2 else targets["flutter_var"] = math.random(1, 5) end
+    if math.random() <= 0.4 then targets["wobble_amp"] = 10 else targets["wobble_amp"] = math.random(1, 15) end
+    if math.random() <= 0.4 then targets["wobble_rpm"] = 33 else targets["wobble_rpm"] = math.random(30, 70) end
+    if math.random() <= 0.4 then targets["flutter_amp"] = 15 else targets["flutter_amp"] = math.random(1, 30) end
+    if math.random() <= 0.4 then targets["flutter_freq"] = 6 else targets["flutter_freq"] = math.random(2, 10) end
+    if math.random() <= 0.4 then targets["flutter_var"] = 2 else targets["flutter_var"] = math.random(1, 5) end
     
     for param, _ in pairs(targets) do
         active_interpolations[param] = true
