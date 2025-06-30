@@ -8,6 +8,7 @@ Engine_twins : CroneEngine {
     var tapeEffect;
     var chewEffect;
     var widthEffect;
+    var widthEffect2;
     var monobassEffect;
     var sineEffect;
     var wobbleEffect;
@@ -372,7 +373,7 @@ alloc {
             arg bus, width=1.0;
             var sig = In.ar(bus, 2);
             var mid = (sig[0] + sig[1]) * 0.5;
-            var side = (sig[0] - sig[1]) * 0.5 * width;
+            var side = ((sig[0] - sig[1]) * 0.5 * width).tanh;
             sig = [mid + side, mid - side];
             ReplaceOut.ar(bus, sig);
         }).add;         
@@ -399,7 +400,6 @@ alloc {
         
         context.server.sync;
 
-        monobassEffect = Synth.new(\monobass, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
         shimmerEffect = Synth.new(\shimmer, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');    
         sineEffect = Synth.new(\sine, [\bus, mixBus.index, \sine_drive, 0.0], context.xg, 'addToTail');  
         tapeEffect = Synth.new(\tape, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');  
@@ -410,6 +410,8 @@ alloc {
         widthEffect = Synth.new(\width, [\bus, mixBus.index, \width, 1.0], context.xg, 'addToTail');
         saturationEffect = Synth.new(\saturation, [\bus, mixBus.index, \drive, 0.0], context.xg, 'addToTail');
         jpverbEffect = Synth.new(\jpverb, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
+        widthEffect2 = Synth.new(\width, [\bus, mixBus.index, \width, 1.0], context.xg, 'addToTail');
+        monobassEffect = Synth.new(\monobass, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
         outputSynth = Synth.new(\output, [\in, mixBus.index,\out, context.out_b.index], context.xg, 'addToTail');   
 
         this.addCommand("reverb_mix", "f", { arg msg; var mix = msg[1]; jpverbEffect.set(\mix, mix); jpverbEffect.run(mix > 0); });
@@ -480,7 +482,7 @@ alloc {
         this.addCommand("eq_low_gain", "if", { arg msg; var voice = msg[1] - 1; currentLowGain[voice] = msg[2]; voices[voice].set(\low_gain, msg[2]); });
         this.addCommand("eq_high_gain", "if", { arg msg; var voice = msg[1] - 1; currentHighGain[voice] = msg[2]; voices[voice].set(\high_gain, msg[2]); });
 
-        this.addCommand("width", "f", { arg msg; var width = msg[1]; widthEffect.set(\width, width); widthEffect.run(width != 1); });
+        this.addCommand("width", "f", { arg msg; var width = msg[1]; widthEffect.set(\width, width); widthEffect.run(width != 1); widthEffect2.set(\width, width); widthEffect2.run(width != 1); });
         this.addCommand("monobass_mix", "f", { arg msg; var mix = msg[1]; monobassEffect.set(\mix, mix); monobassEffect.run(mix > 0); });
         
         this.addCommand("delay_mix", "f", { arg msg; var mix = msg[1]; delayEffect.set(\mix, mix); delayEffect.run(mix > 0); });
@@ -622,6 +624,7 @@ alloc {
         tapeEffect.free;
         chewEffect.free;
         widthEffect.free;
+        widthEffect2.free;
         monobassEffect.free;
         lossdegradeEffect.free;
         sineEffect.free;
