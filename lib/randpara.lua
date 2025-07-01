@@ -115,7 +115,6 @@ local function randomize_shimmer_params()
   if params:get("lock_shimmer") == 2 then return end
   safe_metro_stop(randomize_metro)
     -- SHIMMER
-    if math.random() <= 0.8 then targets["shimmer_mix"] = 0.0 else targets["shimmer_mix"] = math.random(0, 15) end
     if math.random() <= 0.9 then params:set("o2", 1)  else params:set("o2", 2) end
     if math.random() <= 0.5 then targets["pitchv"] = 0.0 else targets["pitchv"] = math.random(0, 2) end
     if math.random() <= 0.5 then targets["lowpass"] = 13000 else targets["lowpass"] = math.random(6000, 15000) end
@@ -146,7 +145,7 @@ local function randomize_delay_params()
   if params:get("lock_delay") == 2 then return end
   safe_metro_stop(randomize_metro)
     -- DELAY
-    if math.random() <= 0.4 then targets["delay_mix"] = 0 else targets["delay_mix"] = math.random(0, 70) end
+    if math.random() <= 0.4 then targets["delay_mix"] = 0 else targets["delay_mix"] = math.random(0, 80) end
     if math.random() <= 0.5 then params:set("delay_time", 0.5) else params:set("delay_time", random_float(0.3, 0.7)) end
     if math.random() <= 0.5 then targets["delay_feedback"] = math.random(20, 75) end
     if math.random() <= 0.5 then targets["stereo"] = 0 else targets["stereo"] = math.random(0, 40) end

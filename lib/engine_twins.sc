@@ -304,7 +304,7 @@ alloc {
         SynthDef(\tape, {
             arg bus, mix=0.0;
             var orig = In.ar(bus, 2);
-            var wet = AnalogTape.ar(orig, 0.9, 0.9, 0.9, 2, 0);
+            var wet = AnalogTape.ar(orig, 0.88, 0.88, 0.88, 2, 0);
             ReplaceOut.ar(bus, LinXFade2.ar(orig, wet, mix * 2 - 1));
         }).add;
         
@@ -446,6 +446,7 @@ alloc {
         this.addCommand("pitch_random_plus", "if", { arg msg; var voice = msg[1] - 1; currentPitchRandomPlus[voice] = msg[2]; voices[voice].set(\pitch_random_plus, msg[2]); });
         this.addCommand("pitch_random_minus", "if", { arg msg; var voice = msg[1] - 1; currentPitchRandomMinus[voice] = msg[2]; voices[voice].set(\pitch_random_minus, msg[2]); });
         this.addCommand("smoothbass", "if", { arg msg; var voice = msg[1] - 1; currentSmoothbass[voice] = msg[2]; voices[voice].set(\smoothbass, msg[2]); });
+        this.addCommand("probability", "if", { arg msg; var voice = msg[1] - 1; currentProbability[voice] = msg[2]; voices[voice].set(\probability, msg[2]); });
         
         this.addCommand("shimmer_mix", "f", { arg msg; var mix = msg[1]; shimmerEffect.set(\mix, mix); shimmerEffect.run(mix > 0); });
         this.addCommand("lowpass", "f", { arg msg; shimmerEffect.set(\lowpass, msg[1]); });
@@ -604,8 +605,6 @@ alloc {
                         \buf_r, liveInputBuffersR[i],
                         \t_reset_pos, 1);
         }); }); });
-        this.addCommand("probability", "if", { arg msg; var voice = msg[1] - 1; currentProbability[voice] = msg[2]; voices[voice].set(\probability, msg[2]);
-});
     }
 
     free {
