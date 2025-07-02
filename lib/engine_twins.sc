@@ -358,7 +358,7 @@ alloc {
             var panPos = LFPar.kr(1/(time*2), iphase: 0).range(-1, 1) * stereo;
             var outputL = processedL * panPos.max(0) + (processedL * (1-stereo));
             var outputR = processedR * panPos.min(0).neg + (processedR * (1-stereo));
-            LocalOut.ar([outputL, outputR].tanh);
+            LocalOut.ar([outputL, outputR]);
             ReplaceOut.ar(bus, LinXFade2.ar(sig, sig + [outputL, outputR], mix * 2 - 1));
         }).add;
 
