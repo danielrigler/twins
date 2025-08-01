@@ -6,7 +6,7 @@
 --           by: @dddstudio                       
 --
 --                          
---                           v0.33
+--                           v0.34
 -- E1: Master Volume
 -- K1+E2/E3: Volume 1/2
 -- K1+E1: Crossfade Volumes
@@ -302,11 +302,13 @@ local function setup_params()
     params:add_binary("randomize_granular", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_granular", function() randpara.randomize_granular_params(1) randpara.randomize_granular_params(2) end)
     params:add_option("lock_granular", "Lock Parameters", {"off", "on"}, 1)
 
-    params:add_group("Delay", 7)
+    params:add_group("Delay", 9)
     params:add_control("delay_mix", "Mix", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("delay_mix", function(x) engine.delay_mix(x/100) end)
     params:add_control("delay_time", "Time", controlspec.new(0.15, 4, "exp", 0.01, 0.5, "s")) params:set_action("delay_time", function(x) engine.delay_time(x) end)
     params:add_control("delay_feedback", "Feedback", controlspec.new(0, 100, "lin", 1, 80, "%")) params:set_action("delay_feedback", function(x) engine.delay_feedback(x/100) end)
     params:add_control("delayLPF", "Filter", controlspec.new(20, 20000, "lin", 1, 3500, "Hz")) params:set_action("delayLPF", function(x) engine.delayLPF(x) end)
+    params:add_control("delay_mod_depth", "Mod Depth", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("delay_mod_depth", function(x) engine.delay_mod_depth(x/10000) end)
+    params:add_taper("delay_mod_rate", "Mod Rate", 0, 10, 0.5, 2, "Hz") params:set_action("delay_mod_rate", function(value) engine.delay_mod_rate(value) end)
     params:add_taper("stereo", "Ping-Pong", 0, 100, 25, 0, "%") params:set_action("stereo", function(value) engine.stereo(value / 100) end)
     params:add_separator("   ")
     params:add_option("lock_delay", "Lock Parameters", {"off", "on"}, 1)

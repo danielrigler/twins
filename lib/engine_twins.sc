@@ -347,12 +347,13 @@ alloc {
         }).add;
 
         SynthDef(\delay, {
-            arg bus, mix=0.0, time=0.5, feedback=0.5, delayLPF=3500, stereo=1;
+            arg bus, mix=0.0, time=0.5, feedback=0.5, delayLPF=3500, stereo=1, mod_rate, mod_depth;
             var sig = In.ar(bus, 2);
             var fb = LocalIn.ar(2);
-            var fbInput = [sig[0] + (fb[1] * feedback), sig[1] + (fb[0] * feedback)];
-            var delayedL = DelayC.ar(fbInput[0], 4.0, time);
-            var delayedR = DelayC.ar(fbInput[1], 4.0, time);
+            var fbInput = [sig[0] + (fb[1] * feedback), sig[1] + (fb[0] * feedback)].softclip;
+            var modulation = LFPar.kr(mod_rate, mul: mod_depth);
+            var delayedL = DelayC.ar(fbInput[0], 4.0, time + modulation);
+            var delayedR = DelayC.ar(fbInput[1], 4.0, time + modulation);
             var processedL = LPF.ar(delayedL, delayLPF);
             var processedR = LPF.ar(delayedR, delayLPF);  
             var panPos = LFPar.kr(1/(time*2), iphase: 0).range(-1, 1) * stereo;
@@ -490,8 +491,9 @@ alloc {
         this.addCommand("delay_time", "f", { arg msg; var delayTime = msg[1]; delayEffect.set(\time, delayTime); });
         this.addCommand("delay_feedback", "f", { arg msg; var delayFeedback = msg[1]; delayEffect.set(\feedback, delayFeedback); });
         this.addCommand("delayLPF", "f", { arg msg; var delayLPF = msg[1]; delayEffect.set(\delayLPF, delayLPF); });
-        this.addCommand("sat", "f", { arg msg; var sat = msg[1]; delayEffect.set(\sat, sat); });
         this.addCommand("stereo", "f", { arg msg; var stereo = msg[1]; delayEffect.set(\stereo, stereo); });
+        this.addCommand("delay_mod_rate", "f", { arg msg; delayEffect.set(\mod_rate, msg[1]); });
+        this.addCommand("delay_mod_depth", "f", { arg msg; delayEffect.set(\mod_depth, msg[1]); });
 
         this.addCommand("set_live_input", "ii", { arg msg;
             var voice = msg[1] - 1;

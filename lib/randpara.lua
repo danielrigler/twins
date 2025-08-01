@@ -145,11 +145,13 @@ local function randomize_delay_params()
   if params:get("lock_delay") == 2 then return end
   safe_metro_stop(randomize_metro)
     -- DELAY
-    if math.random() <= 0.4 then targets["delay_mix"] = 0 else targets["delay_mix"] = math.random(0, 80) end
+    if math.random() <= 0.4 then targets["delay_mix"] = 0 else targets["delay_mix"] = math.random(0, 85) end
     if math.random() <= 0.5 then params:set("delay_time", 0.5) else params:set("delay_time", random_float(0.3, 0.7)) end
     if math.random() <= 0.5 then targets["delay_feedback"] = math.random(20, 75) end
     if math.random() <= 0.5 then targets["stereo"] = 0 else targets["stereo"] = math.random(0, 40) end
-    if math.random() <= 0.6 then targets["delayLPF"] = 3000 else targets["delayLPF"] = math.random(2500, 4500) end
+    if math.random() <= 0.6 then targets["delayLPF"] = 4000 else targets["delayLPF"] = math.random(2500, 5500) end
+    if math.random() <= 0.7 then targets["delay_mod_depth"] = 0 else targets["delay_mod_depth"] = math.random(0, 15) end
+    if math.random() <= 0.4 then targets["delay_mod_rate"] = 1 else targets["delay_mod_rate"] = random_float(0.5, 8) end
 
     for param, _ in pairs(targets) do
         active_interpolations[param] = true
