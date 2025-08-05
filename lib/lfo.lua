@@ -1,5 +1,4 @@
 local number_of_outputs = 16
-local tau = math.pi * 2
 
 local options = {
   lfotypes = { "sine", "random", "square" }
@@ -18,10 +17,6 @@ local function is_locked(target)
   return false
 end
 
-local function random_float(l, h)
-    return l + math.random() * (h - l)
-end
-
 function lfo.is_param_locked(track, param_name)
     return params:get(track.."lock_"..param_name) == 2
 end
@@ -33,7 +28,6 @@ end
 for i = 1, number_of_outputs do
   lfo[i] = { 
     freq = 0.05, 
-    base_freq = 0.05, 
     phase = 0,
     waveform = options.lfotypes[1], 
     slope = 0, 
@@ -42,23 +36,6 @@ for i = 1, number_of_outputs do
     prev = 0,
     prev_polarity = 1
   }
-end
-
-local function make_sine(n)
-  return math.sin(((tau / 100) * lfo[n].counter) - (tau / (lfo[n].freq / 1000)))
-end
-
-local function make_square(n)
-  return make_sine(n) >= 0 and 1 or -1
-end
-
-local function make_sh(n)
-  local polarity = make_square(n)
-  if lfo[n].prev_polarity ~= polarity then
-    lfo[n].prev_polarity = polarity
-    lfo[n].prev = math.random() * (math.random(0, 1) == 0 and 1 or -1)
-  end
-  return lfo[n].prev
 end
 
 table.find = function(tbl, value)
@@ -282,7 +259,7 @@ end
 function lfo.randomize_lfos(track, allow_volume_lfos)
     local other_track = track == "1" and "2" or "1"
     local symmetry = params:get("symmetry") == 1
-    if math.random() <= 0.5 then params:set("global_lfo_freq_scale", 0.75) else params:set("global_lfo_freq_scale", random_float(0.1, 1.8)) end
+    if math.random() <= 0.5 then params:set("global_lfo_freq_scale", 0.75) else params:set("global_lfo_freq_scale", 0.1 + math.random() * (1.8 - 0.1)) end
     
     -- Clear existing LFOs for both tracks in symmetry mode
     for i = 1, 16 do
@@ -407,10 +384,9 @@ function lfo.process()
             elseif wf == "random" then
                 local phase_inc = lfo[i].freq * (1/30)
                 if (lfo[i].phase - phase_inc) % 1.0 > lfo[i].phase then
-                    lfo[i].prev = math.random() * (math.random(2) - 1)  -- -1 or 1
+                    lfo[i].prev = math.random() * (math.random(0, 1))  -- -1 or 1
                 end
-                lfo[i].prev = lfo[i].prev or 0
-                slope = lfo[i].prev
+                                slope = lfo[i].prev
             end
             lfo[i].slope = util.clamp(slope, -1.0, 1.0) * (lfo[i].depth * 0.01) + lfo[i].offset
             local target_index = params:get(i.."lfo_target")
@@ -441,11 +417,12 @@ function lfo.init()
     params:add_control(i .. "offset", i .. " offset", controlspec.new(-0.99, 0.99, "lin", 0.01, 0, ""))
     params:set_action(i .. "offset", function(value) lfo[i].offset = value end)
     params:add_control(i .. "lfo_freq", i .. " freq", controlspec.new(0.01, 2.00, "lin", 0.01, 0.05, ""))
-    params:set_action(i .. "lfo_freq", function(value)
-      lfo[i].base_freq = value
-      lfo[i].freq = value * params:get("global_lfo_freq_scale")
-    end)
-    params:add_option(i .. "lfo", i .. " LFO", { "off", "on" }, 1)
+params:set_action(i .. "lfo_freq", function(value)
+  lfo[i].freq = value * params:get("global_lfo_freq_scale")
+end)
+
+params:add_option(i .. "lfo", i .. " LFO", { "off", "on" }, 1)
+
   end
 
   local lfo_metro = metro.init()
