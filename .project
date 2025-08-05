@@ -1,0 +1,20 @@
+{
+  "file_info": {
+    "version": 1,
+    "kind": "project_metadata"
+  },
+  "installed_on": "2025-08-03T11:33:30.477509828+01:00",
+  "updated_on": "0001-01-01T00:00:00Z",
+  "project_url": "https://github.com/danielrigler/twins",
+  "catalog_entry": {
+    "project_name": "twins",
+    "project_url": "https://github.com/danielrigler/twins",
+    "author": "dddstudio",
+    "description": "randomized dual granular playground, inspired by twine",
+    "discussion_url": "https://llllllll.co/t/twins/71052",
+    "tags": [
+      "granulator",
+      "audio_fx"
+    ]
+  }
+}
