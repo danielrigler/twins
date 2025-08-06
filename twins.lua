@@ -518,8 +518,8 @@ local function randomize_pitch(track, other_track, symmetry)
 end
 
 local function randomize(n)
-    if not randomize_metro[n] then
-        randomize_metro[n] = metro.init()
+    if not randomize_metro[n] then 
+        randomize_metro[n] = metro.init() 
     end
     active_controlled_params = {}
     local param_config = {
@@ -563,14 +563,12 @@ local function randomize(n)
             if not active_controlled_params[param] then
                 local current_value = params:get(param)
                 local new_value = interpolate(current_value, target, factor)
-                if math.abs(new_value - current_value) > tolerance then
-                    params:set(param, new_value)
-                end
+                params:set(param, new_value)
                 all_done = all_done and (math.abs(new_value - target) < tolerance)
             end
         end
-        if all_done then
-            randomize_metro[n]:stop()
+        if all_done then 
+            randomize_metro[n]:stop() 
         end
     end
     randomize_metro[n]:start()
