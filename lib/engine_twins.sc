@@ -304,7 +304,7 @@ alloc {
         SynthDef(\tape, {
             arg bus, mix=0.0;
             var orig = In.ar(bus, 2);
-            var wet = AnalogTape.ar(orig, 0.88, 0.88, 0.88, 2, 0);
+            var wet = AnalogTape.ar(orig, 0.86, 0.86, 0.86, 2, 0);
             ReplaceOut.ar(bus, LinXFade2.ar(orig, wet, mix * 2 - 1));
         }).add;
         
@@ -347,7 +347,7 @@ alloc {
         }).add;
 
         SynthDef(\delay, {
-            arg bus, mix=0.0, time=0.5, feedback=0.5, delayLPF=3500, stereo=1, mod_rate, mod_depth;
+            arg bus, mix=0.0, time=0.5, feedback=0.5, delayLPF=6000, stereo=1, mod_rate, mod_depth;
             var sig = In.ar(bus, 2);
             var fb = LocalIn.ar(2);
             var fbInput = [sig[0] + (fb[1] * feedback), sig[1] + (fb[0] * feedback)].softclip;
