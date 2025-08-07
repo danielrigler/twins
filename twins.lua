@@ -393,7 +393,7 @@ local function setup_params()
     params:add_control("Width", "Stereo Width", controlspec.new(0, 200, "lin", 0.01, 100, "%")) params:set_action("Width", function(value) engine.width(value / 100) end)
     params:add_option("monobass_mix", "Mono Bass", {"off", "on"}, 1) params:set_action("monobass_mix", function(x) engine.monobass_mix(x-1) end)
 
-    params:add_group("BitCrusher", 3)
+    params:add_group("BitCrush", 3)
     params:add_taper("bitcrush_mix", "Mix", 0, 100, 0.0, 0, "%") params:set_action("bitcrush_mix", function(value) engine.bitcrush_mix(value / 100) end)
     params:add_taper("bitcrush_rate", "Rate", 0, 44100, 4500, 100, "Hz") params:set_action("bitcrush_rate", function(value) engine.bitcrush_rate(value) end)
     params:add_taper("bitcrush_bits", "Bits", 1, 24, 10, 1) params:set_action("bitcrush_bits", function(value) engine.bitcrush_bits(value) end)
