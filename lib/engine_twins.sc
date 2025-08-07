@@ -1,42 +1,13 @@
 Engine_twins : CroneEngine {
     classvar nvoices = 2;
 
-    var delayEffect;
-    var saturationEffect;
-    var jpverbEffect;
-    var shimmerEffect;
-    var tapeEffect;
-    var chewEffect;
-    var widthEffect;
-    var widthEffect2;
-    var monobassEffect;
-    var sineEffect;
-    var wobbleEffect;
-    var lossdegradeEffect;
-    var outputSynth;
-    var <buffersL;
-    var <buffersR;
-    var wobbleBuffer;
-    var <voices;
-    var mixBus;
-    var bufSine;
-    var pg;
-    var <liveInputBuffersL;
-    var <liveInputBuffersR;
-    var <liveInputRecorders;
-    var currentSpeed, currentJitter, currentSize, currentDensity, currentDensityModAmt, currentPitch, currentPan, currentSpread;
-    var currentVolume, currentGranularGain, currentCutoff, currentHpf, currentlpfgain;
-    var currentSubharmonics1, currentSubharmonics2, currentSubharmonics3;
-    var currentOvertones1, currentOvertones2;
-    var currentPitchMode, currentTrigMode, currentDirectionMod;
-    var currentSizeVariation, currentPitchRandomPlus, currentPitchRandomMinus;
-    var currentSmoothbass, currentLowGain, currentHighGain;
-    var currentProbability;
-    var liveBufferMix = 1.0;
+    var bitcrushEffect, delayEffect, saturationEffect,jpverbEffect, shimmerEffect, tapeEffect, chewEffect, widthEffect, widthEffect2, monobassEffect, sineEffect, wobbleEffect, lossdegradeEffect, outputSynth;
+    var <buffersL, <buffersR, wobbleBuffer, <voices, mixBus, bufSine, pg, <liveInputBuffersL, <liveInputBuffersR, <liveInputRecorders;
+    var currentSpeed, currentJitter, currentSize, currentDensity, currentDensityModAmt, currentPitch, currentPan, currentSpread, currentVolume, currentGranularGain, currentCutoff, currentHpf, currentlpfgain;
+    var currentSubharmonics1, currentSubharmonics2, currentSubharmonics3, currentOvertones1, currentOvertones2, currentPitchMode, currentTrigMode, currentDirectionMod;
+    var currentSizeVariation, currentPitchRandomPlus, currentPitchRandomMinus, currentSmoothbass, currentLowGain, currentHighGain, currentProbability, liveBufferMix = 1.0;
 
-    *new { arg context, doneCallback;
-        ^super.new(context, doneCallback);
-    }
+    *new { arg context, doneCallback; ^super.new(context, doneCallback); }
 
 readBuf { arg i, path;
     if(buffersL[i].notNil && buffersR[i].notNil, {
@@ -109,21 +80,11 @@ saveLiveBufferToTape { arg voice, filename;
 }
 
 alloc {
-        buffersL = Array.fill(nvoices, { arg i;
-            Buffer.alloc(context.server, context.server.sampleRate * 1);
-        });
-
-        buffersR = Array.fill(nvoices, { arg i;
-            Buffer.alloc(context.server, context.server.sampleRate * 1);
-        });
+        buffersL = Array.fill(nvoices, { arg i; Buffer.alloc(context.server, context.server.sampleRate * 1); });
+        buffersR = Array.fill(nvoices, { arg i; Buffer.alloc(context.server, context.server.sampleRate * 1); });
         
-        liveInputBuffersL = Array.fill(nvoices, {
-            Buffer.alloc(context.server, context.server.sampleRate * 8);
-        });
-        
-        liveInputBuffersR = Array.fill(nvoices, {
-            Buffer.alloc(context.server, context.server.sampleRate * 8);
-        });
+        liveInputBuffersL = Array.fill(nvoices, {Buffer.alloc(context.server, context.server.sampleRate * 8); });
+        liveInputBuffersR = Array.fill(nvoices, {Buffer.alloc(context.server, context.server.sampleRate * 8); });
 
         bufSine = Buffer.alloc(context.server, 1024 * 16, 1);
         bufSine.sine2([2], [0.5], false);
@@ -163,23 +124,9 @@ alloc {
       
         SynthDef(\synth, {
             arg out, buf_l, buf_r,
-            pos, speed, jitter, size, density, density_mod_amt, pitch_offset, pan, spread, gain,
-            t_reset_pos,
-            granular_gain,
-            pitch_mode,
-            trig_mode,
-            subharmonics_1, 
-            subharmonics_2,
-            subharmonics_3,
-            overtones_1, 
-            overtones_2, 
-            cutoff, hpf, lpfgain=0.1,
-            direction_mod,
-            size_variation,
-            low_gain, high_gain,
-            smoothbass,
-            pitch_random_plus, pitch_random_minus,
-            probability;
+            pos, speed, jitter, size, density, density_mod_amt, pitch_offset, pan, spread, gain, t_reset_pos,
+            granular_gain, pitch_mode, trig_mode, subharmonics_1, subharmonics_2, subharmonics_3, overtones_1, overtones_2, 
+            cutoff, hpf, lpfgain=0.1, direction_mod, size_variation, low_gain, high_gain, smoothbass, pitch_random_plus, pitch_random_minus, probability;
  
             var grain_trig, jitter_sig1, jitter_sig2, jitter_sig3, jitter_sig4, jitter_sig5, jitter_sig6, buf_dur, pan_sig, buf_pos, pos_sig, sig_l, sig_r, sig_mix, density_mod, dry_sig, granular_sig, base_pitch, grain_pitch, shaped, grain_size;
             var invDenom = 1.5 / (1 + subharmonics_1 + subharmonics_2 + subharmonics_3 + overtones_1 + overtones_2);
@@ -277,8 +224,15 @@ alloc {
         SynthDef(\monobass, {
             arg bus, mix=0.0;
             var sig = In.ar(bus, 2);
-            sig = BHiPass.ar(sig,200)+Pan2.ar(BLowPass.ar(sig[0]+sig[1],200));
+            sig = BHiPass.ar(sig,230)+Pan2.ar(BLowPass.ar(sig[0]+sig[1],230));
             ReplaceOut.ar(bus, sig);
+        }).add;  
+        
+        SynthDef(\bitcrush, {
+            arg bus, mix=0.0, rate=44100, bits=24;
+            var sig = In.ar(bus, 2);
+            var bit = Decimator.ar(sig,rate,bits);
+            ReplaceOut.ar(bus, LinXFade2.ar(sig, bit, mix * 2 - 1));
         }).add;  
 
         SynthDef(\shimmer, {
@@ -304,7 +258,7 @@ alloc {
         SynthDef(\tape, {
             arg bus, mix=0.0;
             var orig = In.ar(bus, 2);
-            var wet = AnalogTape.ar(orig, 0.86, 0.86, 0.86, 2, 0);
+            var wet = AnalogTape.ar(orig, 0.87, 0.87, 0.87, 2, 0);
             ReplaceOut.ar(bus, LinXFade2.ar(orig, wet, mix * 2 - 1));
         }).add;
         
@@ -346,21 +300,18 @@ alloc {
             ReplaceOut.ar(bus, LinXFade2.ar(dry, shaped, drive * 2 - 1));
         }).add;
 
-        SynthDef(\delay, {
-            arg bus, mix=0.0, time=0.5, feedback=0.5, delayLPF=6000, stereo=1, mod_rate, mod_depth;
-            var sig = In.ar(bus, 2);
-            var fb = LocalIn.ar(2);
-            var fbInput = [sig[0] + (fb[1] * feedback), sig[1] + (fb[0] * feedback)].softclip;
-            var modulation = LFPar.kr(mod_rate, mul: mod_depth);
-            var delayedL = DelayC.ar(fbInput[0], 4.0, time + modulation);
-            var delayedR = DelayC.ar(fbInput[1], 4.0, time + modulation);
-            var processedL = LPF.ar(delayedL, delayLPF);
-            var processedR = LPF.ar(delayedR, delayLPF);  
-            var panPos = LFPar.kr(1/(time*2), iphase: 0).range(-1, 1) * stereo;
-            var outputL = processedL * panPos.max(0) + (processedL * (1-stereo));
-            var outputR = processedR * panPos.min(0).neg + (processedR * (1-stereo));
-            LocalOut.ar([outputL, outputR]);
-            ReplaceOut.ar(bus, LinXFade2.ar(sig, sig + [outputL, outputR], mix * 2 - 1));
+        SynthDef(\delay, { |bus, delay=0.5, time=10, dhpf=20, lpf=20000, w_rate=0.0, w_depth=0.0, stereo=0.3, mix=0.0, i_max_del=2|
+            var input, local, fb, delayed, out, panPos;
+            input = In.ar(bus, 2);
+            fb = exp(log(0.001) * (Lag.kr(delay, 0.1) / Lag.kr(time, 0.1)));
+            local = LocalIn.ar(2).softclip;
+            fb = [input[0] + (local[1] * fb), input[1] + (local[0] * fb)].softclip;
+            delayed = DelayL.ar(Limiter.ar(fb + input, 0.99, 0.01), i_max_del, Lag.kr(delay, 0.1) + LFPar.kr(w_rate, mul: w_depth));
+            delayed = LPF.ar(HPF.ar(delayed, dhpf), lpf);
+            panPos = LFPar.kr(1/(delay*2)).range(-1, 1) * stereo;
+            out = [delayed[0] * panPos.max(0) + (delayed[0] * (1-stereo)), delayed[1] * panPos.min(0).neg + (delayed[1] * (1-stereo))];
+            LocalOut.ar(out);
+            ReplaceOut.ar(bus, LinXFade2.ar(input, input + out, mix * 2 - 1));
         }).add;
 
         SynthDef(\jpverb, {
@@ -401,19 +352,29 @@ alloc {
         
         context.server.sync;
 
+        bitcrushEffect = Synth.new(\bitcrush, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');    
         shimmerEffect = Synth.new(\shimmer, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');    
         sineEffect = Synth.new(\sine, [\bus, mixBus.index, \sine_drive, 0.0], context.xg, 'addToTail');  
         tapeEffect = Synth.new(\tape, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');  
         wobbleEffect = Synth.new(\wobble, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
         chewEffect = Synth.new(\chew, [\bus, mixBus.index, \chew_depth, 0.0], context.xg, 'addToTail');
         lossdegradeEffect = Synth.new(\lossdegrade, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
-        delayEffect = Synth.new(\delay, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
+        delayEffect = Synth.new(\delay, [\bus, mixBus.index, \mix, 0.0,], context.xg, 'addToTail');
         widthEffect = Synth.new(\width, [\bus, mixBus.index, \width, 1.0], context.xg, 'addToTail');
         saturationEffect = Synth.new(\saturation, [\bus, mixBus.index, \drive, 0.0], context.xg, 'addToTail');
         jpverbEffect = Synth.new(\jpverb, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
         widthEffect2 = Synth.new(\width, [\bus, mixBus.index, \width, 1.0], context.xg, 'addToTail');
         monobassEffect = Synth.new(\monobass, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
         outputSynth = Synth.new(\output, [\in, mixBus.index,\out, context.out_b.index], context.xg, 'addToTail');   
+
+        this.addCommand(\mix, "f", { |msg| var mix = msg[1]; delayEffect.set(\mix, mix); delayEffect.run(mix > 0); });
+        this.addCommand(\delay, "f", { |msg| delayEffect.set(\delay, msg[1]);	});
+    		this.addCommand(\time, "f", { |msg| delayEffect.set(\time, msg[1]);	});
+    		this.addCommand(\dhpf, "f", { |msg| delayEffect.set(\dhpf, msg[1]);	});
+    		this.addCommand(\lpf, "f", { |msg| delayEffect.set(\lpf, msg[1]);	});
+    		this.addCommand(\w_rate, "f", { |msg| delayEffect.set(\w_rate, msg[1]);	});
+    		this.addCommand(\w_depth, "f", { |msg| delayEffect.set(\w_depth, msg[1]/100);	});
+    		this.addCommand("stereo", "f", { arg msg; var stereo = msg[1]; delayEffect.set(\stereo, stereo); });
 
         this.addCommand("reverb_mix", "f", { arg msg; var mix = msg[1]; jpverbEffect.set(\mix, mix); jpverbEffect.run(mix > 0); });
         this.addCommand("t60", "f", { arg msg; jpverbEffect.set(\t60, msg[1]); });
@@ -448,6 +409,10 @@ alloc {
         this.addCommand("pitch_random_minus", "if", { arg msg; var voice = msg[1] - 1; currentPitchRandomMinus[voice] = msg[2]; voices[voice].set(\pitch_random_minus, msg[2]); });
         this.addCommand("smoothbass", "if", { arg msg; var voice = msg[1] - 1; currentSmoothbass[voice] = msg[2]; voices[voice].set(\smoothbass, msg[2]); });
         this.addCommand("probability", "if", { arg msg; var voice = msg[1] - 1; currentProbability[voice] = msg[2]; voices[voice].set(\probability, msg[2]); });
+        
+        this.addCommand("bitcrush_mix", "f", { arg msg; var mix = msg[1]; bitcrushEffect.set(\mix, mix); bitcrushEffect.run(mix > 0); });
+        this.addCommand("bitcrush_rate", "f", { arg msg; bitcrushEffect.set(\rate, msg[1]); });
+        this.addCommand("bitcrush_bits", "f", { arg msg; bitcrushEffect.set(\bits, msg[1]); });
         
         this.addCommand("shimmer_mix", "f", { arg msg; var mix = msg[1]; shimmerEffect.set(\mix, mix); shimmerEffect.run(mix > 0); });
         this.addCommand("lowpass", "f", { arg msg; shimmerEffect.set(\lowpass, msg[1]); });
@@ -487,14 +452,6 @@ alloc {
         this.addCommand("width", "f", { arg msg; var width = msg[1]; widthEffect.set(\width, width); widthEffect.run(width != 1); widthEffect2.set(\width, width); widthEffect2.run(width != 1); });
         this.addCommand("monobass_mix", "f", { arg msg; var mix = msg[1]; monobassEffect.set(\mix, mix); monobassEffect.run(mix > 0); });
         
-        this.addCommand("delay_mix", "f", { arg msg; var mix = msg[1]; delayEffect.set(\mix, mix); delayEffect.run(mix > 0); });
-        this.addCommand("delay_time", "f", { arg msg; var delayTime = msg[1]; delayEffect.set(\time, delayTime); });
-        this.addCommand("delay_feedback", "f", { arg msg; var delayFeedback = msg[1]; delayEffect.set(\feedback, delayFeedback); });
-        this.addCommand("delayLPF", "f", { arg msg; var delayLPF = msg[1]; delayEffect.set(\delayLPF, delayLPF); });
-        this.addCommand("stereo", "f", { arg msg; var stereo = msg[1]; delayEffect.set(\stereo, stereo); });
-        this.addCommand("delay_mod_rate", "f", { arg msg; delayEffect.set(\mod_rate, msg[1]); });
-        this.addCommand("delay_mod_depth", "f", { arg msg; delayEffect.set(\mod_depth, msg[1]); });
-
         this.addCommand("set_live_input", "ii", { arg msg;
             var voice = msg[1] - 1;
             var enable = msg[2];
@@ -632,5 +589,6 @@ alloc {
         wobbleEffect.free;
         outputSynth.free;
         delayEffect.free;
+        bitcrushEffect.free;
     }
 }

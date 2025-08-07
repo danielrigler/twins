@@ -6,7 +6,7 @@
 --           by: @dddstudio                       
 --
 --                          
---                           v0.34
+--                           v0.35
 -- E1: Master Volume
 -- K1+E2/E3: Volume 1/2
 -- K1+E1: Crossfade Volumes
@@ -29,7 +29,7 @@
 -- @infinitedigits @cfdrake 
 -- @justmat @artfwo @nzimas
 -- @sonoCircuit @graymazes
--- @Higaru
+-- @Higaru @NiklasKramer
 --
 -- If you like this,
 -- buy them a beer :)
@@ -315,14 +315,15 @@ local function setup_params()
     params:add_binary("randomize_granular", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_granular", function() randpara.randomize_granular_params(1) randpara.randomize_granular_params(2) end)
     params:add_option("lock_granular", "Lock Parameters", {"off", "on"}, 1)
 
-    params:add_group("Delay", 10)
-    params:add_control("delay_mix", "Mix", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("delay_mix", function(x) engine.delay_mix(x/100) end)
-    params:add_control("delay_time", "Time", controlspec.new(0.15, 4, "exp", 0.01, 0.5, "s")) params:set_action("delay_time", function(x) engine.delay_time(x) end)
-    params:add_control("delay_feedback", "Feedback", controlspec.new(0, 100, "lin", 1, 80, "%")) params:set_action("delay_feedback", function(x) engine.delay_feedback(x/100) end)
-    params:add_control("delayLPF", "Filter", controlspec.new(20, 20000, "lin", 1, 6000, "Hz")) params:set_action("delayLPF", function(x) engine.delayLPF(x) end)
-    params:add_control("delay_mod_depth", "Mod Depth", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("delay_mod_depth", function(x) engine.delay_mod_depth(x/10000) end)
-    params:add_taper("delay_mod_rate", "Mod Rate", 0, 10, 1.8, 2, "Hz") params:set_action("delay_mod_rate", function(value) engine.delay_mod_rate(value) end)
-    params:add_taper("stereo", "Ping-Pong", 0, 100, 25, 0, "%") params:set_action("stereo", function(value) engine.stereo(value / 100) end)
+    params:add_group("Delay", 11)
+    params:add_taper("delay_mix", "Mix", 0, 100, 0, 1, "%") params:set_action("delay_mix", function(value) engine.mix(value/100) end)
+    params:add_taper("delay_time", "Time", 0.02, 2, 0.5, 0.1, "s") params:set_action("delay_time", function(value) engine.delay(value) end)
+    params:add_taper("delay_feedback", "Feedback", 0, 100, 30, 1, "%") params:set_action("delay_feedback", function(value) engine.time(value/5) end)
+    params:add_control("delay_lowpass", "LPF", controlspec.new(20, 20000, 'exp', 1, 20000, "Hz")) params:set_action('delay_lowpass', function(value) engine.lpf(value) end)
+    params:add_control("delay_highpass", "HPF", controlspec.new(20, 20000, 'exp', 1, 20, "Hz")) params:set_action("delay_highpass", function(value) engine.dhpf(value) end)
+    params:add_taper("wiggle_rate", "Mod Freq", 0, 20, 2, 1, "Hz") params:set_action("wiggle_rate", function(value) engine.w_rate(value) end)
+    params:add_taper("wiggle_depth", "Mod Depth", 0, 100, 0, 0, "%") params:set_action("wiggle_depth", function(value) engine.w_depth(value/100) end)
+    params:add_taper("stereo", "Ping-Pong", 0, 100, 30, 1, "%") params:set_action("stereo", function(value) engine.stereo(value/100) end)
     params:add_separator("   ")
     params:add_binary("randomize_delay_params", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_delay_params", function() randpara.randomize_delay_params(steps) end)
     params:add_option("lock_delay", "Lock Parameters", {"off", "on"}, 1)
@@ -371,7 +372,7 @@ local function setup_params()
     params:add_control("lossdegrade_mix", "Loss / Degrade", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("lossdegrade_mix", function(value) engine.lossdegrade_mix(value / 100) end)
     params:add_separator("    ")
     params:add_binary("randomize_tape", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_tape", function() randpara.randomize_tape_params(steps) end)
-    params:add_option("lock_tape", "Lock Parameters", {"off", "on"}, 1)
+    params:add_option("lock_tape", "Lock Parameters", {"off", "on"}, 1)    
     
     params:add_group("EQ", 6)
     for i = 1, 2 do 
@@ -387,6 +388,11 @@ local function setup_params()
       params:add_taper(i.."lpfgain", i.." LPF Resonance", 0, 4, 0.1, 3, "") params:set_action(i.."lpfgain", function(value) engine.lpfgain(i, value) end)
       params:add_control(i.."hpf",i.." HPF Cutoff",controlspec.new(20,20000,"exp",0,20,"Hz")) params:set_action(i.."hpf",function(value) engine.hpf(i,value) end)
     end
+    
+    params:add_group("BitCrusher", 3)
+    params:add_taper("bitcrush_mix", "Mix", 0, 100, 0.0, 0, "%") params:set_action("bitcrush_mix", function(value) engine.bitcrush_mix(value / 100) end)
+    params:add_taper("bitcrush_rate", "Rate", 0, 44100, 4500, 100, "Hz") params:set_action("bitcrush_rate", function(value) engine.bitcrush_rate(value) end)
+    params:add_taper("bitcrush_bits", "Bits", 1, 24, 10, 1) params:set_action("bitcrush_bits", function(value) engine.bitcrush_bits(value) end)
     
     params:add_group("Stereo", 2)
     params:add_control("Width", "Stereo Width", controlspec.new(0, 200, "lin", 0.01, 100, "%")) params:set_action("Width", function(value) engine.width(value / 100) end)
@@ -417,7 +423,7 @@ local function setup_params()
     params:add_taper("min_density", "density (min)", 0.1, 50, 1, 5, "Hz")
     params:add_taper("max_density", "density (max)", 0.1, 50, 16, 5, "Hz")
     params:add_taper("min_spread", "spread (min)", 0, 100, 0, 0, "%")
-    params:add_taper("max_spread", "spread (max)", 0, 100, 70, 0, "%")
+    params:add_taper("max_spread", "spread (max)", 0, 100, 65, 0, "%")
     params:add_control("min_pitch", "pitch (min)", controlspec.new(-48, 48, "lin", 1, -31, "st"))
     params:add_control("max_pitch", "pitch (max)", controlspec.new(-48, 48, "lin", 1, 31, "st"))
     params:add_taper("min_speed", "speed (min)", -2, 2, 0, 0, "x")
@@ -611,26 +617,24 @@ function enc(n, d)
             local other_param_name = other_track .. config.param
             local delta = config.invert and -d or d
             if config.wrap then
-                local current_val = params:get(other_param_name)
-                local new_val = util.clamp(current_val + delta, config.wrap[1], config.wrap[2])
-                if new_val ~= current_val then
-                    params:set(other_param_name, new_val)
-                    if config.engine then engine.seek(other_track, new_val / 100) end
-                end
-            else
-                params:delta(other_param_name, config.delta * (config.invert and -delta_multiplier or delta_multiplier) * d)
-            end
+            local current_val = params:get(other_param_name)
+            local range = config.wrap[2] - config.wrap[1] + 1
+            local new_val = (current_val + delta - config.wrap[1]) % range + config.wrap[1]
+            params:set(other_param_name, new_val)
+            if config.engine then engine.seek(other_track, new_val / 100) end
+        else
+            params:delta(other_param_name, config.delta * (config.invert and -delta_multiplier or delta_multiplier) * d)
+        end
         else
             local is_active, lfo_index = is_lfo_active_for_param(param_name)
             if is_active then params:set(lfo_index .. "lfo", 1) end
         end
         if config.wrap then
             local current_val = params:get(param_name)
-            local new_val = util.clamp(current_val + d, config.wrap[1], config.wrap[2])
-            if new_val ~= current_val then
-                params:set(param_name, new_val)
-                if config.engine then engine.seek(track, new_val / 100) end
-            end
+            local range = config.wrap[2] - config.wrap[1] + 1
+            local new_val = (current_val + d - config.wrap[1]) % range + config.wrap[1]
+            params:set(param_name, new_val)
+            if config.engine then engine.seek(track, new_val / 100) end
         else
             params:delta(param_name, config.delta * delta_multiplier * d)
         end

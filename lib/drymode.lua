@@ -16,6 +16,7 @@ function drymode.toggle_dry_mode()
             speed = {params:get("1speed"), params:get("2speed")},
             reverb_mix = params:get("reverb_mix"),
             delay_mix = params:get("delay_mix"),
+            bitcrush_mix = params:get("bitcrush_mix"),
             shimmer_mix = params:get("shimmer_mix"),
             tape_mix = params:get("tape_mix"),
             drive = params:get("drive"),
@@ -98,6 +99,7 @@ function drymode.toggle_dry_mode()
         end
         params:set("reverb_mix", 0)
         params:set("delay_mix", 0)
+        params:set("bitcrush_mix", 0)
         params:set("shimmer_mix", 0)
         params:set("tape_mix", 1)
         params:set("drive", 0)
@@ -119,6 +121,7 @@ function drymode.toggle_dry_mode()
             end
             params:set("reverb_mix", prev_settings.reverb_mix)
             params:set("delay_mix", prev_settings.delay_mix)
+            params:set("bitcrush_mix", prev_settings.bitcrush_mix)
             params:set("shimmer_mix", prev_settings.shimmer_mix)
             params:set("tape_mix", prev_settings.tape_mix)
             params:set("drive", prev_settings.drive)

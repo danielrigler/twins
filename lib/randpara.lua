@@ -146,12 +146,13 @@ local function randomize_delay_params()
   safe_metro_stop(randomize_metro)
     -- DELAY
     if math.random() <= 0.5 then targets["delay_mix"] = 0 else targets["delay_mix"] = math.random(0, 90) end
-    if math.random() <= 0.3 then params:set("delay_time", 0.5) else params:set("delay_time", random_float(0.25, 0.8)) end
+    if math.random() <= 0.3 then params:set("delay_time", 0.5) else params:set("delay_time", random_float(0.15, 1)) end
     if math.random() <= 0.5 then targets["delay_feedback"] = math.random(20, 80) end
-    if math.random() <= 0.4 then targets["stereo"] = 0 else targets["stereo"] = math.random(0, 60) end
-    targets["delayLPF"] = math.random(2500, 10000)
-    if math.random() <= 0.7 then targets["delay_mod_depth"] = 0 else targets["delay_mod_depth"] = math.random(0, 15) end
-    if math.random() <= 0.4 then targets["delay_mod_rate"] = 1.8 else targets["delay_mod_rate"] = random_float(0.5, 10) end
+    if math.random() <= 0.6 then targets["stereo"] = 27 else targets["stereo"] = math.random(0, 70) end
+    targets["delay_lowpass"] = math.random(1000, 20000)
+    targets["delay_highpass"] = math.random(20, 300)
+    if math.random() <= 0.7 then targets["wiggle_depth"] = 0 else targets["wiggle_depth"] = math.random(0, 10) end
+    if math.random() <= 0.6 then targets["wiggle_rate"] = 2 else targets["wiggle_rate"] = random_float(0.5, 4) end
 
     for param, _ in pairs(targets) do
         active_interpolations[param] = true
