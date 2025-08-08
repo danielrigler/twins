@@ -8,7 +8,7 @@ Inspired by @cfd90's Twine and contains influence and code from a lot of other n
 My main goal was building a tool for creating nice ambient soundscapes. And no problem if you do not have external controllers. I have tweaked the GUI and controls, so it is playable even with only a norns. 
 
 **Some of the new features:**
-* Reverb, delay, tape effects, shimmer, EQ, filters, etc
+* Reverb, delay, tape effects, shimmer, EQ, filters, bit reduction, etc.
 * Flexible volume control
 * Extra granular parameters, increased parameter ranges
 * Smooth transition interpolation
