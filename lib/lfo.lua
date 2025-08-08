@@ -360,7 +360,7 @@ function lfo.process()
     if lfo_paused then
         -- When paused, only process volume LFO offsets
         for i = 1, 16 do
-            if params:get(i.."lfo") == 2 then
+            if params:get(i.."lfo_target") and params:get(i.."lfo") == 2 then
                 local target_param = lfo.lfo_targets[params:get(i.."lfo_target")]
                 if target_param and (target_param == "1volume" or target_param == "2volume") then
                     local min_val, max_val = lfo.get_parameter_range(target_param)
@@ -373,7 +373,7 @@ function lfo.process()
     end
     
     for i = 1, 16 do
-        if params:get(i.."lfo") == 2 then
+        if params:get(i.."lfo") == 2 and params:get(i.."lfo_target") then
             lfo[i].phase = (lfo[i].phase + lfo[i].freq * (1/30)) % 1.0
             local slope
             local wf = lfo[i].waveform
@@ -417,11 +417,11 @@ function lfo.init()
     params:add_control(i .. "offset", i .. " offset", controlspec.new(-0.99, 0.99, "lin", 0.01, 0, ""))
     params:set_action(i .. "offset", function(value) lfo[i].offset = value end)
     params:add_control(i .. "lfo_freq", i .. " freq", controlspec.new(0.01, 2.00, "lin", 0.01, 0.05, ""))
-params:set_action(i .. "lfo_freq", function(value)
-  lfo[i].freq = value * params:get("global_lfo_freq_scale")
-end)
+    params:set_action(i .. "lfo_freq", function(value)
+      lfo[i].freq = value * params:get("global_lfo_freq_scale")
+    end)
 
-params:add_option(i .. "lfo", i .. " LFO", { "off", "on" }, 1)
+    params:add_option(i .. "lfo", i .. " LFO", { "off", "on" }, 1)
 
   end
 
