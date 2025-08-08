@@ -30,6 +30,7 @@ function drymode.toggle_dry_mode()
             wobble_mix = params:get("wobble_mix"),
             chew_depth = params:get("chew_depth"),
             lossdegrade_mix = params:get("lossdegrade_mix"),
+            rspeed = params:get("rspeed"),
             -- Store complete LFO states
             speed_lfos = {},
             seek_lfos = {},
@@ -108,6 +109,7 @@ function drymode.toggle_dry_mode()
         params:set("wobble_mix", 0)
         params:set("chew_depth", 0)
         params:set("lossdegrade_mix", 0)
+        params:set("rspeed", 0)
     else
         -- Restore previous settings
         if next(prev_settings) ~= nil then
@@ -131,6 +133,7 @@ function drymode.toggle_dry_mode()
             params:set("wobble_mix", prev_settings.wobble_mix)
             params:set("chew_depth", prev_settings.chew_depth)
             params:set("lossdegrade_mix", prev_settings.lossdegrade_mix)
+            params:set("rspeed", prev_settings.rspeed)
             
             if prev_settings.pan then
                 params:set("1pan", prev_settings.pan[1])

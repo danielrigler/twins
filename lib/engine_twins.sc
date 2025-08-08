@@ -1,7 +1,7 @@
 Engine_twins : CroneEngine {
     classvar nvoices = 2;
 
-    var bitcrushEffect, delayEffect, saturationEffect,jpverbEffect, shimmerEffect, tapeEffect, chewEffect, widthEffect, widthEffect2, monobassEffect, sineEffect, wobbleEffect, lossdegradeEffect, outputSynth;
+    var bitcrushEffect, delayEffect, saturationEffect,jpverbEffect, shimmerEffect, tapeEffect, chewEffect, widthEffect, widthEffect2, monobassEffect, sineEffect, wobbleEffect, lossdegradeEffect, rotateEffect, outputSynth;
     var <buffersL, <buffersR, wobbleBuffer, <voices, mixBus, bufSine, pg, <liveInputBuffersL, <liveInputBuffersR, <liveInputRecorders;
     var currentSpeed, currentJitter, currentSize, currentDensity, currentDensityModAmt, currentPitch, currentPan, currentSpread, currentVolume, currentGranularGain, currentCutoff, currentHpf, currentlpfgain;
     var currentSubharmonics1, currentSubharmonics2, currentSubharmonics3, currentOvertones1, currentOvertones2, currentPitchMode, currentTrigMode, currentDirectionMod;
@@ -321,6 +321,13 @@ alloc {
             ReplaceOut.ar(bus, LinXFade2.ar(dry, wet, mix * 2 - 1));
         }).add;
         
+        SynthDef(\rotate, {
+            arg bus, rspeed;
+            var sig = In.ar(bus, 2);
+            var rot = Rotate2.ar(sig[0], sig[1], LFSaw.kr(rspeed));
+            ReplaceOut.ar(bus, rot);
+        }).add;
+        
         SynthDef(\width, {
             arg bus, width=1.0;
             var sig = In.ar(bus, 2);
@@ -365,6 +372,7 @@ alloc {
         jpverbEffect = Synth.new(\jpverb, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
         widthEffect2 = Synth.new(\width, [\bus, mixBus.index, \width, 1.0], context.xg, 'addToTail');
         monobassEffect = Synth.new(\monobass, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
+        rotateEffect = Synth.new(\rotate, [\bus, mixBus.index], context.xg, 'addToTail');
         outputSynth = Synth.new(\output, [\in, mixBus.index,\out, context.out_b.index], context.xg, 'addToTail');   
 
         this.addCommand(\mix, "f", { |msg| var mix = msg[1]; delayEffect.set(\mix, mix); delayEffect.run(mix > 0); });
@@ -451,6 +459,8 @@ alloc {
 
         this.addCommand("width", "f", { arg msg; var width = msg[1]; widthEffect.set(\width, width); widthEffect.run(width != 1); widthEffect2.set(\width, width); widthEffect2.run(width != 1); });
         this.addCommand("monobass_mix", "f", { arg msg; var mix = msg[1]; monobassEffect.set(\mix, mix); monobassEffect.run(mix > 0); });
+        
+        this.addCommand("rspeed", "f", { arg msg; var rspeed = msg[1]; rotateEffect.set(\rspeed, rspeed); rotateEffect.run(rspeed > 0); });
         
         this.addCommand("set_live_input", "ii", { arg msg;
             var voice = msg[1] - 1;
@@ -590,5 +600,6 @@ alloc {
         outputSynth.free;
         delayEffect.free;
         bitcrushEffect.free;
+        rotateEffect.free;
     }
 }
