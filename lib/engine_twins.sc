@@ -231,7 +231,7 @@ alloc {
         SynthDef(\bitcrush, {
             arg bus, mix=0.0, rate=44100, bits=24;
             var sig = In.ar(bus, 2);
-            var bit = Decimator.ar(sig,rate,bits);
+            var bit = LPF.ar(Decimator.ar(sig,rate,bits), 10000);
             ReplaceOut.ar(bus, LinXFade2.ar(sig, bit, mix * 2 - 1));
         }).add;  
 
@@ -303,7 +303,7 @@ alloc {
         SynthDef(\delay, { |bus, delay=0.5, time=10, dhpf=20, lpf=20000, w_rate=0.0, w_depth=0.0, stereo=0.3, mix=0.0, i_max_del=2|
             var input, local, fb, delayed, out, panPos;
             input = In.ar(bus, 2);
-            fb = exp(log(0.001) * (Lag.kr(delay, 0.1) / Lag.kr(time, 0.1)));
+            fb = exp(log(0.001) * (Lag.kr(delay, 0.5) / Lag.kr(time, 0.5)));
             local = LocalIn.ar(2).softclip;
             fb = [input[0] + (local[1] * fb), input[1] + (local[0] * fb)].softclip;
             delayed = DelayL.ar(Limiter.ar(fb + input, 0.99, 0.01), i_max_del, Lag.kr(delay, 0.1) + LFPar.kr(w_rate, mul: w_depth));
