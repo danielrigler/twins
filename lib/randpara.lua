@@ -72,15 +72,15 @@ local function randomize_jpverb_params(steps)
   if params:get("lock_reverb") == 2 then return end
   safe_metro_stop(randomize_metro)
   -- JPVERB
-  if math.random() <= 0.5 then targets["t60"] = 4 else targets["t60"] = random_float(2, 6) end
-  if math.random() <= 0.6 then targets["damp"] = 0 else targets["damp"] = random_float(0, 20) end
-  if math.random() <= 0.3 then targets["rsize"] = 1 else targets["rsize"] = random_float(1, 3) end
-  if math.random() <= 0.6 then targets["earlyDiff"] = 70.7 else targets["earlyDiff"] = random_float(70.7, 90) end
+  if math.random() <= 0.5 then targets["t60"] = 4 else targets["t60"] = random_float(1, 6) end
+  if math.random() <= 0.5 then targets["damp"] = 0 else targets["damp"] = random_float(0, 25) end
+  if math.random() <= 0.3 then targets["rsize"] = 1 else targets["rsize"] = random_float(1, 4) end
+  if math.random() <= 0.6 then targets["earlyDiff"] = 70.7 else targets["earlyDiff"] = random_float(40.7, 100) end
   if math.random() <= 0.6 then targets["modDepth"] = 10 else targets["modDepth"] = math.random(10, 90) end
-  if math.random() <= 0.6 then targets["modFreq"] = 2 else targets["modFreq"] = random_float(1, 3) end
-  if math.random() <= 0.6 then targets["low"] = 1 else targets["low"] = random_float(0.9, 1) end
-  if math.random() <= 0.6 then targets["mid"] = 1 else targets["mid"] = random_float(0.8, 1) end
-  if math.random() <= 0.6 then targets["high"] = 1 else targets["high"] = random_float(0.6, 1) end
+  if math.random() <= 0.6 then targets["modFreq"] = 2 else targets["modFreq"] = random_float(0.5, 3) end
+  if math.random() <= 0.6 then targets["low"] = 1 else targets["low"] = random_float(0.7, 1) end
+  if math.random() <= 0.6 then targets["mid"] = 1 else targets["mid"] = random_float(0.7, 1) end
+  if math.random() <= 0.6 then targets["high"] = 1 else targets["high"] = random_float(0.7, 1) end
   if math.random() <= 0.6 then targets["lowcut"] = 500 else targets["lowcut"] = math.random(250, 750) end
   if math.random() <= 0.6 then targets["highcut"] = 2000 else targets["highcut"] = math.random(1500, 3500) end
 

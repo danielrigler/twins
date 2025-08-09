@@ -187,7 +187,7 @@ alloc {
             sig_mix = HPF.ar(sig_mix, Lag.kr(hpf));
             sig_mix = MoogFF.ar(sig_mix, Lag.kr(cutoff), lpfgain);
 
-            sig_mix = Compander.ar(sig_mix, sig_mix, 0.4, 1, 0.5, 0.03, 0.3) * 0.7;
+            sig_mix = Compander.ar(sig_mix, sig_mix, 0.4, 1, 0.5, 0.03, 0.3) * 0.5;
 
             Out.ar(out, sig_mix * gain);
         }).add;
@@ -203,7 +203,7 @@ alloc {
             sig = HPF.ar(sig, Lag.kr(hpf));
             sig = MoogFF.ar(sig, Lag.kr(cutoff), lpfgain);
             sig = Balance2.ar(sig[0], sig[1], Lag.kr(pan));
-            sig = Compander.ar(sig, sig, 0.4, 1, 0.5, 0.03, 0.3) * 0.7;
+            sig = Compander.ar(sig, sig, 0.4, 1, 0.5, 0.03, 0.3) * 0.5;
             Out.ar(out, sig * gain);
         }).add;
         
@@ -231,8 +231,9 @@ alloc {
         SynthDef(\bitcrush, {
             arg bus, mix=0.0, rate=44100, bits=24;
             var sig = In.ar(bus, 2);
-            var bit = LPF.ar(Decimator.ar(sig,rate,bits), 10000);
-            ReplaceOut.ar(bus, LinXFade2.ar(sig, bit, mix * 2 - 1));
+            var mod = LFNoise1.kr(0.25).range(0.4, 1);
+            var bit = LPF.ar(Decimator.ar(sig,rate*mod,bits), 10000);
+            ReplaceOut.ar(bus, XFade2.ar(sig, bit, mix * 2 - 1));
         }).add;  
 
         SynthDef(\shimmer, {
@@ -245,7 +246,7 @@ alloc {
             var fbProcessed = fbSig * fb;
             pit = LPF.ar((pit + pit2 + fbProcessed),lowpass);
             LocalOut.ar(DelayC.ar(pit, 0.5, fbDelay));
-            ReplaceOut.ar(bus, LinXFade2.ar(orig, orig + pit, mix * 2 - 1));
+            ReplaceOut.ar(bus, XFade2.ar(orig, orig + pit, mix * 2 - 1));
         }).add;
         
         SynthDef(\sine, {
@@ -259,7 +260,7 @@ alloc {
             arg bus, mix=0.0;
             var orig = In.ar(bus, 2);
             var wet = AnalogTape.ar(orig, 0.87, 0.87, 0.87, 2, 0);
-            ReplaceOut.ar(bus, LinXFade2.ar(orig, wet, mix * 2 - 1));
+            ReplaceOut.ar(bus, XFade2.ar(orig, wet, mix * 2 - 1));
         }).add;
         
         SynthDef(\wobble, {
@@ -273,7 +274,7 @@ alloc {
             BufWr.ar(dry, wobbleBuffer, pw);
             pr = DelayL.ar(Phasor.ar(0, BufRateScale.kr(wobbleBuffer)*rate, 0, BufFrames.kr(wobbleBuffer)), 0.2, 0.2);
             wet = BufRd.ar(2, wobbleBuffer, pr, interpolation:4);
-            ReplaceOut.ar(bus, LinXFade2.ar(dry, wet, mix * 2 - 1));
+            ReplaceOut.ar(bus, XFade2.ar(dry, wet, mix * 2 - 1));
         }).add;
         
         SynthDef(\chew, {
@@ -288,7 +289,7 @@ alloc {
             var sig = In.ar(bus, 2);
             var loss = AnalogLoss.ar(sig,0.4,0.38,0.5,1);
             var degrade = AnalogDegrade.ar(loss,0.3,0.3,0.5,0.5);
-            ReplaceOut.ar(bus, LinXFade2.ar(sig, degrade, mix * 2 - 1));
+            ReplaceOut.ar(bus, XFade2.ar(sig, degrade, mix * 2 - 1));
         }).add;
         
         SynthDef(\saturation, {
@@ -297,13 +298,13 @@ alloc {
             dry = In.ar(bus, 2);
             wet = dry * (drive * 10 + 1);
             shaped = wet.tanh * 0.3;
-            ReplaceOut.ar(bus, LinXFade2.ar(dry, shaped, drive * 2 - 1));
+            ReplaceOut.ar(bus, XFade2.ar(dry, shaped, drive * 2 - 1));
         }).add;
 
         SynthDef(\delay, { |bus, delay=0.5, time=10, dhpf=20, lpf=20000, w_rate=0.0, w_depth=0.0, stereo=0.3, mix=0.0, i_max_del=2|
             var input, local, fb, delayed, out, panPos;
             input = In.ar(bus, 2);
-            fb = exp(log(0.001) * (Lag.kr(delay, 0.5) / Lag.kr(time, 0.5)));
+            fb = exp(log(0.001) * (delay / time));
             local = LocalIn.ar(2).softclip;
             fb = [input[0] + (local[1] * fb), input[1] + (local[0] * fb)].softclip;
             delayed = DelayL.ar(Limiter.ar(fb + input, 0.99, 0.01), i_max_del, Lag.kr(delay, 0.1) + LFPar.kr(w_rate, mul: w_depth));
@@ -311,14 +312,14 @@ alloc {
             panPos = LFPar.kr(1/(delay*2)).range(-1, 1) * stereo;
             out = [delayed[0] * panPos.max(0) + (delayed[0] * (1-stereo)), delayed[1] * panPos.min(0).neg + (delayed[1] * (1-stereo))];
             LocalOut.ar(out);
-            ReplaceOut.ar(bus, LinXFade2.ar(input, input + out, mix * 2 - 1));
+            ReplaceOut.ar(bus, XFade2.ar(input, input + out, mix * 2 - 1));
         }).add;
 
         SynthDef(\jpverb, {
             arg bus, mix=0.0, t60, damp, rsize, earlyDiff, modDepth, modFreq, low, mid, high, lowcut, highcut;
             var dry = In.ar(bus, 2);
             var wet = JPverb.ar(dry, t60, damp, rsize, earlyDiff, modDepth, modFreq, low, mid, high, lowcut, highcut);
-            ReplaceOut.ar(bus, LinXFade2.ar(dry, wet, mix * 2 - 1));
+            ReplaceOut.ar(bus, XFade2.ar(dry, wet, mix * 2 - 1));
         }).add;
         
         SynthDef(\rotate, {
@@ -368,9 +369,9 @@ alloc {
         lossdegradeEffect = Synth.new(\lossdegrade, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
         delayEffect = Synth.new(\delay, [\bus, mixBus.index, \mix, 0.0,], context.xg, 'addToTail');
         widthEffect = Synth.new(\width, [\bus, mixBus.index, \width, 1.0], context.xg, 'addToTail');
-        saturationEffect = Synth.new(\saturation, [\bus, mixBus.index, \drive, 0.0], context.xg, 'addToTail');
         jpverbEffect = Synth.new(\jpverb, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
         widthEffect2 = Synth.new(\width, [\bus, mixBus.index, \width, 1.0], context.xg, 'addToTail');
+        saturationEffect = Synth.new(\saturation, [\bus, mixBus.index, \drive, 0.0], context.xg, 'addToTail');
         monobassEffect = Synth.new(\monobass, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
         rotateEffect = Synth.new(\rotate, [\bus, mixBus.index], context.xg, 'addToTail');
         outputSynth = Synth.new(\output, [\in, mixBus.index,\out, context.out_b.index], context.xg, 'addToTail');   

@@ -54,6 +54,8 @@ local manual_adjustment_duration = 0.5
 local manual_cleanup_metro = nil
 local last_cleanup_time = 0
 local CLEANUP_INTERVAL = 0.5
+local tap_times = {}
+local TAP_TIMEOUT = 2
 local animation_y = -64
 local animation_speed = 150
 local animation_complete = false
@@ -165,6 +167,26 @@ local function stop_interpolations()
         end
     end
     active_controlled_params = {}
+end
+
+local function register_tap()
+    local now = util.time()
+    if #tap_times > 0 and (now - tap_times[#tap_times]) > TAP_TIMEOUT then
+        tap_times = {}
+    end
+    table.insert(tap_times, now)
+    while #tap_times > 3 do
+        table.remove(tap_times, 1)
+    end
+    if #tap_times >= 2 then
+        local sum, count = 0, 0
+        for i = math.max(2, #tap_times - 2), #tap_times do
+            sum = sum + (tap_times[i] - tap_times[i - 1])
+            count = count + 1
+        end
+        local avg_interval = sum / count
+        params:set("delay_time", util.clamp(avg_interval, 0.02, 2))
+    end
 end
 
 local last_random_sample = nil
@@ -315,14 +337,15 @@ local function setup_params()
     params:add_binary("randomize_granular", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_granular", function() randpara.randomize_granular_params(1) randpara.randomize_granular_params(2) end)
     params:add_option("lock_granular", "Lock Parameters", {"off", "on"}, 1)
 
-    params:add_group("Delay", 11)
+    params:add_group("Delay", 12)
     params:add_taper("delay_mix", "Mix", 0, 100, 0, 1, "%") params:set_action("delay_mix", function(value) engine.mix(value/100) end)
     params:add_taper("delay_time", "Time", 0.02, 2, 0.5, 0.1, "s") params:set_action("delay_time", function(value) engine.delay(value) end)
+    params:add_binary("tap", "↳ TAP!", "trigger", 0) params:set_action("tap", function() register_tap() end)
     params:add_taper("delay_feedback", "Feedback", 0, 100, 30, 1, "%") params:set_action("delay_feedback", function(value) engine.time(value/5) end)
     params:add_control("delay_lowpass", "LPF", controlspec.new(20, 20000, 'exp', 1, 20000, "Hz")) params:set_action('delay_lowpass', function(value) engine.lpf(value) end)
     params:add_control("delay_highpass", "HPF", controlspec.new(20, 20000, 'exp', 1, 20, "Hz")) params:set_action("delay_highpass", function(value) engine.dhpf(value) end)
-    params:add_taper("wiggle_rate", "Mod Freq", 0, 20, 2, 1, "Hz") params:set_action("wiggle_rate", function(value) engine.w_rate(value) end)
     params:add_taper("wiggle_depth", "Mod Depth", 0, 100, 0, 0, "%") params:set_action("wiggle_depth", function(value) engine.w_depth(value/100) end)
+    params:add_taper("wiggle_rate", "Mod Freq", 0, 20, 2, 1, "Hz") params:set_action("wiggle_rate", function(value) engine.w_rate(value) end)
     params:add_taper("stereo", "Ping-Pong", 0, 100, 30, 1, "%") params:set_action("stereo", function(value) engine.stereo(value/100) end)
     params:add_separator("   ")
     params:add_binary("randomize_delay_params", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_delay_params", function() randpara.randomize_delay_params(steps) end)
@@ -397,7 +420,7 @@ local function setup_params()
     params:add_group("BitCrush", 3)
     params:add_taper("bitcrush_mix", "Mix", 0, 100, 0.0, 0, "%") params:set_action("bitcrush_mix", function(value) engine.bitcrush_mix(value / 100) end)
     params:add_taper("bitcrush_rate", "Rate", 0, 44100, 4500, 100, "Hz") params:set_action("bitcrush_rate", function(value) engine.bitcrush_rate(value) end)
-    params:add_taper("bitcrush_bits", "Bits", 1, 24, 10, 1) params:set_action("bitcrush_bits", function(value) engine.bitcrush_bits(value) end)
+    params:add_taper("bitcrush_bits", "Bits", 1, 24, 14, 1) params:set_action("bitcrush_bits", function(value) engine.bitcrush_bits(value) end)
 
     params:add_group("LFOs", 118)
     params:add_binary("randomize_lfos", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_lfos", function() lfo.clearLFOs() if randomize_metro[1] then randomize_metro[1]:stop() end if randomize_metro[2] then randomize_metro[2]:stop() end lfo.randomize_lfos("1", params:get("allow_volume_lfos") == 2)  lfo.randomize_lfos("2", params:get("allow_volume_lfos") == 2) end)
@@ -718,6 +741,7 @@ function key(n, z)
             elseif n == 3 then
                 local idx = mode_indices2[current_mode] or 1
                 current_mode = mode_list2[(idx % #mode_list2) + 1]
+                if params:get_selected_param() == "delay_time" then register_tap() end
             end
         end
     end
