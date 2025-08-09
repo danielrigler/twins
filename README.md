@@ -4,8 +4,7 @@ A randomized dual granular sample playground for Monome Norns.
 
 ![100%](https://llllllll.co/uploads/default/original/3X/3/c/3c5256be810b01e9d48ec62541b852443f9cdf44.png)
 
-Inspired by @cfd90's Twine and contains influence and code from a lot of other norns users. This is basically Twine on steroids. A granular playground. It contains a lot of effects and extra granular parameters. Actually you can turn off granular processing and use this as a normal sample player with effects. Live input processing is also possible. Let me know if you find this useful. 
-My main goal was building a tool for creating nice ambient soundscapes. And no problem if you do not have external controllers. I have tweaked the GUI and controls, so it is playable even with only a norns. 
+Inspired by @cfd90’s Twine and contains influence and code from a lot of other norns users. This is basically Twine on steroids. A granular playground. It contains a lot of effects and extra granular parameters. You can turn off granular processing and use this as a normal sample player with effects. Live input processing is also possible. My main goal was building a tool for creating nice ambient soundscapes. And no problem if you do not have external controllers. I have tweaked the GUI and controls, so it is playable even with only a norns. Let me know if you find this useful.
 
 **Some of the new features:**
 * Reverb, delay, tape effects, shimmer, EQ, filters, bit reduction, etc.
@@ -42,7 +41,7 @@ install from Maiden Project Manager, or from Maiden REPL:
 do not forget to restart.
 
 ### Version history
-* **v0.35** - Delay tweaks, bitcrusher.
+* **v0.35** - Delay tweaks, bitcrusher, stereo field rotation.
 * **v0.34** - Added delay modulation.
 * **v0.33** - Ping-Pong delay, smaller tweaks.
 * **v0.32** - Live mode tweaks, tape saturation.
@@ -50,7 +49,7 @@ do not forget to restart.
 * **v0.30** - Symmetry, dry mode, actions.
 * **v0.29** - Optimizations and tweaks.
 * **v0.28** - Shimmer update.
-* **v0.26** - Swith to JPverb. Locking improvements. 
+* **v0.26** - Switch to JPverb. Locking improvements. 
 * **v0.25** - Improved shimmer. Small tweaks and fixes. 
 * **v0.24** - Added tape wobble. 
 * **v0.23** - Added shimmer again. 0 mix is bypass to save resources. 
