@@ -741,7 +741,6 @@ function key(n, z)
             elseif n == 3 then
                 local idx = mode_indices2[current_mode] or 1
                 current_mode = mode_list2[(idx % #mode_list2) + 1]
-                if params:get_selected_param() == "delay_time" then register_tap() end
             end
         end
     end
