@@ -1,7 +1,7 @@
 Engine_twins : CroneEngine {
     classvar nvoices = 2;
 
-    var bitcrushEffect, delayEffect, saturationEffect,jpverbEffect, shimmerEffect, tapeEffect, chewEffect, widthEffect, widthEffect2, monobassEffect, sineEffect, wobbleEffect, lossdegradeEffect, rotateEffect, outputSynth;
+    var bitcrushEffect, delayEffect, saturationEffect,jpverbEffect, shimmerEffect, tapeEffect, chewEffect, widthEffect, widthEffect2, monobassEffect, sineEffect, wobbleEffect, lossdegradeEffect, tascamEffect, rotateEffect, outputSynth;
     var <buffersL, <buffersR, wobbleBuffer, <voices, mixBus, bufSine, pg, <liveInputBuffersL, <liveInputBuffersR, <liveInputRecorders;
     var currentSpeed, currentJitter, currentSize, currentDensity, currentDensityModAmt, currentPitch, currentPan, currentSpread, currentVolume, currentGranularGain, currentCutoff, currentHpf, currentlpfgain;
     var currentSubharmonics1, currentSubharmonics2, currentSubharmonics3, currentOvertones1, currentOvertones2, currentPitchMode, currentTrigMode, currentDirectionMod;
@@ -129,7 +129,7 @@ alloc {
             cutoff, hpf, lpfgain=0.1, direction_mod, size_variation, low_gain, high_gain, smoothbass, pitch_random_plus, pitch_random_minus, probability;
  
             var grain_trig, jitter_sig1, jitter_sig2, jitter_sig3, jitter_sig4, jitter_sig5, jitter_sig6, buf_dur, pan_sig, buf_pos, pos_sig, sig_l, sig_r, sig_mix, density_mod, dry_sig, granular_sig, base_pitch, grain_pitch, shaped, grain_size;
-            var invDenom = 1.5 / (1 + subharmonics_1 + subharmonics_2 + subharmonics_3 + overtones_1 + overtones_2);
+            var invDenom = 1 / (1 + subharmonics_1 + subharmonics_2 + subharmonics_3 + overtones_1 + overtones_2);
             var subharmonic_1_vol = subharmonics_1 * invDenom;
             var subharmonic_2_vol = subharmonics_2 * invDenom;
             var subharmonic_3_vol = subharmonics_3 * invDenom;
@@ -178,7 +178,7 @@ alloc {
 
             pan_sig = Lag.kr(TRand.kr(trig: grain_trig, lo: spread.neg, hi: spread));
             granular_sig = Balance2.ar(sig_l, sig_r, pan + pan_sig);
-            sig_mix = (dry_sig * (1 - granular_gain)) + (granular_sig * granular_gain);
+            sig_mix = ((dry_sig * (1 - granular_gain)) + (granular_sig * granular_gain)) * 0.5;
             
             low = BLowShelf.ar(sig_mix, 130, 6, low_gain);
             high = BHiShelf.ar(sig_mix, 3900, 6, high_gain);
@@ -186,8 +186,6 @@ alloc {
             
             sig_mix = HPF.ar(sig_mix, Lag.kr(hpf));
             sig_mix = MoogFF.ar(sig_mix, Lag.kr(cutoff), lpfgain);
-
-            sig_mix = Compander.ar(sig_mix, sig_mix, 0.4, 1, 0.5, 0.03, 0.3) * 0.5;
 
             Out.ar(out, sig_mix * gain);
         }).add;
@@ -256,10 +254,25 @@ alloc {
             ReplaceOut.ar(bus, shaped);
         }).add;
         
+        SynthDef(\tascam, {
+            arg bus, mix=0.0;
+            var orig = In.ar(bus, 2);
+			      var tascam_snd=BHiPass.ar(orig,30);
+			      tascam_snd=BPeakEQ.ar(tascam_snd,freq:60,rq:3,db:4);
+			      tascam_snd=BPeakEQ.ar(tascam_snd,freq:150,rq:1.5,db:4);
+			      tascam_snd=BPeakEQ.ar(tascam_snd,210,db:3);
+			      tascam_snd=BPeakEQ.ar(tascam_snd,250,db:-1.5);
+			      tascam_snd=BPeakEQ.ar(tascam_snd,300,db:3);
+			      tascam_snd=BPeakEQ.ar(tascam_snd,400,db:-3);
+			      tascam_snd=BPeakEQ.ar(tascam_snd,7000,db:1);
+			      tascam_snd=BLowPass.ar(tascam_snd,10000);
+			      ReplaceOut.ar(bus, XFade2.ar(orig, tascam_snd, mix * 2 - 1));
+        }).add;
+        
         SynthDef(\tape, {
             arg bus, mix=0.0;
             var orig = In.ar(bus, 2);
-            var wet = AnalogTape.ar(orig, 0.87, 0.87, 0.87, 2, 0);
+            var wet = AnalogTape.ar(orig, 0.9, 0.8, 0.9, 2, 0);
             ReplaceOut.ar(bus, XFade2.ar(orig, wet, mix * 2 - 1));
         }).add;
         
@@ -287,8 +300,8 @@ alloc {
         SynthDef(\lossdegrade, {
             arg bus, mix=0.0;
             var sig = In.ar(bus, 2);
-            var loss = AnalogLoss.ar(sig,0.4,0.38,0.5,1);
-            var degrade = AnalogDegrade.ar(loss,0.3,0.3,0.5,0.5);
+            var loss = AnalogLoss.ar(sig,0.5,0.5,0.5,1);
+            var degrade = AnalogDegrade.ar(loss,0.2,0.5,0.1,0.5);
             ReplaceOut.ar(bus, XFade2.ar(sig, degrade, mix * 2 - 1));
         }).add;
         
@@ -367,6 +380,7 @@ alloc {
         wobbleEffect = Synth.new(\wobble, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
         chewEffect = Synth.new(\chew, [\bus, mixBus.index, \chew_depth, 0.0], context.xg, 'addToTail');
         lossdegradeEffect = Synth.new(\lossdegrade, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
+        tascamEffect = Synth.new(\tascam, [\bus, mixBus.index, \mix, 0.0,], context.xg, 'addToTail');
         delayEffect = Synth.new(\delay, [\bus, mixBus.index, \mix, 0.0,], context.xg, 'addToTail');
         widthEffect = Synth.new(\width, [\bus, mixBus.index, \width, 1.0], context.xg, 'addToTail');
         jpverbEffect = Synth.new(\jpverb, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
@@ -442,6 +456,7 @@ alloc {
         this.addCommand("volume", "if", { arg msg; var voice = msg[1] - 1; currentVolume[voice] = msg[2]; voices[voice].set(\gain, msg[2]); });
 
         this.addCommand("tape_mix", "f", { arg msg; var mix = msg[1]; tapeEffect.set(\mix, mix); tapeEffect.run(mix > 0); });
+        this.addCommand("tascam", "f", { arg msg; var mix = msg[1]; tascamEffect.set(\mix, mix); tascamEffect.run(mix > 0); });
         this.addCommand("sine_drive", "f", { arg msg; var sine_drive = msg[1]; sineEffect.set(\sine_drive, sine_drive); sineEffect.run(sine_drive > 0); });
         this.addCommand("drive", "f", { arg msg; var drive = msg[1]; saturationEffect.set(\drive, drive); saturationEffect.run(drive > 0); });
         this.addCommand("wobble_mix", "f", { arg msg; var mix = msg[1]; wobbleEffect.set(\mix, mix); wobbleEffect.run(mix > 0); });
@@ -602,5 +617,6 @@ alloc {
         delayEffect.free;
         bitcrushEffect.free;
         rotateEffect.free;
+        tascamEffect.free;
     }
 }

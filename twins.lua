@@ -6,7 +6,7 @@
 --           by: @dddstudio                       
 --
 --                          
---                           v0.35
+--                           v0.36
 -- E1: Master Volume
 -- K1+E2/E3: Volume 1/2
 -- K1+E1: Crossfade Volumes
@@ -351,8 +351,9 @@ local function setup_params()
     params:add_separator("        ")
     params:add_option("lock_shimmer", "Lock Parameters", {"off", "on"}, 1)
     
-    params:add_group("Tape", 16)
+    params:add_group("Tape", 17)
     params:add_option("tape_mix", "Analog Tape", {"off", "on"}, 1) params:set_action("tape_mix", function(x) engine.tape_mix(x-1) end)
+    params:add_option("tascam", "Tascam Filter", {"off", "on"}, 1) params:set_action("tascam", function(x) engine.tascam(x-1) end)
     params:add_control("sine_drive", "Shaper Drive", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("sine_drive", function(value) engine.sine_drive((10+value)/20) end)
     params:add_control("drive", "Saturation", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("drive", function(x) engine.drive(x/100) end)
     params:add{type = "control", id = "wobble_mix", name = "Wobble", controlspec = controlspec.new(0, 100, "lin", 1, 0, "%"), action = function(value) engine.wobble_mix(value/100) end}
@@ -455,7 +456,7 @@ local function setup_params()
     params:add_option("steps", "Transition Time", {"short", "medium", "long"}, 2) params:set_action("steps", function(value) lfo.cleanup() steps = ({20, 300, 800})[value] end)
 
     for i = 1, 2 do
-      params:add_taper(i.. "volume", i.. " volume", -70, 20, -10, 0, "dB") params:set_action(i.. "volume", function(value) if value == -70 then engine.volume(i, 0) else engine.volume(i, math.pow(10, value / 20)) end end) params:hide(i.. "volume")
+      params:add_taper(i.. "volume", i.. " volume", -70, 10, -15, 0, "dB") params:set_action(i.. "volume", function(value) if value == -70 then engine.volume(i, 0) else engine.volume(i, math.pow(10, value / 20)) end end) params:hide(i.. "volume")
       params:add_taper(i.. "pan", i.. " pan", -100, 100, 0, 0, "%") params:set_action(i.. "pan", function(value) engine.pan(i, value / 100)  end) params:hide(i.. "pan")
       params:add_taper(i.. "speed", i.. " speed", -2, 2, 0.10, 0) params:set_action(i.. "speed", function(value) if math.abs(value) < 0.01 then engine.speed(i, 0) else engine.speed(i, value) end end) params:hide(i.. "speed")
       params:add_taper(i.. "density", i.. " density", 0.1, 300, 10, 5) params:set_action(i.. "density", function(value) engine.density(i, value) end) params:hide(i.. "density")
@@ -899,7 +900,7 @@ function redraw()
     screen.level(levels.dim)
     for i, track in ipairs({1, 2}) do
         local x = i == 1 and 0 or 127
-        local height = util.linlin(-60, 20, 0, 64, cached_params[track.."volume"])
+        local height = util.linlin(-70, 10, 0, 64, cached_params[track.."volume"])
         screen.rect(x, 64 - height, 1, height)
     end
     -- Draw pan indicators
