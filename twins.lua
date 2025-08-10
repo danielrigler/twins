@@ -36,24 +36,22 @@
 --
 --                    Daniel Rigler
 
+installer_ = include("lib/scinstaller/scinstaller") installer = installer_:new{requirements = {"AnalogTape", "AnalogChew", "AnalogLoss", "AnalogDegrade"}, 
+  zip = "https://github.com/schollz/portedplugins/releases/download/v0.4.6/PortedPlugins-RaspberryPi.zip"}
+engine.name = installer:ready() and 'twins' or nil
 local randpara = include("lib/randpara")
 local lfo = include("lib/lfo")
 local Mirror = include("lib/mirror")
 local macro = include("lib/macro") macro.set_lfo_reference(lfo)
 local drymode = include("lib/drymode") drymode.set_lfo_reference(lfo)
-installer_ = include("lib/scinstaller/scinstaller") installer = installer_:new{requirements = {"AnalogTape", "AnalogChew", "AnalogLoss", "AnalogDegrade"}, 
-  zip = "https://github.com/schollz/portedplugins/releases/download/v0.4.6/PortedPlugins-RaspberryPi.zip"}
-engine.name = installer:ready() and 'twins' or nil
-local ui_metro
 local randomize_metro = { [1] = nil, [2] = nil }
+local manual_cleanup_metro = nil
+local ui_metro = nil
 local key_state = {} for n = 1, 3 do key_state[n] = false end
 local current_mode = "speed"
 local current_filter_mode = "lpf"
 local manual_adjustments = {}
 local manual_adjustment_duration = 0.5
-local manual_cleanup_metro = nil
-local last_cleanup_time = 0
-local CLEANUP_INTERVAL = 0.5
 local tap_times = {}
 local TAP_TIMEOUT = 2
 local animation_y = -64
@@ -63,13 +61,11 @@ local animation_start_time = nil
 local initital_monitor_level
 local initital_reverb_onoff
 local initital_compressor_onoff
-
 local valid_audio_exts = {[".wav"]=true,[".aif"]=true,[".aiff"]=true,[".flac"]=true}
 local mode_list = {"pitch","spread","density","size","jitter","lpf","pan","seek","speed"}
 local mode_indices = {}; for i,v in ipairs(mode_list) do mode_indices[v]=i end
 local mode_list2 = {"speed","seek","pan","lpf","jitter","size","density","spread","pitch"}
 local mode_indices2 = {}; for i,v in ipairs(mode_list2) do mode_indices2[v]=i end
-
 local param_modes = {
     speed = {param = "speed", delta = 0.5, wrap = nil, engine = false, has_lock = true},
     seek = {param = "seek", delta = 1, wrap = {0, 100}, engine = true, has_lock = true},
@@ -81,30 +77,12 @@ local param_modes = {
     density = {param = "density", delta = 2, wrap = nil, engine = false, has_lock = true},
     spread = {param = "spread", delta = 2, wrap = nil, engine = false, has_lock = true},
     pitch = {param = "pitch", delta = 1, wrap = nil, engine = false, has_lock = true}}
-
 local param_rows = {
     {y = 11, label = "jitter:    ", mode = "jitter", param1 = "1jitter", param2 = "2jitter"},
     {y = 21, label = "size:     ", mode = "size", param1 = "1size", param2 = "2size"},
     {y = 31, label = "density:  ", mode = "density", param1 = "1density", param2 = "2density", hz = true},
     {y = 41, label = "spread:   ", mode = "spread", param1 = "1spread", param2 = "2spread"},
     {y = 51, label = "pitch:    ", mode = "pitch", param1 = "1pitch", param2 = "2pitch", st = true}}
-
-local function setup_manual_cleanup()
-    manual_cleanup_metro = metro.init()
-    manual_cleanup_metro.time = CLEANUP_INTERVAL
-    manual_cleanup_metro.event = function()
-        local current_time = util.time()
-        if next(manual_adjustments) ~= nil and (current_time - last_cleanup_time) >= CLEANUP_INTERVAL then
-            for param, adjustment in pairs(manual_adjustments) do
-                if adjustment and adjustment.time and (current_time - adjustment.time > manual_adjustment_duration) then
-                    adjustment.active = false
-                end
-            end
-            last_cleanup_time = current_time
-        end
-    end
-    manual_cleanup_metro:start()
-end
 
 local function is_audio_loaded(track_num)
     local file_path = params:get(track_num .. "sample")
@@ -135,8 +113,57 @@ local function setup_ui_metro()
     ui_metro:start()
 end
 
-local function is_direct_live(track_num)
-    return params:get(track_num.."live_direct") == 1
+local function setup_manual_cleanup()
+    local last_cleanup_time = 0
+    local CLEANUP_INTERVAL = 0.5
+    manual_cleanup_metro = metro.init()
+    manual_cleanup_metro.time = CLEANUP_INTERVAL
+    manual_cleanup_metro.event = function()
+        local current_time = util.time()
+        if next(manual_adjustments) ~= nil and (current_time - last_cleanup_time) >= CLEANUP_INTERVAL then
+            for param, adjustment in pairs(manual_adjustments) do
+                if adjustment and adjustment.time and (current_time - adjustment.time > manual_adjustment_duration) then
+                    adjustment.active = false
+                end
+            end
+            last_cleanup_time = current_time
+        end
+    end
+    manual_cleanup_metro:start()
+end
+
+local function load_random_tape_file(track_num)
+    if params:get(track_num .. "live_input") == 1 then return false end
+    local function scan_audio_files(dir)
+        local files = {}
+        for _, entry in ipairs(util.scandir(dir)) do
+            local path = dir .. entry
+            if entry:sub(-1) == "/" then
+                for _, f in ipairs(scan_audio_files(path)) do
+                    table.insert(files, f)
+                end
+            else
+                local ext = path:lower():match("^.+(%..+)$") or ""
+                if valid_audio_exts[ext] then table.insert(files, path) end
+            end
+        end
+        return files
+    end
+    local audio_files = scan_audio_files(_path.tape)
+    if #audio_files == 0 then return false end
+    local selected_file = audio_files[math.random(#audio_files)]
+    if last_random_sample and math.random() < 0.5 and tab.contains(audio_files, last_random_sample) then
+        selected_file = last_random_sample
+    else
+        while selected_file == last_random_sample and #audio_files > 1 do
+            selected_file = audio_files[math.random(#audio_files)]
+        end
+    end
+    last_random_sample = selected_file
+    if params:get(track_num .. "sample") ~= selected_file then
+        params:set(track_num .. "sample", selected_file)
+    end
+    return true
 end
 
 local function is_lfo_active_for_param(param_name)
@@ -160,15 +187,6 @@ local function disable_lfos_for_param(param_name)
     end
 end
 
-local function stop_interpolations()
-    for i = 1, 2 do
-        if randomize_metro[i] then
-            randomize_metro[i]:stop()
-        end
-    end
-    active_controlled_params = {}
-end
-
 local function register_tap()
     local now = util.time()
     if #tap_times > 0 and (now - tap_times[#tap_times]) > TAP_TIMEOUT then
@@ -189,51 +207,8 @@ local function register_tap()
     end
 end
 
-local last_random_sample = nil
-local function scan_audio_files(dir)
-    local files = {}
-    for _, entry in ipairs(util.scandir(dir)) do
-        local path = dir .. entry
-        if entry:sub(-1) == "/" then
-            local subdir_files = scan_audio_files(path)
-            for _, f in ipairs(subdir_files) do
-                table.insert(files, f)
-            end
-        else
-            local ext = path:lower():match("^.+(%..+)$") or ""
-            if valid_audio_exts[ext] then
-                table.insert(files, path)
-            end
-        end
-    end
-    return files
-end
-
-local function load_random_tape_file(track_num)
-    if params:get(track_num .. "live_input") == 1 then return false end
-    local audio_files = scan_audio_files(_path.tape)
-    if #audio_files == 0 then return false end
-    if last_random_sample and math.random() < 0.5 and tab.contains(audio_files, last_random_sample) then
-        if params:get(track_num .. "sample") ~= last_random_sample then
-            params:set(track_num .. "sample", last_random_sample)
-        end
-        return true
-    end
-    local selected_file = audio_files[math.random(#audio_files)]
-    while selected_file == last_random_sample and #audio_files > 1 do
-        selected_file = audio_files[math.random(#audio_files)]
-    end
-    last_random_sample = selected_file
-    if params:get(track_num .. "sample") ~= selected_file then
-        params:set(track_num .. "sample", selected_file)
-    end
-    return true
-end
-
 local function setup_params()
-    local all_params = {
-        "jitter", "size", "density", "spread", "pitch", 
-        "pan", "seek", "speed", "cutoff", "hpf"}
+    local all_params = {"jitter", "size", "density", "spread", "pitch", "pan", "seek", "speed", "cutoff", "hpf"}
     for _, param in ipairs(all_params) do
         manual_adjustments["1"..param] = {active = false, value = 0}
         manual_adjustments["2"..param] = {active = false, value = 0}
@@ -269,12 +244,10 @@ local function setup_params()
             end
         end)
     end
-
     params:add_control("live_buffer_mix", "Overdub", controlspec.new(0, 100, "lin", 1, 100, "%")) params:set_action("live_buffer_mix", function(value) engine.live_buffer_mix(value / 100) end)
     params:add_control("live_buffer_length", "Buffer Length", controlspec.new(0.1, 60, "lin", 0.1, 8, "s")) params:set_action("live_buffer_length", function(value) engine.live_buffer_length(value) end)
     params:add{type = "trigger", id = "save_live_buffer1", name = "Buffer1 to Tape", action = function() local timestamp = os.date("%Y%m%d_%H%M%S") local filename = "live1_"..timestamp..".wav" engine.save_live_buffer(1, filename) end}
     params:add{type = "trigger", id = "save_live_buffer2", name = "Buffer2 to Tape", action = function() local timestamp = os.date("%Y%m%d_%H%M%S") local filename = "live2_"..timestamp..".wav" engine.save_live_buffer(2, filename) end}
-
     for i = 1, 2 do
         params:add_binary(i.."live_direct", "Direct "..i.." ►", "toggle", 0)
         params:set_action(i.."live_direct", function(value)
@@ -300,7 +273,6 @@ local function setup_params()
             end
         end)
     end
-
     params:add_option("isMono", "Input Mode", {"stereo", "mono"}, 1) params:set_action("isMono", function(value) local monoValue = value - 1
         for i = 1, 2 do
             if params:get(i.."live_direct") == 1 then
@@ -483,7 +455,7 @@ local function setup_params()
     params:add_option("steps", "Transition Time", {"short", "medium", "long"}, 2) params:set_action("steps", function(value) lfo.cleanup() steps = ({20, 300, 800})[value] end)
 
     for i = 1, 2 do
-      params:add_taper(i.. "volume", i.. " volume", -70, 20, -5, 0, "dB") params:set_action(i.. "volume", function(value) if value == -70 then engine.volume(i, 0) else engine.volume(i, math.pow(10, value / 20)) end end) params:hide(i.. "volume")
+      params:add_taper(i.. "volume", i.. " volume", -70, 20, -10, 0, "dB") params:set_action(i.. "volume", function(value) if value == -70 then engine.volume(i, 0) else engine.volume(i, math.pow(10, value / 20)) end end) params:hide(i.. "volume")
       params:add_taper(i.. "pan", i.. " pan", -100, 100, 0, 0, "%") params:set_action(i.. "pan", function(value) engine.pan(i, value / 100)  end) params:hide(i.. "pan")
       params:add_taper(i.. "speed", i.. " speed", -2, 2, 0.10, 0) params:set_action(i.. "speed", function(value) if math.abs(value) < 0.01 then engine.speed(i, 0) else engine.speed(i, value) end end) params:hide(i.. "speed")
       params:add_taper(i.. "density", i.. " density", 0.1, 300, 10, 5) params:set_action(i.. "density", function(value) engine.density(i, value) end) params:hide(i.. "density")
@@ -494,10 +466,6 @@ local function setup_params()
       params:add_control(i.. "seek", i.. " seek", controlspec.new(0, 100, "lin", 0.01, 0, "%")) params:set_action(i.. "seek", function(value) engine.seek(i, value) end) params:hide(i.. "seek")
     end
     params:bang()
-end
-
-local function interpolate(start_val, end_val, factor)
-    return start_val + (end_val - start_val) * factor
 end
 
 local function randomize_pitch(track, other_track, symmetry)
@@ -554,18 +522,16 @@ local function randomize(n)
     end
     active_controlled_params = {}
     local param_config = {
-      speed = {min = "min_speed", max = "max_speed", lock = params:get(n.."lock_speed")==1, param_name = n.."speed"},
-      jitter = {min = "min_jitter", max = "max_jitter", lock = params:get(n.."lock_jitter")==1, param_name = n.."jitter"},
-      size = {min = "min_size", max = "max_size", lock = params:get(n.."lock_size")==1, param_name = n.."size"},
-      density = {min = "min_density", max = "max_density", lock = params:get(n.."lock_density")==1, param_name = n.."density"},
-      spread = {min = "min_spread", max = "max_spread", lock = params:get(n.."lock_spread")==1, param_name = n.."spread"},
-      pitch = {lock = params:get(n.."lock_pitch")==1, param_name = n.."pitch"}}
+        speed = {min = "min_speed", max = "max_speed", lock = params:get(n.."lock_speed")==1, param_name = n.."speed"},
+        jitter = {min = "min_jitter", max = "max_jitter", lock = params:get(n.."lock_jitter")==1, param_name = n.."jitter"},
+        size = {min = "min_size", max = "max_size", lock = params:get(n.."lock_size")==1, param_name = n.."size"},
+        density = {min = "min_density", max = "max_density", lock = params:get(n.."lock_density")==1, param_name = n.."density"},
+        spread = {min = "min_spread", max = "max_spread", lock = params:get(n.."lock_spread")==1, param_name = n.."spread"},
+        pitch = {lock = params:get(n.."lock_pitch")==1, param_name = n.."pitch"}}
     local targets = {}
     local symmetry = params:get("symmetry") == 1
     local other_track = n == 1 and 2 or 1
-    if param_config.pitch.lock and not active_controlled_params[param_config.pitch.param_name] then
-       randomize_pitch(n, other_track, symmetry)
-    end
+    if param_config.pitch.lock and not active_controlled_params[param_config.pitch.param_name] then randomize_pitch(n, other_track, symmetry) end --pitch randomization
     for param, config in pairs(param_config) do
         if param ~= "pitch" then
             if config.lock and not active_controlled_params[config.param_name] then
@@ -593,7 +559,7 @@ local function randomize(n)
         for param, target in pairs(targets) do
             if not active_controlled_params[param] then
                 local current_value = params:get(param)
-                local new_value = interpolate(current_value, target, factor)
+                local new_value = current_value + (target - current_value) * factor --interpolation
                 params:set(param, new_value)
                 all_done = all_done and (math.abs(new_value - target) < tolerance)
             end
@@ -605,32 +571,30 @@ local function randomize(n)
     randomize_metro[n]:start()
 end
 
-local function setup_engine()
-    randomize(1)
-    randomize(2)
-end
-
 function init()
-    if not installer:ready() then
-        clock.run(function() while true do redraw() clock.sleep(1 / 10) end end)
-        do return end
-    end
+    if not installer:ready() then clock.run(function() while true do redraw() clock.sleep(1 / 10) end end) do return end end
+    setup_ui_metro()
+    setup_manual_cleanup()
+    setup_params()
     initital_monitor_level = params:get('monitor_level')
     params:set('monitor_level', -math.huge)
     initital_reverb_onoff = params:get('reverb')
     params:set('reverb', 1)
     initital_compressor_onoff = params:get('compressor')
     params:set('compressor', 1)
-    setup_ui_metro()
-    setup_params()
-    setup_engine()
-    setup_manual_cleanup()
+    randomize(1)
+    randomize(2)
 end
 
 function enc(n, d)
     if not installer:ready() then return end
     local function handle_param_adjustment(track, config, delta_multiplier)
-        stop_interpolations()
+        for i = 1, 2 do
+          if randomize_metro[i] then
+            randomize_metro[i]:stop()
+          end
+        end
+        active_controlled_params = {}
         local param_name = track .. config.param
         manual_adjustments[param_name] = {
             active = true,
@@ -822,61 +786,34 @@ local function get_lfo_modulation(param_name)
     return nil
 end
 
-local function draw_progress_bar(x, y, width, value, min, max, is_log)
-    value = math.min(math.max(value, min), max)
-    local value_pos
-    if is_log then
-        value_pos = util.linlin(math.log(min), math.log(max), x, x + width, math.log(value))
-    else
-        value_pos = util.linlin(min, max, x, x + width, value)
-    end
-    screen.level(6)
-    screen.rect(x, y, value_pos - x, 1)
-end
-
 function redraw()
-    if not installer:ready() then installer:redraw() do return end end
+    if not installer:ready() then installer:redraw() return end
     screen.clear()
     screen.save()
     screen.translate(0, animation_y)
-    local highlight_level = 15
-    local normal_level = 15
-    local dim_level = 6
-    local value_level = 1
-
+    local levels = {highlight = 15, dim = 6, value = 1}
     local cached_params = {}
     for _, row in ipairs(param_rows) do
         cached_params[row.param1] = params:get(row.param1)
         cached_params[row.param2] = params:get(row.param2)
     end
-    cached_params["1volume"] = params:get("1volume")
-    cached_params["2volume"] = params:get("2volume")
-    cached_params["1pan"] = params:get("1pan")
-    cached_params["2pan"] = params:get("2pan")
-    cached_params["1seek"] = params:get("1seek")
-    cached_params["2seek"] = params:get("2seek")
-    cached_params["1speed"] = params:get("1speed")
-    cached_params["2speed"] = params:get("2speed")
-    cached_params["1cutoff"] = params:get("1cutoff")
-    cached_params["2cutoff"] = params:get("2cutoff")
-    cached_params["1hpf"] = params:get("1hpf")
-    cached_params["2hpf"] = params:get("2hpf")
-
+    for _, param in ipairs({"volume", "pan", "seek", "speed", "cutoff", "hpf"}) do
+        cached_params["1"..param] = params:get("1"..param)
+        cached_params["2"..param] = params:get("2"..param)
+    end
     for _, row in ipairs(param_rows) do
         local param_name = string.match(row.label, "%a+")
-        local is_highlighted_row = current_mode == row.mode
-        screen.level(normal_level)
+        local is_highlighted = current_mode == row.mode
+        screen.level(levels.highlight)
         screen.move(5, row.y)
         screen.text(row.label)
         for i, param in ipairs({row.param1, row.param2}) do
             local x = i == 1 and 51 or 92
-            local track = i == 1 and 1 or 2
+            local track = i
             local is_locked = is_param_locked(track, param_name)
-            if is_locked then
-                draw_l_shape(x, row.y, true)
-            end
+            if is_locked then draw_l_shape(x, row.y, true) end
             screen.move(x, row.y)
-            screen.level(is_highlighted_row and highlight_level or value_level)
+            screen.level(is_highlighted and levels.highlight or levels.value)
             if row.hz then
                 screen.text(format_density(cached_params[param]))
             elseif row.st then
@@ -886,71 +823,71 @@ function redraw()
             else
                 screen.text(params:string(param))
             end
-            if not row.st and param_name ~= "seek" then
-                local min_val, max_val = lfo.get_parameter_range(param)
-                screen.level(dim_level)
-                if manual_adjustments[param] and manual_adjustments[param].active then
-                    local bar_value = util.linlin(min_val, max_val, 0, 30, manual_adjustments[param].value)
-                    screen.rect(x, row.y + 1, bar_value, 1)
-                else
-                    local lfo_mod = get_lfo_modulation(param)
-                    if lfo_mod then
-                        local bar_value = util.linlin(min_val, max_val, 0, 30, lfo_mod)
-                        screen.rect(x, row.y + 1, bar_value, 1)
-                    end
+            local min_val, max_val = lfo.get_parameter_range(param)
+            screen.level(levels.dim)
+            local bar_value
+            if manual_adjustments[param] and manual_adjustments[param].active then
+                bar_value = util.linlin(min_val, max_val, 0, 30, manual_adjustments[param].value)
+            else
+                local lfo_mod = get_lfo_modulation(param)
+                if lfo_mod then
+                    bar_value = util.linlin(min_val, max_val, 0, 30, lfo_mod)
                 end
+            end
+            if bar_value then
+                screen.rect(x, row.y + 1, bar_value, 1)
                 screen.fill()
             end
         end
     end
-
-    local bottom_label = (current_mode == "lpf" or current_mode == "hpf") and (current_filter_mode == "lpf" and "lpf:      " or "hpf:      ") 
-                       or (current_mode == "seek" and "seek:     ") 
-                       or (current_mode == "pan" and "pan:      ") 
-                       or "speed:    "
-    local is_bottom_row_active = current_mode == "speed" or current_mode == "seek" or current_mode == "pan" or current_mode == "lpf" or current_mode == "hpf"
+    -- Draw bottom row
+    local mode_labels = {lpf = current_filter_mode == "lpf" and "lpf:      " or "hpf:      ", hpf = current_filter_mode == "lpf" and "lpf:      " or "hpf:      ", seek = "seek:     ", pan = "pan:      ", speed = "speed:    "}
+    local bottom_label = mode_labels[current_mode] or mode_labels.speed
+    local is_bottom_active = (current_mode == "speed") or (current_mode == "seek") or (current_mode == "pan") or (current_mode == "lpf") or (current_mode == "hpf")
     local show_direct = not (current_mode == "pan" or current_mode == "lpf" or current_mode == "hpf")
     screen.move(5, 61)
-    screen.level(normal_level)
+    screen.level(levels.highlight)
     screen.text(bottom_label)
     for i, track in ipairs({1, 2}) do
         local x = i == 1 and 51 or 92
-        local text_level = is_bottom_row_active and highlight_level or value_level
-        if is_direct_live(track) and show_direct then
+        local text_level = is_bottom_active and levels.highlight or levels.value
+        if params:get(track.."live_direct") == 1 and show_direct then
             screen.move(x, 61)
             screen.level(text_level)
             screen.text("direct")
         else
+            local param = track..current_mode
             if current_mode == "seek" then
-                local value = params:get(track.."seek")
-                screen.level(dim_level)
+                local value = cached_params[param]
+                screen.level(levels.dim)
                 screen.rect(x, 63, util.linlin(0, 100, 0, 30, value), 1)
                 screen.fill()
                 screen.move(x, 61)
                 screen.level(text_level)
                 screen.text(format_seek(value))
             elseif current_mode == "pan" then
-                local pan = params:get(track.."pan")
+                local pan = cached_params[param]
                 screen.move(x, 61)
                 screen.level(text_level)
                 screen.text(math.abs(pan) < 0.5 and "0%" or string.format("%.0f%%", pan))
             elseif current_mode == "lpf" or current_mode == "hpf" then
-                local param = current_filter_mode == "lpf" and track.."cutoff" or track.."hpf"
-                draw_progress_bar(x, 63, 30, params:get(param), 20, 20000, true)
+                local filter_param = current_filter_mode == "lpf" and track.."cutoff" or track.."hpf"
+                screen.rect(x, 63, util.linlin(math.log(20), math.log(20000), 0, 30, math.log(cached_params[filter_param])), 1)
                 screen.move(x, 61)
                 screen.level(text_level)
-                screen.text(string.format("%.0f", params:get(param)))
+                screen.text(string.format("%.0f", cached_params[filter_param]))
             else
                 screen.move(x, 61)
                 screen.level(text_level)
-                screen.text(format_speed(params:get(track.."speed")))
+                screen.text(format_speed(cached_params[track.."speed"]))
             end
         end
     end
-    if (current_mode ~= "lpf" and current_mode ~= "hpf") then
+    -- Draw locks on bottom row
+    if current_mode ~= "lpf" and current_mode ~= "hpf" then
         local param_type = (current_mode == "pan" or current_mode == "seek") and current_mode or "speed"
         for i, track in ipairs({1, 2}) do
-            if not is_direct_live(track) then
+            if params:get(track.."live_direct") ~= 1 then
                 local x = i == 1 and 51 or 92
                 if is_param_locked(track, param_type) then
                     draw_l_shape(x, 61, true)
@@ -958,36 +895,38 @@ function redraw()
             end
         end
     end
-    screen.level(dim_level)
+    -- Draw volume indicators
+    screen.level(levels.dim)
     for i, track in ipairs({1, 2}) do
         local x = i == 1 and 0 or 127
-        local volume = params:get(track.."volume")
-        local height = util.linlin(-60, 20, 0, 64, volume)
+        local height = util.linlin(-60, 20, 0, 64, cached_params[track.."volume"])
         screen.rect(x, 64 - height, 1, height)
     end
+    -- Draw pan indicators
     for i, track in ipairs({1, 2}) do
         local center_start = i == 1 and 52 or 93
         local center_end = center_start + 25
-        local pan = params:get(track.."pan")
-        local pos = util.linlin(-100, 100, center_start, center_end, pan)
+        local pos = util.linlin(-100, 100, center_start, center_end, cached_params[track.."pan"])
         screen.rect(pos - 1, 0, 4, 1)
     end
     screen.fill()
-    screen.level(normal_level)
-    if params:get("dry_mode") == 1 then screen.pixel(6, 0) screen.pixel(10, 0) screen.pixel(14, 0) end 
-    if params:get("symmetry") == 1 then screen.pixel(6, 0) screen.pixel(8, 0) screen.pixel(10, 0) end
+    -- Draw status indicators
+    screen.level(levels.highlight)
+    if params:get("dry_mode") == 1 then 
+        screen.pixel(6, 0) screen.pixel(10, 0) screen.pixel(14, 0) 
+    end 
+    if params:get("symmetry") == 1 then 
+        screen.pixel(6, 0) screen.pixel(8, 0) screen.pixel(10, 0) 
+    end
     screen.fill()
     screen.restore()
     screen.update()
 end
 
 function cleanup()
-  if ui_metro then ui_metro:stop() ui_metro = nil end
-  if manual_cleanup_metro then manual_cleanup_metro:stop() manual_cleanup_metro = nil end
-  for i = 1, 2 do
-    if randomize_metro[i] then randomize_metro[i]:stop() randomize_metro[i] = nil end
-  end
-  lfo.cleanup()
+  ui_metro:stop()
+  manual_cleanup_metro:stop()
+  for i = 1, 2 do randomize_metro[i]:stop() end
   params:set('monitor_level', initital_monitor_level)
   params:set('reverb', initital_reverb_onoff)
   params:set('compressor', initital_compressor_onoff)

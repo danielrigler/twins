@@ -420,11 +420,8 @@ function lfo.init()
     params:set_action(i .. "lfo_freq", function(value)
       lfo[i].freq = value * params:get("global_lfo_freq_scale")
     end)
-
     params:add_option(i .. "lfo", i .. " LFO", { "off", "on" }, 1)
-
   end
-
   local lfo_metro = metro.init()
   lfo_metro.time = 1/30
   lfo_metro.count = -1
