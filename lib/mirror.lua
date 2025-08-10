@@ -34,7 +34,7 @@ function Mirror.copy_voice_params(from_track, to_track, mirror_pan)
         "granular_gain", "subharmonics_3", "subharmonics_2", "subharmonics_1",
         "overtones_1", "overtones_2", "smoothbass", "pitch_random_plus",
         "pitch_random_minus", "size_variation", "density_mod_amt", "direction_mod",
-        "pitch_mode"
+        "pitch_mode", "trig_mode", "probability"
     }
     local volume_has_lfo = false
     for lfo_num = 1, 16 do

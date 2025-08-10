@@ -334,7 +334,7 @@ local function setup_params()
       params:add_option(i.. "pitch_mode", i.. " Pitch Mode", {"match speed", "independent"}, 2) params:set_action(i.. "pitch_mode", function(value) engine.pitch_mode(i, value - 1) end)
     end
     params:add_separator(" ")
-    params:add_binary("randomize_granular", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_granular", function() randpara.randomize_granular_params(1) randpara.randomize_granular_params(2) end)
+    params:add_binary("randomize_granular", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_granular", function() for i=1, 2 do randpara.randomize_granular_params(i) end end)
     params:add_option("lock_granular", "Lock Parameters", {"off", "on"}, 1)
 
     params:add_group("Delay", 12)
@@ -397,12 +397,13 @@ local function setup_params()
     params:add_binary("randomize_tape", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_tape", function() randpara.randomize_tape_params(steps) end)
     params:add_option("lock_tape", "Lock Parameters", {"off", "on"}, 1)    
     
-    params:add_group("EQ", 6)
+    params:add_group("EQ", 7)
     for i = 1, 2 do 
     params:add_control(i.."eq_low_gain", i.." Bass", controlspec.new(-1, 1, "lin", 0.01, 0, "")) params:set_action(i.."eq_low_gain", function(value) engine.eq_low_gain(i, value*55) end)
     params:add_control(i.."eq_high_gain", i.." Treble", controlspec.new(-1, 1, "lin", 0.01, 0, "")) params:set_action(i.."eq_high_gain", function(value) engine.eq_high_gain(i, value*45) end)
     end
     params:add_separator("     ")
+    params:add_binary("randomize_eq", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_eq", function() for i=1, 2 do randpara.randomize_eq_params(i) end end)
     params:add_option("lock_eq", "Lock Parameters", {"off", "on"}, 1)
     
     params:add_group("Filters", 6)
@@ -468,9 +469,9 @@ local function setup_params()
     end
 
     params:add_group("Symmetry", 3)
+    params:add_binary("symmetry", "Symmetry", "toggle", 0)
     params:add_binary("copy_1_to_2", "Copy 1 → 2", "trigger", 0) params:set_action("copy_1_to_2", function() Mirror.copy_voice_params("1", "2", true) Mirror.copy_voice_params("2", "1", true) end)
     params:add_binary("copy_2_to_1", "Copy 1 ← 2", "trigger", 0) params:set_action("copy_2_to_1", function() Mirror.copy_voice_params("2", "1", true) Mirror.copy_voice_params("1", "2", true) end)
-    params:add_binary("symmetry", "Symmetry", "toggle", 0)
     
     params:add_group("Actions", 2)
     params:add_binary("macro_more", "More+", "trigger", 0) params:set_action("macro_more", function() macro.macro_more() end)
@@ -479,7 +480,7 @@ local function setup_params()
     params:add_group("Other", 3)
     params:add_binary("dry_mode", "Dry Mode", "toggle", 0) params:set_action("dry_mode", function(x) drymode.toggle_dry_mode() end)
     params:add_binary("unload_all", "Unload All Audio", "trigger", 0) params:set_action("unload_all", function() engine.unload_all() params:set("1sample", "-") params:set("2sample", "-") params:set("1live_input", 0) params:set("2live_input", 0) params:set("1live_direct", 0) params:set("2live_direct", 0) end)
-    params:add_option("steps", "Transition Time", {"short", "medium", "long"}, 2) params:set_action("steps", function(value) lfo.cleanup() steps = ({20, 400, 800})[value] end)
+    params:add_option("steps", "Transition Time", {"short", "medium", "long"}, 2) params:set_action("steps", function(value) lfo.cleanup() steps = ({20, 300, 800})[value] end)
 
     for i = 1, 2 do
       params:add_taper(i.. "volume", i.. " volume", -70, 20, -5, 0, "dB") params:set_action(i.. "volume", function(value) if value == -70 then engine.volume(i, 0) else engine.volume(i, math.pow(10, value / 20)) end end) params:hide(i.. "volume")
