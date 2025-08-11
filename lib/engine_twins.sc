@@ -1,7 +1,7 @@
 Engine_twins : CroneEngine {
     classvar nvoices = 2;
 
-    var bitcrushEffect, delayEffect, saturationEffect,jpverbEffect, shimmerEffect, tapeEffect, chewEffect, widthEffect, widthEffect2, monobassEffect, sineEffect, wobbleEffect, lossdegradeEffect, tascamEffect, rotateEffect, outputSynth;
+    var bitcrushEffect, delayEffect, saturationEffect,jpverbEffect, shimmerEffect, tapeEffect, chewEffect, widthEffect, monobassEffect, sineEffect, wobbleEffect, lossdegradeEffect, tascamEffect, rotateEffect, outputSynth;
     var <buffersL, <buffersR, wobbleBuffer, <voices, mixBus, bufSine, pg, <liveInputBuffersL, <liveInputBuffersR, <liveInputRecorders;
     var currentSpeed, currentJitter, currentSize, currentDensity, currentDensityModAmt, currentPitch, currentPan, currentSpread, currentVolume, currentGranularGain, currentCutoff, currentHpf, currentlpfgain;
     var currentSubharmonics1, currentSubharmonics2, currentSubharmonics3, currentOvertones1, currentOvertones2, currentPitchMode, currentTrigMode, currentDirectionMod;
@@ -85,11 +85,21 @@ alloc {
         
         liveInputBuffersL = Array.fill(nvoices, {Buffer.alloc(context.server, context.server.sampleRate * 8); });
         liveInputBuffersR = Array.fill(nvoices, {Buffer.alloc(context.server, context.server.sampleRate * 8); });
+        liveInputRecorders = Array.fill(nvoices, { nil });
 
         bufSine = Buffer.alloc(context.server, 1024 * 16, 1);
         bufSine.sine2([2], [0.5], false);
         wobbleBuffer = Buffer.alloc(context.server, 48000 * 5, 2);
         mixBus = Bus.audio(context.server, 2);
+        
+        pg = ParGroup.head(context.xg);
+        voices = Array.fill(nvoices, { arg i;
+            Synth.new(\synth, [
+                \out, mixBus.index, 
+                \buf_l, buffersL[i],
+                \buf_r, buffersR[i],
+            ], target: pg);
+        });
         
         context.server.sync;
      
@@ -359,20 +369,6 @@ alloc {
 
         context.server.sync;
         
-        pg = ParGroup.head(context.xg);
-        
-        voices = Array.fill(nvoices, { arg i;
-            Synth.new(\synth, [
-                \out, mixBus.index, 
-                \buf_l, buffersL[i],
-                \buf_r, buffersR[i],
-            ], target: pg);
-        });
-        
-        liveInputRecorders = Array.fill(nvoices, { nil });
-        
-        context.server.sync;
-
         bitcrushEffect = Synth.new(\bitcrush, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');    
         shimmerEffect = Synth.new(\shimmer, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');    
         sineEffect = Synth.new(\sine, [\bus, mixBus.index, \sine_drive, 0.0], context.xg, 'addToTail');  
@@ -384,7 +380,6 @@ alloc {
         delayEffect = Synth.new(\delay, [\bus, mixBus.index, \mix, 0.0,], context.xg, 'addToTail');
         widthEffect = Synth.new(\width, [\bus, mixBus.index, \width, 1.0], context.xg, 'addToTail');
         jpverbEffect = Synth.new(\jpverb, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
-        widthEffect2 = Synth.new(\width, [\bus, mixBus.index, \width, 1.0], context.xg, 'addToTail');
         saturationEffect = Synth.new(\saturation, [\bus, mixBus.index, \drive, 0.0], context.xg, 'addToTail');
         monobassEffect = Synth.new(\monobass, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
         rotateEffect = Synth.new(\rotate, [\bus, mixBus.index], context.xg, 'addToTail');
@@ -473,9 +468,8 @@ alloc {
         this.addCommand("eq_low_gain", "if", { arg msg; var voice = msg[1] - 1; currentLowGain[voice] = msg[2]; voices[voice].set(\low_gain, msg[2]); });
         this.addCommand("eq_high_gain", "if", { arg msg; var voice = msg[1] - 1; currentHighGain[voice] = msg[2]; voices[voice].set(\high_gain, msg[2]); });
 
-        this.addCommand("width", "f", { arg msg; var width = msg[1]; widthEffect.set(\width, width); widthEffect.run(width != 1); widthEffect2.set(\width, width); widthEffect2.run(width != 1); });
+        this.addCommand("width", "f", { arg msg; var width = msg[1]; widthEffect.set(\width, width); widthEffect.run(width != 1); });
         this.addCommand("monobass_mix", "f", { arg msg; var mix = msg[1]; monobassEffect.set(\mix, mix); monobassEffect.run(mix > 0); });
-        
         this.addCommand("rspeed", "f", { arg msg; var rspeed = msg[1]; rotateEffect.set(\rspeed, rspeed); rotateEffect.run(rspeed > 0); });
         
         this.addCommand("set_live_input", "ii", { arg msg;
@@ -608,7 +602,6 @@ alloc {
         tapeEffect.free;
         chewEffect.free;
         widthEffect.free;
-        widthEffect2.free;
         monobassEffect.free;
         lossdegradeEffect.free;
         sineEffect.free;
