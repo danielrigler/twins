@@ -110,8 +110,8 @@ lfo.target_ranges = {
   ["2density"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
   ["1volume"] = { depth = { 2, 3 }, offset = { -1, 1 }, frequency = { 0.1, 0.5 }, waveform = { "sine" }, chance = 1.0 },
   ["2volume"] = { depth = { 2, 3 }, offset = { -1, 1 }, frequency = { 0.1, 0.5 }, waveform = { "sine" }, chance = 1.0 },
-  ["1seek"] = { depth = { 30, 60 }, offset = { 0, 0 }, frequency = { 0.05, 0.3 }, waveform = { "sine", "random" }, chance = 0.4 },
-  ["2seek"] = { depth = { 30, 60 }, offset = { 0, 0 }, frequency = { 0.05, 0.3 }, waveform = { "sine", "random" }, chance = 0.4 },
+  ["1seek"] = { depth = { 30, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.3 },
+  ["2seek"] = { depth = { 30, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.3 },
   ["1speed"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.02, 0.1 }, waveform = { "sine" }, chance = 0.1 },
   ["2speed"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.02, 0.1 }, waveform = { "sine" }, chance = 0.1 }
 }
@@ -119,7 +119,7 @@ lfo.target_ranges = {
 function lfo.get_parameter_range(param_name)
   local param_ranges = {
     ["1pan"] = { -100, 100 }, ["2pan"] = { -100, 100 },
-    ["1seek"] = { 0, 100 }, ["2seek"] = { 0, 100 },
+    ["1seek"] = { 0, 1 }, ["2seek"] = { 0, 1 },
     ["1speed"] = { -0.2, 0.2 }, ["2speed"] = { -0.2, 0.2 },
     ["1jitter"] = { 1, 999 }, ["2jitter"] = { 1, 999 },
     ["1spread"] = { 0, 100 }, ["2spread"] = { 0, 100 },

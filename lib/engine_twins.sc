@@ -133,13 +133,13 @@ alloc {
         currentProbability = [100, 100];
       
         SynthDef(\synth, {
-            arg out, buf_l, buf_r,
+            arg out, buf_l, buf_r, voice,
             pos, speed, jitter, size, density, density_mod_amt, pitch_offset, pan, spread, gain, t_reset_pos,
             granular_gain, pitch_mode, trig_mode, subharmonics_1, subharmonics_2, subharmonics_3, overtones_1, overtones_2, 
             cutoff, hpf, lpfgain=0.1, direction_mod, size_variation, low_gain, high_gain, smoothbass, pitch_random_plus, pitch_random_minus, probability;
  
             var grain_trig, jitter_sig1, jitter_sig2, jitter_sig3, jitter_sig4, jitter_sig5, jitter_sig6, buf_dur, pan_sig, buf_pos, pos_sig, sig_l, sig_r, sig_mix, density_mod, dry_sig, granular_sig, base_pitch, grain_pitch, shaped, grain_size;
-            var invDenom = 1 / (1 + subharmonics_1 + subharmonics_2 + subharmonics_3 + overtones_1 + overtones_2);
+            var invDenom = 1.25 / (1 + subharmonics_1 + subharmonics_2 + subharmonics_3 + overtones_1 + overtones_2);
             var subharmonic_1_vol = subharmonics_1 * invDenom;
             var subharmonic_2_vol = subharmonics_2 * invDenom;
             var subharmonic_3_vol = subharmonics_3 * invDenom;
@@ -196,7 +196,8 @@ alloc {
             
             sig_mix = HPF.ar(sig_mix, Lag.kr(hpf));
             sig_mix = MoogFF.ar(sig_mix, Lag.kr(cutoff), lpfgain);
-
+            
+            SendReply.kr(Impulse.kr(30), '/buf_pos', [buf_pos], voice);
             Out.ar(out, sig_mix * gain);
         }).add;
         
@@ -584,6 +585,12 @@ alloc {
                         \buf_r, liveInputBuffersR[i],
                         \t_reset_pos, 1);
         }); }); });
+        
+        ~posUpdater = OSCFunc({ |msg|
+        var voice = msg[1];
+        var pos = msg[3];
+        NetAddr("127.0.0.1", 10111).sendMsg("/twins/buf_pos", voice, pos);
+        }, '/buf_pos', context.server.addr);
     }
 
     free {
