@@ -41,7 +41,7 @@ installer_ = include("lib/scinstaller/scinstaller") installer = installer_:new{r
 engine.name = installer:ready() and 'twins' or nil
 local randpara = include("lib/randpara")
 local lfo = include("lib/lfo")
-local Mirror = include("lib/mirror")
+local Mirror = include("lib/mirror") Mirror.init(osc_positions, lfo)
 local macro = include("lib/macro") macro.set_lfo_reference(lfo)
 local drymode = include("lib/drymode") drymode.set_lfo_reference(lfo)
 local randomize_metro = { [1] = nil, [2] = nil }
@@ -62,7 +62,7 @@ local animation_start_time = nil
 local initital_monitor_level
 local initital_reverb_onoff
 local initital_compressor_onoff
-local osc_positions = {[1] = 0, [2] = 0} Mirror.init(osc_positions)
+local osc_positions = {[1] = 0, [2] = 0}
 local valid_audio_exts = {[".wav"]=true,[".aif"]=true,[".aiff"]=true,[".flac"]=true}
 local mode_list = {"pitch","spread","density","size","jitter","lpf","pan","speed","seek"}
 local mode_indices = {}; for i,v in ipairs(mode_list) do mode_indices[v]=i end
@@ -218,13 +218,20 @@ local function is_lfo_active_for_param(param_name)
     return false, nil
 end
 
-local function disable_lfos_for_param(param_name)
+local function disable_lfos_for_param(param_name, only_self)
     local base_param = param_name:sub(2)
-    for track = 1, 2 do
-        local full_param = track .. base_param
-        local is_active, lfo_index = is_lfo_active_for_param(full_param)
+    if only_self then
+        local is_active, lfo_index = is_lfo_active_for_param(param_name)
         if is_active then
             params:set(lfo_index .. "lfo", 1)
+        end
+    else
+        for track = 1, 2 do
+            local full_param = track .. base_param
+            local is_active, lfo_index = is_lfo_active_for_param(full_param)
+            if is_active then
+                params:set(lfo_index .. "lfo", 1)
+            end
         end
     end
 end
@@ -658,44 +665,33 @@ function enc(n, d)
     local function handle_param(track, config)
         for i = 1, 2 do if randomize_metro[i] then randomize_metro[i]:stop() end end
         active_controlled_params = {}
-        local p, sym = track..config.param, params:get("symmetry") == 1
+        local p = track..config.param
+        local sym = params:get("symmetry") == 1
         local delta = config.delta * d
-        manual_adjustments[p] = {active = true, value = params:get(p), time = util.time()}
         if config.param == "seek" then
+            disable_lfos_for_param(p, not sym)
+            manual_adjustments[p] = {active = true, value = osc_positions[track] * 100, time = util.time()}
             if sym then
-                for i = 1, 16 do
-                    if params:get(i.."lfo") == 2 then
-                        local target = lfo.lfo_targets[params:get(i.."lfo_target")] or ""
-                        if target:match("seek$") then
-                            params:set(i.."lfo", 1)
-                        end
-                    end
+                local base_pos = osc_positions[1] * 100
+                local new_pos = (base_pos + delta) % 100
+                if new_pos < 0 then new_pos = new_pos + 100 end
+                local norm_pos = new_pos / 100
+                for tr = 1, 2 do
+                    osc_positions[tr] = norm_pos
+                    params:set(tr.."seek", new_pos)
+                    engine.seek(tr, norm_pos)
                 end
-                local base_pos1 = params:get("1seek")
-                local base_pos2 = params:get("2seek")
-                local movement = delta
-                local new_pos1 = (base_pos1 + movement) % 100
-                local new_pos2 = (base_pos2 + movement) % 100
-                if new_pos1 < 0 then new_pos1 = new_pos1 + 100 end
-                if new_pos2 < 0 then new_pos2 = new_pos2 + 100 end
-                params:set("1seek", new_pos1)
-                params:set("2seek", new_pos2)
-                engine.seek(1, new_pos1 / 100)
-                engine.seek(2, new_pos2 / 100)
-                osc_positions[1] = new_pos1 / 100
-                osc_positions[2] = new_pos2 / 100
-                return
             else
-                local active, idx = is_lfo_active_for_param(p)
-                if active then params:set(idx.."lfo", 1) end
-                local val = (params:get(p) + delta) % 100
-                if val < 0 then val = val + 100 end
-                params:set(p, val)
-                engine.seek(track, val / 100)
-                osc_positions[track] = val / 100
-                return
+                local base_pos = osc_positions[track] * 100
+                local new_pos = (base_pos + delta) % 100
+                if new_pos < 0 then new_pos = new_pos + 100 end
+                osc_positions[track] = new_pos / 100
+                params:set(p, new_pos)
+                engine.seek(track, osc_positions[track])
             end
+            return
         end
+        manual_adjustments[p] = {active = true, value = params:get(p), time = util.time()}
         if sym then
             disable_lfos_for_param(p)
             local ot, op = 3 - track, (3 - track)..config.param
@@ -703,7 +699,8 @@ function enc(n, d)
             if config.wrap then
                 local r = config.wrap[2] - config.wrap[1] + 1
                 local mod = function(v) return (v - config.wrap[1]) % r + config.wrap[1] end
-                params:set(p, mod(cv + delta))
+                local new_val = mod(cv + delta)
+                params:set(p, new_val)
                 params:set(op, mod(config.param == "pan" and cv - delta or params:get(op) + delta))
             else
                 params:delta(p, delta)
@@ -727,7 +724,8 @@ function enc(n, d)
     if n == 1 then
         local a1, i1 = is_lfo_active_for_param("1volume")
         local a2, i2 = is_lfo_active_for_param("2volume")
-        local k1, ld = key_state[1], 0.75 * d
+        local k1 = key_state[1]
+        local ld = 0.75 * d
         if a1 or a2 then
             if a1 and a2 then
                 params:delta(i1.."offset", ld)
@@ -949,22 +947,24 @@ function redraw()
         screen.text(bottom_row_mode .. ":     ")
     end
     -- Draw bottom row values
-    if bottom_row_mode == "seek" then
-        for track = 1, 2 do
-            local x = (track == 1) and 51 or 92
-            local show_live = params:get(track.."live_input") == 1
-            if is_param_locked(track, "seek") then draw_l_shape(x, 61, true) end
-            screen.move(x, 61)
-            screen.level(is_bottom_active and levels.highlight or levels.value)
-            if show_live then
-                screen.text("live")
-            else
-                screen.text(string.format("%.0f%%", osc_positions[track] * 100))
-                screen.level(levels.dim)
-                screen.rect(x, 63, 30 * osc_positions[track], 1)
-                screen.fill()
-            end
+if bottom_row_mode == "seek" then
+    for track = 1, 2 do
+        local x = (track == 1) and 51 or 92
+        local show_live = params:get(track.."live_input") == 1
+        if is_param_locked(track, "seek") then draw_l_shape(x, 61, true) end
+        screen.move(x, 61)
+        screen.level(is_bottom_active and levels.highlight or levels.value)
+        if show_live then
+            screen.text("live")
+        else
+            -- Always show seek value, even if file not loaded
+            screen.text(string.format("%.0f%%", osc_positions[track] * 100))
         end
+        -- Always draw seek bar
+        screen.level(levels.dim)
+        screen.rect(x, 63, 30 * osc_positions[track], 1)
+        screen.fill()
+    end
     elseif bottom_row_mode == "speed" then
         for track = 1, 2 do
             local x = (track == 1) and 51 or 92
@@ -1017,12 +1017,14 @@ function redraw()
 end
 
 function cleanup()
-  osc.event = nil
-  if osc.inited then osc.deinit() end
-  ui_metro:stop()
-  manual_cleanup_metro:stop()
-  for i = 1, 2 do randomize_metro[i]:stop() end
-  params:set('monitor_level', initital_monitor_level)
-  params:set('reverb', initital_reverb_onoff)
-  params:set('compressor', initital_compressor_onoff)
+    if ui_metro and ui_metro.is_running then ui_metro:stop() end
+    if manual_cleanup_metro and manual_cleanup_metro.is_running then manual_cleanup_metro:stop() end
+    for i = 1, 2 do
+        if randomize_metro[i] and randomize_metro[i].is_running then randomize_metro[i]:stop() end
+    end
+    params:set('monitor_level', initital_monitor_level)
+    params:set('reverb', initital_reverb_onoff)
+    params:set('compressor', initital_compressor_onoff)
+    osc.event = nil
+    if osc.inited then osc.deinit() end
 end

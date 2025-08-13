@@ -1,7 +1,8 @@
 local Mirror = {}
 
-function Mirror.init(osc_positions_ref)
+function Mirror.init(osc_positions_ref, lfo_ref)
     Mirror.osc_positions = osc_positions_ref
+    Mirror.lfo = lfo_ref
 end
 
 local function param_exists(name)
@@ -22,7 +23,7 @@ local function clear_destination_lfos(to_track)
     for lfo_num = 1, 16 do
         local target_index = safe_get(lfo_num.."lfo_target") or 0
         if target_index > 0 then
-            local target_name = lfo.lfo_targets[target_index] or ""
+            local target_name = Mirror.lfo.lfo_targets[target_index] or ""
             if target_name:match("^"..to_track) then
                 params:set(lfo_num.."lfo", 1)
             end
@@ -49,7 +50,7 @@ function Mirror.copy_voice_params(from_track, to_track, mirror_pan)
     for lfo_num = 1, 16 do
         if safe_get(lfo_num.."lfo") == 2 then
             local target_index = safe_get(lfo_num.."lfo_target") or 0
-            if target_index > 0 and (lfo.lfo_targets[target_index] or ""):match("^"..from_track.."volume$") then
+            if target_index > 0 and (Mirror.lfo.lfo_targets[target_index] or ""):match("^"..from_track.."volume$") then
                 volume_has_lfo = true
                 break
             end
@@ -72,23 +73,24 @@ function Mirror.copy_voice_params(from_track, to_track, mirror_pan)
         end
     end
 
-    -- Mirror the seek position in the engine
+-- Correctly mirror seek parameter and update engine/internal position
+local seek_value = safe_get(from_track.."seek")
+local to_idx = tonumber(to_track)
+if param_exists(to_track.."seek") and seek_value ~= nil and to_idx then
+    safe_set(to_track.."seek", seek_value)
+    local normalized = seek_value / 100
     if Mirror.osc_positions then
-        local from_idx = tonumber(from_track)
-        local to_idx = tonumber(to_track)
-        if from_idx and to_idx and Mirror.osc_positions[from_idx] then
-            Mirror.osc_positions[to_idx] = Mirror.osc_positions[from_idx]
-            -- Update engine seek position (0-1 range)
-            engine.seek(to_idx, Mirror.osc_positions[to_idx])
-        end
+        Mirror.osc_positions[to_idx] = normalized
     end
+    engine.seek(to_idx, normalized)
+end
 
     -- Handle LFO mirroring
     for src_lfo = 1, 16 do
         if safe_get(src_lfo.."lfo") == 2 then
             local src_target_index = safe_get(src_lfo.."lfo_target") or 0
             if src_target_index > 0 then
-                local src_target_name = lfo.lfo_targets[src_target_index] or ""
+                local src_target_name = Mirror.lfo.lfo_targets[src_target_index] or ""
                 local src_track_prefix, src_param_name = src_target_name:match("^(%d+)(.+)$")
                 
                 if src_track_prefix == from_track then
@@ -96,7 +98,7 @@ function Mirror.copy_voice_params(from_track, to_track, mirror_pan)
                     local dest_target_index = nil
                     
                     -- Find matching target index for destination
-                    for idx, target in ipairs(lfo.lfo_targets) do
+                    for idx, target in ipairs(Mirror.lfo.lfo_targets) do
                         if target == dest_target_name then
                             dest_target_index = idx
                             break
@@ -119,7 +121,7 @@ function Mirror.copy_voice_params(from_track, to_track, mirror_pan)
                             local src_freq = safe_get(src_lfo.."lfo_freq")
                             local src_depth = safe_get(src_lfo.."lfo_depth")
                             local src_offset = safe_get(src_lfo.."offset")
-                            local current_phase = (lfo[src_lfo] and lfo[src_lfo].phase) or 0
+                            local current_phase = (Mirror.lfo[src_lfo] and Mirror.lfo[src_lfo].phase) or 0
                             
                             if src_param_name == "pan" and mirror_pan then
                                 src_offset = -src_offset
@@ -140,13 +142,13 @@ function Mirror.copy_voice_params(from_track, to_track, mirror_pan)
                             safe_set(dest_lfo.."lfo", 2)
                             
                             -- Update LFO object if it exists
-                            if lfo[dest_lfo] then
-                                lfo[dest_lfo].target = dest_target_index
-                                lfo[dest_lfo].shape = src_shape
-                                lfo[dest_lfo].freq = src_freq
-                                lfo[dest_lfo].depth = src_depth
-                                lfo[dest_lfo].offset = src_offset
-                                lfo[dest_lfo].phase = current_phase
+                            if Mirror.lfo[dest_lfo] then
+                                Mirror.lfo[dest_lfo].target = dest_target_index
+                                Mirror.lfo[dest_lfo].shape = src_shape
+                                Mirror.lfo[dest_lfo].freq = src_freq
+                                Mirror.lfo[dest_lfo].depth = src_depth
+                                Mirror.lfo[dest_lfo].offset = src_offset
+                                Mirror.lfo[dest_lfo].phase = current_phase
                             end
                         end
                     end

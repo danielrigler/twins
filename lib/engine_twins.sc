@@ -197,7 +197,7 @@ alloc {
             sig_mix = HPF.ar(sig_mix, Lag.kr(hpf));
             sig_mix = MoogFF.ar(sig_mix, Lag.kr(cutoff), lpfgain);
             
-            SendReply.kr(Impulse.kr(30), '/buf_pos', [buf_pos], voice);
+            SendReply.kr(Impulse.kr(15), '/buf_pos', [buf_pos], voice);
             Out.ar(out, sig_mix * gain);
         }).add;
         

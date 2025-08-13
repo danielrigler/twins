@@ -8,6 +8,11 @@ local lfo = {}
 local assigned_params = {}
 local lfo_paused = false
 
+-- Helper to check param existence before accessing
+local function param_exists(name)
+    return params.lookup and params.lookup[name] ~= nil
+end
+
 local function is_locked(target)
   local track, param = string.match(target, "(%d)(%a+)")
   local lockable_params = { "jitter", "size", "density", "spread", "pitch", "pan", "seek", "speed" }
@@ -56,11 +61,15 @@ function lfo.clearLFOs(track, param_type)
             end
         end
         for i = 1, 16 do
-            local target_index = params:get(i .. "lfo_target")
-            local target_param = lfo.lfo_targets[target_index]
-            if target_param and target_filter(target_param) and not is_locked(target_param) then
-                params:set(i .. "lfo", 1)
-                params:set(i .. "lfo_target", 1)
+            local lfo_param = i.."lfo"
+            local lfo_target_param = i.."lfo_target"
+            if param_exists(lfo_param) and param_exists(lfo_target_param) then
+                local target_index = params:get(lfo_target_param)
+                local target_param = lfo.lfo_targets[target_index]
+                if target_param and target_filter(target_param) and not is_locked(target_param) then
+                    params:set(lfo_param, 1)
+                    params:set(lfo_target_param, 1)
+                end
             end
         end
     end
@@ -155,7 +164,8 @@ function lfo.assign_to_current_row(current_mode, current_filter_mode)
     -- Get available LFO slots
     local available_slots = {}
     for i = 1, 16 do
-        if params:get(i.."lfo") == 1 then
+        local lfo_param = i.."lfo"
+        if param_exists(lfo_param) and params:get(lfo_param) == 1 then
             table.insert(available_slots, i)
         end
     end
@@ -220,7 +230,9 @@ function randomize_lfo(i, target)
         return
     end
     for j = 1, number_of_outputs do
-        if j ~= i and params:get(j.."lfo") == 2 and lfo.lfo_targets[params:get(j.."lfo_target")] == target then
+        local lfo_param = j.."lfo"
+        local lfo_target_param = j.."lfo_target"
+        if j ~= i and param_exists(lfo_param) and param_exists(lfo_target_param) and params:get(lfo_param) == 2 and lfo.lfo_targets[params:get(lfo_target_param)] == target then
             return
         end
     end
@@ -228,10 +240,15 @@ function randomize_lfo(i, target)
     if not target_index then return end
     local min_val, max_val = lfo.get_parameter_range(target)
     local current_val = params:get(target)
-    params:set(i.."lfo_target", target_index)
+    local lfo_target_param = i.."lfo_target"
+    if param_exists(lfo_target_param) then
+        params:set(lfo_target_param, target_index)
+    end
     local is_pan, is_seek = target:match("pan$"), target:match("seek$")
     lfo[i].offset = is_pan and 0 or (is_seek and (math.random() - 0.5) or lfo.scale(current_val, min_val, max_val, -1, 1))
-    params:set(i.."offset", lfo[i].offset)
+    if param_exists(i.."offset") then
+        params:set(i.."offset", lfo[i].offset)
+    end
     local ranges = lfo.target_ranges[target]
     local max_allowed = math.min(max_val - current_val, current_val - min_val)
     local scaled_max = lfo.scale(max_allowed, 0, max_val - min_val, 0, 100)
@@ -239,20 +256,28 @@ function randomize_lfo(i, target)
     if lfo[i].depth == 0 then
         lfo[i].depth = math.random(ranges.depth[1], ranges.depth[2])
     end
-    params:set(i.."lfo_depth", lfo[i].depth)
+    if param_exists(i.."lfo_depth") then
+        params:set(i.."lfo_depth", lfo[i].depth)
+    end
     if ranges.frequency then
         local min_f, max_f = ranges.frequency[1] * 100, ranges.frequency[2] * 100
         if min_f <= max_f then
             lfo[i].freq = math.random(min_f, max_f) / 100
-            params:set(i.."lfo_freq", lfo[i].freq)
+            if param_exists(i.."lfo_freq") then
+                params:set(i.."lfo_freq", lfo[i].freq)
+            end
         end
     end
     if ranges.waveform then
         local wf_index = math.random(#ranges.waveform)
         lfo[i].waveform = ranges.waveform[wf_index]
-        params:set(i.."lfo_shape", wf_index)
+        if param_exists(i.."lfo_shape") then
+            params:set(i.."lfo_shape", wf_index)
+        end
     end
-    params:set(i.."lfo", 2)
+    if param_exists(i.."lfo") then
+        params:set(i.."lfo", 2)
+    end
     assigned_params[target] = true
 end
 
@@ -263,19 +288,23 @@ function lfo.randomize_lfos(track, allow_volume_lfos)
     
     -- Clear existing LFOs for both tracks in symmetry mode
     for i = 1, 16 do
-        local target_param = lfo.lfo_targets[params:get(i.."lfo_target")]
-        if target_param then
-            local should_clear = false
-            if symmetry and not target_param:match("volume$") then
-                should_clear = target_param:match("^[12]")
-            else
-                should_clear = target_param:match("^"..track)
-            end
-            
-            if should_clear and not is_locked(target_param) then
-                params:set(i.."lfo", 1)
-                params:set(i.."lfo_target", 1)
-                assigned_params[target_param] = nil
+        local lfo_param = i.."lfo"
+        local lfo_target_param = i.."lfo_target"
+        if param_exists(lfo_param) and param_exists(lfo_target_param) then
+            local target_param = lfo.lfo_targets[params:get(lfo_target_param)]
+            if target_param then
+                local should_clear = false
+                if symmetry and not target_param:match("volume$") then
+                    should_clear = target_param:match("^[12]")
+                else
+                    should_clear = target_param:match("^"..track)
+                end
+                
+                if should_clear and not is_locked(target_param) then
+                    params:set(lfo_param, 1)
+                    params:set(lfo_target_param, 1)
+                    assigned_params[target_param] = nil
+                end
             end
         end
     end
@@ -300,7 +329,8 @@ function lfo.randomize_lfos(track, allow_volume_lfos)
     -- Find free slots
     local free_slots = {}
     for j = 1, 16 do
-        if params:get(j.."lfo") == 1 then
+        local lfo_param = j.."lfo"
+        if param_exists(lfo_param) and params:get(lfo_param) == 1 then
             table.insert(free_slots, j)
         end
     end
@@ -335,19 +365,28 @@ function lfo.randomize_lfos(track, allow_volume_lfos)
                         lfo[slot2].phase = (lfo[slot1].phase + 0.5) % 1.0
                         -- Invert offset
                         lfo[slot2].offset = -lfo[slot1].offset
-                        params:set(slot2.."offset", -params:get(slot1.."offset"))
+                        if param_exists(slot2.."offset") and param_exists(slot1.."offset") then
+                            params:set(slot2.."offset", -params:get(slot1.."offset"))
+                        end
                     else
                         -- Keep phase and offset identical
                         lfo[slot2].phase = lfo[slot1].phase
                         lfo[slot2].offset = lfo[slot1].offset
-                        params:set(slot2.."offset", params:get(slot1.."offset"))
+                        if param_exists(slot2.."offset") and param_exists(slot1.."offset") then
+                            params:set(slot2.."offset", params:get(slot1.."offset"))
+                        end
                     end
                     
                     -- Update other parameters
-                    params:set(slot2.."lfo_freq", params:get(slot1.."lfo_freq"))
-                    params:set(slot2.."lfo_shape", params:get(slot1.."lfo_shape"))
-                    params:set(slot2.."lfo_depth", params:get(slot1.."lfo_depth"))
-                    
+                    if param_exists(slot2.."lfo_freq") and param_exists(slot1.."lfo_freq") then
+                        params:set(slot2.."lfo_freq", params:get(slot1.."lfo_freq"))
+                    end
+                    if param_exists(slot2.."lfo_shape") and param_exists(slot1.."lfo_shape") then
+                        params:set(slot2.."lfo_shape", params:get(slot1.."lfo_shape"))
+                    end
+                    if param_exists(slot2.."lfo_depth") and param_exists(slot1.."lfo_depth") then
+                        params:set(slot2.."lfo_depth", params:get(slot1.."lfo_depth"))
+                    end
                     mirrored_pairs[mirrored_target] = true
                 end
             end
@@ -360,12 +399,17 @@ function lfo.process()
     if lfo_paused then
         -- When paused, only process volume LFO offsets
         for i = 1, 16 do
-            if params:get(i.."lfo_target") and params:get(i.."lfo") == 2 then
-                local target_param = lfo.lfo_targets[params:get(i.."lfo_target")]
+            local lfo_target_param = i.."lfo_target"
+            local lfo_param = i.."lfo"
+            if param_exists(lfo_target_param) and param_exists(lfo_param) and params:get(lfo_target_param) and params:get(lfo_param) == 2 then
+                local target_param = lfo.lfo_targets[params:get(lfo_target_param)]
                 if target_param and (target_param == "1volume" or target_param == "2volume") then
                     local min_val, max_val = lfo.get_parameter_range(target_param)
-                    local modulated_value = lfo.scale(params:get(i.."offset"), -1.0, 1.0, min_val, max_val)
-                    params:set(target_param, modulated_value)
+                    local offset_param = i.."offset"
+                    local modulated_value = lfo.scale(param_exists(offset_param) and params:get(offset_param) or 0, -1.0, 1.0, min_val, max_val)
+                    if param_exists(target_param) then
+                        params:set(target_param, modulated_value)
+                    end
                 end
             end
         end
@@ -373,7 +417,9 @@ function lfo.process()
     end
     
     for i = 1, 16 do
-        if params:get(i.."lfo") == 2 and params:get(i.."lfo_target") then
+        local lfo_param = i.."lfo"
+        local lfo_target_param = i.."lfo_target"
+        if param_exists(lfo_param) and param_exists(lfo_target_param) and params:get(lfo_param) == 2 and params:get(lfo_target_param) then
             lfo[i].phase = (lfo[i].phase + lfo[i].freq * (1/30)) % 1.0
             local slope
             local wf = lfo[i].waveform
@@ -386,16 +432,18 @@ function lfo.process()
                 if (lfo[i].phase - phase_inc) % 1.0 > lfo[i].phase then
                     lfo[i].prev = math.random() * (math.random(0, 1))  -- -1 or 1
                 end
-                                slope = lfo[i].prev
+                slope = lfo[i].prev
             end
             lfo[i].slope = util.clamp(slope, -1.0, 1.0) * (lfo[i].depth * 0.01) + lfo[i].offset
-            local target_index = params:get(i.."lfo_target")
+            local target_index = params:get(lfo_target_param)
             if target_index and lfo.lfo_targets[target_index] then
                 local target_param = lfo.lfo_targets[target_index]
                 local min_val, max_val = lfo.get_parameter_range(target_param)
                 local modulated_value = lfo.scale(lfo[i].slope, -1.0, 1.0, min_val, max_val)
                 modulated_value = util.clamp(modulated_value, min_val, max_val)
-                params:set(target_param, modulated_value)
+                if param_exists(target_param) then
+                    params:set(target_param, modulated_value)
+                end
             end
         end
     end
