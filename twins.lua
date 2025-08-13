@@ -47,6 +47,7 @@ local drymode = include("lib/drymode") drymode.set_lfo_reference(lfo)
 local randomize_metro = { [1] = nil, [2] = nil }
 local manual_cleanup_metro = nil
 local ui_metro = nil
+local m = { [1] = nil, [2] = nil }
 local key_state = {} for n = 1, 3 do key_state[n] = false end
 local current_mode = "seek"
 local bottom_row_display_mode = "seek"
@@ -446,16 +447,8 @@ local function setup_params()
     params:add_taper("bitcrush_bits", "Bits", 1, 24, 14, 1) params:set_action("bitcrush_bits", function(value) engine.bitcrush_bits(value) end)
 
     params:add_group("LFOs", 118)
-    params:add_binary("randomize_lfos", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_lfos", function() lfo.clearLFOs() if randomize_metro[1] then randomize_metro[1]:stop() end if randomize_metro[2] then randomize_metro[2]:stop() end lfo.randomize_lfos("1", params:get("allow_volume_lfos") == 2)  lfo.randomize_lfos("2", params:get("allow_volume_lfos") == 2) end)
-    params:add_control("global_lfo_freq_scale", "Freq Scale", controlspec.new(0.1, 10, "exp", 0.01, 1.0, "x"))
-    params:set_action("global_lfo_freq_scale", function(value)
-      local phase_ref = {} for i = 1, 16 do phase_ref[i] = lfo[i].phase end
-      for i = 1, 16 do
-          local base_freq = params:get(i.."lfo_freq") or 0.05
-          lfo[i].base_freq = base_freq
-          lfo[i].freq = base_freq * value
-          lfo[i].phase = phase_ref[i]
-      end end)
+    params:add_binary("randomize_lfos", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_lfos", function() lfo.clearLFOs() local allow_vol = params:get("allow_volume_lfos") == 2 for i = 1, 2 do lfo.randomize_lfos(i, allow_vol) end end)
+    params:add_control("global_lfo_freq_scale", "Freq Scale", controlspec.new(0.1, 10, "exp", 0.01, 1.0, "x")) params:set_action("global_lfo_freq_scale", function(value) local base_freq for i = 1, 16 do local phase = lfo[i].phase base_freq = params:get(i.."lfo_freq") or 0.05 lfo[i].base_freq = base_freq lfo[i].freq = base_freq * value lfo[i].phase = phase end end)
     params:add_binary("lfo.assign_to_current_row", "Assign to Selection", "trigger", 0) params:set_action("lfo.assign_to_current_row", function() lfo.assign_to_current_row(current_mode, current_filter_mode) end)
     params:add_binary("lfo_pause", "Pause ⏸︎", "toggle", 0) params:set_action("lfo_pause", function(value) lfo.set_pause(value == 1) end)
     params:add_binary("ClearLFOs", "Clear All", "trigger", 0) params:set_action("ClearLFOs", function() lfo.clearLFOs() end)
@@ -947,24 +940,24 @@ function redraw()
         screen.text(bottom_row_mode .. ":     ")
     end
     -- Draw bottom row values
-if bottom_row_mode == "seek" then
-    for track = 1, 2 do
-        local x = (track == 1) and 51 or 92
-        local show_live = params:get(track.."live_input") == 1
-        if is_param_locked(track, "seek") then draw_l_shape(x, 61, true) end
-        screen.move(x, 61)
-        screen.level(is_bottom_active and levels.highlight or levels.value)
-        if show_live then
-            screen.text("live")
-        else
-            -- Always show seek value, even if file not loaded
-            screen.text(string.format("%.0f%%", osc_positions[track] * 100))
+    if bottom_row_mode == "seek" then
+        for track = 1, 2 do
+            local x = (track == 1) and 51 or 92
+            local show_live = params:get(track.."live_input") == 1
+            if is_param_locked(track, "seek") then draw_l_shape(x, 61, true) end
+            screen.move(x, 61)
+            screen.level(is_bottom_active and levels.highlight or levels.value)
+            if show_live then
+               screen.text("live")
+            else
+                -- Always show seek value, even if file not loaded
+                screen.text(string.format("%.0f%%", osc_positions[track] * 100))
+            end
+            -- Always draw seek bar
+            screen.level(levels.dim)
+            screen.rect(x, 63, 30 * osc_positions[track], 1)
+            screen.fill()
         end
-        -- Always draw seek bar
-        screen.level(levels.dim)
-        screen.rect(x, 63, 30 * osc_positions[track], 1)
-        screen.fill()
-    end
     elseif bottom_row_mode == "speed" then
         for track = 1, 2 do
             local x = (track == 1) and 51 or 92
@@ -1018,10 +1011,9 @@ end
 
 function cleanup()
     if ui_metro and ui_metro.is_running then ui_metro:stop() end
+    if m and m.is_running then m:stop() end
     if manual_cleanup_metro and manual_cleanup_metro.is_running then manual_cleanup_metro:stop() end
-    for i = 1, 2 do
-        if randomize_metro[i] and randomize_metro[i].is_running then randomize_metro[i]:stop() end
-    end
+    for i = 1, 2 do if randomize_metro[i] and randomize_metro[i].is_running then randomize_metro[i]:stop() end end
     params:set('monitor_level', initital_monitor_level)
     params:set('reverb', initital_reverb_onoff)
     params:set('compressor', initital_compressor_onoff)

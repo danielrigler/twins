@@ -212,7 +212,6 @@ alloc {
             sig = HPF.ar(sig, Lag.kr(hpf));
             sig = MoogFF.ar(sig, Lag.kr(cutoff), lpfgain);
             sig = Balance2.ar(sig[0], sig[1], Lag.kr(pan));
-            sig = Compander.ar(sig, sig, 0.4, 1, 0.5, 0.03, 0.3) * 0.5;
             Out.ar(out, sig * gain);
         }).add;
         
@@ -357,7 +356,7 @@ alloc {
             arg bus, width=1.0;
             var sig = In.ar(bus, 2);
             var mid = (sig[0] + sig[1]) * 0.5;
-            var side = ((sig[0] - sig[1]) * 0.5 * width).tanh;
+            var side = ((sig[0] - sig[1]) * 0.5 * width);
             sig = [mid + side, mid - side];
             ReplaceOut.ar(bus, sig);
         }).add;         
