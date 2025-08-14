@@ -319,18 +319,19 @@ alloc {
             arg bus, drive=0.0;
             var dry, wet, shaped;
             dry = In.ar(bus, 2);
-            wet = dry * (drive * 10 + 1);
-            shaped = wet.tanh * 0.3;
+            wet = dry * (20 * drive + 1);
+            shaped = wet.tanh * 0.1;
             ReplaceOut.ar(bus, XFade2.ar(dry, shaped, drive * 2 - 1));
         }).add;
 
-        SynthDef(\delay, { |bus, delay=0.5, time=10, dhpf=20, lpf=20000, w_rate=0.0, w_depth=0.0, stereo=0.3, mix=0.0, i_max_del=2|
-            var input, local, fb, delayed, out, panPos;
+        SynthDef(\delay, { |bus, delay=0.5, fb_amt=0.3, dhpf=20, lpf=20000, w_rate=0.0, w_depth=0.0, stereo=0.27, mix=0.0|
+            var input, local, fb, delayed, out, panPos, modRate;
             input = In.ar(bus, 2);
-            fb = exp(log(0.001) * (delay / time));
-            local = LocalIn.ar(2).softclip;
-            fb = [input[0] + (local[1] * fb), input[1] + (local[0] * fb)].softclip;
-            delayed = DelayC.ar(fb + input, i_max_del, Lag.kr(delay, 1) + LFPar.kr(w_rate, mul: w_depth));
+            local = LocalIn.ar(2);
+            fb = [input[0] + (local[1] * fb_amt), input[1] + (local[0] * fb_amt)]; 
+            fb = Limiter.ar(fb, 0.9).softclip;
+            modRate = w_rate * (1 + LFNoise1.kr(0.2, 0.05));
+            delayed = DelayC.ar(input + fb, 2, Lag.kr(delay, 1) + LFPar.kr(modRate, mul: w_depth));
             delayed = LPF.ar(HPF.ar(delayed, dhpf), lpf);
             panPos = LFPar.kr(1/(delay*2)).range(-1, 1) * stereo;
             out = [delayed[0] * panPos.max(0) + (delayed[0] * (1-stereo)), delayed[1] * panPos.min(0).neg + (delayed[1] * (1-stereo))];
@@ -387,7 +388,7 @@ alloc {
 
         this.addCommand(\mix, "f", { |msg| var mix = msg[1]; delayEffect.set(\mix, mix); delayEffect.run(mix > 0); });
         this.addCommand(\delay, "f", { |msg| delayEffect.set(\delay, msg[1]);	});
-    		this.addCommand(\time, "f", { |msg| delayEffect.set(\time, msg[1]);	});
+    		this.addCommand(\fb_amt, "f", { |msg| delayEffect.set(\fb_amt, msg[1]);	});
     		this.addCommand(\dhpf, "f", { |msg| delayEffect.set(\dhpf, msg[1]);	});
     		this.addCommand(\lpf, "f", { |msg| delayEffect.set(\lpf, msg[1]);	});
     		this.addCommand(\w_rate, "f", { |msg| delayEffect.set(\w_rate, msg[1]);	});

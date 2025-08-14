@@ -74,7 +74,7 @@ local function randomize_jpverb_params(steps)
   -- JPVERB
   if math.random() <= 0.5 then targets["t60"] = 4 else targets["t60"] = random_float(1, 6) end
   if math.random() <= 0.5 then targets["damp"] = 0 else targets["damp"] = random_float(0, 25) end
-  if math.random() <= 0.3 then targets["rsize"] = 1 else targets["rsize"] = random_float(1, 4) end
+  if math.random() <= 0.3 then params:set("rsize", 1)  else params:set("rsize", random_float(1, 4)) end
   if math.random() <= 0.6 then targets["earlyDiff"] = 70.7 else targets["earlyDiff"] = random_float(40.7, 100) end
   if math.random() <= 0.6 then targets["modDepth"] = 10 else targets["modDepth"] = math.random(10, 90) end
   if math.random() <= 0.6 then targets["modFreq"] = 2 else targets["modFreq"] = random_float(0.5, 3) end
@@ -148,10 +148,10 @@ local function randomize_delay_params()
     if math.random() <= 0.5 then targets["delay_mix"] = 0 else targets["delay_mix"] = math.random(0, 90) end
     if math.random() <= 0.3 then params:set("delay_time", 0.5) else params:set("delay_time", random_float(0.15, 1)) end
     if math.random() <= 0.5 then targets["delay_feedback"] = math.random(20, 80) end
-    if math.random() <= 0.6 then targets["stereo"] = 27 else targets["stereo"] = math.random(0, 70) end
+    if math.random() <= 0.5 then targets["stereo"] = 25 else targets["stereo"] = math.random(0, 70) end
     targets["delay_lowpass"] = math.random(1000, 20000)
     targets["delay_highpass"] = math.random(20, 300)
-    if math.random() <= 0.7 then targets["wiggle_depth"] = 0 else targets["wiggle_depth"] = math.random(0, 10) end
+    if math.random() <= 0.7 then targets["wiggle_depth"] = 2 else targets["wiggle_depth"] = math.random(0, 10) end
     if math.random() <= 0.6 then targets["wiggle_rate"] = 2 else targets["wiggle_rate"] = random_float(0.5, 4) end
 
     for param, _ in pairs(targets) do
