@@ -47,7 +47,6 @@ local drymode = include("lib/drymode") drymode.set_lfo_reference(lfo)
 local randomize_metro = { [1] = nil, [2] = nil }
 local manual_cleanup_metro = nil
 local ui_metro = nil
-local m = { [1] = nil, [2] = nil }
 local key_state = {} for n = 1, 3 do key_state[n] = false end
 local current_mode = "seek"
 local bottom_row_display_mode = "seek"
@@ -96,6 +95,13 @@ local function random_float(l, h)
     return l + math.random() * (h - l)
 end
 
+local function stop_metro_safe(m)
+  if m then
+    local ok, err = pcall(function() m:stop() end)
+    if m then m.event = nil end
+  end
+end
+
 local osc_voice_map = {}
 local osc_voice_nums = {}
 local function contains(tbl, val)
@@ -138,7 +144,7 @@ end
 
 local function setup_ui_metro()
     ui_metro = metro.init()
-    ui_metro.time = 1/30
+    ui_metro.time = 1/60
     ui_metro.event = function()
         if animation_complete then
             redraw()
@@ -148,8 +154,8 @@ local function setup_ui_metro()
         local elapsed = util.time() - animation_start_time
         animation_y = util.clamp(elapsed * animation_speed - 64, -64, 0)
         if animation_y >= 0 then
-            animation_complete = true
-            animation_y = 0
+          animation_complete = true
+          animation_y = 0
         end
         redraw()
     end
@@ -560,8 +566,8 @@ local function randomize_pitch(track, other_track, symmetry)
 end
 
 local function randomize(n)
-    local m = randomize_metro[n]
-    if not m then m = metro.init() randomize_metro[n] = m end
+    randomize_metro[n] = randomize_metro[n] or metro.init()
+    local m_rand = randomize_metro[n]
     active_controlled_params = {}
     local symmetry = params:get("symmetry") == 1
     local other_track = (n == 1) and 2 or 1
@@ -620,8 +626,8 @@ local function randomize(n)
         end
     end
     if next(targets) then
-        m.time = 1 / 30
-        m.event = function(count)
+        m_rand.time = 1 / 30
+        m_rand.event = function(count)
             local tolerance = 0.01
             local factor = count / steps
             local all_done = true
@@ -633,9 +639,9 @@ local function randomize(n)
                     all_done = all_done and (math.abs(new_val - target) < tolerance)
                 end
             end
-            if all_done then m:stop() end
+            if all_done then stop_metro_safe(m_rand) end
         end
-        m:start()
+        m_rand:start()
     end
 end
 
@@ -656,7 +662,7 @@ end
 function enc(n, d)
     if not installer:ready() then return end
     local function handle_param(track, config)
-        for i = 1, 2 do if randomize_metro[i] then randomize_metro[i]:stop() end end
+        --for i = 1, 2 do if randomize_metro[i] then stop_metro_safe(randomize_metro[i]) end end
         active_controlled_params = {}
         local p = track..config.param
         local sym = params:get("symmetry") == 1
@@ -736,6 +742,7 @@ function enc(n, d)
         end
     elseif n == 2 or n == 3 then
         local t = n - 1
+        stop_metro_safe(randomize_metro[t])
         if key_state[1] then
             local p = t.."volume"
             if params:get("symmetry") == 1 then
@@ -758,13 +765,11 @@ function key(n, z)
     if z == 1 then
         if key_state[1] then
             if n == 2 then
-                lfo.clearLFOs(1)
                 lfo.randomize_lfos("1", params:get("allow_volume_lfos") == 2)
                 randomize(1)
                 randpara.randomize_params(steps, 1)
                 return
             elseif n == 3 then
-                lfo.clearLFOs(2)
                 lfo.randomize_lfos("2", params:get("allow_volume_lfos") == 2)
                 randomize(2)
                 randpara.randomize_params(steps, 2)
@@ -1010,10 +1015,12 @@ function redraw()
 end
 
 function cleanup()
-    if ui_metro and ui_metro.is_running then ui_metro:stop() end
-    if m and m.is_running then m:stop() end
-    if manual_cleanup_metro and manual_cleanup_metro.is_running then manual_cleanup_metro:stop() end
-    for i = 1, 2 do if randomize_metro[i] and randomize_metro[i].is_running then randomize_metro[i]:stop() end end
+    stop_metro_safe(ui_metro)
+    stop_metro_safe(manual_cleanup_metro)
+    for i = 1, 2 do stop_metro_safe(randomize_metro[i]) end
+    stop_metro_safe(m_rand)
+    stop_metro_safe(lfo_metro)
+    if lfo and lfo.cleanup then lfo.cleanup() end
     params:set('monitor_level', initital_monitor_level)
     params:set('reverb', initital_reverb_onoff)
     params:set('compressor', initital_compressor_onoff)

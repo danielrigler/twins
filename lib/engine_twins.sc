@@ -330,7 +330,7 @@ alloc {
             fb = exp(log(0.001) * (delay / time));
             local = LocalIn.ar(2).softclip;
             fb = [input[0] + (local[1] * fb), input[1] + (local[0] * fb)].softclip;
-            delayed = DelayL.ar(Limiter.ar(fb + input, 0.99, 0.01), i_max_del, Lag.kr(delay, 0.1) + LFPar.kr(w_rate, mul: w_depth));
+            delayed = DelayC.ar(fb + input, i_max_del, Lag.kr(delay, 1) + LFPar.kr(w_rate, mul: w_depth));
             delayed = LPF.ar(HPF.ar(delayed, dhpf), lpf);
             panPos = LFPar.kr(1/(delay*2)).range(-1, 1) * stereo;
             out = [delayed[0] * panPos.max(0) + (delayed[0] * (1-stereo)), delayed[1] * panPos.min(0).neg + (delayed[1] * (1-stereo))];

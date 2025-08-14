@@ -478,7 +478,7 @@ function lfo.init()
 end
 
 function lfo.cleanup()
-  lfo_paused = false  -- Reset pause state on cleanup
+  lfo_paused = false
   if lfo_metro then
     lfo_metro:stop()
   end
