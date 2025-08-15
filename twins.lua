@@ -6,7 +6,7 @@
 --           by: @dddstudio                       
 --
 --                          
---                           v0.36
+--                           v0.37
 -- E1: Master Volume
 -- K1+E2/E3: Volume 1/2
 -- K1+E1: Crossfade Volumes
@@ -442,9 +442,10 @@ local function setup_params()
       params:add_control(i.."hpf",i.." HPF Cutoff",controlspec.new(20,20000,"exp",0,20,"Hz")) params:set_action(i.."hpf",function(value) engine.hpf(i,value) end)
     end
     
-    params:add_group("Stereo", 3)
+    params:add_group("Stereo", 4)
     params:add_control("Width", "Stereo Width", controlspec.new(0, 200, "lin", 0.01, 100, "%")) params:set_action("Width", function(value) engine.width(value / 100) end)
     params:add_taper("rspeed", "Rotation Speed", 0, 1, 0, 1) params:set_action("rspeed", function(value) engine.rspeed(value) end)
+    params:add_option("haas", "Haas Effect", {"off", "on"}, 1) params:set_action("haas", function(x) engine.haas(x-1) end)
     params:add_option("monobass_mix", "Mono Bass", {"off", "on"}, 1) params:set_action("monobass_mix", function(x) engine.monobass_mix(x-1) end)
 
     params:add_group("BitCrush", 3)
@@ -660,7 +661,7 @@ end
 function enc(n, d)
     if not installer:ready() then return end
     local function handle_param(track, config)
-        --for i = 1, 2 do if randomize_metro[i] then stop_metro_safe(randomize_metro[i]) end end
+        for i = 1, 2 do if randomize_metro[i] then stop_metro_safe(randomize_metro[i]) end end
         active_controlled_params = {}
         local p = track..config.param
         local sym = params:get("symmetry") == 1
@@ -763,11 +764,13 @@ function key(n, z)
     if z == 1 then
         if key_state[1] then
             if n == 2 then
+                lfo.clearLFOs(1)            
                 lfo.randomize_lfos("1", params:get("allow_volume_lfos") == 2)
                 randomize(1)
                 randpara.randomize_params(steps, 1)
                 return
             elseif n == 3 then
+                lfo.clearLFOs(2)
                 lfo.randomize_lfos("2", params:get("allow_volume_lfos") == 2)
                 randomize(2)
                 randpara.randomize_params(steps, 2)
