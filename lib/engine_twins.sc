@@ -136,10 +136,10 @@ alloc {
             arg out, buf_l, buf_r, voice,
             pos, speed, jitter, size, density, density_mod_amt, pitch_offset, pan, spread, gain, t_reset_pos,
             granular_gain, pitch_mode, trig_mode, subharmonics_1, subharmonics_2, subharmonics_3, overtones_1, overtones_2, 
-            cutoff, hpf, lpfgain=0.1, direction_mod, size_variation, low_gain, high_gain, smoothbass, pitch_random_plus, pitch_random_minus, probability;
+            cutoff, hpf, lpfgain=0.1, direction_mod, size_variation, low_gain, mid_gain, high_gain, smoothbass, pitch_random_plus, pitch_random_minus, probability;
  
             var grain_trig, jitter_sig1, jitter_sig2, jitter_sig3, jitter_sig4, jitter_sig5, jitter_sig6, buf_dur, pan_sig, buf_pos, pos_sig, sig_l, sig_r, sig_mix, density_mod, dry_sig, granular_sig, base_pitch, grain_pitch, shaped, grain_size;
-            var invDenom = 1.25 / (1 + subharmonics_1 + subharmonics_2 + subharmonics_3 + overtones_1 + overtones_2);
+            var invDenom = 1.5 / (1 + subharmonics_1 + subharmonics_2 + subharmonics_3 + overtones_1 + overtones_2);
             var subharmonic_1_vol = subharmonics_1 * invDenom;
             var subharmonic_2_vol = subharmonics_2 * invDenom;
             var subharmonic_3_vol = subharmonics_3 * invDenom;
@@ -147,7 +147,6 @@ alloc {
             var overtone_2_vol = overtones_2 * invDenom;
             var lagPitchOffset = Lag.kr(pitch_offset);
             var grain_direction = Select.kr(pitch_mode, [1, Select.kr(speed.abs > 0.001, [1, speed.sign])]) * ((LFNoise1.kr(density).range(0,1) < direction_mod).linlin(0,1,1,-1));
-            var low, high;
             var positive_intervals = [12, 24], negative_intervals = [-12, -24];
             var interval_plus, interval_minus, final_interval;
             var base_trig;
@@ -179,20 +178,20 @@ alloc {
                 var vol = [subharmonic_1_vol, subharmonic_2_vol, subharmonic_3_vol][i];
                 #sig_l, sig_r = [
                     sig_l + ~grainBufFunc.(buf_l, grain_pitch * div, grain_size * smoothbass, vol, grain_direction, pos_sig, jitter_sig2),
-                    sig_r + ~grainBufFunc.(buf_r, grain_pitch * div, grain_size * smoothbass, vol, grain_direction, pos_sig, jitter_sig2)];};
+                    sig_r + ~grainBufFunc.(buf_r, grain_pitch * div, grain_size * smoothbass, vol, grain_direction, pos_sig, jitter_sig3)];};
             [2, 4].do { |mult, i|
                 var vol = [overtone_1_vol, overtone_2_vol][i];
                 #sig_l, sig_r = [
                     sig_l + ~grainBufFunc.(buf_l, grain_pitch * mult, grain_size, vol, grain_direction, pos_sig, jitter_sig3),
-                    sig_r + ~grainBufFunc.(buf_r, grain_pitch * mult, grain_size, vol, grain_direction, pos_sig, jitter_sig3)];};
+                    sig_r + ~grainBufFunc.(buf_r, grain_pitch * mult, grain_size, vol, grain_direction, pos_sig, jitter_sig2)];};
 
-            pan_sig = Lag.kr(TRand.kr(trig: grain_trig, lo: spread.neg, hi: spread));
+            pan_sig = Lag.kr(TRand.kr(trig: grain_trig, lo: 0, hi: spread) * (ToggleFF.kr(grain_trig) * 2 - 1), grain_size * 0.15);
             granular_sig = Balance2.ar(sig_l, sig_r, pan + pan_sig);
             sig_mix = ((dry_sig * (1 - granular_gain)) + (granular_sig * granular_gain)) * 0.5;
             
-            low = BLowShelf.ar(sig_mix, 130, 6, low_gain);
-            high = BHiShelf.ar(sig_mix, 3900, 6, high_gain);
-            sig_mix = low + high;
+            sig_mix = BLowShelf.ar(sig_mix, 70, 6, low_gain);
+            sig_mix = BPeakEQ.ar(sig_mix, 800, 1, mid_gain);
+            sig_mix = BHiShelf.ar(sig_mix, 4000, 6, high_gain);
             
             sig_mix = HPF.ar(sig_mix, Lag.kr(hpf));
             sig_mix = MoogFF.ar(sig_mix, Lag.kr(cutoff), lpfgain);
@@ -319,7 +318,7 @@ alloc {
             arg bus, drive=0.0;
             var dry, wet, shaped;
             dry = In.ar(bus, 2);
-            wet = dry * (20 * drive + 1);
+            wet = dry * (30 * drive + 1);
             shaped = wet.tanh * 0.1;
             ReplaceOut.ar(bus, XFade2.ar(dry, shaped, drive * 2 - 1));
         }).add;
@@ -467,6 +466,7 @@ alloc {
         this.addCommand("lossdegrade_mix", "f", { arg msg; var mix = msg[1]; lossdegradeEffect.set(\mix, mix); lossdegradeEffect.run(mix > 0); });
         
         this.addCommand("eq_low_gain", "if", { arg msg; var voice = msg[1] - 1; currentLowGain[voice] = msg[2]; voices[voice].set(\low_gain, msg[2]); });
+        this.addCommand("eq_mid_gain", "if", { arg msg; var voice = msg[1] - 1; currentLowGain[voice] = msg[2]; voices[voice].set(\mid_gain, msg[2]); });
         this.addCommand("eq_high_gain", "if", { arg msg; var voice = msg[1] - 1; currentHighGain[voice] = msg[2]; voices[voice].set(\high_gain, msg[2]); });
 
         this.addCommand("width", "f", { arg msg; var width = msg[1]; widthEffect.set(\width, width); widthEffect.run(width != 1); });

@@ -109,26 +109,26 @@ lfo.lfo_targets = {
 lfo.target_ranges = {
   ["1pan"] = { depth = { 25, 90 }, offset = { 0, 0 }, frequency = { 0.05, 0.6 }, waveform = { "sine" }, chance = 0.8 },
   ["2pan"] = { depth = { 25, 90 }, offset = { 0, 0 }, frequency = { 0.05, 0.6 }, waveform = { "sine" }, chance = 0.8 },
-  ["1jitter"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
-  ["2jitter"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
-  ["1spread"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
-  ["2spread"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5},
-  ["1size"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
-  ["2size"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
-  ["1density"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
-  ["2density"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
+  ["1jitter"] = { depth = { 10, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
+  ["2jitter"] = { depth = { 10, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
+  ["1spread"] = { depth = { 10, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
+  ["2spread"] = { depth = { 10, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5},
+  ["1size"] = { depth = { 10, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
+  ["2size"] = { depth = { 10, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
+  ["1density"] = { depth = { 10, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
+  ["2density"] = { depth = { 10, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
   ["1volume"] = { depth = { 2, 3 }, offset = { -1, 1 }, frequency = { 0.1, 0.5 }, waveform = { "sine" }, chance = 1.0 },
   ["2volume"] = { depth = { 2, 3 }, offset = { -1, 1 }, frequency = { 0.1, 0.5 }, waveform = { "sine" }, chance = 1.0 },
   ["1seek"] = { depth = { 30, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.3 },
   ["2seek"] = { depth = { 30, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.3 },
-  ["1speed"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.02, 0.1 }, waveform = { "sine" }, chance = 0.1 },
-  ["2speed"] = { depth = { 5, 100 }, offset = { -1, 1 }, frequency = { 0.02, 0.1 }, waveform = { "sine" }, chance = 0.1 }
+  ["1speed"] = { depth = { 10, 100 }, offset = { -1, 1 }, frequency = { 0.02, 0.1 }, waveform = { "sine" }, chance = 0.1 },
+  ["2speed"] = { depth = { 10, 100 }, offset = { -1, 1 }, frequency = { 0.02, 0.1 }, waveform = { "sine" }, chance = 0.1 }
 }
 
 function lfo.get_parameter_range(param_name)
   local param_ranges = {
     ["1pan"] = { -100, 100 }, ["2pan"] = { -100, 100 },
-    ["1seek"] = { 0, 1 }, ["2seek"] = { 0, 1 },
+    ["1seek"] = { 0.01, 0.99 }, ["2seek"] = { 0.01, 0.99 },
     ["1speed"] = { -0.2, 0.2 }, ["2speed"] = { -0.2, 0.2 },
     ["1jitter"] = { 1, 999 }, ["2jitter"] = { 1, 999 },
     ["1spread"] = { 0, 100 }, ["2spread"] = { 0, 100 },

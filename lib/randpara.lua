@@ -132,8 +132,9 @@ local function randomize_eq_params(i)
   if params:get("lock_eq") == 2 then return end
   safe_metro_stop(randomize_metro)
     -- EQ
-    if math.random() <= 0.4 then targets[i.."eq_low_gain"] = 0 else targets[i.."eq_low_gain"] = random_float(-0.35, 0.25) end
-    if math.random() <= 0.4 then targets[i.."eq_high_gain"] = 0.25 else targets[i.."eq_high_gain"] = random_float(-0.2, 0.5) end
+    if math.random() <= 0.4 then targets[i.."eq_low_gain"] = 0 else targets[i.."eq_low_gain"] = random_float(-0.25, 0.5) end
+    if math.random() <= 0.5 then targets[i.."eq_mid_gain"] = 0 else targets[i.."eq_mid_gain"] = random_float(-0.2, 0.2) end
+    if math.random() <= 0.4 then targets[i.."eq_high_gain"] = 0.2 else targets[i.."eq_high_gain"] = random_float(-0.1, 0.5) end
 
     for param, _ in pairs(targets) do
         active_interpolations[param] = true
@@ -151,7 +152,7 @@ local function randomize_delay_params()
     if math.random() <= 0.5 then targets["stereo"] = 25 else targets["stereo"] = math.random(0, 70) end
     targets["delay_lowpass"] = math.random(1000, 20000)
     targets["delay_highpass"] = math.random(20, 300)
-    if math.random() <= 0.7 then targets["wiggle_depth"] = 2 else targets["wiggle_depth"] = math.random(0, 10) end
+    if math.random() <= 0.7 then targets["wiggle_depth"] = 1 else targets["wiggle_depth"] = math.random(0, 10) end
     if math.random() <= 0.6 then targets["wiggle_rate"] = 2 else targets["wiggle_rate"] = random_float(0.5, 4) end
 
     for param, _ in pairs(targets) do
@@ -232,6 +233,7 @@ end
 return {
     randomize_params = randomize_params,
     randomize_jpverb_params = randomize_jpverb_params,
+    randomize_eq_params = randomize_eq_params,
     randomize_granular_params = randomize_granular_params,
     randomize_delay_params = randomize_delay_params,
     randomize_shimmer_params = randomize_shimmer_params,

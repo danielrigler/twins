@@ -61,7 +61,6 @@ local animation_complete = false
 local animation_start_time = nil
 local initital_monitor_level
 local initital_reverb_onoff
-local initital_compressor_onoff
 local osc_positions = {[1] = 0, [2] = 0}
 local valid_audio_exts = {[".wav"]=true,[".aif"]=true,[".aiff"]=true,[".flac"]=true}
 local mode_list = {"pitch","spread","density","size","jitter","lpf","pan","speed","seek"}
@@ -372,7 +371,7 @@ local function setup_params()
     params:add_taper("delay_feedback", "Feedback", 0, 120, 30, 1, "%") params:set_action("delay_feedback", function(value) engine.fb_amt(value/100) end)
     params:add_control("delay_lowpass", "LPF", controlspec.new(20, 20000, 'exp', 1, 20000, "Hz")) params:set_action('delay_lowpass', function(value) engine.lpf(value) end)
     params:add_control("delay_highpass", "HPF", controlspec.new(20, 20000, 'exp', 1, 20, "Hz")) params:set_action("delay_highpass", function(value) engine.dhpf(value) end)
-    params:add_taper("wiggle_depth", "Mod Depth", 0, 100, 0, 0, "%") params:set_action("wiggle_depth", function(value) engine.w_depth(value/100) end)
+    params:add_taper("wiggle_depth", "Mod Depth", 0, 100, 1, 0, "%") params:set_action("wiggle_depth", function(value) engine.w_depth(value/100) end)
     params:add_taper("wiggle_rate", "Mod Freq", 0, 20, 2, 1, "Hz") params:set_action("wiggle_rate", function(value) engine.w_rate(value) end)
     params:add_taper("stereo", "Ping-Pong", 0, 100, 30, 1, "%") params:set_action("stereo", function(value) engine.stereo(value/100) end)
     params:add_separator("   ")
@@ -426,9 +425,10 @@ local function setup_params()
     params:add_binary("randomize_tape", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_tape", function() randpara.randomize_tape_params(steps) end)
     params:add_option("lock_tape", "Lock Parameters", {"off", "on"}, 1)    
     
-    params:add_group("EQ", 7)
+    params:add_group("EQ", 9)
     for i = 1, 2 do 
     params:add_control(i.."eq_low_gain", i.." Bass", controlspec.new(-1, 1, "lin", 0.01, 0, "")) params:set_action(i.."eq_low_gain", function(value) engine.eq_low_gain(i, value*55) end)
+    params:add_control(i.."eq_mid_gain", i.." Mid", controlspec.new(-1, 1, "lin", 0.01, 0, "")) params:set_action(i.."eq_mid_gain", function(value) engine.eq_mid_gain(i, value*20) end)
     params:add_control(i.."eq_high_gain", i.." Treble", controlspec.new(-1, 1, "lin", 0.01, 0, "")) params:set_action(i.."eq_high_gain", function(value) engine.eq_high_gain(i, value*45) end)
     end
     params:add_separator("     ")
@@ -469,7 +469,7 @@ local function setup_params()
     params:add_taper("min_density", "density (min)", 0.1, 50, 1, 5, "Hz")
     params:add_taper("max_density", "density (max)", 0.1, 50, 16, 5, "Hz")
     params:add_taper("min_spread", "spread (min)", 0, 100, 0, 0, "%")
-    params:add_taper("max_spread", "spread (max)", 0, 100, 75, 0, "%")
+    params:add_taper("max_spread", "spread (max)", 0, 100, 100, 0, "%")
     params:add_control("min_pitch", "pitch (min)", controlspec.new(-48, 48, "lin", 1, -31, "st"))
     params:add_control("max_pitch", "pitch (max)", controlspec.new(-48, 48, "lin", 1, 31, "st"))
     params:add_taper("min_speed", "speed (min)", -2, 2, -0.15, 0, "x")
@@ -655,8 +655,6 @@ function init()
     params:set('monitor_level', -math.huge)
     initital_reverb_onoff = params:get('reverb')
     params:set('reverb', 1)
-    initital_compressor_onoff = params:get('compressor')
-    params:set('compressor', 1)
 end
 
 function enc(n, d)
@@ -1023,7 +1021,6 @@ function cleanup()
     if lfo and lfo.cleanup then lfo.cleanup() end
     params:set('monitor_level', initital_monitor_level)
     params:set('reverb', initital_reverb_onoff)
-    params:set('compressor', initital_compressor_onoff)
     osc.event = nil
     if osc.inited then osc.deinit() end
 end
