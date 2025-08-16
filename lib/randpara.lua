@@ -134,7 +134,7 @@ local function randomize_eq_params(i)
     -- EQ
     if math.random() <= 0.4 then targets[i.."eq_low_gain"] = 0 else targets[i.."eq_low_gain"] = random_float(-0.25, 0.25) end
     if math.random() <= 0.6 then targets[i.."eq_mid_gain"] = 0 else targets[i.."eq_mid_gain"] = random_float(-0.4, 0.1) end
-    if math.random() <= 0.4 then targets[i.."eq_high_gain"] = 0.25 else targets[i.."eq_high_gain"] = random_float(0.0, 0.5) end
+    if math.random() <= 0.4 then targets[i.."eq_high_gain"] = 0.2 else targets[i.."eq_high_gain"] = random_float(0.0, 0.4) end
 
     for param, _ in pairs(targets) do
         active_interpolations[param] = true

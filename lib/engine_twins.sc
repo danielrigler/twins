@@ -99,9 +99,9 @@ alloc {
             ], target: pg);
         });
         
-        currentSpeed = [0.1, 0.1]; currentJitter = [0.25, 0.25]; currentSize = [0.1, 0.1]; currentDensity = [10, 10]; currentPitch = [1, 1]; currentPan = [0, 0]; currentSpread = [0, 0]; currentVolume = [1, 1]; currentGranularGain = [1, 1]; currentCutoff = [20000, 20000]; currentlpfgain = [0.1, 0.1]; currentHpf = [20, 20]; currentSubharmonics1 = [0, 0]; currentSubharmonics2 = [0, 0]; currentSubharmonics3 = [0, 0]; currentOvertones1 = [0, 0]; currentOvertones2 = [0, 0]; currentPitchMode = [0, 0]; currentTrigMode = [0, 0]; currentDirectionMod = [0, 0]; currentSizeVariation = [0, 0]; currentPitchRandomPlus = [0, 0]; currentPitchRandomMinus = [0, 0]; currentSmoothbass = [1, 1]; currentDensityModAmt = [0, 0]; currentLowGain = [0, 0]; currentHighGain = [0, 0]; currentProbability = [100, 100]; liveBufferMix = 1.0;        currentSpeed = [0.1, 0.1]; currentJitter = [0.25, 0.25]; currentSize = [0.1, 0.1]; currentDensity = [10, 10]; currentPitch = [1, 1]; currentPan = [0, 0]; currentSpread = [0, 0]; currentVolume = [1, 1]; currentGranularGain = [1, 1]; currentCutoff = [20000, 20000]; currentlpfgain = [0.1, 0.1]; currentHpf = [20, 20]; currentSubharmonics1 = [0, 0]; currentSubharmonics2 = [0, 0]; currentSubharmonics3 = [0, 0]; currentOvertones1 = [0, 0]; currentOvertones2 = [0, 0]; currentPitchMode = [0, 0]; currentTrigMode = [0, 0]; currentDirectionMod = [0, 0]; currentSizeVariation = [0, 0]; currentPitchRandomPlus = [0, 0]; currentPitchRandomMinus = [0, 0]; currentSmoothbass = [1, 1]; currentDensityModAmt = [0, 0]; currentLowGain = [0, 0]; currentHighGain = [0, 0]; currentProbability = [100, 100]; liveBufferMix = 1.0;
-        
         context.server.sync;
+        
+        currentSpeed = [0.1, 0.1]; currentJitter = [0.25, 0.25]; currentSize = [0.1, 0.1]; currentDensity = [10, 10]; currentPitch = [1, 1]; currentPan = [0, 0]; currentSpread = [0, 0]; currentVolume = [1, 1]; currentGranularGain = [1, 1]; currentCutoff = [20000, 20000]; currentlpfgain = [0.1, 0.1]; currentHpf = [20, 20]; currentSubharmonics1 = [0, 0]; currentSubharmonics2 = [0, 0]; currentSubharmonics3 = [0, 0]; currentOvertones1 = [0, 0]; currentOvertones2 = [0, 0]; currentPitchMode = [0, 0]; currentTrigMode = [0, 0]; currentDirectionMod = [0, 0]; currentSizeVariation = [0, 0]; currentPitchRandomPlus = [0, 0]; currentPitchRandomMinus = [0, 0]; currentSmoothbass = [1, 1]; currentDensityModAmt = [0, 0]; currentLowGain = [0, 0]; currentHighGain = [0, 0]; currentProbability = [100, 100]; liveBufferMix = 1.0;        currentSpeed = [0.1, 0.1]; currentJitter = [0.25, 0.25]; currentSize = [0.1, 0.1]; currentDensity = [10, 10]; currentPitch = [1, 1]; currentPan = [0, 0]; currentSpread = [0, 0]; currentVolume = [1, 1]; currentGranularGain = [1, 1]; currentCutoff = [20000, 20000]; currentlpfgain = [0.1, 0.1]; currentHpf = [20, 20]; currentSubharmonics1 = [0, 0]; currentSubharmonics2 = [0, 0]; currentSubharmonics3 = [0, 0]; currentOvertones1 = [0, 0]; currentOvertones2 = [0, 0]; currentPitchMode = [0, 0]; currentTrigMode = [0, 0]; currentDirectionMod = [0, 0]; currentSizeVariation = [0, 0]; currentPitchRandomPlus = [0, 0]; currentPitchRandomMinus = [0, 0]; currentSmoothbass = [1, 1]; currentDensityModAmt = [0, 0]; currentLowGain = [0, 0]; currentHighGain = [0, 0]; currentProbability = [100, 100]; liveBufferMix = 1.0;
 
         SynthDef(\synth, {
             arg out, buf_l, buf_r, voice, pos, speed, jitter, size, density, density_mod_amt, pitch_offset, pan, spread, gain, t_reset_pos,
@@ -109,12 +109,12 @@ alloc {
             cutoff, hpf, lpfgain, direction_mod, size_variation, low_gain, mid_gain, high_gain, smoothbass, pitch_random_plus, pitch_random_minus, probability;
  
             var grain_trig, jitter_sig1, jitter_sig2, jitter_sig3, buf_dur, pan_sig, buf_pos, pos_sig, sig_l, sig_r, sig_mix, density_mod, dry_sig, granular_sig, base_pitch, grain_pitch, shaped, grain_size;
-            var invDenom = 1.5 / (1 + subharmonics_1 + subharmonics_2 + subharmonics_3 + overtones_1 + overtones_2);
-            var subharmonic_1_vol = subharmonics_1 * invDenom;
-            var subharmonic_2_vol = subharmonics_2 * invDenom;
-            var subharmonic_3_vol = subharmonics_3 * invDenom;
-            var overtone_1_vol = overtones_1 * invDenom;
-            var overtone_2_vol = overtones_2 * invDenom;
+            var invDenom = 1 / (1 + subharmonics_1 + subharmonics_2 + subharmonics_3 + overtones_1 + overtones_2);
+            var subharmonic_1_vol = subharmonics_1 * invDenom * 2;
+            var subharmonic_2_vol = subharmonics_2 * invDenom * 2;
+            var subharmonic_3_vol = subharmonics_3 * invDenom * 2;
+            var overtone_1_vol = overtones_1 * invDenom * 2;
+            var overtone_2_vol = overtones_2 * invDenom * 2;
             var lagPitchOffset = Lag.kr(pitch_offset);
             var grain_direction = Select.kr(pitch_mode, [1, Select.kr(speed.abs > 0.001, [1, speed.sign])]) * ((LFNoise1.kr(density).range(0,1) < direction_mod).linlin(0,1,1,-1));
             var positive_intervals = [12, 24], negative_intervals = [-12, -24];
@@ -359,6 +359,8 @@ alloc {
         monobassEffect = Synth.new(\monobass, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
         rotateEffect = Synth.new(\rotate, [\bus, mixBus.index], context.xg, 'addToTail');
         outputSynth = Synth.new(\output, [\in, mixBus.index,\out, context.out_b.index], context.xg, 'addToTail');   
+
+        context.server.sync;
 
         this.addCommand(\mix, "f", { |msg| var mix = msg[1]; delayEffect.set(\mix, mix); delayEffect.run(mix > 0); });
         this.addCommand(\delay, "f", { |msg| delayEffect.set(\delay, msg[1]);	});
