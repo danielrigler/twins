@@ -1,7 +1,7 @@
 local Mirror = {}
 
 function Mirror.init(osc_positions_ref, lfo_ref)
-    Mirror.osc_positions = osc_positions_ref
+    Mirror.osc_positions = osc_positions_ref or {}
     Mirror.lfo = lfo_ref
 end
 
@@ -33,11 +33,13 @@ end
 
 function Mirror.copy_voice_params(from_track, to_track, mirror_pan)
     -- Clear any LFOs affecting the destination track first
+    
+    Mirror.osc_positions = Mirror.osc_positions or {}
     clear_destination_lfos(to_track)
     
-    -- List of parameters to copy between tracks
+    -- List of parameters to copy (excluding seek - handled specially)
     local params_to_copy = {
-        "speed", "pitch", "jitter", "spread", "density", "size", "seek", "pan",
+        "speed", "pitch", "jitter", "spread", "density", "size", "pan",
         "cutoff", "hpf", "eq_low_gain", "eq_high_gain",
         "granular_gain", "subharmonics_3", "subharmonics_2", "subharmonics_1",
         "overtones_1", "overtones_2", "smoothbass", "pitch_random_plus",
@@ -73,17 +75,17 @@ function Mirror.copy_voice_params(from_track, to_track, mirror_pan)
         end
     end
 
--- Correctly mirror seek parameter and update engine/internal position
-local seek_value = safe_get(from_track.."seek")
-local to_idx = tonumber(to_track)
-if param_exists(to_track.."seek") and seek_value ~= nil and to_idx then
+
+
+    local seek_value = safe_get(from_track.."seek")
     safe_set(to_track.."seek", seek_value)
     local normalized = seek_value / 100
-    if Mirror.osc_positions then
-        Mirror.osc_positions[to_idx] = normalized
-    end
-    engine.seek(to_idx, normalized)
-end
+    engine.seek(to_track, normalized)
+    engine.seek(from_track, normalized)
+
+
+
+
 
     -- Handle LFO mirroring
     for src_lfo = 1, 16 do
@@ -125,7 +127,7 @@ end
                             
                             if src_param_name == "pan" and mirror_pan then
                                 src_offset = -src_offset
-                                current_phase = (current_phase + 0.5) % 1
+                                current_phase = (current_phase + 0.5) % 1  -- Flip phase for mirrored pan
                             elseif src_param_name == "volume" then
                                 local current_vol = safe_get(from_track.."volume")
                                 local vol_offset = current_vol - src_offset
@@ -145,10 +147,11 @@ end
                             if Mirror.lfo[dest_lfo] then
                                 Mirror.lfo[dest_lfo].target = dest_target_index
                                 Mirror.lfo[dest_lfo].shape = src_shape
-                                Mirror.lfo[dest_lfo].freq = src_freq
+                                Mirror.lfo[dest_lfo].freq = src_freq * params:get("global_lfo_freq_scale") or 1
                                 Mirror.lfo[dest_lfo].depth = src_depth
                                 Mirror.lfo[dest_lfo].offset = src_offset
                                 Mirror.lfo[dest_lfo].phase = current_phase
+                                Mirror.lfo[dest_lfo].base_freq = src_freq
                             end
                         end
                     end

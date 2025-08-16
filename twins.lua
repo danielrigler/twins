@@ -418,8 +418,8 @@ local function setup_params()
     params:add{type = "control", id = "flutter_freq", name = "Flutter Speed", controlspec = controlspec.new(3, 30, "lin", 0.01, 6, "Hz"), action = function(value) engine.flutter_freq(value) end}
     params:add{type = "control", id = "flutter_var", name = "Flutter Var.", controlspec = controlspec.new(0.1, 10, "lin", 0.01, 2, "Hz"), action = function(value) engine.flutter_var(value) end}
     params:add{type = "control", id = "chew_depth", name = "Chew", controlspec = controlspec.new(0, 50, "lin", 1, 0, "%"), action = function(value) engine.chew_depth(value/100) end}
-    params:add{type = "control", id = "chew_freq", name = "Chew Freq.", controlspec = controlspec.new(0, 60, "lin", 1, 50, "%"), action = function(value) engine.chew_freq(value/100) end}
-    params:add{type = "control", id = "chew_variance", name = "Chew Var.", controlspec = controlspec.new(0, 60, "lin", 1, 50, "%"), action = function(value) engine.chew_variance(value/100) end}
+    params:add{type = "control", id = "chew_freq", name = "Chew Freq.", controlspec = controlspec.new(0, 60, "lin", 1, 25, "%"), action = function(value) engine.chew_freq(value/100) end}
+    params:add{type = "control", id = "chew_variance", name = "Chew Var.", controlspec = controlspec.new(0, 70, "lin", 1, 60, "%"), action = function(value) engine.chew_variance(value/100) end}
     params:add_control("lossdegrade_mix", "Loss / Degrade", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("lossdegrade_mix", function(value) engine.lossdegrade_mix(value / 100) end)
     params:add_separator("    ")
     params:add_binary("randomize_tape", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_tape", function() randpara.randomize_tape_params(steps) end)
@@ -492,8 +492,8 @@ local function setup_params()
 
     params:add_group("Symmetry", 3)
     params:add_binary("symmetry", "Symmetry", "toggle", 0)
-    params:add_binary("copy_1_to_2", "Copy 1 → 2", "trigger", 0) params:set_action("copy_1_to_2", function() Mirror.copy_voice_params("1", "2", true) Mirror.copy_voice_params("2", "1", true) end)
-    params:add_binary("copy_2_to_1", "Copy 1 ← 2", "trigger", 0) params:set_action("copy_2_to_1", function() Mirror.copy_voice_params("2", "1", true) Mirror.copy_voice_params("1", "2", true) end)
+    params:add_binary("copy_1_to_2", "Copy 1 → 2", "trigger", 0) params:set_action("copy_1_to_2", function() Mirror.copy_voice_params("1", "2", true) end)
+    params:add_binary("copy_2_to_1", "Copy 1 ← 2", "trigger", 0) params:set_action("copy_2_to_1", function() Mirror.copy_voice_params("2", "1", true) end)
     
     params:add_group("Actions", 2)
     params:add_binary("macro_more", "More+", "trigger", 0) params:set_action("macro_more", function() macro.macro_more() end)
@@ -661,35 +661,34 @@ end
 function enc(n, d)
     if not installer:ready() then return end
     local function handle_param(track, config)
-        for i = 1, 2 do if randomize_metro[i] then stop_metro_safe(randomize_metro[i]) end end
-        active_controlled_params = {}
-        local p = track..config.param
-        local sym = params:get("symmetry") == 1
-        local delta = config.delta * d
-        if config.param == "seek" then
-            disable_lfos_for_param(p, not sym)
-            manual_adjustments[p] = {active = true, value = osc_positions[track] * 100, time = util.time()}
-            if sym then
-                local base_pos = osc_positions[1] * 100
-                local new_pos = (base_pos + delta) % 100
-                if new_pos < 0 then new_pos = new_pos + 100 end
-                local norm_pos = new_pos / 100
-                for tr = 1, 2 do
-                    osc_positions[tr] = norm_pos
-                    params:set(tr.."seek", new_pos)
-                    engine.seek(tr, norm_pos)
-                end
-            else
-                local base_pos = osc_positions[track] * 100
-                local new_pos = (base_pos + delta) % 100
-                if new_pos < 0 then new_pos = new_pos + 100 end
-                osc_positions[track] = new_pos / 100
-                params:set(p, new_pos)
-                engine.seek(track, osc_positions[track])
+    active_controlled_params = {}
+    local p = track..config.param
+    local sym = params:get("symmetry") == 1
+    local delta = config.delta * d
+    if config.param == "seek" then
+        disable_lfos_for_param(p, not sym)
+        manual_adjustments[p] = {active = true, value = osc_positions[track] * 100, time = util.time()}
+        if sym then
+            local base_pos = osc_positions[1] * 100
+            local new_pos = (base_pos + delta) % 100
+            if new_pos < 0 then new_pos = new_pos + 100 end
+            local norm_pos = new_pos / 100
+            for tr = 1, 2 do
+                osc_positions[tr] = norm_pos
+                params:set(tr.."seek", new_pos)
+                engine.seek(tr, norm_pos)
             end
-            return
+            else
+            local base_pos = osc_positions[track] * 100
+            local new_pos = (base_pos + delta) % 100
+            if new_pos < 0 then new_pos = new_pos + 100 end
+            osc_positions[track] = new_pos / 100
+            params:set(p, new_pos)
+            engine.seek(track, osc_positions[track])
         end
-        manual_adjustments[p] = {active = true, value = params:get(p), time = util.time()}
+        return
+    end
+    manual_adjustments[p] = {active = true, value = params:get(p), time = util.time()}
         if sym then
             disable_lfos_for_param(p)
             local ot, op = 3 - track, (3 - track)..config.param
