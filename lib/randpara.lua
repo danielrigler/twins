@@ -72,12 +72,12 @@ local function randomize_jpverb_params(steps)
   if params:get("lock_reverb") == 2 then return end
   safe_metro_stop(randomize_metro)
   -- JPVERB
-  if math.random() <= 0.5 then targets["t60"] = 4 else targets["t60"] = random_float(1, 6) end
-  if math.random() <= 0.5 then targets["damp"] = 0 else targets["damp"] = random_float(0, 25) end
-  if math.random() <= 0.3 then params:set("rsize", 1)  else params:set("rsize", random_float(1, 4)) end
-  if math.random() <= 0.6 then targets["earlyDiff"] = 70.7 else targets["earlyDiff"] = random_float(40.7, 100) end
-  if math.random() <= 0.6 then targets["modDepth"] = 10 else targets["modDepth"] = math.random(10, 90) end
-  if math.random() <= 0.6 then targets["modFreq"] = 2 else targets["modFreq"] = random_float(0.5, 3) end
+  if math.random() <= 0.5 then targets["t60"] = 4 else targets["t60"] = random_float(0.8, 6) end
+  if math.random() <= 0.4 then targets["damp"] = 0 else targets["damp"] = random_float(0, 25) end
+  if math.random() <= 0.3 then params:set("rsize", 1)  else params:set("rsize", random_float(1, 4.5)) end
+  if math.random() <= 0.5 then targets["earlyDiff"] = 70.7 else targets["earlyDiff"] = random_float(40.7, 100) end
+  if math.random() <= 0.6 then targets["modDepth"] = 10 else targets["modDepth"] = math.random(0, 100) end
+  if math.random() <= 0.6 then targets["modFreq"] = 2 else targets["modFreq"] = random_float(0.5, 4) end
   if math.random() <= 0.6 then targets["low"] = 1 else targets["low"] = random_float(0.7, 1) end
   if math.random() <= 0.6 then targets["mid"] = 1 else targets["mid"] = random_float(0.7, 1) end
   if math.random() <= 0.6 then targets["high"] = 1 else targets["high"] = random_float(0.7, 1) end
@@ -133,8 +133,8 @@ local function randomize_eq_params(i)
   safe_metro_stop(randomize_metro)
     -- EQ
     if math.random() <= 0.4 then targets[i.."eq_low_gain"] = 0 else targets[i.."eq_low_gain"] = random_float(-0.25, 0.25) end
-    if math.random() <= 0.6 then targets[i.."eq_mid_gain"] = 0 else targets[i.."eq_mid_gain"] = random_float(-0.4, 0.1) end
-    if math.random() <= 0.4 then targets[i.."eq_high_gain"] = 0.2 else targets[i.."eq_high_gain"] = random_float(0.0, 0.4) end
+    if math.random() <= 0.6 then targets[i.."eq_mid_gain"] = 0 else targets[i.."eq_mid_gain"] = random_float(-0.3, 0.05) end
+    if math.random() <= 0.4 then targets[i.."eq_high_gain"] = 0.2 else targets[i.."eq_high_gain"] = random_float(-0.1, 0.4) end
 
     for param, _ in pairs(targets) do
         active_interpolations[param] = true
@@ -146,12 +146,12 @@ local function randomize_delay_params()
   if params:get("lock_delay") == 2 then return end
   safe_metro_stop(randomize_metro)
     -- DELAY
-    if math.random() <= 0.5 then targets["delay_mix"] = 0 else targets["delay_mix"] = math.random(0, 90) end
+    if math.random() <= 0.5 then targets["delay_mix"] = 0 else targets["delay_mix"] = math.random(0, 80) end
     if math.random() <= 0.3 then params:set("delay_time", 0.5) else params:set("delay_time", random_float(0.15, 1)) end
     if math.random() <= 0.5 then targets["delay_feedback"] = math.random(20, 80) end
     if math.random() <= 0.5 then targets["stereo"] = 25 else targets["stereo"] = math.random(0, 70) end
-    targets["delay_lowpass"] = math.random(1000, 20000)
-    targets["delay_highpass"] = math.random(20, 300)
+    targets["delay_lowpass"] = math.random(600, 20000)
+    targets["delay_highpass"] = math.random(20, 250)
     if math.random() <= 0.7 then targets["wiggle_depth"] = 1 else targets["wiggle_depth"] = math.random(0, 10) end
     if math.random() <= 0.6 then targets["wiggle_rate"] = 2 else targets["wiggle_rate"] = random_float(0.5, 4) end
 
