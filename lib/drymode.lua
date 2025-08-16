@@ -72,13 +72,13 @@ function drymode.toggle_dry_mode()
     if not dry_mode_state then
         -- Store params
         prev_settings = store_params({
-            "granular_gain", "speed", "eq_low_gain", "eq_high_gain", "cutoff", "hpf"
+            "granular_gain", "speed", "eq_low_gain", "eq_mid_gain", "eq_high_gain", "cutoff", "hpf"
         }, true)
 
     for k, v in pairs(store_params({
         "reverb_mix", "delay_mix", "bitcrush_mix", "shimmer_mix", "tape_mix",
         "drive", "Width", "monobass_mix", "sine_drive", "wobble_mix",
-        "chew_depth", "lossdegrade_mix", "rspeed"
+        "chew_depth", "lossdegrade_mix", "rspeed", "haas"
     }, false)) do
         prev_settings[k] = v
     end
@@ -96,6 +96,7 @@ function drymode.toggle_dry_mode()
             params:set(i.."granular_gain", 0)
             params:set(i.."speed", 1.0)
             params:set(i.."eq_low_gain", 0)
+            params:set(i.."eq_mid_gain", 0)
             params:set(i.."eq_high_gain", 0)
             params:set(i.."cutoff", 20000)
             params:set(i.."hpf", 20)
@@ -113,12 +114,14 @@ function drymode.toggle_dry_mode()
         params:set("chew_depth", 0)
         params:set("lossdegrade_mix", 0)
         params:set("rspeed", 0)
+        params:set("haas", 0)
     else
         if next(prev_settings) then
             restore_params({
                 granular_gain = prev_settings.granular_gain,
                 speed = prev_settings.speed,
                 eq_low_gain = prev_settings.eq_low_gain,
+                eq_mid_gain = prev_settings.eq_mid_gain,
                 eq_high_gain = prev_settings.eq_high_gain,
                 cutoff = prev_settings.cutoff,
                 hpf = prev_settings.hpf
@@ -137,7 +140,8 @@ function drymode.toggle_dry_mode()
                 wobble_mix = prev_settings.wobble_mix,
                 chew_depth = prev_settings.chew_depth,
                 lossdegrade_mix = prev_settings.lossdegrade_mix,
-                rspeed = prev_settings.rspeed
+                rspeed = prev_settings.rspeed,
+                haas = prev_settings.haas
             }, false)
 
             restore_lfos(prev_settings.speed_lfos)

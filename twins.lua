@@ -180,6 +180,16 @@ local function setup_manual_cleanup()
     manual_cleanup_metro:start()
 end
 
+local function is_lfo_active_for_param(param_name)
+    for i = 1, 16 do
+        local target_index = params:get(i.. "lfo_target")
+        if lfo.lfo_targets[target_index] == param_name and params:get(i.. "lfo") == 2 then
+            return true, i
+        end
+    end
+    return false, nil
+end
+
 local function load_random_tape_file(track_num)
     if params:get(track_num .. "live_input") == 1 then return false end
     local function scan_audio_files(dir)
@@ -212,16 +222,6 @@ local function load_random_tape_file(track_num)
         params:set(track_num .. "sample", selected_file)
     end
     return true
-end
-
-local function is_lfo_active_for_param(param_name)
-    for i = 1, 16 do
-        local target_index = params:get(i.. "lfo_target")
-        if lfo.lfo_targets[target_index] == param_name and params:get(i.. "lfo") == 2 then
-            return true, i
-        end
-    end
-    return false, nil
 end
 
 local function disable_lfos_for_param(param_name, only_self)
@@ -512,7 +512,7 @@ local function setup_params()
       params:add_control(i.. "pitch", i.. " pitch", controlspec.new(-48, 48, "lin", 1, 0, "st")) params:set_action(i.. "pitch", function(value) engine.pitch_offset(i, math.pow(0.5, -value / 12)) end) params:hide(i.. "pitch")
       params:add_taper(i.. "jitter", i.. " jitter", 0, 4999, 250, 3, "ms") params:set_action(i.. "jitter", function(value) engine.jitter(i, value / 1000) end) params:hide(i.. "jitter")
       params:add_taper(i.. "size", i.. " size", 1, 5999, 200, 1, "ms") params:set_action(i.. "size", function(value) engine.size(i, value / 1000) end) params:hide(i.. "size")
-      params:add_taper(i.. "spread", i.. " spread", 0, 100, 0, 0, "%") params:set_action(i.. "spread", function(value) engine.spread(i, value / 100) end) params:hide(i.. "spread")
+      params:add_taper(i.. "spread", i.. " spread", 0, 100, 30, 0, "%") params:set_action(i.. "spread", function(value) engine.spread(i, value / 100) end) params:hide(i.. "spread")
       params:add_control(i.. "seek", i.. " seek", controlspec.new(0, 100, "lin", 0.01, 0, "%")) params:set_action(i.. "seek", function(value) engine.seek(i, value) end) params:hide(i.. "seek")
     end
     params:bang()
@@ -620,8 +620,8 @@ local function randomize(n)
                 local val = random_float(min_val, max_val)
                 targets[cfg.name] = val
                 if symmetry then
-                    local other_name = (key == "pan") and (other_track .. "pan") or (other_track .. key)
-                    targets[other_name] = (key == "pan") and -val or val
+                  local other_name = (key == "pan") and (other_track .. "pan") or (other_track .. key)
+                  targets[other_name] = (key == "pan") and -val or val
                 end
             end
         end
@@ -647,15 +647,15 @@ local function randomize(n)
 end
 
 function init()
+    initital_reverb_onoff = params:get('reverb')
+    params:set('reverb', 1)
+    initital_monitor_level = params:get('monitor_level')
+    params:set('monitor_level', -math.huge)
     if not installer:ready() then clock.run(function() while true do redraw() clock.sleep(1 / 10) end end) do return end end
     setup_ui_metro()
     setup_manual_cleanup()
     setup_params()
     setup_osc()
-    initital_monitor_level = params:get('monitor_level')
-    params:set('monitor_level', -math.huge)
-    initital_reverb_onoff = params:get('reverb')
-    params:set('reverb', 1)
 end
 
 function enc(n, d)
@@ -764,12 +764,14 @@ function key(n, z)
     if z == 1 then
         if key_state[1] then
             if n == 2 then
+                stop_metro_safe(randomize_metro[n-1])
                 lfo.clearLFOs(1)            
                 lfo.randomize_lfos("1", params:get("allow_volume_lfos") == 2)
                 randomize(1)
                 randpara.randomize_params(steps, 1)
                 return
             elseif n == 3 then
+                stop_metro_safe(randomize_metro[n-1])
                 lfo.clearLFOs(2)
                 lfo.randomize_lfos("2", params:get("allow_volume_lfos") == 2)
                 randomize(2)
