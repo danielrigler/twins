@@ -462,23 +462,11 @@ local function setup_params()
     params:add_option("allow_volume_lfos", "Allow Volume LFOs", {"no", "yes"}, 2)
     lfo.init()
 
-    params:add_group("Limits", 14)
-    params:add_taper("min_jitter", "jitter (min)", 0, 4999, 100, 5, "ms")
-    params:add_taper("max_jitter", "jitter (max)", 0, 4999, 999, 5, "ms")
-    params:add_taper("min_size", "size (min)", 1, 999, 100, 5, "ms")
-    params:add_taper("max_size", "size (max)", 1, 999, 500, 5, "ms")
-    params:add_taper("min_density", "density (min)", 0.1, 50, 1, 5, "Hz")
-    params:add_taper("max_density", "density (max)", 0.1, 50, 16, 5, "Hz")
-    params:add_taper("min_spread", "spread (min)", 0, 100, 0, 0, "%")
-    params:add_taper("max_spread", "spread (max)", 0, 100, 60, 0, "%")
-    params:add_control("min_pitch", "pitch (min)", controlspec.new(-48, 48, "lin", 1, -31, "st"))
-    params:add_control("max_pitch", "pitch (max)", controlspec.new(-48, 48, "lin", 1, 31, "st"))
-    params:add_taper("min_speed", "speed (min)", -2, 2, -0.15, 0, "x")
-    params:add_taper("max_speed", "speed (max)", -2, 2, 0.5, 0, "x")
-    params:add_taper("min_seek", "seek (min)", 0, 100, 0, 0, "%")
-    params:add_taper("max_seek", "seek (max)", 0, 100, 100, 0, "%")
-
-    params:add_group("Locking", 16)
+    params:add_group("Locking", 19)
+    for i = 1, 2 do
+      params:add_option(i.."size_density_lock", i.." Size-Density Lock", {"off", "on"}, 1) params:set_action(i.."size_density_lock", function(value) if value == 2 then local size = params:get(i.."size") local density = params:get(i.."density") if size > 0 and density > 0 then _G["size_density_ratio_"..i] = size / (1000 /density) end end end)
+    end
+    params:add_separator("                  ")
     for i = 1, 2 do
       params:add_option(i.. "lock_jitter", i.. " lock jitter", {"off", "on"}, 1)
       params:add_option(i.. "lock_size", i.. " lock size", {"off", "on"}, 1)
@@ -494,6 +482,22 @@ local function setup_params()
     params:add_binary("symmetry", "Symmetry", "toggle", 0)
     params:add_binary("copy_1_to_2", "Copy 1 → 2", "trigger", 0) params:set_action("copy_1_to_2", function() Mirror.copy_voice_params("1", "2", true) end)
     params:add_binary("copy_2_to_1", "Copy 1 ← 2", "trigger", 0) params:set_action("copy_2_to_1", function() Mirror.copy_voice_params("2", "1", true) end)
+    
+    params:add_group("Limits", 14) 
+    params:add_taper("min_jitter", "jitter (min)", 0, 4999, 100, 5, "ms")
+    params:add_taper("max_jitter", "jitter (max)", 0, 4999, 999, 5, "ms")
+    params:add_taper("min_size", "size (min)", 1, 999, 100, 5, "ms")
+    params:add_taper("max_size", "size (max)", 1, 999, 500, 5, "ms")
+    params:add_taper("min_density", "density (min)", 0.1, 50, 1, 5, "Hz")
+    params:add_taper("max_density", "density (max)", 0.1, 50, 16, 5, "Hz")
+    params:add_taper("min_spread", "spread (min)", 0, 100, 0, 0, "%")
+    params:add_taper("max_spread", "spread (max)", 0, 100, 60, 0, "%")
+    params:add_control("min_pitch", "pitch (min)", controlspec.new(-48, 48, "lin", 1, -31, "st"))
+    params:add_control("max_pitch", "pitch (max)", controlspec.new(-48, 48, "lin", 1, 31, "st"))
+    params:add_taper("min_speed", "speed (min)", -2, 2, -0.15, 0, "x")
+    params:add_taper("max_speed", "speed (max)", -2, 2, 0.5, 0, "x")
+    params:add_taper("min_seek", "seek (min)", 0, 100, 0, 0, "%")
+    params:add_taper("max_seek", "seek (max)", 0, 100, 100, 0, "%")
     
     params:add_group("Actions", 2)
     params:add_binary("macro_more", "More+", "trigger", 0) params:set_action("macro_more", function() macro.macro_more() end)
@@ -661,34 +665,65 @@ end
 function enc(n, d)
     if not installer:ready() then return end
     local function handle_param(track, config)
-    active_controlled_params = {}
-    local p = track..config.param
-    local sym = params:get("symmetry") == 1
-    local delta = config.delta * d
-    if config.param == "seek" then
-        disable_lfos_for_param(p, not sym)
-        manual_adjustments[p] = {active = true, value = osc_positions[track] * 100, time = util.time()}
-        if sym then
-            local base_pos = osc_positions[1] * 100
+        active_controlled_params = {}
+        local p = track..config.param
+        local sym = params:get("symmetry") == 1
+        local delta = config.delta * d
+        -- Handle size/density lock
+        local size_density_locked = params:get(track.."size_density_lock") == 2
+        local is_size = config.param == "size"
+        local is_density = config.param == "density"
+        if size_density_locked and (is_size or is_density) then
+            local ratio = _G["size_density_ratio_"..track] or 1
+            local other_param = is_size and "density" or "size"
+            disable_lfos_for_param(p, not sym)
+            disable_lfos_for_param(track..other_param, not sym)
+            if is_size then
+                local new_size = params:get(p) + 3*delta
+                params:set(p, new_size)
+                params:set(track.."density", (1000 / new_size) * ratio)
+                if sym then
+                    local other_track = 3 - track
+                    local other_ratio = _G["size_density_ratio_"..other_track] or 1
+                    local other_size = params:get(other_track.."size") + 3*delta
+                    params:set(other_track.."size", other_size)
+                    params:set(other_track.."density", (1000 / other_size) * other_ratio)
+                end
+            else
+                local new_density = params:get(p) + 0.05*delta
+                params:set(p, new_density)
+                params:set(track.."size", (1000 / new_density) * ratio)
+                if sym then
+                    local other_track = 3 - track
+                    local other_ratio = _G["size_density_ratio_"..other_track] or 1
+                    local other_density = params:get(other_track.."density") + 0.1*delta
+                    params:set(other_track.."density", other_density)
+                    params:set(other_track.."size", (1000 / other_density) * other_ratio)
+                end
+            end
+            return
+        end
+        if config.param == "seek" then
+            disable_lfos_for_param(p, not sym)
+            manual_adjustments[p] = {active = true, value = osc_positions[track] * 100, time = util.time()}
+            local base_pos = osc_positions[sym and 1 or track] * 100
             local new_pos = (base_pos + delta) % 100
             if new_pos < 0 then new_pos = new_pos + 100 end
             local norm_pos = new_pos / 100
-            for tr = 1, 2 do
-                osc_positions[tr] = norm_pos
-                params:set(tr.."seek", new_pos)
-                engine.seek(tr, norm_pos)
-            end
+            if sym then
+                for tr = 1, 2 do
+                    osc_positions[tr] = norm_pos
+                    params:set(tr.."seek", new_pos)
+                    engine.seek(tr, norm_pos)
+                end
             else
-            local base_pos = osc_positions[track] * 100
-            local new_pos = (base_pos + delta) % 100
-            if new_pos < 0 then new_pos = new_pos + 100 end
-            osc_positions[track] = new_pos / 100
-            params:set(p, new_pos)
-            engine.seek(track, osc_positions[track])
+                osc_positions[track] = norm_pos
+                params:set(p, new_pos)
+                engine.seek(track, norm_pos)
+            end
+            return
         end
-        return
-    end
-    manual_adjustments[p] = {active = true, value = params:get(p), time = util.time()}
+        manual_adjustments[p] = {active = true, value = params:get(p), time = util.time()}
         if sym then
             disable_lfos_for_param(p)
             local ot, op = 3 - track, (3 - track)..config.param
