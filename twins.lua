@@ -464,18 +464,18 @@ local function setup_params()
 
     params:add_group("Locking", 19)
     for i = 1, 2 do
-      params:add_option(i.."size_density_lock", i.." Size-Density Lock", {"off", "on"}, 1) params:set_action(i.."size_density_lock", function(value) if value == 2 then local size = params:get(i.."size") local density = params:get(i.."density") if size > 0 and density > 0 then _G["size_density_ratio_"..i] = size / (1000 /density) end end end)
+      params:add_binary(i.."size_density_lock", i.." Size-Density Lock", "toggle", 0) params:set_action(i.."size_density_lock", function(value) if value == 1 then local size = params:get(i.."size") local density = params:get(i.."density") if size > 0 and density > 0 then _G["size_density_ratio_"..i] = size / (1000 /density) end end end)
     end
     params:add_separator("                  ")
     for i = 1, 2 do
-      params:add_option(i.. "lock_jitter", i.. " lock jitter", {"off", "on"}, 1)
-      params:add_option(i.. "lock_size", i.. " lock size", {"off", "on"}, 1)
-      params:add_option(i.. "lock_density", i.. " lock density", {"off", "on"}, 1)
-      params:add_option(i.. "lock_spread", i.. " lock spread", {"off", "on"}, 1)
-      params:add_option(i.. "lock_pitch", i.. " lock pitch", {"off", "on"}, 1)
-      params:add_option(i.. "lock_speed", i.. " lock speed", {"off", "on"}, 1)
-      params:add_option(i.. "lock_seek", i.. " lock seek", {"off", "on"}, 1)
-      params:add_option(i.. "lock_pan", i.. " lock pan", {"off", "on"}, 1)
+      params:add_option(i.. "lock_jitter", i.. " Lock Jitter", {"off", "on"}, 1)
+      params:add_option(i.. "lock_size", i.. " Lock Size", {"off", "on"}, 1)
+      params:add_option(i.. "lock_density", i.. " Lock Density", {"off", "on"}, 1)
+      params:add_option(i.. "lock_spread", i.. " Lock Spread", {"off", "on"}, 1)
+      params:add_option(i.. "lock_pitch", i.. " Lock Pitch", {"off", "on"}, 1)
+      params:add_option(i.. "lock_speed", i.. " Lock Speed", {"off", "on"}, 1)
+      params:add_option(i.. "lock_seek", i.. " Lock Seek", {"off", "on"}, 1)
+      params:add_option(i.. "lock_pan", i.. " Lock Pan", {"off", "on"}, 1)
     end
 
     params:add_group("Symmetry", 3)
@@ -670,7 +670,7 @@ function enc(n, d)
         local sym = params:get("symmetry") == 1
         local delta = config.delta * d
         -- Handle size/density lock
-        local size_density_locked = params:get(track.."size_density_lock") == 2
+        local size_density_locked = params:get(track.."size_density_lock") == 1
         local is_size = config.param == "size"
         local is_density = config.param == "density"
         if size_density_locked and (is_size or is_density) then
@@ -696,7 +696,7 @@ function enc(n, d)
                 if sym then
                     local other_track = 3 - track
                     local other_ratio = _G["size_density_ratio_"..other_track] or 1
-                    local other_density = params:get(other_track.."density") + 0.1*delta
+                    local other_density = params:get(other_track.."density") + 0.05*delta
                     params:set(other_track.."density", other_density)
                     params:set(other_track.."size", (1000 / other_density) * other_ratio)
                 end
@@ -885,14 +885,17 @@ local function is_param_locked(track_num, param)
     return params:get(track_num .. "lock_" .. param) == 2
 end
 
-local function draw_l_shape(x, y, is_locked)
-    if is_locked then
+local function draw_l_shape(x, y)
         local pulse_level = math.floor(util.linlin(-1, 1, 1, 8, math.sin(util.time() * 4)))
         screen.level(pulse_level)
-        screen.move(x - 4, y) screen.line_rel(2, 0)
-        screen.move(x - 3, y) screen.line_rel(0, -3)
+        screen.move(x - 4, y) screen.line_rel(2, 0) screen.move(x - 3, y) screen.line_rel(0, -3)
         screen.stroke()
-    end
+end
+
+local function draw_lock_shape(x, y)
+        screen.level(4)
+        screen.move(x - 3, y + 1) screen.line_rel(0, 1) screen.move(x - 3, y + 3) screen.line_rel(0, 1) screen.move(x - 3, y + 5) screen.line_rel(0, 1)
+        screen.stroke()
 end
 
 local function get_lfo_modulation(param_name)
@@ -932,8 +935,14 @@ function redraw()
         for track = 1, 2 do
             local param = (track == 1) and row.param1 or row.param2
             local x = (track == 1) and 51 or 92
+            
+            if (param_name == "size") and params:get(track.."size_density_lock") == 1 then
+                draw_lock_shape(x, row.y)
+            end
+            
+            
             if is_param_locked(track, param_name) then
-                draw_l_shape(x, row.y, true)
+                draw_l_shape(x, row.y)
             end
             screen.move(x, row.y)
             screen.level(is_highlighted and levels.highlight or levels.value)
@@ -986,7 +995,7 @@ function redraw()
         for track = 1, 2 do
             local x = (track == 1) and 51 or 92
             local show_live = params:get(track.."live_input") == 1
-            if is_param_locked(track, "seek") then draw_l_shape(x, 61, true) end
+            if is_param_locked(track, "seek") then draw_l_shape(x, 61) end
             screen.move(x, 61)
             screen.level(is_bottom_active and levels.highlight or levels.value)
             if show_live then
@@ -1003,7 +1012,7 @@ function redraw()
     elseif bottom_row_mode == "speed" then
         for track = 1, 2 do
             local x = (track == 1) and 51 or 92
-            if is_param_locked(track, "speed") then draw_l_shape(x, 61, true) end
+            if is_param_locked(track, "speed") then draw_l_shape(x, 61) end
             screen.move(x, 61)
             screen.level(levels.highlight)
             screen.text(format_speed(cached_params[track.."speed"]))
@@ -1012,7 +1021,7 @@ function redraw()
         for track = 1, 2 do
             local x = (track == 1) and 51 or 92
             local pan = cached_params[track.."pan"]
-            if is_param_locked(track, "pan") then draw_l_shape(x, 61, true) end
+            if is_param_locked(track, "pan") then draw_l_shape(x, 61) end
             screen.move(x, 61)
             screen.level(levels.highlight)
             screen.text(math.abs(pan) < 0.5 and "0%" or string.format("%.0f%%", pan))
