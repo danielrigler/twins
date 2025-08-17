@@ -72,13 +72,13 @@ function drymode.toggle_dry_mode()
     if not dry_mode_state then
         -- Store params
         prev_settings = store_params({
-            "granular_gain", "speed", "eq_low_gain", "eq_mid_gain", "eq_high_gain", "cutoff", "hpf"
+            "granular_gain", "speed", "eq_low_gain", "eq_mid_gain", "eq_high_gain", "cutoff", "hpf", "lpfgain"
         }, true)
 
     for k, v in pairs(store_params({
-        "reverb_mix", "delay_mix", "bitcrush_mix", "shimmer_mix", "tape_mix",
+        "filter_lock_ratio", "reverb_mix", "delay_mix", "bitcrush_mix", "shimmer_mix", "tape_mix",
         "drive", "Width", "monobass_mix", "sine_drive", "wobble_mix",
-        "chew_depth", "lossdegrade_mix", "rspeed", "haas"
+        "chew_depth", "lossdegrade_mix", "rspeed", "haas", "tascam", "sine_drive"
     }, false)) do
         prev_settings[k] = v
     end
@@ -92,16 +92,7 @@ function drymode.toggle_dry_mode()
         store_and_disable_lfos({["1volume"]=true, ["2volume"]=true}, prev_settings.volume_lfos)
 
         -- Set dry values
-        for i = 1, 2 do
-            params:set(i.."granular_gain", 0)
-            params:set(i.."speed", 1.0)
-            params:set(i.."eq_low_gain", 0)
-            params:set(i.."eq_mid_gain", 0)
-            params:set(i.."eq_high_gain", 0)
-            params:set(i.."cutoff", 20000)
-            params:set(i.."hpf", 20)
-            params:set(i.."pan", 0)
-        end
+        params:set("filter_lock_ratio", 0)
         params:set("reverb_mix", 0)
         params:set("delay_mix", 0)
         params:set("bitcrush_mix", 0)
@@ -115,6 +106,21 @@ function drymode.toggle_dry_mode()
         params:set("lossdegrade_mix", 0)
         params:set("rspeed", 0)
         params:set("haas", 0)
+        params:set("tascam", 0)
+        params:set("sine_drive", 0)
+        
+        for i = 1, 2 do
+            params:set(i.."granular_gain", 0)
+            params:set(i.."speed", 1.0)
+            params:set(i.."eq_low_gain", 0)
+            params:set(i.."eq_mid_gain", 0)
+            params:set(i.."eq_high_gain", 0)
+            params:set(i.."cutoff", 20000)
+            params:set(i.."hpf", 20)
+            params:set(i.."lpfgain", 0)
+            params:set(i.."pan", 0)
+        end
+        
     else
         if next(prev_settings) then
             restore_params({
@@ -124,7 +130,8 @@ function drymode.toggle_dry_mode()
                 eq_mid_gain = prev_settings.eq_mid_gain,
                 eq_high_gain = prev_settings.eq_high_gain,
                 cutoff = prev_settings.cutoff,
-                hpf = prev_settings.hpf
+                hpf = prev_settings.hpf,
+                lpfgain = prev_settings.lpfgain
             }, true)
 
             restore_params({
@@ -141,7 +148,10 @@ function drymode.toggle_dry_mode()
                 chew_depth = prev_settings.chew_depth,
                 lossdegrade_mix = prev_settings.lossdegrade_mix,
                 rspeed = prev_settings.rspeed,
-                haas = prev_settings.haas
+                haas = prev_settings.haas,
+                tascam = prev_settings.tascam,
+                sine_drive = prev_settings.sine_drive,
+                filter_lock_ratio = prev_settings.filter_lock_ratio
             }, false)
 
             restore_lfos(prev_settings.speed_lfos)

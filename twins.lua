@@ -61,6 +61,8 @@ local animation_complete = false
 local animation_start_time = nil
 local initital_monitor_level
 local initital_reverb_onoff
+local filter_lock_ratio = false
+local filter_differences = {[1] = 0, [2] = 0}
 local osc_positions = {[1] = 0, [2] = 0}
 local valid_audio_exts = {[".wav"]=true,[".aif"]=true,[".aiff"]=true,[".flac"]=true}
 local mode_list = {"pitch","spread","density","size","jitter","lpf","pan","speed","seek"}
@@ -435,12 +437,17 @@ local function setup_params()
     params:add_binary("randomize_eq", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_eq", function() for i=1, 2 do randpara.randomize_eq_params(i) end end)
     params:add_option("lock_eq", "Lock Parameters", {"off", "on"}, 1)
     
-    params:add_group("Filters", 6)
+    params:add_group("Filters", 11)
+    params:add_binary("filter_lock_ratio", "Lock Filter Spread", "toggle", 0) params:set_action("filter_lock_ratio", function(value) filter_lock_ratio = value == 1 if filter_lock_ratio then for i = 1, 2 do local cutoff = params:get(i.."cutoff") local hpf = params:get(i.."hpf") filter_differences[i] = cutoff - hpf end end end)
+    params:add_separator("                   ")
     for i = 1, 2 do
-      params:add_control(i.."cutoff",i.." LPF Cutoff",controlspec.new(20,20000,"exp",0,20000,"Hz")) params:set_action(i.."cutoff",function(value) engine.cutoff(i,value) end)
-      params:add_taper(i.."lpfgain", i.." LPF Resonance", 0, 4, 0.1, 3, "") params:set_action(i.."lpfgain", function(value) engine.lpfgain(i, value) end)
-      params:add_control(i.."hpf",i.." HPF Cutoff",controlspec.new(20,20000,"exp",0,20,"Hz")) params:set_action(i.."hpf",function(value) engine.hpf(i,value) end)
+      params:add_control(i.."cutoff",i.." LPF",controlspec.new(20,20000,"exp",0,20000,"Hz")) params:set_action(i.."cutoff", function(value) engine.cutoff(i, value) if filter_lock_ratio then local new_hpf = value - filter_differences[i] new_hpf = util.clamp(new_hpf, 20, 20000) params:set(i.."hpf", new_hpf) end end)
+      params:add_control(i.."hpf",i.." HPF",controlspec.new(20,20000,"exp",0,20,"Hz")) params:set_action(i.."hpf", function(value) engine.hpf(i, value) if filter_lock_ratio then local new_cutoff = value + filter_differences[i] new_cutoff = util.clamp(new_cutoff, 20, 20000) params:set(i.."cutoff", new_cutoff) end end)
+      params:add_taper(i.."lpfgain", i.." Q", 0, 1, 0.0, 1, "") params:set_action(i.."lpfgain", function(value) engine.lpfgain(i, value * 4) end)
     end
+    params:add_separator("                    ")
+    params:add_binary("randomizefilters", "RaNd0m1ze!", "trigger", 0) params:set_action("randomizefilters", function(value) for i = 1, 2 do local cutoff = math.random(20, 20000) params:set(i.."cutoff", cutoff) params:set(i.."lpfgain", math.random()) params:set(i.."hpf", math.random(20, math.floor(cutoff))) end end)
+    params:add_binary("resetfilters", "Reset", "trigger", 0) params:set_action("resetfilters", function(value) params:set("filter_lock_ratio", 0) for i=1, 2 do params:set(i.."cutoff", 20000) params:set(i.."hpf", 20) params:set(i.."lpfgain", 0.0) end end)
     
     params:add_group("Stereo", 4)
     params:add_control("Width", "Stereo Width", controlspec.new(0, 200, "lin", 0.01, 100, "%")) params:set_action("Width", function(value) engine.width(value / 100) end)
@@ -1031,7 +1038,11 @@ function redraw()
         for track = 1, 2 do
             local x = (track == 1) and 51 or 92
             local filter_param = track .. filter_suffix
-            screen.rect(x, 63, util.linlin(math.log(20), math.log(20000), 0, 30, math.log(cached_params[filter_param])), 1)
+            if filter_lock_ratio then draw_l_shape(x, 61) end
+            screen.level(levels.dim)
+            local bar_width = util.linlin(math.log(20), math.log(20000), 0, 30, math.log(cached_params[filter_param]))
+            screen.rect(x, 63, bar_width, 1)
+            screen.fill()
             screen.move(x, 61)
             screen.level(levels.highlight)
             screen.text(string.format("%.0f", cached_params[filter_param]))

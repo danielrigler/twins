@@ -106,7 +106,7 @@ alloc {
         SynthDef(\synth, {
             arg out, buf_l, buf_r, voice, pos, speed, jitter, size, density, density_mod_amt, pitch_offset, pan, spread, gain, t_reset_pos,
             granular_gain, pitch_mode, trig_mode, subharmonics_1, subharmonics_2, subharmonics_3, overtones_1, overtones_2, 
-            cutoff, hpf, lpfgain, direction_mod, size_variation, low_gain, mid_gain, high_gain, smoothbass, pitch_random_plus, pitch_random_minus, probability;
+            cutoff, hpf, hpfq, lpfgain, direction_mod, size_variation, low_gain, mid_gain, high_gain, smoothbass, pitch_random_plus, pitch_random_minus, probability;
  
             var grain_trig, jitter_sig1, jitter_sig2, jitter_sig3, buf_dur, pan_sig, buf_pos, pos_sig, sig_l, sig_r, sig_mix, density_mod, dry_sig, granular_sig, base_pitch, grain_pitch, shaped, grain_size;
             var invDenom = 1 / (1 + subharmonics_1 + subharmonics_2 + subharmonics_3 + overtones_1 + overtones_2);
@@ -161,8 +161,8 @@ alloc {
             sig_mix = BPeakEQ.ar(sig_mix, 800, 1, mid_gain);
             sig_mix = BHiShelf.ar(sig_mix, 4000, 6, high_gain);
             
-            sig_mix = HPF.ar(sig_mix, Lag.kr(hpf));
-            sig_mix = MoogFF.ar(sig_mix, Lag.kr(cutoff), lpfgain);
+            sig_mix = HPF.ar(sig_mix, Lag.kr(hpf, 0.5));
+            sig_mix = MoogFF.ar(sig_mix, Lag.kr(cutoff, 0.5), lpfgain);
             
             SendReply.kr(Impulse.kr(15), '/buf_pos', [buf_pos], voice);
             Out.ar(out, sig_mix * gain * 1.1);
@@ -358,9 +358,7 @@ alloc {
         saturationEffect = Synth.new(\saturation, [\bus, mixBus.index, \drive, 0.0], context.xg, 'addToTail');
         monobassEffect = Synth.new(\monobass, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
         rotateEffect = Synth.new(\rotate, [\bus, mixBus.index], context.xg, 'addToTail');
-        outputSynth = Synth.new(\output, [\in, mixBus.index,\out, context.out_b.index], context.xg, 'addToTail');   
-
-        context.server.sync;
+        outputSynth = Synth.new(\output, [\in, mixBus.index,\out, context.out_b.index], context.xg, 'addToTail');
 
         this.addCommand(\mix, "f", { |msg| var mix = msg[1]; delayEffect.set(\mix, mix); delayEffect.run(mix > 0); });
         this.addCommand(\delay, "f", { |msg| delayEffect.set(\delay, msg[1]);	});
