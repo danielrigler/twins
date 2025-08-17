@@ -192,40 +192,6 @@ local function is_lfo_active_for_param(param_name)
     return false, nil
 end
 
-local function load_random_tape_file(track_num)
-    if params:get(track_num .. "live_input") == 1 then return false end
-    local function scan_audio_files(dir)
-        local files = {}
-        for _, entry in ipairs(util.scandir(dir)) do
-            local path = dir .. entry
-            if entry:sub(-1) == "/" then
-                for _, f in ipairs(scan_audio_files(path)) do
-                    table.insert(files, f)
-                end
-            else
-                local ext = path:lower():match("^.+(%..+)$") or ""
-                if valid_audio_exts[ext] then table.insert(files, path) end
-            end
-        end
-        return files
-    end
-    local audio_files = scan_audio_files(_path.tape)
-    if #audio_files == 0 then return false end
-    local selected_file = audio_files[math.random(#audio_files)]
-    if last_random_sample and math.random() < 0.5 and tab.contains(audio_files, last_random_sample) then
-        selected_file = last_random_sample
-    else
-        while selected_file == last_random_sample and #audio_files > 1 do
-            selected_file = audio_files[math.random(#audio_files)]
-        end
-    end
-    last_random_sample = selected_file
-    if params:get(track_num .. "sample") ~= selected_file then
-        params:set(track_num .. "sample", selected_file)
-    end
-    return true
-end
-
 local function disable_lfos_for_param(param_name, only_self)
     local base_param = param_name:sub(2)
     if only_self then
@@ -242,6 +208,36 @@ local function disable_lfos_for_param(param_name, only_self)
             end
         end
     end
+end
+
+local last_selected = nil
+local function load_random_tape_file(track_num)
+  if params:get(track_num .. "live_input") == 1 then return false end
+  local function scan(dir)
+    local files = {}
+    for _, entry in ipairs(util.scandir(dir)) do
+      local path = dir .. entry
+      if entry:sub(-1) == "/" then
+        for _, f in ipairs(scan(path)) do files[#files+1] = f end
+      elseif valid_audio_exts[path:lower():match("^.+(%..+)$") or ""] then
+        files[#files+1] = path
+      end
+    end
+    return files
+  end
+  local audio_files = scan(_path.tape)
+  if #audio_files == 0 then return false end
+  local selected
+  if track_num == 2 and last_selected and math.random() < 0.5 then
+    selected = last_selected
+  else
+    selected = audio_files[math.random(#audio_files)]
+  end
+  last_selected = selected
+  if params:get(track_num .. "sample") ~= selected then
+    params:set(track_num .. "sample", selected)
+  end
+  return true
 end
 
 local function register_tap()
@@ -437,15 +433,14 @@ local function setup_params()
     params:add_binary("randomize_eq", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_eq", function() for i=1, 2 do randpara.randomize_eq_params(i) end end)
     params:add_option("lock_eq", "Lock Parameters", {"off", "on"}, 1)
     
-    params:add_group("Filters", 11)
-    params:add_binary("filter_lock_ratio", "Lock Filter Spread", "toggle", 0) params:set_action("filter_lock_ratio", function(value) filter_lock_ratio = value == 1 if filter_lock_ratio then for i = 1, 2 do local cutoff = params:get(i.."cutoff") local hpf = params:get(i.."hpf") filter_differences[i] = cutoff - hpf end end end)
-    params:add_separator("                   ")
+    params:add_group("Filters", 10)
     for i = 1, 2 do
       params:add_control(i.."cutoff",i.." LPF",controlspec.new(20,20000,"exp",0,20000,"Hz")) params:set_action(i.."cutoff", function(value) engine.cutoff(i, value) if filter_lock_ratio then local new_hpf = value - filter_differences[i] new_hpf = util.clamp(new_hpf, 20, 20000) params:set(i.."hpf", new_hpf) end end)
       params:add_control(i.."hpf",i.." HPF",controlspec.new(20,20000,"exp",0,20,"Hz")) params:set_action(i.."hpf", function(value) engine.hpf(i, value) if filter_lock_ratio then local new_cutoff = value + filter_differences[i] new_cutoff = util.clamp(new_cutoff, 20, 20000) params:set(i.."cutoff", new_cutoff) end end)
       params:add_taper(i.."lpfgain", i.." Q", 0, 1, 0.0, 1, "") params:set_action(i.."lpfgain", function(value) engine.lpfgain(i, value * 4) end)
     end
-    params:add_separator("                    ")
+    params:add_separator("                   ")
+    params:add_binary("filter_lock_ratio", "Lock Filter Spread", "toggle", 0) params:set_action("filter_lock_ratio", function(value) filter_lock_ratio = value == 1 if filter_lock_ratio then for i = 1, 2 do local cutoff = params:get(i.."cutoff") local hpf = params:get(i.."hpf") filter_differences[i] = cutoff - hpf end end end)
     params:add_binary("randomizefilters", "RaNd0m1ze!", "trigger", 0) params:set_action("randomizefilters", function(value) for i = 1, 2 do local cutoff = math.random(20, 20000) params:set(i.."cutoff", cutoff) params:set(i.."lpfgain", math.random()) params:set(i.."hpf", math.random(20, math.floor(cutoff))) end end)
     params:add_binary("resetfilters", "Reset", "trigger", 0) params:set_action("resetfilters", function(value) params:set("filter_lock_ratio", 0) for i=1, 2 do params:set(i.."cutoff", 20000) params:set(i.."hpf", 20) params:set(i.."lpfgain", 0.0) end end)
     
@@ -922,7 +917,6 @@ function redraw()
     screen.save()
     screen.translate(0, animation_y)
     local levels = {highlight = 15, dim = 6, value = 4}
-    -- Cache parameters
     local cached_params = {}
     for _, row in ipairs(param_rows) do
         cached_params[row.param1] = params:get(row.param1)
@@ -942,12 +936,9 @@ function redraw()
         for track = 1, 2 do
             local param = (track == 1) and row.param1 or row.param2
             local x = (track == 1) and 51 or 92
-            
             if (param_name == "size") and params:get(track.."size_density_lock") == 1 then
                 draw_lock_shape(x, row.y)
             end
-            
-            
             if is_param_locked(track, param_name) then
                 draw_l_shape(x, row.y)
             end
@@ -997,7 +988,6 @@ function redraw()
     else
         screen.text(bottom_row_mode .. ":     ")
     end
-    -- Draw bottom row values
     if bottom_row_mode == "seek" then
         for track = 1, 2 do
             local x = (track == 1) and 51 or 92
@@ -1008,10 +998,8 @@ function redraw()
             if show_live then
                screen.text("live")
             else
-                -- Always show seek value, even if file not loaded
                 screen.text(string.format("%.0f%%", osc_positions[track] * 100))
             end
-            -- Always draw seek bar
             screen.level(levels.dim)
             screen.rect(x, 63, 30 * osc_positions[track], 1)
             screen.fill()
