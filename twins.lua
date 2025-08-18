@@ -110,22 +110,23 @@ local function clamp01(val)
   return (val < 0 and 0) or (val > 1 and 1) or val
 end
 
-local function osc_event(_, args)
-  local node_id = args[1]
-  local pos = clamp01(args[2])
-  node_data[node_id] = pos
-  if recent_ids[1] ~= node_id and recent_ids[2] ~= node_id then
-    if #recent_ids == 2 then
-      recent_ids[1] = recent_ids[2]
-      recent_ids[2] = node_id
-    else
-      recent_ids[#recent_ids+1] = node_id
+local function osc_event(path, args)
+  if path == "/twins/buf_pos" then
+    local node_id = args[1]
+    local pos = clamp01(args[2])
+    node_data[node_id] = pos
+    if recent_ids[1] ~= node_id and recent_ids[2] ~= node_id then
+      if #recent_ids == 2 then
+        recent_ids[1] = recent_ids[2]
+        recent_ids[2] = node_id
+      else
+        recent_ids[#recent_ids+1] = node_id
+      end
     end
   end
   if #recent_ids == 2 then
     local a, b = recent_ids[1], recent_ids[2]
-    if a > b then a, b = b, a end -- inline sort
-
+    if a > b then a, b = b, a end
     if is_audio_loaded(1) then
       osc_positions[1] = node_data[a]
     end
