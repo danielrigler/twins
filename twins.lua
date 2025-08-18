@@ -64,6 +64,8 @@ local initital_reverb_onoff
 local filter_lock_ratio = false
 local filter_differences = {[1] = 0, [2] = 0}
 local osc_positions = {[1] = 0, [2] = 0}
+local node_data = {}
+local recent_ids = {}
 local valid_audio_exts = {[".wav"]=true,[".aif"]=true,[".aiff"]=true,[".flac"]=true}
 local mode_list = {"pitch","spread","density","size","jitter","lpf","pan","speed","seek"}
 local mode_indices = {}; for i,v in ipairs(mode_list) do mode_indices[v]=i end
@@ -89,7 +91,7 @@ local param_rows = {
 
 local function is_audio_loaded(track_num)
     local file_path = params:get(track_num .. "sample")
-    return (file_path and file_path ~= "" and file_path ~= "none" and file_path ~= "-")
+    return (file_path and file_path ~= "-")
 end
 
 local function random_float(l, h)
@@ -103,38 +105,32 @@ local function stop_metro_safe(m)
   end
 end
 
-local osc_voice_map = {}
-local osc_voice_nums = {}
-local function contains(tbl, val)
-  for i = 1, #tbl do
-    if tbl[i] == val then return true end
-  end
-  return false
+local function clamp01(val)
+  val = tonumber(val) or 0
+  return (val < 0 and 0) or (val > 1 and 1) or val
 end
 
-local function update_voice_map(voice)
-  if not contains(osc_voice_nums, voice) then
-    table.insert(osc_voice_nums, voice)
-    if #osc_voice_nums > 2 then
-      table.remove(osc_voice_nums, 1)
+local function osc_event(_, args)
+  local node_id = args[1]
+  local pos = clamp01(args[2])
+  node_data[node_id] = pos
+  if recent_ids[1] ~= node_id and recent_ids[2] ~= node_id then
+    if #recent_ids == 2 then
+      recent_ids[1] = recent_ids[2]
+      recent_ids[2] = node_id
+    else
+      recent_ids[#recent_ids+1] = node_id
     end
   end
-  if #osc_voice_nums == 2 then
-    local v1, v2 = osc_voice_nums[1], osc_voice_nums[2]
-    if v1 > v2 then v1, v2 = v2, v1 end
-    osc_voice_map[v1] = 1
-    osc_voice_map[v2] = 2
-  end
-end
+  if #recent_ids == 2 then
+    local a, b = recent_ids[1], recent_ids[2]
+    if a > b then a, b = b, a end -- inline sort
 
-local function osc_event(path, args, from)
-  local voice = args[1]
-  local pos = args[2]
-  update_voice_map(voice)
-  if osc_voice_map[voice] then
-    local track = osc_voice_map[voice]
-    if is_audio_loaded(track) then
-      osc_positions[track] = pos
+    if is_audio_loaded(1) then
+      osc_positions[1] = node_data[a]
+    end
+    if is_audio_loaded(2) then
+      osc_positions[2] = node_data[b]
     end
   end
 end
@@ -658,10 +654,10 @@ function init()
     initital_monitor_level = params:get('monitor_level')
     params:set('monitor_level', -math.huge)
     if not installer:ready() then clock.run(function() while true do redraw() clock.sleep(1 / 10) end end) do return end end
+    setup_osc()
     setup_ui_metro()
     setup_manual_cleanup()
     setup_params()
-    setup_osc()
 end
 
 function enc(n, d)
@@ -708,20 +704,27 @@ function enc(n, d)
         if config.param == "seek" then
             disable_lfos_for_param(p, not sym)
             manual_adjustments[p] = {active = true, value = osc_positions[track] * 100, time = util.time()}
-            local base_pos = osc_positions[sym and 1 or track] * 100
-            local new_pos = (base_pos + delta) % 100
-            if new_pos < 0 then new_pos = new_pos + 100 end
+            local delta = config.delta * d
+            local current_pos = osc_positions[track] * 100
+            local new_pos = current_pos + delta
+            if config.wrap then
+                new_pos = (new_pos - config.wrap[1]) % (config.wrap[2] - config.wrap[1] + 1) + config.wrap[1]
+            else
+                new_pos = util.clamp(new_pos, 0, 100)
+            end
             local norm_pos = new_pos / 100
             if sym then
                 for tr = 1, 2 do
                     osc_positions[tr] = norm_pos
                     params:set(tr.."seek", new_pos)
                     engine.seek(tr, norm_pos)
+                    manual_adjustments[tr.."seek"] = {active = true, value = new_pos, time = util.time()}
                 end
             else
                 osc_positions[track] = norm_pos
                 params:set(p, new_pos)
                 engine.seek(track, norm_pos)
+                manual_adjustments[p].value = new_pos
             end
             return
         end
