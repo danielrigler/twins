@@ -145,7 +145,7 @@ end
 
 local function setup_ui_metro()
     ui_metro = metro.init()
-    ui_metro.time = 1/60
+    ui_metro.time = 1/30
     ui_metro.event = function()
         if animation_complete then
             redraw()
