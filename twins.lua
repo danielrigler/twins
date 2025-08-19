@@ -36,8 +36,9 @@
 --
 --                    Daniel Rigler
 
-installer_ = include("lib/scinstaller/scinstaller") installer = installer_:new{requirements = {"AnalogTape", "AnalogChew", "AnalogLoss", "AnalogDegrade"}, 
-  zip = "https://github.com/schollz/portedplugins/releases/download/v0.4.6/PortedPlugins-RaspberryPi.zip"}
+installer_ = include("lib/scinstaller/scinstaller")
+installer = installer_:new{requirements = {"Fverb2", "Fverb", "AnalogTape", "AnalogChew", "AnalogLoss", "AnalogDegrade"},
+    zip = "https://github.com/schollz/portedplugins/releases/download/v0.4.6/PortedPlugins-RaspberryPi.zip"}
 engine.name = installer:ready() and 'twins' or nil
 local randpara = include("lib/randpara")
 local lfo = include("lib/lfo")

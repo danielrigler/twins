@@ -198,7 +198,7 @@ alloc {
         SynthDef(\monobass, {
             arg bus, mix=0.0;
             var sig = In.ar(bus, 2);
-            sig = BHiPass.ar(sig,230)+Pan2.ar(BLowPass.ar(sig[0]+sig[1],230));
+            sig = BHiPass.ar(sig,200)+Pan2.ar(BLowPass.ar(sig[0]+sig[1],200));
             ReplaceOut.ar(bus, sig);
         }).add;  
         
@@ -468,7 +468,6 @@ alloc {
                 if (liveInputRecorders[voice].notNil, { 
                     liveInputRecorders[voice].free;});
                 liveInputRecorders[voice] = nil; }); });
-        
         this.addCommand("live_buffer_mix", "f", { arg msg; liveBufferMix = msg[1]; liveInputRecorders.do({ arg recorder; if (recorder.notNil, {recorder.set(\mix, liveBufferMix);}); }); });
         this.addCommand("live_direct", "ii", { arg msg;
             var voice = msg[1] - 1;
@@ -491,7 +490,6 @@ alloc {
                 voices[voice].set(\t_reset_pos, 1);
             });
         });
-        
         this.addCommand("isMono", "ii", { arg msg; var voice = msg[1] - 1; voices[voice].set(\isMono, msg[2]); });
         this.addCommand("live_mono", "ii", { arg msg; var voice = msg[1] - 1; var mono = msg[2]; if(liveInputRecorders[voice].notNil, {liveInputRecorders[voice].set(\isMono, mono); }); });
         this.addCommand("unload_all", "", {this.unloadAll(); });
