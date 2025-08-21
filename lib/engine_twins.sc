@@ -113,8 +113,8 @@ alloc {
             var subharmonic_1_vol = subharmonics_1 * invDenom * 2;
             var subharmonic_2_vol = subharmonics_2 * invDenom * 2;
             var subharmonic_3_vol = subharmonics_3 * invDenom * 2;
-            var overtone_1_vol = overtones_1 * invDenom * 2;
-            var overtone_2_vol = overtones_2 * invDenom * 2;
+            var overtone_1_vol = overtones_1 * invDenom * 1.6;
+            var overtone_2_vol = overtones_2 * invDenom * 1.6;
             var lagPitchOffset = Lag.kr(pitch_offset);
             var grain_direction = Select.kr(pitch_mode, [1, Select.kr(speed.abs > 0.001, [1, speed.sign])]) * ((LFNoise1.kr(density).range(0,1) < direction_mod).linlin(0,1,1,-1));
             var positive_intervals = [12, 24], negative_intervals = [-12, -24];
@@ -153,10 +153,10 @@ alloc {
                 #sig_l, sig_r = [sig_l + ~grainBufFunc.(buf_l, grain_pitch * mult, grain_size, vol, grain_direction, pos_sig, jitter_sig3),
                                  sig_r + ~grainBufFunc.(buf_r, grain_pitch * mult, grain_size, vol, grain_direction, pos_sig, jitter_sig3)];};
             
-            pan_sig = Lag.kr(TRand.kr(trig: grain_trig, lo: 0, hi: spread) * (ToggleFF.kr(grain_trig) * 2 - 1), grain_size * 0.15);
+            pan_sig = TRand.kr(trig: grain_trig, lo: spread*0.2, hi: spread*0.9) * (ToggleFF.kr(grain_trig) * 2 - 1);
             granular_sig = Balance2.ar(sig_l, sig_r, pan + pan_sig);
-            sig_mix = ((dry_sig * (1 - granular_gain)) + (granular_sig * granular_gain)) * 0.5;
-            
+            sig_mix = ((dry_sig * (1 - granular_gain)) + (granular_sig * granular_gain));
+             
             sig_mix = BLowShelf.ar(sig_mix, 70, 6, low_gain);
             sig_mix = BPeakEQ.ar(sig_mix, 800, 1, mid_gain);
             sig_mix = BHiShelf.ar(sig_mix, 4000, 6, high_gain);
@@ -165,7 +165,7 @@ alloc {
             sig_mix = MoogFF.ar(sig_mix, Lag.kr(cutoff, 0.5), lpfgain);
             
             SendReply.kr(Impulse.kr(15), '/buf_pos', [buf_pos], voice);
-            Out.ar(out, sig_mix * gain * 1.2);
+            Out.ar(out, sig_mix * gain * 1.6);
         }).add;
         
         SynthDef(\liveDirect, {
