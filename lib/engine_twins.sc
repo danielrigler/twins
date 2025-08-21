@@ -165,7 +165,7 @@ alloc {
             sig_mix = MoogFF.ar(sig_mix, Lag.kr(cutoff, 0.5), lpfgain);
             
             SendReply.kr(Impulse.kr(15), '/buf_pos', [buf_pos], voice);
-            Out.ar(out, sig_mix * gain * 1.6);
+            Out.ar(out, sig_mix * gain * 1.4);
         }).add;
         
         SynthDef(\liveDirect, {
