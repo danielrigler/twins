@@ -6,7 +6,7 @@
 --           by: @dddstudio                       
 --
 --                          
---                           v0.37
+--                           v0.38
 -- E1: Master Volume
 -- K1+E2/E3: Volume 1/2
 -- K1+E1: Crossfade Volumes
@@ -24,12 +24,12 @@
 --
 --
 --
---
 -- Thanks to:
 -- @infinitedigits @cfdrake 
 -- @justmat @artfwo @nzimas
 -- @sonoCircuit @graymazes
 -- @Higaru @NiklasKramer
+-- @xmacex
 --
 -- If you like this,
 -- buy them a beer :)
@@ -40,20 +40,17 @@ installer_ = include("lib/scinstaller/scinstaller")
 installer = installer_:new{requirements = {"Fverb2", "Fverb", "AnalogTape", "AnalogChew", "AnalogLoss", "AnalogDegrade"},
     zip = "https://github.com/schollz/portedplugins/releases/download/v0.4.6/PortedPlugins-RaspberryPi.zip"}
 engine.name = installer:ready() and 'twins' or nil
+local osc_positions = {[1] = 0, [2] = 0}
 local randpara = include("lib/randpara")
 local lfo = include("lib/lfo")
 local Mirror = include("lib/mirror") Mirror.init(osc_positions, lfo)
 local macro = include("lib/macro") macro.set_lfo_reference(lfo)
 local drymode = include("lib/drymode") drymode.set_lfo_reference(lfo)
 local randomize_metro = { [1] = nil, [2] = nil }
-local manual_cleanup_metro = nil
 local ui_metro = nil
 local key_state = {} for n = 1, 3 do key_state[n] = false end
 local current_mode = "seek"
-local bottom_row_display_mode = "seek"
 local current_filter_mode = "lpf"
-local manual_adjustments = {}
-local manual_adjustment_duration = 0.5
 local tap_times = {}
 local TAP_TIMEOUT = 2
 local animation_y = -64
@@ -64,9 +61,7 @@ local initital_monitor_level
 local initital_reverb_onoff
 local filter_lock_ratio = false
 local filter_differences = {[1] = 0, [2] = 0}
-local osc_positions = {[1] = 0, [2] = 0}
-local node_data = {}
-local recent_ids = {}
+local oscgo = 0
 local valid_audio_exts = {[".wav"]=true,[".aif"]=true,[".aiff"]=true,[".flac"]=true}
 local mode_list = {"pitch","spread","density","size","jitter","lpf","pan","speed","seek"}
 local mode_indices = {}; for i,v in ipairs(mode_list) do mode_indices[v]=i end
@@ -91,8 +86,8 @@ local param_rows = {
     {y = 51, label = "pitch:    ", mode = "pitch", param1 = "1pitch", param2 = "2pitch", st = true}}
 
 local function is_audio_loaded(track_num)
-    local file_path = params:get(track_num .. "sample")
-    return (file_path and file_path ~= "-")
+  local file_path = params:get(track_num .. "sample")
+  return (file_path and file_path ~= "-")
 end
 
 local function random_float(l, h)
@@ -106,34 +101,12 @@ local function stop_metro_safe(m)
   end
 end
 
-local function clamp01(val)
-  val = tonumber(val) or 0
-  return (val < 0 and 0) or (val > 1 and 1) or val
-end
-
 local function osc_event(path, args)
-  if path == "/twins/buf_pos" then
-    local node_id = args[1]
-    local pos = clamp01(args[2])
-    node_data[node_id] = pos
-    if recent_ids[1] ~= node_id and recent_ids[2] ~= node_id then
-      if #recent_ids == 2 then
-        recent_ids[1] = recent_ids[2]
-        recent_ids[2] = node_id
-      else
-        recent_ids[#recent_ids+1] = node_id
-      end
-    end
-  end
-  if #recent_ids == 2 then
-    local a, b = recent_ids[1], recent_ids[2]
-    if a > b then a, b = b, a end
-    if is_audio_loaded(1) then
-      osc_positions[1] = node_data[a]
-    end
-    if is_audio_loaded(2) then
-      osc_positions[2] = node_data[b]
-    end
+  local vid, pos
+  if path == "/twins/buf_pos" and oscgo == 1 then
+    vid = args[1] + 1
+    pos = args[2]
+    osc_positions[vid] = pos
   end
 end
 
@@ -159,25 +132,6 @@ local function setup_ui_metro()
         redraw()
     end
     ui_metro:start()
-end
-
-local function setup_manual_cleanup()
-    local last_cleanup_time = 0
-    local CLEANUP_INTERVAL = 0.5
-    manual_cleanup_metro = metro.init()
-    manual_cleanup_metro.time = CLEANUP_INTERVAL
-    manual_cleanup_metro.event = function()
-        local current_time = util.time()
-        if next(manual_adjustments) ~= nil and (current_time - last_cleanup_time) >= CLEANUP_INTERVAL then
-            for param, adjustment in pairs(manual_adjustments) do
-                if adjustment and adjustment.time and (current_time - adjustment.time > manual_adjustment_duration) then
-                    adjustment.active = false
-                end
-            end
-            last_cleanup_time = current_time
-        end
-    end
-    manual_cleanup_metro:start()
 end
 
 local function is_lfo_active_for_param(param_name)
@@ -210,32 +164,33 @@ end
 
 local last_selected = nil
 local function load_random_tape_file(track_num)
-  if params:get(track_num .. "live_input") == 1 then return false end
-  local function scan(dir)
-    local files = {}
-    for _, entry in ipairs(util.scandir(dir)) do
-      local path = dir .. entry
-      if entry:sub(-1) == "/" then
-        for _, f in ipairs(scan(path)) do files[#files+1] = f end
-      elseif valid_audio_exts[path:lower():match("^.+(%..+)$") or ""] then
-        files[#files+1] = path
+    if params:get(track_num .. "live_input") == 1 then return false end
+    local function scan(dir)
+      local files = {}
+      for _, entry in ipairs(util.scandir(dir)) do
+        local path = dir .. entry
+        if entry:sub(-1) == "/" then
+          for _, f in ipairs(scan(path)) do files[#files+1] = f end
+        elseif valid_audio_exts[path:lower():match("^.+(%..+)$") or ""] then
+          files[#files+1] = path
+        end
       end
+      return files
     end
-    return files
-  end
-  local audio_files = scan(_path.tape)
-  if #audio_files == 0 then return false end
-  local selected
-  if track_num == 2 and last_selected and math.random() < 0.5 then
-    selected = last_selected
-  else
-    selected = audio_files[math.random(#audio_files)]
-  end
-  last_selected = selected
-  if params:get(track_num .. "sample") ~= selected then
-    params:set(track_num .. "sample", selected)
-  end
-  return true
+    local audio_files = scan(_path.tape)
+    if #audio_files == 0 then return false end
+    local selected
+    if track_num == 2 and last_selected and math.random() < 0.5 then
+      selected = last_selected
+    else
+      selected = audio_files[math.random(#audio_files)]
+    end
+    last_selected = selected
+    if params:get(track_num .. "sample") ~= selected then
+      params:set(track_num .. "sample", selected)
+    end
+    oscgo = 1
+    return true
 end
 
 local function register_tap()
@@ -259,24 +214,9 @@ local function register_tap()
 end
 
 local function setup_params()
-    local all_params = {"jitter", "size", "density", "spread", "pitch", "pan", "seek", "speed", "cutoff", "hpf"}
-    for _, param in ipairs(all_params) do
-        manual_adjustments["1"..param] = {active = false, value = 0}
-        manual_adjustments["2"..param] = {active = false, value = 0}
-    end
-
     params:add_separator("Input")
     for i = 1, 2 do
-        params:add_file(i.. "sample", "Sample " ..i)
-        params:set_action(i.. "sample", function(file)
-            if file ~= nil and file ~= "" and file ~= "none" and file ~= "-" then
-                engine.read(i, file)
-                if is_audio_loaded(1) and is_audio_loaded(2) then
-                    params:set("1pan", -15)
-                    params:set("2pan", 15)
-                end
-            end
-        end)
+      params:add_file(i.. "sample", "Sample " ..i) params:set_action(i.. "sample", function(file) if file ~= nil and file ~= "" and file ~= "none" and file ~= "-" then engine.read(i, file) oscgo = 1 if is_audio_loaded(1) and is_audio_loaded(2) then params:set("1pan", -15) params:set("2pan", 15) end end end) 
     end
     params:add_binary("randomtapes", "Random Tapes", "trigger", 0) params:set_action("randomtapes", function() load_random_tape_file(1) load_random_tape_file(2) end)
 
@@ -290,6 +230,7 @@ local function setup_params()
                 end
                 engine.set_live_input(i, 1)
                 engine.live_mono(i, params:get("isMono") - 1)
+                oscgo = 1
             else
                 engine.set_live_input(i, 0)
             end
@@ -309,7 +250,6 @@ local function setup_params()
                     params:set(i.."live_input", 0)
                 end
                 engine.live_direct(i, 1)
-                engine.isMono(i, params:get("isMono") - 1)
             else
                 engine.live_direct(i, 0)
                 if _G["prev_live_state_"..i] == 1 then
@@ -317,21 +257,15 @@ local function setup_params()
                     engine.isMono(i, params:get("isMono") - 1)
                 else
                     local current_sample = params:get(i.."sample")
-                    if current_sample ~= "none" and current_sample ~= "" then
-                        engine.read(i, current_sample)
-                    end
+                    engine.read(i, current_sample)
                 end
             end
         end)
     end
     params:add_option("isMono", "Input Mode", {"stereo", "mono"}, 1) params:set_action("isMono", function(value) local monoValue = value - 1
         for i = 1, 2 do
-            if params:get(i.."live_direct") == 1 then
-                engine.isMono(i, monoValue)
-            end
-            if params:get(i.."live_input") == 1 then
-                engine.live_mono(i, monoValue)
-            end
+            if params:get(i.."live_direct") == 1 then engine.isMono(i, monoValue) end
+            if params:get(i.."live_input") == 1 then engine.live_mono(i, monoValue) end
         end
     end)
     params:add_binary("dry_mode2", "Dry Mode", "toggle", 0) params:set_action("dry_mode2", function(x) drymode.toggle_dry_mode2() end)
@@ -505,7 +439,7 @@ local function setup_params()
     
     params:add_group("Other", 3)
     params:add_binary("dry_mode", "Dry Mode", "toggle", 0) params:set_action("dry_mode", function(x) drymode.toggle_dry_mode() end)
-    params:add_binary("unload_all", "Unload All Audio", "trigger", 0) params:set_action("unload_all", function() for i=1, 2 do params:set(i.."seek", 0) engine.unload_all() params:set(i.."sample", "-") params:set(i.."live_input", 0) params:set(i.."live_direct", 0) osc_positions[i] = 0 end end)
+    params:add_binary("unload_all", "Unload All Audio", "trigger", 0) params:set_action("unload_all", function() for i=1, 2 do params:set(i.."seek", 0) params:set(i.."sample", "-") params:set(i.."live_input", 0) params:set(i.."live_direct", 0) osc_positions[i] = 0 end engine.unload_all() oscgo = 0 end)
     params:add_option("steps", "Transition Time", {"short", "medium", "long"}, 2) params:set_action("steps", function(value) lfo.cleanup() steps = ({20, 300, 800})[value] end)
 
     for i = 1, 2 do
@@ -658,8 +592,11 @@ function init()
     if not installer:ready() then clock.run(function() while true do redraw() clock.sleep(1 / 10) end end) do return end end
     setup_osc()
     setup_ui_metro()
-    setup_manual_cleanup()
     setup_params()
+    
+
+    
+    
 end
 
 function enc(n, d)
@@ -705,32 +642,24 @@ function enc(n, d)
         end
         if config.param == "seek" then
             disable_lfos_for_param(p, not sym)
-            manual_adjustments[p] = {active = true, value = osc_positions[track] * 100, time = util.time()}
             local delta = config.delta * d
             local current_pos = osc_positions[track] * 100
             local new_pos = current_pos + delta
-            if config.wrap then
-                new_pos = (new_pos - config.wrap[1]) % (config.wrap[2] - config.wrap[1] + 1) + config.wrap[1]
-            else
-                new_pos = util.clamp(new_pos, 0, 100)
-            end
+            if config.wrap then new_pos = (new_pos - config.wrap[1]) % (config.wrap[2] - config.wrap[1] + 1) + config.wrap[1] end
             local norm_pos = new_pos / 100
             if sym then
                 for tr = 1, 2 do
                     osc_positions[tr] = norm_pos
                     params:set(tr.."seek", new_pos)
                     engine.seek(tr, norm_pos)
-                    manual_adjustments[tr.."seek"] = {active = true, value = new_pos, time = util.time()}
                 end
             else
                 osc_positions[track] = norm_pos
                 params:set(p, new_pos)
                 engine.seek(track, norm_pos)
-                manual_adjustments[p].value = new_pos
             end
             return
         end
-        manual_adjustments[p] = {active = true, value = params:get(p), time = util.time()}
         if sym then
             disable_lfos_for_param(p)
             local ot, op = 3 - track, (3 - track)..config.param
@@ -827,12 +756,6 @@ function key(n, z)
             elseif n == 3 then
                 local idx = mode_indices2[current_mode] or 1
                 current_mode = mode_list2[(idx % #mode_list2) + 1]
-            end
-            if current_mode == "jitter" or current_mode == "size" or current_mode == "density" 
-               or current_mode == "spread" or current_mode == "pitch" then
-                bottom_row_display_mode = "seek"
-            else
-                bottom_row_display_mode = current_mode
             end
         end
     end
@@ -963,14 +886,9 @@ function redraw()
             if param_name ~= "pitch" then
                 local min_val, max_val = lfo.get_parameter_range(param)
                 local bar_value
-                local manual = manual_adjustments[param]
-                if manual and manual.active then
-                    bar_value = util.linlin(min_val, max_val, 0, 30, manual.value)
-                else
-                    local lfo_mod = get_lfo_modulation(param)
-                    if lfo_mod then
-                        bar_value = util.linlin(min_val, max_val, 0, 30, lfo_mod)
-                    end
+                local lfo_mod = get_lfo_modulation(param)
+                if lfo_mod then
+                    bar_value = util.linlin(min_val, max_val, 0, 30, lfo_mod)
                 end
                 if bar_value then
                     screen.level(levels.dim)
@@ -996,17 +914,18 @@ function redraw()
     if bottom_row_mode == "seek" then
         for track = 1, 2 do
             local x = (track == 1) and 51 or 92
-            local show_live = params:get(track.."live_input") == 1
             if is_param_locked(track, "seek") then draw_l_shape(x, 61) end
             screen.move(x, 61)
             screen.level(is_bottom_active and levels.highlight or levels.value)
-            if show_live then
+            if params:get(track.."live_input") == 1 then
                screen.text("live")
+            elseif params:get(track.."live_direct") == 1 then
+               screen.text("direct")
             else
-                screen.text(string.format("%.0f%%", osc_positions[track] * 100))
+            screen.text(string.format("%.0f%%", osc_positions[track] * 100))
             end
             screen.level(levels.dim)
-            screen.rect(x, 63, 30 * osc_positions[track], 1)
+            if params:get(track.."live_direct") ~= 1 then screen.rect(x, 63, 30 * osc_positions[track], 1) end
             screen.fill()
         end
     elseif bottom_row_mode == "speed" then
@@ -1066,7 +985,6 @@ end
 
 function cleanup()
     stop_metro_safe(ui_metro)
-    stop_metro_safe(manual_cleanup_metro)
     for i = 1, 2 do stop_metro_safe(randomize_metro[i]) end
     stop_metro_safe(m_rand)
     stop_metro_safe(lfo_metro)
@@ -1074,5 +992,4 @@ function cleanup()
     params:set('monitor_level', initital_monitor_level)
     params:set('reverb', initital_reverb_onoff)
     osc.event = nil
-    if osc.inited then osc.deinit() end
 end
