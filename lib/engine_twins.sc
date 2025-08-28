@@ -408,7 +408,7 @@ alloc {
         liveInputBuffersL.do({ arg b; b.free; });
         liveInputBuffersR.do({ arg b; b.free; });
         liveInputRecorders.do({ arg s; if (s.notNil) { s.free; }; });
-        ~o.free;
+        o.free;
         wobbleBuffer.free; mixBus.free; bufSine.free; jpverbEffect.free; shimmerEffect.free; saturationEffect.free; tapeEffect.free; chewEffect.free; widthEffect.free; monobassEffect.free; lossdegradeEffect.free; sineEffect.free; wobbleEffect.free; outputSynth.free; delayEffect.free; bitcrushEffect.free; rotateEffect.free; tascamEffect.free; haasEffect.free; 
     }
 }
