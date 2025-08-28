@@ -41,6 +41,7 @@ installer = installer_:new{requirements = {"Fverb2", "Fverb", "AnalogTape", "Ana
     zip = "https://github.com/schollz/portedplugins/releases/download/v0.4.6/PortedPlugins-RaspberryPi.zip"}
 engine.name = installer:ready() and 'twins' or nil
 local osc_positions = {[1] = 0, [2] = 0}
+local rec_positions = {[1] = 0, [2] = 0}
 local randpara = include("lib/randpara")
 local lfo = include("lib/lfo")
 local Mirror = include("lib/mirror") Mirror.init(osc_positions, lfo)
@@ -110,6 +111,12 @@ local function osc_event(path, args)
     if audio_active[vid] or params:get(vid.."live_input") == 1 or params:get(vid.."live_direct") == 1 then
       osc_positions[vid] = pos
     end
+  elseif path == "/twins/rec_pos" then
+    vid = args[1] + 1
+    pos = args[2]
+    if params:get(vid.."live_input") == 1 then
+      rec_positions[vid] = pos
+    end
   end
 end
 
@@ -172,39 +179,27 @@ local function load_random_tape_file(track_num)
       local files = {}
       for _, entry in ipairs(util.scandir(dir)) do
         local path = dir .. entry
-        if entry:sub(-1) == "/" then
-          for _, f in ipairs(scan(path)) do files[#files+1] = f end
-        elseif valid_audio_exts[path:lower():match("^.+(%..+)$") or ""] then
-          files[#files+1] = path
-        end
+        if entry:sub(-1) == "/" then for _, f in ipairs(scan(path)) do files[#files+1] = f end
+        elseif valid_audio_exts[path:lower():match("^.+(%..+)$") or ""] then files[#files+1] = path end
       end
       return files
     end
     local audio_files = scan(_path.tape)
     if #audio_files == 0 then return false end
     local selected
-    if track_num == 2 and last_selected and math.random() < 0.5 then
-      selected = last_selected
-    else
-      selected = audio_files[math.random(#audio_files)]
-    end
+    if track_num == 2 and last_selected and math.random() < 0.5 then selected = last_selected
+    else selected = audio_files[math.random(#audio_files)] end
     last_selected = selected
-    if params:get(track_num .. "sample") ~= selected then
-      params:set(track_num .. "sample", selected)
-    end
+    if params:get(track_num .. "sample") ~= selected then params:set(track_num .. "sample", selected) end
     oscgo = 1
     return true
 end
 
 local function register_tap()
     local now = util.time()
-    if #tap_times > 0 and (now - tap_times[#tap_times]) > TAP_TIMEOUT then
-        tap_times = {}
-    end
+    if #tap_times > 0 and (now - tap_times[#tap_times]) > TAP_TIMEOUT then tap_times = {} end
     table.insert(tap_times, now)
-    while #tap_times > 3 do
-        table.remove(tap_times, 1)
-    end
+    while #tap_times > 3 do table.remove(tap_times, 1) end
     if #tap_times >= 2 then
         local sum, count = 0, 0
         for i = math.max(2, #tap_times - 2), #tap_times do
@@ -761,17 +756,11 @@ local function format_seek(value)
 end
 
 local function format_speed(speed)
-    if math.abs(speed) < 0.01 then
-        return ".00x"
+    if math.abs(speed) < 0.01 then return ".00x"
     elseif math.abs(speed) < 1 then
-        if speed < -0.01 then 
-            return string.format("-.%02dx", math.floor(math.abs(speed) * 100))
-        else 
-            return string.format(".%02dx", math.floor(math.abs(speed) * 100))
-        end
-    else 
-        return string.format("%.2fx", speed)
-    end
+        if speed < -0.01 then return string.format("-.%02dx", math.floor(math.abs(speed) * 100))
+        else return string.format(".%02dx", math.floor(math.abs(speed) * 100)) end
+    else return string.format("%.2fx", speed) end
 end
 
 local function is_param_locked(track_num, param)
@@ -779,16 +768,22 @@ local function is_param_locked(track_num, param)
 end
 
 local function draw_l_shape(x, y)
-        local pulse_level = math.floor(util.linlin(-1, 1, 1, 8, math.sin(util.time() * 4)))
-        screen.level(pulse_level)
-        screen.move(x - 4, y) screen.line_rel(2, 0) screen.move(x - 3, y) screen.line_rel(0, -3)
-        screen.stroke()
+    local pulse_level = math.floor(util.linlin(-1, 1, 1, 8, math.sin(util.time() * 4)))
+    screen.level(pulse_level)
+    screen.move(x - 4, y) screen.line_rel(2, 0) screen.move(x - 3, y) screen.line_rel(0, -3)
+    screen.stroke()
 end
 
 local function draw_lock_shape(x, y)
-        screen.level(4)
-        screen.move(x - 3, y + 1) screen.line_rel(0, 1) screen.move(x - 3, y + 3) screen.line_rel(0, 1) screen.move(x - 3, y + 5) screen.line_rel(0, 1)
-        screen.stroke()
+    screen.level(4)
+    screen.move(x - 3, y + 1) screen.line_rel(0, 1) screen.move(x - 3, y + 3) screen.line_rel(0, 1) screen.move(x - 3, y + 5) screen.line_rel(0, 1)
+    screen.stroke()
+end
+
+local function draw_recording_head(x, y, position)
+    screen.level(15)
+    screen.rect(x + math.floor(position * 30), y - 1, 1, 2)
+    screen.fill()
 end
 
 local function get_lfo_modulation(param_name)
@@ -808,15 +803,16 @@ function redraw()
     screen.save()
     screen.translate(0, animation_y)
     local levels = {highlight = 15, dim = 6, value = 4}
-    local cached_params = {}
-    for _, row in ipairs(param_rows) do
-        cached_params[row.param1] = params:get(row.param1)
-        cached_params[row.param2] = params:get(row.param2)
-    end
-    for _, param in ipairs({"volume", "pan", "seek", "speed", "cutoff", "hpf"}) do
-        cached_params["1"..param] = params:get("1"..param)
-        cached_params["2"..param] = params:get("2"..param)
-    end
+    local cached_volume = {params:get("1volume"), params:get("2volume")}
+    local cached_pan    = {params:get("1pan"), params:get("2pan")}
+    local cached_seek   = {params:get("1seek"), params:get("2seek")}
+    local cached_speed  = {params:get("1speed"), params:get("2speed")}
+    local cached_cutoff = {params:get("1cutoff"), params:get("2cutoff")}
+    local cached_hpf    = {params:get("1hpf"), params:get("2hpf")}
+    local dry_mode      = params:get("dry_mode")
+    local symmetry      = params:get("symmetry")
+    local rects = { [levels.highlight] = {}, [levels.dim] = {}, [levels.value] = {} }
+    local pixels = { [levels.highlight] = {}, [levels.dim] = {}, [levels.value] = {} }
     -- Draw upper 5 parameter rows
     for _, row in ipairs(param_rows) do
         local param_name = string.match(row.label, "%a+")
@@ -827,36 +823,24 @@ function redraw()
         for track = 1, 2 do
             local param = (track == 1) and row.param1 or row.param2
             local x = (track == 1) and 51 or 92
-            if (param_name == "size") and params:get(track.."size_density_lock") == 1 then
-                draw_lock_shape(x, row.y)
-            end
-            if is_param_locked(track, param_name) then
-                draw_l_shape(x, row.y)
-            end
+            -- Locks
+            if (param_name == "size") and params:get(track.."size_density_lock") == 1 then draw_lock_shape(x, row.y) end
+            if is_param_locked(track, param_name) then draw_l_shape(x, row.y) end
+            -- Text values
             screen.move(x, row.y)
             screen.level(is_highlighted and levels.highlight or levels.value)
-            local val = cached_params[param]
-            if row.hz then
-                screen.text(format_density(val))
-            elseif row.st then
-                screen.text(format_pitch(val))
-            elseif param_name == "spread" then
-                screen.text(string.format("%.0f%%", val))
-            else
-                screen.text(params:string(param))
-            end
-            -- Parameter modulation indicators
+            local val = params:get(param)
+            if row.hz then screen.text(format_density(val))
+            elseif row.st then screen.text(format_pitch(val))
+            elseif param_name == "spread" then screen.text(string.format("%.0f%%", val))
+            else screen.text(params:string(param)) end
+            -- LFO modulation bars (dim rects)
             if param_name ~= "pitch" then
                 local min_val, max_val = lfo.get_parameter_range(param)
-                local bar_value
                 local lfo_mod = get_lfo_modulation(param)
                 if lfo_mod then
-                    bar_value = util.linlin(min_val, max_val, 0, 30, lfo_mod)
-                end
-                if bar_value then
-                    screen.level(levels.dim)
-                    screen.rect(x, row.y + 1, bar_value, 1)
-                    screen.fill()
+                    local bar_value = util.linlin(min_val, max_val, 0, 30, lfo_mod)
+                    table.insert(rects[levels.dim], {x, row.y + 1, bar_value, 1})
                 end
             end
         end
@@ -866,82 +850,81 @@ function redraw()
     local is_upper_row_active = upper_modes[current_mode]
     local bottom_row_mode = is_upper_row_active and "seek" or current_mode
     local is_bottom_active = not is_upper_row_active
-    -- Draw bottom row label
+    -- Bottom row label
     screen.move(5, 61)
     screen.level(levels.highlight)
-    if bottom_row_mode == "lpf" or bottom_row_mode == "hpf" then
-        screen.text(current_filter_mode == "lpf" and "lpf:      " or "hpf:      ")
-    else
-        screen.text(bottom_row_mode .. ":     ")
-    end
-    if bottom_row_mode == "seek" then
-        for track = 1, 2 do
-            local x = (track == 1) and 51 or 92
+    if bottom_row_mode == "lpf" or bottom_row_mode == "hpf" then screen.text(current_filter_mode == "lpf" and "lpf:      " or "hpf:      ")
+    else screen.text(bottom_row_mode .. ":     ") end
+    -- Bottom row values
+    for track = 1, 2 do
+        local x = (track == 1) and 51 or 92
+        if bottom_row_mode == "seek" then
             if is_param_locked(track, "seek") then draw_l_shape(x, 61) end
             screen.move(x, 61)
             screen.level(is_bottom_active and levels.highlight or levels.value)
-            if params:get(track.."live_input") == 1 then
-               screen.text("live")
-            elseif params:get(track.."live_direct") == 1 then
-               screen.text("direct")
-            else
-            screen.text(string.format("%.0f%%", osc_positions[track] * 100))
-            end
-            screen.level(levels.dim)
-            if params:get(track.."live_direct") ~= 1 then screen.rect(x, 63, 30 * osc_positions[track], 1) end
-            screen.fill()
-        end
-    elseif bottom_row_mode == "speed" then
-        for track = 1, 2 do
-            local x = (track == 1) and 51 or 92
+            if params:get(track.."live_input") == 1 then screen.text("live")
+            elseif params:get(track.."live_direct") == 1 then screen.text("direct")
+            else screen.text(string.format("%.0f%%", osc_positions[track] * 100)) end
+            if params:get(track.."live_direct") ~= 1 then table.insert(rects[levels.dim], {x, 63, 30 * osc_positions[track], 1}) end
+        elseif bottom_row_mode == "speed" then
             if is_param_locked(track, "speed") then draw_l_shape(x, 61) end
             screen.move(x, 61)
             screen.level(levels.highlight)
-            screen.text(format_speed(cached_params[track.."speed"]))
-        end
-    elseif bottom_row_mode == "pan" then
-        for track = 1, 2 do
-            local x = (track == 1) and 51 or 92
-            local pan = cached_params[track.."pan"]
+            screen.text(format_speed(cached_speed[track]))
+        elseif bottom_row_mode == "pan" then
             if is_param_locked(track, "pan") then draw_l_shape(x, 61) end
             screen.move(x, 61)
             screen.level(levels.highlight)
-            screen.text(math.abs(pan) < 0.5 and "0%" or string.format("%.0f%%", pan))
-        end
-    elseif bottom_row_mode == "lpf" or bottom_row_mode == "hpf" then
-        local filter_suffix = (current_filter_mode == "lpf") and "cutoff" or "hpf"
-        for track = 1, 2 do
-            local x = (track == 1) and 51 or 92
-            local filter_param = track .. filter_suffix
+            screen.text(math.abs(cached_pan[track]) < 0.5 and "0%" or string.format("%.0f%%", cached_pan[track]))
+        elseif bottom_row_mode == "lpf" or bottom_row_mode == "hpf" then
+            local filter_param = (current_filter_mode == "lpf") and cached_cutoff[track] or cached_hpf[track]
             if filter_lock_ratio then draw_l_shape(x, 61) end
-            screen.level(levels.dim)
-            local bar_width = util.linlin(math.log(20), math.log(20000), 0, 30, math.log(cached_params[filter_param]))
-            screen.rect(x, 63, bar_width, 1)
-            screen.fill()
+            local bar_width = util.linlin(math.log(20), math.log(20000), 0, 30, math.log(filter_param))
+            table.insert(rects[levels.dim], {x, 63, bar_width, 1})
             screen.move(x, 61)
             screen.level(levels.highlight)
-            screen.text(string.format("%.0f", cached_params[filter_param]))
+            screen.text(string.format("%.0f", filter_param))
         end
     end
-    -- Volume indicators
-    screen.level(levels.dim)
+    -- Volume meters (dim rects)
     for track = 1, 2 do
         local x = (track == 1) and 0 or 127
-        local height = util.linlin(-70, 10, 0, 64, cached_params[track.."volume"])
-        screen.rect(x, 64 - height, 1, height)
+        local height = util.linlin(-70, 10, 0, 64, cached_volume[track])
+        table.insert(rects[levels.dim], {x, 64 - height, 1, height})
     end
-    -- Pan indicators
+    -- Pan indicators (dim rects)
     for track = 1, 2 do
         local center_start = (track == 1) and 52 or 93
-        local pos = util.linlin(-100, 100, center_start, center_start + 25, cached_params[track.."pan"])
-        screen.rect(pos - 1, 0, 4, 1)
+        local pos = util.linlin(-100, 100, center_start, center_start + 25, cached_pan[track])
+        table.insert(rects[levels.dim], {pos - 1, 0, 4, 1})
     end
-    screen.fill()
-    -- Status indicators
-    screen.level(levels.highlight)
-    if params:get("dry_mode") == 1 then screen.pixel(6, 0) screen.pixel(10, 0) screen.pixel(14, 0) end
-    if params:get("symmetry") == 1 then screen.pixel(6, 0) screen.pixel(8, 0) screen.pixel(10, 0) end
-    screen.fill()
+    -- Status indicators (highlight pixels)
+    if dry_mode == 1 then 
+        table.insert(pixels[levels.highlight], {6,0})
+        table.insert(pixels[levels.highlight], {10,0})
+        table.insert(pixels[levels.highlight], {14,0})
+    end
+    if symmetry == 1 then 
+        table.insert(pixels[levels.highlight], {6,0})
+        table.insert(pixels[levels.highlight], {8,0})
+        table.insert(pixels[levels.highlight], {10,0})
+    end
+    for _, lvl in ipairs({levels.dim, levels.value, levels.highlight}) do
+        screen.level(lvl)
+        for _, r in ipairs(rects[lvl]) do
+            screen.rect(table.unpack(r))
+        end
+        for _, p in ipairs(pixels[lvl]) do
+            screen.pixel(table.unpack(p))
+        end
+        screen.fill()
+    end
+    for track = 1, 2 do
+        if params:get(track.."live_input") == 1 and bottom_row_mode == "seek" then
+            local x = (track == 1) and 51 or 92
+            draw_recording_head(x, 63, rec_positions[track])
+        end
+    end  
     screen.restore()
     screen.update()
 end
