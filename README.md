@@ -35,7 +35,7 @@ _some features might require a pi4 based unit. If you hear clicks and crackles t
 ### Discussion
 **[FORUM](https://llllllll.co/t/twins/71052)**
 ### Download
-**v0.37**
+**v0.38**
 install from Maiden Project Manager, or from Maiden REPL:
 ```
 ;install https://github.com/danielrigler/twins
@@ -43,6 +43,7 @@ install from Maiden Project Manager, or from Maiden REPL:
 do not forget to restart.
 
 ### Version history
+* **v0.38** - Improved seek display (now also in live mode), new record head indicator.
 * **v0.37** - Added Haas effect. Locking enhancements.
 * **v0.36** - Realtime seek position display, small tweaks. 
 * **v0.35** - Delay tweaks, bitcrusher, stereo field rotation.
