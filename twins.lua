@@ -6,7 +6,7 @@
 --           by: @dddstudio                       
 --
 --                          
---                           v0.38
+--                           v0.39
 -- E1: Master Volume
 -- K1+E2/E3: Volume 1/2
 -- K1+E1: Crossfade Volumes
@@ -259,7 +259,7 @@ local function setup_params()
     params:add_group("Delay", 12)
     params:add_taper("delay_mix", "Mix", 0, 100, 0, 1, "%") params:set_action("delay_mix", function(value) engine.mix(value/100) end)
     params:add_taper("delay_time", "Time", 0.02, 2, 0.5, 0.1, "s") params:set_action("delay_time", function(value) engine.delay(value) end)
-    params:add_binary("tap", "↳ TAP!", "trigger", 0) params:set_action("tap", function() register_tap() end)
+    params:add_binary("tap", "â†³ TAP!", "trigger", 0) params:set_action("tap", function() register_tap() end)
     params:add_taper("delay_feedback", "Feedback", 0, 120, 30, 1, "%") params:set_action("delay_feedback", function(value) engine.fb_amt(value/100) end)
     params:add_control("delay_lowpass", "LPF", controlspec.new(20, 20000, 'exp', 1, 20000, "Hz")) params:set_action('delay_lowpass', function(value) engine.lpf(value) end)
     params:add_control("delay_highpass", "HPF", controlspec.new(20, 20000, 'exp', 1, 20, "Hz")) params:set_action("delay_highpass", function(value) engine.dhpf(value) end)
@@ -603,7 +603,7 @@ function enc(n, d)
             local delta = config.delta * d
             local current_pos = osc_positions[track] * 100
             local new_pos = current_pos + delta
-            if config.wrap then new_pos = (new_pos - config.wrap[1]) % (config.wrap[2] - config.wrap[1] + 1) + config.wrap[1] end
+            if config.wrap then local range = config.wrap[2] - config.wrap[1] new_pos = ((new_pos - config.wrap[1]) % range) + config.wrap[1] end
             local norm_pos = new_pos / 100
             if sym then
                 for tr = 1, 2 do
