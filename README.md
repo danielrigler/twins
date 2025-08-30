@@ -12,7 +12,7 @@ Inspired by @cfd90’s Twine and contains influence and code from a lot of other
 * Reverb, delay, tape effects, shimmer, EQ, filters, bit reduction, etc.
 * Flexible volume control
 * Extra granular parameters, increased parameter ranges
-* Smooth transition interpolation
+* Smooth transition interpolation / evolution
 * Freely assignable LFOs with randomization
 * On screen navigation with parameter locking
 * Symmetry mode and mirroring
@@ -35,7 +35,7 @@ _some features might require a pi4 based unit. If you hear clicks and crackles t
 ### Discussion
 **[FORUM](https://llllllll.co/t/twins/71052)**
 ### Download
-**v0.38**
+**v0.39**
 install from Maiden Project Manager, or from Maiden REPL:
 ```
 ;install https://github.com/danielrigler/twins
@@ -43,6 +43,7 @@ install from Maiden Project Manager, or from Maiden REPL:
 do not forget to restart.
 
 ### Version history
+* **v0.39** - Added parameter evolution.
 * **v0.38** - Improved seek display (now also in live mode), new record head indicator.
 * **v0.37** - Added Haas effect. Locking enhancements.
 * **v0.36** - Realtime seek position display, small tweaks. 
