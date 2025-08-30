@@ -1,6 +1,14 @@
 local randomize_metro = metro.init()
+local evolution_metro = metro.init()
 local targets, active_interpolations = {}, {}
 local interpolation_speed = 1 / 30
+
+local evolution_active = false
+local evolution_range = 0.15
+local evolution_states = {}
+local evolution_update_rate = 1/4
+local evolvable_params_cache = {}
+local cache_dirty = true
 
 ------------------------------------------------------------
 -- Utilities
@@ -19,6 +27,253 @@ end
 
 local function clear_table(t)
   for k in pairs(t) do t[k] = nil end
+end
+
+local PARAM_SPECS = {
+  -- Format: [param_name] = {range, {min, max}, group}
+  -- Filter params
+  ["1cutoff"] = {13000, {20, 20000}, "filter"},
+  ["2cutoff"] = {13000, {20, 20000}, "filter"},
+  ["1hpf"] = {500, {20, 20000}, "filter"},
+  ["2hpf"] = {500, {20, 20000}, "filter"},
+  
+  -- EQ params
+  ["1eq_low_gain"] = {2, {-0.7, 0.7}, "eq"},
+  ["2eq_low_gain"] = {2, {-0.7, 0.7}, "eq"},
+  ["1eq_mid_gain"] = {2, {-0.7, 0.7}, "eq"},
+  ["2eq_mid_gain"] = {2, {-0.7, 0.7}, "eq"},
+  ["1eq_high_gain"] = {2, {-0.7, 0.7}, "eq"},
+  ["2eq_high_gain"] = {2, {-0.7, 0.7}, "eq"},
+  
+  -- Granular params
+  ["1direction_mod"] = {40, {0, 100}, "granular"},
+  ["2direction_mod"] = {40, {0, 100}, "granular"},
+  ["1size_variation"] = {40, {0, 100}, "granular"},
+  ["2size_variation"] = {40, {0, 100}, "granular"},
+  ["1density_mod_amt"] = {50, {0, 100}, "granular"},
+  ["2density_mod_amt"] = {50, {0, 100}, "granular"},
+  ["1subharmonics_1"] = {1, {0, 1}, "granular"},
+  ["2subharmonics_1"] = {1, {0, 1}, "granular"},
+  ["1subharmonics_2"] = {1, {0, 1}, "granular"},
+  ["2subharmonics_2"] = {1, {0, 1}, "granular"},
+  ["1subharmonics_3"] = {1, {0, 1}, "granular"},
+  ["2subharmonics_3"] = {1, {0, 1}, "granular"},
+  ["1overtones_1"] = {1, {0, 1}, "granular"},
+  ["2overtones_1"] = {1, {0, 1}, "granular"},
+  ["1overtones_2"] = {1, {0, 1}, "granular"},
+  ["2overtones_2"] = {1, {0, 1}, "granular"},
+  ["1pitch_random_plus"] = {20, {0, 100}, "granular"},
+  ["1pitch_random_minus"] = {20, {0, 100}, "granular"},  
+  ["2pitch_random_plus"] = {20, {0, 100}, "granular"},
+  ["2pitch_random_minus"] = {20, {0, 100}, "granular"},  
+
+  -- Global effects
+  ["delay_mix"] = {40, {0, 80}, "delay"},
+  ["delay_time"] = {2, {0.15, 2}, "delay"},
+  ["delay_feedback"] = {40, {0, 100}, "delay"},
+  ["stereo"] = {70, {0, 100}, "delay"},
+  ["wiggle_depth"] = {20, {0, 75}, "delay"},
+  ["wiggle_rate"] = {4, {0, 6}, "delay"},
+  ["t60"] = {2, {0.1, 8}, "reverb"},
+  ["damp"] = {10, {0, 100}, "reverb"},
+  ["earlyDiff"] = {50, {0, 100}, "reverb"},
+  ["modDepth"] = {100, {0, 100}, "reverb"},
+  ["modFreq"] = {2, {0, 5}, "reverb"},
+  ["low"] = {0.5, {0, 1}, "reverb"},
+  ["mid"] = {0.5, {0, 1}, "reverb"},
+  ["high"] = {0.5, {0, 1}, "reverb"},
+  ["lowcut"] = {500, {100, 4000}, "reverb"},
+  ["highcut"] = {1000, {1000, 4000}, "reverb"},
+  ["wobble_amp"] = {20, {0, 100}, "tape"},
+  ["wobble_rpm"] = {30, {30, 90}, "tape"},
+  ["flutter_amp"] = {30, {0, 100}, "tape"},
+  ["flutter_freq"] = {5, {3, 30}, "tape"},
+  ["flutter_var"] = {5, {0.1, 10}, "tape"},
+  ["rsize"] = {3, {1, 5}, "reverb"},
+  ["pitchv"] = {2, {0, 4}, "shimmer"},
+  ["lowpass"] = {10000, {100, 20000}, "shimmer"},
+  ["hipass"] = {500, {20, 4000}, "shimmer"},
+  ["fb"] = {30, {0, 80}, "shimmer"},
+  ["fbDelay"] = {0.2, {0.02, 1}, "shimmer"}
+}
+
+-- Lock parameter mapping
+local LOCK_PARAMS = {
+  filter = "lock_filter",
+  eq = "lock_eq", 
+  granular = "lock_granular",
+  delay = "lock_delay",
+  reverb = "lock_reverb",
+  tape = "lock_tape",
+  shimmer = "lock_shimmer"
+}
+
+local function get_param_range(param_name)
+  local spec = PARAM_SPECS[param_name]
+  return spec and spec[1]
+end
+
+local function get_param_bounds(param_name)
+  local spec = PARAM_SPECS[param_name]
+  return spec and spec[2]
+end
+
+------------------------------------------------------------
+-- Evolution System
+------------------------------------------------------------
+
+local function set_evolution_rate(rate)
+  evolution_update_rate = rate
+  if evolution_active then
+    evolution_metro.time = evolution_update_rate
+  end
+end
+
+local function init_evolution_state(param_name)
+  if evolution_states[param_name] then return end
+  local param_range = get_param_range(param_name)
+  evolution_states[param_name] = {
+    center_value = params:get(param_name),
+    current_drift = 0,
+    velocity = 0,
+    momentum_decay = random_float(0.92, 0.98),  -- Slight randomization
+    direction_change_prob = random_float(0.03, 0.08),  -- Varied behavior
+    max_drift_range = param_range * evolution_range,
+    last_boundary_hit = 0  -- For boundary hit dampening
+  }
+end
+
+local function clamp_to_param_bounds(param_name, value)
+  local bounds = get_param_bounds(param_name)
+  return bounds and util.clamp(value, bounds[1], bounds[2]) or value
+end
+
+local function evolve_parameter(param_name, state)
+  if math.random() < state.direction_change_prob then
+    local intensity = state.max_drift_range / 50
+    state.velocity = random_float(-intensity, intensity)
+  end
+  
+  -- Apply momentum with slight random component
+  state.velocity = state.velocity * state.momentum_decay + 
+                   random_float(-1, 1) * (state.max_drift_range / 300)
+  
+  -- Update drift
+  state.current_drift = state.current_drift + state.velocity
+  
+  -- Constrain drift
+  state.current_drift = util.clamp(state.current_drift, 
+                                   -state.max_drift_range, 
+                                   state.max_drift_range)
+  
+  -- Calculate new value with boundary handling
+  local new_value = state.center_value + state.current_drift
+  local bounds = get_param_bounds(param_name)
+  
+  if bounds then
+    -- Smooth boundary reflection with dampening
+    if new_value < bounds[1] then
+      new_value = bounds[1]
+      state.velocity = -state.velocity * random_float(0.3, 0.7)
+      state.current_drift = new_value - state.center_value
+    elseif new_value > bounds[2] then
+      new_value = bounds[2]
+      state.velocity = -state.velocity * random_float(0.3, 0.7)
+      state.current_drift = new_value - state.center_value
+    end
+  end
+  
+  return new_value
+end
+
+-- Build cached list of evolvable parameters
+local function build_evolvable_params_cache()
+  if not cache_dirty then return end
+  
+  clear_table(evolvable_params_cache)
+  
+  -- Check each parameter in PARAM_SPECS
+  for param_name, spec in pairs(PARAM_SPECS) do
+    local group = spec[3]
+    local lock_param = LOCK_PARAMS[group]
+    
+    -- Include if parameter exists and isn't locked
+    if params.lookup[param_name] and 
+       (not lock_param or not params.lookup[lock_param] or params:get(lock_param) ~= 2) then
+      table.insert(evolvable_params_cache, param_name)
+    end
+  end
+  cache_dirty = false
+end
+
+local function evolution_update()
+  if not evolution_active then return end
+  
+  build_evolvable_params_cache()
+  if #evolvable_params_cache == 0 then return end
+  
+  local symmetry = params:get("symmetry") == 1
+  local updated_params = {}
+  
+  for _, param_name in ipairs(evolvable_params_cache) do
+    if params.lookup[param_name] and not updated_params[param_name] then
+      init_evolution_state(param_name)
+      local state = evolution_states[param_name]
+      local new_value = evolve_parameter(param_name, state)
+      
+      params:set(param_name, new_value)
+      updated_params[param_name] = true
+      
+      if symmetry and param_name:match("^%d") then
+        local track_num = param_name:match("^(%d)")
+        local mirrored = param_name:gsub("^%d", tostring((tonumber(track_num) % 2) + 1))
+        
+        if params.lookup[mirrored] and not updated_params[mirrored] then
+          init_evolution_state(mirrored)
+          evolution_states[mirrored].center_value = new_value
+          evolution_states[mirrored].current_drift = 0
+          params:set(mirrored, new_value)
+          updated_params[mirrored] = true
+        end
+      end
+    end
+  end
+end
+
+-- Evolution control functions with cache invalidation
+local function start_evolution()
+  if evolution_active then return end
+  
+  evolution_active = true
+  cache_dirty = true
+  clear_table(evolution_states)
+  
+  evolution_metro.time = evolution_update_rate
+  evolution_metro.event = evolution_update
+  evolution_metro:start()
+end
+
+local function stop_evolution()
+  if not evolution_active then return end
+  evolution_active = false
+  if evolution_metro and evolution_metro.running then
+    evolution_metro:stop()
+  end
+end
+
+local function reset_evolution_centers()
+  for param_name, state in pairs(evolution_states) do
+    state.center_value = params:get(param_name)
+    state.current_drift = 0
+    state.velocity = 0
+  end
+end
+
+local function set_evolution_range(range_pct)
+  evolution_range = util.clamp(range_pct / 100, 0.001, 1.0)
+  for param_name, state in pairs(evolution_states) do
+    state.max_drift_range = get_param_range(param_name) * evolution_range
+  end
 end
 
 ------------------------------------------------------------
@@ -40,7 +295,13 @@ local function start_interpolation(steps, symmetry)
         local new_value = interpolate(current, target, threshold, factor)
         params:set(param, new_value)
 
-        -- Symmetry: mirror to paired track param
+        -- Update evolution center when randomization sets new value
+        if evolution_states[param] then
+          evolution_states[param].center_value = new_value
+          evolution_states[param].current_drift = 0
+        end
+
+        -- Symmetry handling
         if symmetry and param:match("^%d") then
           local mirrored = param:gsub("^(%d)(.*)", function(num, rest)
             return (tonumber(num) % 2) + 1 .. rest
@@ -49,11 +310,16 @@ local function start_interpolation(steps, symmetry)
             local mdata = targets[mirrored] or { target = target, threshold = threshold }
             local mnew = interpolate(params:get(mirrored), mdata.target, mdata.threshold, factor)
             params:set(mirrored, mnew)
+            
+            if evolution_states[mirrored] then
+              evolution_states[mirrored].center_value = mnew
+              evolution_states[mirrored].current_drift = 0
+            end
+            
             if math.abs(mnew - mdata.target) > mdata.threshold then all_done = false end
           end
         end
 
-        -- Check convergence
         if math.abs(new_value - target) > threshold then
           all_done = false
         else
@@ -77,10 +343,15 @@ end
 
 local function set_param(param, prob, default, random, direct)
   if direct then
-    params:set(param,
-      (math.random() <= prob)
-        and (type(default) == "function" and default() or default)
-        or random())
+    local val = (math.random() <= prob)
+      and (type(default) == "function" and default() or default)
+      or random()
+    params:set(param, val)
+    
+    if evolution_states[param] then
+      evolution_states[param].center_value = val
+      evolution_states[param].current_drift = 0
+    end
     return
   end
 
@@ -217,7 +488,6 @@ local function randomize_params(steps, track_num)
   -- Track FX
   if symmetry then
     randomize_track(1, steps, {track_param_configs.eq, track_param_configs.granular})
-    -- Mirror track 1 â†’ 2
     for param, data in pairs(targets) do
       if param:sub(1,1) == tostring(track_num) then
         local mirrored = param:gsub("^(%d)(.*)", function(num, rest)
@@ -276,6 +546,18 @@ local function randomize_eq_params(track, steps)
   start_interpolation(steps, params:get("symmetry") == 1)
 end
 
+local function cleanup()
+  stop_evolution()
+  if randomize_metro then
+    randomize_metro:stop()
+  end
+  clear_table(targets)
+  clear_table(active_interpolations)
+  clear_table(evolution_states)
+  clear_table(evolvable_params_cache)
+  cache_dirty = true
+end
+
 ------------------------------------------------------------
 -- Public API
 ------------------------------------------------------------
@@ -291,4 +573,15 @@ return {
   randomize_tape_params     = randomize_tape_params,
   randomize_granular_params = randomize_granular_params,
   randomize_eq_params       = randomize_eq_params,
+  
+  -- evolution system
+  start_evolution           = start_evolution,
+  stop_evolution            = stop_evolution,
+  set_evolution_range       = set_evolution_range,
+  set_evolution_rate        = set_evolution_rate,
+  reset_evolution_centers   = reset_evolution_centers,
+  cleanup                   = cleanup,
+  
+  -- for external access
+  is_evolution_active       = function() return evolution_active end,
 }

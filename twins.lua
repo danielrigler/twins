@@ -29,7 +29,7 @@
 -- @justmat @artfwo @nzimas
 -- @sonoCircuit @graymazes
 -- @Higaru @NiklasKramer
--- @xmacex
+-- @xmacex @vehka
 --
 -- If you like this,
 -- buy them a beer :)
@@ -37,7 +37,7 @@
 --                    Daniel Rigler
 
 installer_ = include("lib/scinstaller/scinstaller")
-installer = installer_:new{requirements = {"Fverb2", "Fverb", "AnalogTape", "AnalogChew", "AnalogLoss", "AnalogDegrade"},
+installer = installer_:new{requirements = {"AnalogTape", "AnalogChew", "AnalogLoss", "AnalogDegrade"},
     zip = "https://github.com/schollz/portedplugins/releases/download/v0.4.6/PortedPlugins-RaspberryPi.zip"}
 engine.name = installer:ready() and 'twins' or nil
 local osc_positions = {[1] = 0, [2] = 0}
@@ -87,21 +87,10 @@ local param_rows = {
     {y = 41, label = "spread:   ", mode = "spread", param1 = "1spread", param2 = "2spread"},
     {y = 51, label = "pitch:    ", mode = "pitch", param1 = "1pitch", param2 = "2pitch", st = true}}
 
-local function is_audio_loaded(track_num)
-  local file_path = params:get(track_num .. "sample")
-  return (file_path and file_path ~= "-") or audio_active[track_num]
-end
-
-local function random_float(l, h)
-    return l + math.random() * (h - l)
-end
-
-local function stop_metro_safe(m)
-  if m then
-    local ok, err = pcall(function() m:stop() end)
-    if m then m.event = nil end
-  end
-end
+local function table_find(tbl, value) for i = 1, #tbl do if tbl[i] == value then return i end end return nil end
+local function is_audio_loaded(track_num) local file_path = params:get(track_num .. "sample") return (file_path and file_path ~= "-") or audio_active[track_num] end
+local function random_float(l, h) return l + math.random() * (h - l) end
+local function stop_metro_safe(m) if m then local ok, err = pcall(function() m:stop() end) if m then m.event = nil end end end
 
 local function osc_event(path, args)
   local vid, pos
@@ -120,9 +109,7 @@ local function osc_event(path, args)
   end
 end
 
-local function setup_osc()
-  osc.event = osc_event
-end
+local function setup_osc() osc.event = osc_event end
 
 local function setup_ui_metro()
     ui_metro = metro.init()
@@ -259,7 +246,7 @@ local function setup_params()
     params:add_group("Delay", 12)
     params:add_taper("delay_mix", "Mix", 0, 100, 0, 1, "%") params:set_action("delay_mix", function(value) engine.mix(value/100) end)
     params:add_taper("delay_time", "Time", 0.02, 2, 0.5, 0.1, "s") params:set_action("delay_time", function(value) engine.delay(value) end)
-    params:add_binary("tap", "â†³ TAP!", "trigger", 0) params:set_action("tap", function() register_tap() end)
+    params:add_binary("tap", "↳ TAP!", "trigger", 0) params:set_action("tap", function() register_tap() end)
     params:add_taper("delay_feedback", "Feedback", 0, 120, 30, 1, "%") params:set_action("delay_feedback", function(value) engine.fb_amt(value/100) end)
     params:add_control("delay_lowpass", "LPF", controlspec.new(20, 20000, 'exp', 1, 20000, "Hz")) params:set_action('delay_lowpass', function(value) engine.lpf(value) end)
     params:add_control("delay_highpass", "HPF", controlspec.new(20, 20000, 'exp', 1, 20, "Hz")) params:set_action("delay_highpass", function(value) engine.dhpf(value) end)
@@ -399,10 +386,13 @@ local function setup_params()
     params:add_binary("macro_more", "More+", "trigger", 0) params:set_action("macro_more", function() macro.macro_more() end)
     params:add_binary("macro_less", "Less-", "trigger", 0) params:set_action("macro_less", function() macro.macro_less() end)
     
-    params:add_group("Other", 3)
+    params:add_group("Other", 6)
     params:add_binary("dry_mode", "Dry Mode", "toggle", 0) params:set_action("dry_mode", function(x) drymode.toggle_dry_mode() end)
     params:add_binary("unload_all", "Unload All Audio", "trigger", 0) params:set_action("unload_all", function() for i=1, 2 do params:set(i.."seek", 0) params:set(i.."sample", "-") params:set(i.."live_input", 0) params:set(i.."live_direct", 0) audio_active[i] = false osc_positions[i] = 0 end engine.unload_all() oscgo = 0 end)
     params:add_option("steps", "Transition Time", {"short", "medium", "long"}, 2) params:set_action("steps", function(value) lfo.cleanup() steps = ({20, 300, 800})[value] end)
+    params:add_binary("evolution", "Evolve", "toggle", 0) params:set_action("evolution", function(value) if value == 1 then randpara.reset_evolution_centers() randpara.start_evolution() else randpara.stop_evolution() end end)
+    params:add_control("evolution_range", "Evolution Range", controlspec.new(1, 100, "lin", 1, 15, "%")) params:set_action("evolution_range", function(value) randpara.set_evolution_range(value) end)
+    params:add_option("evolution_rate", "Evolution Rate", {"slowest", "slow", "moderate", "medium", "fast", "crazy"}, 3) params:set_action("evolution_rate", function(value) local rates = {1/0.5, 1/1.5, 1/4, 1/8, 1/15, 1/30} randpara.set_evolution_rate(rates[value]) end)
 
     for i = 1, 2 do
       params:add_taper(i.. "volume", i.. " volume", -70, 10, -15, 0, "dB") params:set_action(i.. "volume", function(value) if value == -70 then engine.volume(i, 0) else engine.volume(i, math.pow(10, value / 20)) end end) params:hide(i.. "volume")
@@ -552,9 +542,9 @@ function init()
     initital_monitor_level = params:get('monitor_level')
     params:set('monitor_level', -math.huge)
     if not installer:ready() then clock.run(function() while true do redraw() clock.sleep(1 / 10) end end) do return end end
-    setup_osc()
     setup_ui_metro()
     setup_params()
+    setup_osc()
 end
 
 function enc(n, d)
@@ -723,7 +713,7 @@ function key(n, z)
         else
             local lockable_params = {"jitter", "size", "density", "spread", "pitch", "pan", "seek", "speed"}
             local param_name = string.match(current_mode, "%a+")
-            if param_name and table.find(lockable_params, param_name) then
+            if param_name and table_find(lockable_params, param_name) then
                 local is_locked1 = params:get("1lock_" .. param_name) == 2
                 local is_locked2 = params:get("2lock_" .. param_name) == 2
                 if is_locked1 ~= is_locked2 then
@@ -739,29 +729,10 @@ function key(n, z)
     end
 end
 
-local function format_density(value)
-    return string.format("%.1f Hz", value)
-end
-
-local function format_pitch(value)
-    if value > 0 then
-        return string.format("+%.0f", value)
-    else
-        return string.format("%.0f", value)
-    end
-end
-
-local function format_seek(value)
-    return string.format("%.0f%%", value)
-end
-
-local function format_speed(speed)
-    if math.abs(speed) < 0.01 then return ".00x"
-    elseif math.abs(speed) < 1 then
-        if speed < -0.01 then return string.format("-.%02dx", math.floor(math.abs(speed) * 100))
-        else return string.format(".%02dx", math.floor(math.abs(speed) * 100)) end
-    else return string.format("%.2fx", speed) end
-end
+local function format_density(value) return string.format("%.1f Hz", value) end
+local function format_pitch(value) if value > 0 then return string.format("+%.0f", value) else return string.format("%.0f", value) end end
+local function format_seek(value) return string.format("%.0f%%", value) end
+local function format_speed(speed) if math.abs(speed) < 0.01 then return ".00x" elseif math.abs(speed) < 1 then if speed < -0.01 then return string.format("-.%02dx", math.floor(math.abs(speed) * 100)) else return string.format(".%02dx", math.floor(math.abs(speed) * 100)) end else return string.format("%.2fx", speed) end end
 
 local function is_param_locked(track_num, param)
     return params:get(track_num .. "lock_" .. param) == 2
@@ -909,6 +880,11 @@ function redraw()
         table.insert(pixels[levels.highlight], {8,0})
         table.insert(pixels[levels.highlight], {10,0})
     end
+    if params:get("evolution") == 1 then 
+        table.insert(pixels[levels.highlight], {18,0})
+        table.insert(pixels[levels.highlight], {20,0})
+        table.insert(pixels[levels.highlight], {22,0})
+    end    
     for _, lvl in ipairs({levels.dim, levels.value, levels.highlight}) do
         screen.level(lvl)
         for _, r in ipairs(rects[lvl]) do
@@ -931,10 +907,10 @@ end
 
 function cleanup()
     stop_metro_safe(ui_metro)
-    for i = 1, 2 do stop_metro_safe(randomize_metro[i]) end
     stop_metro_safe(m_rand)
-    stop_metro_safe(lfo_metro)
-    if lfo and lfo.cleanup then lfo.cleanup() end
+    for i = 1, 2 do stop_metro_safe(randomize_metro[i]) end
+    lfo.cleanup()
+    randpara.cleanup()
     params:set('monitor_level', initital_monitor_level)
     params:set('reverb', initital_reverb_onoff)
     osc.event = nil

@@ -11,10 +11,9 @@ local param_ranges = {
     jitter = {min = 0, max = 1999},
     size = {min = 150, max = 599},
     density = {min = 0.1, max = 49},
-    spread = {min = 0, max = 99}
 }
 
-local params_to_adjust = {"speed", "size", "jitter", "spread", "density"}
+local params_to_adjust = {"speed", "size", "jitter", "density"}
 local lfo_ref = nil
 local randomize_metro = metro.init()
 
