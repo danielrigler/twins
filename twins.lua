@@ -391,7 +391,7 @@ local function setup_params()
     params:add_binary("unload_all", "Unload All Audio", "trigger", 0) params:set_action("unload_all", function() for i=1, 2 do params:set(i.."seek", 0) params:set(i.."sample", "-") params:set(i.."live_input", 0) params:set(i.."live_direct", 0) audio_active[i] = false osc_positions[i] = 0 end engine.unload_all() oscgo = 0 end)
     params:add_option("steps", "Transition Time", {"short", "medium", "long"}, 2) params:set_action("steps", function(value) lfo.cleanup() steps = ({20, 300, 800})[value] end)
     params:add_binary("evolution", "Evolve", "toggle", 0) params:set_action("evolution", function(value) if value == 1 then randpara.reset_evolution_centers() randpara.start_evolution() else randpara.stop_evolution() end end)
-    params:add_control("evolution_range", "Evolution Range", controlspec.new(1, 100, "lin", 1, 15, "%")) params:set_action("evolution_range", function(value) randpara.set_evolution_range(value) end)
+    params:add_control("evolution_range", "Evolution Range", controlspec.new(0, 100, "lin", 1, 15, "%")) params:set_action("evolution_range", function(value) randpara.set_evolution_range(value) end)
     params:add_option("evolution_rate", "Evolution Rate", {"slowest", "slow", "moderate", "medium", "fast", "crazy"}, 3) params:set_action("evolution_rate", function(value) local rates = {1/0.5, 1/1.5, 1/4, 1/8, 1/15, 1/30} randpara.set_evolution_rate(rates[value]) end)
 
     for i = 1, 2 do
