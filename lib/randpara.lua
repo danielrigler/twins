@@ -9,6 +9,7 @@ local evolution_states = {}
 local evolution_update_rate = 1/4
 local evolvable_params_cache = {}
 local cache_dirty = true
+local evolution_symmetry_state = false
 
 ------------------------------------------------------------
 -- Utilities
@@ -31,12 +32,7 @@ end
 
 local PARAM_SPECS = {
   -- Format: [param_name] = {range, {min, max}, group}
-  -- Filter params
-  ["1cutoff"] = {13000, {20, 20000}, "filter"},
-  ["2cutoff"] = {13000, {20, 20000}, "filter"},
-  ["1hpf"] = {500, {20, 20000}, "filter"},
-  ["2hpf"] = {500, {20, 20000}, "filter"},
-  
+
   -- EQ params
   ["1eq_low_gain"] = {2, {-0.7, 0.7}, "eq"},
   ["2eq_low_gain"] = {2, {-0.7, 0.7}, "eq"},
@@ -74,6 +70,8 @@ local PARAM_SPECS = {
   ["stereo"] = {70, {0, 100}, "delay"},
   ["wiggle_depth"] = {20, {0, 75}, "delay"},
   ["wiggle_rate"] = {4, {0, 6}, "delay"},
+  ["delay_lowpass"] = {10000, {500, 20000}, "delay"},
+  ["delay_hipass"] = {300, {20, 1500}, "delay"},
   ["t60"] = {2, {0.1, 8}, "reverb"},
   ["damp"] = {10, {0, 100}, "reverb"},
   ["earlyDiff"] = {50, {0, 100}, "reverb"},
@@ -89,12 +87,16 @@ local PARAM_SPECS = {
   ["flutter_amp"] = {30, {0, 100}, "tape"},
   ["flutter_freq"] = {5, {3, 30}, "tape"},
   ["flutter_var"] = {5, {0.1, 10}, "tape"},
-  ["rsize"] = {3, {1, 5}, "reverb"},
   ["pitchv"] = {2, {0, 4}, "shimmer"},
   ["lowpass"] = {10000, {100, 20000}, "shimmer"},
   ["hipass"] = {500, {20, 4000}, "shimmer"},
   ["fb"] = {30, {0, 80}, "shimmer"},
-  ["fbDelay"] = {0.2, {0.02, 1}, "shimmer"}
+  ["fbDelay"] = {0.2, {0.02, 1}, "shimmer"},
+  ["global_lfo_freq_scale"] = {3, {0.1, 5}, "lfo"},
+  ["bitcrush_rate"] = {1000, {3500, 5500}, "bitcrush"},
+  ["bitcrush_bits"] = {2, {12, 16}, "bitcrush"},
+  ["chew_freq"] = {20, {1, 60}, "chew"},
+  ["chew_variance"] = {20, {0, 70}, "chew"}
 }
 
 -- Lock parameter mapping
@@ -212,7 +214,7 @@ local function evolution_update()
   build_evolvable_params_cache()
   if #evolvable_params_cache == 0 then return end
   
-  local symmetry = params:get("symmetry") == 1
+  local symmetry = evolution_symmetry_state
   local updated_params = {}
   
   for _, param_name in ipairs(evolvable_params_cache) do
@@ -245,6 +247,7 @@ local function start_evolution()
   if evolution_active then return end
   
   evolution_active = true
+  evolution_symmetry_state = params:get("symmetry") == 1
   cache_dirty = true
   clear_table(evolution_states)
   

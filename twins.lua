@@ -70,16 +70,16 @@ local mode_indices = {}; for i,v in ipairs(mode_list) do mode_indices[v]=i end
 local mode_list2 = {"seek","speed","pan","lpf","jitter","size","density","spread","pitch"}
 local mode_indices2 = {}; for i,v in ipairs(mode_list2) do mode_indices2[v]=i end
 local param_modes = {
-    speed = {param = "speed", delta = 0.5, wrap = nil, engine = false, has_lock = true},
-    seek = {param = "seek", delta = 1, wrap = {0, 100}, engine = true, has_lock = true},
-    pan = {param = "pan", delta = 5, wrap = nil, engine = false, has_lock = true, invert = true},
-    lpf = {param = "cutoff", delta = 1, wrap = nil, engine = false, has_lock = false},
-    hpf = {param = "hpf", delta = 1, wrap = nil, engine = false, has_lock = false},
-    jitter = {param = "jitter", delta = 2, wrap = nil, engine = false, has_lock = true},
-    size = {param = "size", delta = 2, wrap = nil, engine = false, has_lock = true},
-    density = {param = "density", delta = 2, wrap = nil, engine = false, has_lock = true},
-    spread = {param = "spread", delta = 2, wrap = nil, engine = false, has_lock = true},
-    pitch = {param = "pitch", delta = 1, wrap = nil, engine = false, has_lock = true}}
+    speed = {param = "speed", delta = 0.5, engine = false, has_lock = true},
+    seek = {param = "seek", delta = 1, engine = true, has_lock = true},
+    pan = {param = "pan", delta = 5, engine = false, has_lock = true, invert = true},
+    lpf = {param = "cutoff", delta = 1, engine = false, has_lock = false},
+    hpf = {param = "hpf", delta = 1, engine = false, has_lock = false},
+    jitter = {param = "jitter", delta = 2, engine = false, has_lock = true},
+    size = {param = "size", delta = 2, engine = false, has_lock = true},
+    density = {param = "density", delta = 2, engine = false, has_lock = true},
+    spread = {param = "spread", delta = 2, engine = false, has_lock = true},
+    pitch = {param = "pitch", delta = 1, engine = false, has_lock = true}}
 local param_rows = {
     {y = 11, label = "jitter:    ", mode = "jitter", param1 = "1jitter", param2 = "2jitter"},
     {y = 21, label = "size:     ", mode = "size", param1 = "1size", param2 = "2size"},
@@ -91,25 +91,6 @@ local function table_find(tbl, value) for i = 1, #tbl do if tbl[i] == value then
 local function is_audio_loaded(track_num) local file_path = params:get(track_num .. "sample") return (file_path and file_path ~= "-") or audio_active[track_num] end
 local function random_float(l, h) return l + math.random() * (h - l) end
 local function stop_metro_safe(m) if m then local ok, err = pcall(function() m:stop() end) if m then m.event = nil end end end
-
-local function osc_event(path, args)
-  local vid, pos
-  if path == "/twins/buf_pos" and oscgo == 1 then
-    vid = args[1] + 1
-    pos = args[2]
-    if audio_active[vid] or params:get(vid.."live_input") == 1 or params:get(vid.."live_direct") == 1 then
-      osc_positions[vid] = pos
-    end
-  elseif path == "/twins/rec_pos" then
-    vid = args[1] + 1
-    pos = args[2]
-    if params:get(vid.."live_input") == 1 then
-      rec_positions[vid] = pos
-    end
-  end
-end
-
-local function setup_osc() osc.event = osc_event end
 
 local function setup_ui_metro()
     ui_metro = metro.init()
@@ -403,7 +384,7 @@ local function setup_params()
       params:add_taper(i.. "jitter", i.. " jitter", 0, 4999, 250, 3, "ms") params:set_action(i.. "jitter", function(value) engine.jitter(i, value / 1000) end) params:hide(i.. "jitter")
       params:add_taper(i.. "size", i.. " size", 1, 5999, 200, 1, "ms") params:set_action(i.. "size", function(value) engine.size(i, value / 1000) end) params:hide(i.. "size")
       params:add_taper(i.. "spread", i.. " spread", 0, 100, 30, 0, "%") params:set_action(i.. "spread", function(value) engine.spread(i, value / 100) end) params:hide(i.. "spread")
-      params:add_control(i.. "seek", i.. " seek", controlspec.new(0, 100, "lin", 0.01, 0, "%")) params:set_action(i.. "seek", function(value) engine.seek(i, value) end) params:hide(i.. "seek")
+      params:add_control(i.. "seek", i.. " seek", controlspec.new(0, 100, "lin", 0.01, 0, "%")) params:set_action(i.. "seek", function(value) engine.seek(i, value / 100) end) params:hide(i.. "seek")
     end
     params:bang()
 end
@@ -536,17 +517,6 @@ local function randomize(n)
     end
 end
 
-function init()
-    initital_reverb_onoff = params:get('reverb')
-    params:set('reverb', 1)
-    initital_monitor_level = params:get('monitor_level')
-    params:set('monitor_level', -math.huge)
-    if not installer:ready() then clock.run(function() while true do redraw() clock.sleep(1 / 10) end end) do return end end
-    setup_ui_metro()
-    setup_params()
-    setup_osc()
-end
-
 function enc(n, d)
     if not installer:ready() then return end
     local function handle_param(track, config)
@@ -593,7 +563,7 @@ function enc(n, d)
             local delta = config.delta * d
             local current_pos = osc_positions[track] * 100
             local new_pos = current_pos + delta
-            if config.wrap then local range = config.wrap[2] - config.wrap[1] new_pos = ((new_pos - config.wrap[1]) % range) + config.wrap[1] end
+            local new_pos = (new_pos % 100 + 100) % 100
             local norm_pos = new_pos / 100
             if sym then
                 for tr = 1, 2 do
@@ -612,16 +582,8 @@ function enc(n, d)
             disable_lfos_for_param(p)
             local ot, op = 3 - track, (3 - track)..config.param
             local cv = params:get(p)
-            if config.wrap then
-                local r = config.wrap[2] - config.wrap[1] + 1
-                local mod = function(v) return (v - config.wrap[1]) % r + config.wrap[1] end
-                local new_val = mod(cv + delta)
-                params:set(p, new_val)
-                params:set(op, mod(config.param == "pan" and cv - delta or params:get(op) + delta))
-            else
                 params:delta(p, delta)
                 params:delta(op, config.param == "pan" and -delta or delta)
-            end
             if config.param == "pan" then
                 engine.pan(track, params:get(p) / 100)
                 engine.pan(ot, params:get(op) / 100)
@@ -629,12 +591,7 @@ function enc(n, d)
         else
             local active, idx = is_lfo_active_for_param(p)
             if active then params:set(idx.."lfo", 1) end
-            if config.wrap then
-                local r = config.wrap[2] - config.wrap[1] + 1
-                params:set(p, (params:get(p) + delta - config.wrap[1]) % r + config.wrap[1])
-            else
-                params:delta(p, delta)
-            end
+            params:delta(p, delta)
         end
     end
     if n == 1 then
@@ -903,6 +860,37 @@ function redraw()
     end  
     screen.restore()
     screen.update()
+end
+
+local function osc_event(path, args)
+  local vid, pos
+  if path == "/twins/buf_pos" and oscgo == 1 then
+    vid = args[1] + 1
+    pos = args[2]
+    if audio_active[vid] or params:get(vid.."live_input") == 1 or params:get(vid.."live_direct") == 1 then
+      osc_positions[vid] = pos
+      params:set(vid.."seek", pos * 100, true)
+    end
+  elseif path == "/twins/rec_pos" then
+    vid = args[1] + 1
+    pos = args[2]
+    if params:get(vid.."live_input") == 1 then
+      rec_positions[vid] = pos
+    end
+  end
+end
+
+local function setup_osc() osc.event = osc_event end
+
+function init()
+    initital_reverb_onoff = params:get('reverb')
+    params:set('reverb', 1)
+    initital_monitor_level = params:get('monitor_level')
+    params:set('monitor_level', -math.huge)
+    if not installer:ready() then clock.run(function() while true do redraw() clock.sleep(1 / 10) end end) do return end end
+    setup_ui_metro()
+    setup_params()
+    setup_osc()
 end
 
 function cleanup()
