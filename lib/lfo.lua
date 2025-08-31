@@ -8,29 +8,19 @@ local lfo = {}
 local assigned_params = {}
 local lfo_paused = false
 
--- Cache for parameter existence checks
-local param_cache = {}
-
 -- Constants
 local PHASE_INCREMENT = 1/30
 local TWO_PI = math.pi * 2
 local LOCKABLE_PARAMS = { "jitter", "size", "density", "spread", "pitch", "pan", "seek", "speed" }
 local LOCKABLE_LOOKUP = {}
+
 for _, param in ipairs(LOCKABLE_PARAMS) do
   LOCKABLE_LOOKUP[param] = true
 end
 
--- Helper to check param existence with caching
+-- Optimized parameter existence check
 local function param_exists(name)
-  if param_cache[name] == nil then
-    param_cache[name] = params.lookup and params.lookup[name] ~= nil
-  end
-  return param_cache[name]
-end
-
--- Clear param cache when needed
-local function clear_param_cache()
-  param_cache = {}
+  return params.lookup and params.lookup[name] ~= nil
 end
 
 -- Optimized table.find
@@ -57,33 +47,23 @@ function lfo.set_pause(paused)
   lfo_paused = paused
 end
 
--- Initialize LFO table more efficiently
+-- Initialize LFO table
 for i = 1, number_of_outputs do
   lfo[i] = { 
     freq = 0.05, 
     phase = 0,
-    waveform = "sine", -- Use string directly instead of table lookup
+    waveform = "sine",
     slope = 0, 
     depth = 50, 
     offset = 0,
-    prev = 0,
-    prev_polarity = 1
+    prev = 0
   }
 end
 
--- Cache for audio loaded status
-local audio_loaded_cache = {}
+-- Simplified audio loaded check
 local function is_audio_loaded(track_num)
-  if audio_loaded_cache[track_num] == nil then
-    local file_path = params:get(track_num .. "sample")
-    audio_loaded_cache[track_num] = file_path and file_path ~= "" and file_path ~= "none" and file_path ~= "-"
-  end
-  return audio_loaded_cache[track_num]
-end
-
--- Clear audio cache when needed
-local function clear_audio_cache()
-  audio_loaded_cache = {}
+  local file_path = params:get(track_num .. "sample")
+  return file_path and file_path ~= "" and file_path ~= "none" and file_path ~= "-"
 end
 
 function lfo.clearLFOs(track, param_type)
@@ -94,21 +74,18 @@ function lfo.clearLFOs(track, param_type)
       end
     end
     for i = 1, 16 do
-      local lfo_param = i.."lfo"
-      local lfo_target_param = i.."lfo_target"
-      if param_exists(lfo_param) and param_exists(lfo_target_param) then
-        local target_index = params:get(lfo_target_param)
+      if param_exists(i.."lfo") and param_exists(i.."lfo_target") then
+        local target_index = params:get(i.."lfo_target")
         local target_param = lfo.lfo_targets[target_index]
         if target_param and target_filter(target_param) and not is_locked(target_param) then
-          params:set(lfo_param, 1)
-          params:set(lfo_target_param, 1)
+          params:set(i.."lfo", 1)
+          params:set(i.."lfo_target", 1)
         end
       end
     end
   end
   
   local function reset_pan()
-    clear_audio_cache() -- Refresh audio cache before checking
     local track1_loaded = is_audio_loaded("1")
     local track2_loaded = is_audio_loaded("2")
     if track1_loaded and track2_loaded then
@@ -142,11 +119,17 @@ lfo.lfo_targets = {
   "1pitch", "2pitch", "1cutoff", "2cutoff", "1hpf", "2hpf", "1speed", "2speed"
 }
 
+-- Precompute target indices for faster lookup
+local lfo_target_indices = {}
+for idx, target in ipairs(lfo.lfo_targets) do
+  lfo_target_indices[target] = idx
+end
+
 lfo.target_ranges = {
   ["1pan"] = { depth = { 25, 90 }, offset = { 0, 0 }, frequency = { 0.05, 0.6 }, waveform = { "sine" }, chance = 0.8 },
   ["2pan"] = { depth = { 25, 90 }, offset = { 0, 0 }, frequency = { 0.05, 0.6 }, waveform = { "sine" }, chance = 0.8 },
-  ["1jitter"] = { depth = { 20, 100 }, offset = { 0, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
-  ["2jitter"] = { depth = { 20, 100 }, offset = { 0, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
+  ["1jitter"] = { depth = { 20, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
+  ["2jitter"] = { depth = { 20, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
   ["1spread"] = { depth = { 20, 100 }, offset = { 0, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
   ["2spread"] = { depth = { 20, 100 }, offset = { 0, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5},
   ["1size"] = { depth = { 20, 100 }, offset = { 0, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
@@ -165,12 +148,12 @@ lfo.target_ranges = {
 local param_ranges_cache = {
   ["1pan"] = { -90, 90 }, ["2pan"] = { -90, 90 },
   ["1seek"] = { 0, 100 }, ["2seek"] = { 0, 100 },
-  ["1speed"] = { -0.14, 0.49 }, ["2speed"] = { -0.14, 0.49 },
-  ["1jitter"] = { 101, 998 }, ["2jitter"] = { 101, 998 },
-  ["1spread"] = { 0, 100 }, ["2spread"] = { 0, 100 },
-  ["1size"] = { 101, 499 }, ["2size"] = { 101, 499 },
+  ["1speed"] = { -0.15, 0.5 }, ["2speed"] = { -0.15, 0.5 },
+  ["1jitter"] = { 50, 950 }, ["2jitter"] = { 50, 950 },
+  ["1spread"] = { 0, 80 }, ["2spread"] = { 0, 80 },
+  ["1size"] = { 100, 499 }, ["2size"] = { 100, 499 },
   ["1density"] = { 0, 29 }, ["2density"] = { 0, 29 },
-  ["1volume"] = { -100, 100 }, ["2volume"] = { -100, 100 },
+  ["1volume"] = { -70, 10 }, ["2volume"] = { -70, 10 },
   ["1pitch"] = { -12, 12 }, ["2pitch"] = { -12, 12 },
   ["1cutoff"] = { 20, 20000 }, ["2cutoff"] = { 20, 20000 },
   ["1hpf"] = { 20, 20000 }, ["2hpf"] = { 20, 20000 }
@@ -198,8 +181,7 @@ function lfo.assign_to_current_row(current_mode, current_filter_mode)
   -- Get available LFO slots
   local available_slots = {}
   for i = 1, 16 do
-    local lfo_param = i.."lfo"
-    if param_exists(lfo_param) and params:get(lfo_param) == 1 then
+    if param_exists(i.."lfo") and params:get(i.."lfo") == 1 then
       available_slots[#available_slots + 1] = i
     end
   end
@@ -259,19 +241,16 @@ function randomize_lfo(i, target)
     return
   end
   
-  -- Check for conflicts more efficiently
+  -- Check for conflicts
   for j = 1, number_of_outputs do
-    if j ~= i then
-      local lfo_param = j.."lfo"
-      local lfo_target_param = j.."lfo_target"
-      if param_exists(lfo_param) and param_exists(lfo_target_param) and 
-         params:get(lfo_param) == 2 and lfo.lfo_targets[params:get(lfo_target_param)] == target then
+    if j ~= i and param_exists(j.."lfo") and param_exists(j.."lfo_target") then
+      if params:get(j.."lfo") == 2 and lfo.lfo_targets[params:get(j.."lfo_target")] == target then
         return
       end
     end
   end
   
-  local target_index = table_find(lfo.lfo_targets, target)
+  local target_index = lfo_target_indices[target]
   if not target_index then return end
   
   local min_val, max_val = lfo.get_parameter_range(target)
@@ -312,6 +291,32 @@ function randomize_lfo(i, target)
   assigned_params[target] = true
 end
 
+function lfo.assign_volume_lfos()
+    -- Clear existing volume LFOs first
+    lfo.clearLFOs("1", "volume")
+    lfo.clearLFOs("2", "volume")
+    
+    -- Find free LFO slots
+    local free_slots = {}
+    for i = 1, 16 do
+        if param_exists(i.."lfo") and params:get(i.."lfo") == 1 then
+            free_slots[#free_slots + 1] = i
+        end
+    end
+    
+    -- Assign volume LFO for track 1 if slots available and not locked
+    if #free_slots > 0 and not is_locked("1volume") then
+        local slot1 = table.remove(free_slots, 1)
+        randomize_lfo(slot1, "1volume")
+    end
+    
+    -- Assign volume LFO for track 2 if slots available and not locked
+    if #free_slots > 0 and not is_locked("2volume") then
+        local slot2 = table.remove(free_slots, 1)
+        randomize_lfo(slot2, "2volume")
+    end
+end
+
 function lfo.randomize_lfos(track, allow_volume_lfos)
   local symmetry = params:get("symmetry") == 1
   
@@ -320,17 +325,15 @@ function lfo.randomize_lfos(track, allow_volume_lfos)
   
   -- Clear existing LFOs
   for i = 1, 16 do
-    local lfo_param = i.."lfo"
-    local lfo_target_param = i.."lfo_target"
-    if param_exists(lfo_param) and param_exists(lfo_target_param) then
-      local target_param = lfo.lfo_targets[params:get(lfo_target_param)]
+    if param_exists(i.."lfo") and param_exists(i.."lfo_target") then
+      local target_param = lfo.lfo_targets[params:get(i.."lfo_target")]
       if target_param then
         local should_clear = (symmetry and not target_param:match("volume$") and target_param:match("^[12]")) or
                            target_param:match("^"..track)
         
         if should_clear and not is_locked(target_param) then
-          params:set(lfo_param, 1)
-          params:set(lfo_target_param, 1)
+          params:set(i.."lfo", 1)
+          params:set(i.."lfo_target", 1)
           assigned_params[target_param] = nil
         end
       end
@@ -411,15 +414,12 @@ function lfo.process()
   if lfo_paused then
     -- Process only volume LFOs when paused
     for i = 1, 16 do
-      local lfo_target_param = i.."lfo_target"
-      local lfo_param = i.."lfo"
-      if param_exists(lfo_target_param) and param_exists(lfo_param) and params:get(lfo_param) == 2 then
-        local target_param = lfo.lfo_targets[params:get(lfo_target_param)]
+      if params:get(i.."lfo") == 2 then
+        local target_param = lfo.lfo_targets[params:get(i.."lfo_target")]
         if target_param and (target_param == "1volume" or target_param == "2volume") then
           local min_val, max_val = lfo.get_parameter_range(target_param)
-          local offset = param_exists(i.."offset") and params:get(i.."offset") or 0
-          local modulated_value = lfo.scale(offset, -1.0, 1.0, min_val, max_val)
-          params:set(target_param, modulated_value)
+          local offset = params:get(i.."offset") or 0
+          params:set(target_param, lfo.scale(offset, -1.0, 1.0, min_val, max_val))
         end
       end
     end
@@ -428,37 +428,31 @@ function lfo.process()
   
   -- Main LFO processing
   for i = 1, 16 do
-    local lfo_param = i.."lfo"
-    local lfo_target_param = i.."lfo_target"
-    if param_exists(lfo_param) and param_exists(lfo_target_param) and 
-       params:get(lfo_param) == 2 and params:get(lfo_target_param) then
-      
-      -- Update phase
-      lfo[i].phase = (lfo[i].phase + lfo[i].freq * PHASE_INCREMENT) % 1.0
+    if params:get(i.."lfo") == 2 then
+      local lfo_obj = lfo[i]
+      lfo_obj.phase = (lfo_obj.phase + lfo_obj.freq * PHASE_INCREMENT) % 1.0
       
       -- Calculate slope based on waveform
       local slope
-      local wf = lfo[i].waveform
-      if wf == "sine" then
-        slope = math.sin(lfo[i].phase * TWO_PI)
-      elseif wf == "square" then
-        slope = lfo[i].phase < 0.5 and 1 or -1
-      elseif wf == "random" then
-        local phase_inc = lfo[i].freq * PHASE_INCREMENT
-        if (lfo[i].phase - phase_inc) % 1.0 > lfo[i].phase then
-          lfo[i].prev = math.random() * (math.random(0, 1) * 2 - 1)
+      if lfo_obj.waveform == "sine" then
+        slope = math.sin(lfo_obj.phase * TWO_PI)
+      elseif lfo_obj.waveform == "square" then
+        slope = lfo_obj.phase < 0.5 and 1 or -1
+      elseif lfo_obj.waveform == "random" then
+        local phase_inc = lfo_obj.freq * PHASE_INCREMENT
+        if (lfo_obj.phase - phase_inc) % 1.0 > lfo_obj.phase then
+          lfo_obj.prev = math.random() * (math.random(0, 1) * 2 - 1)
         end
-        slope = lfo[i].prev
+        slope = lfo_obj.prev
       end
       
-      lfo[i].slope = util.clamp(slope, -1.0, 1.0) * (lfo[i].depth * 0.01) + lfo[i].offset
+      lfo_obj.slope = util.clamp(slope, -1.0, 1.0) * (lfo_obj.depth * 0.01) + lfo_obj.offset
       
-      local target_index = params:get(lfo_target_param)
-      local target_param = lfo.lfo_targets[target_index]
+      local target_param = lfo.lfo_targets[params:get(i.."lfo_target")]
       if target_param then
         local min_val, max_val = lfo.get_parameter_range(target_param)
         local modulated_value = util.clamp(
-          lfo.scale(lfo[i].slope, -1.0, 1.0, min_val, max_val), 
+          lfo.scale(lfo_obj.slope, -1.0, 1.0, min_val, max_val), 
           min_val, max_val
         )
         params:set(target_param, modulated_value)
@@ -472,8 +466,6 @@ function lfo.scale(old_value, old_min, old_max, new_min, new_max)
 end
 
 function lfo.init()
-  clear_param_cache() -- Ensure fresh cache on init
-  
   for i = 1, number_of_outputs do
     params:add_separator("LFO " .. i)
     params:add_option(i .. "lfo_target", i .. " target", lfo.lfo_targets, 1)
@@ -495,15 +487,6 @@ function lfo.init()
   lfo_metro.count = -1
   lfo_metro.event = lfo.process
   lfo_metro:start()
-end
-
-function lfo.cleanup()
-  lfo_paused = false
-  if lfo_metro then
-    lfo_metro:stop()
-  end
-  clear_param_cache()
-  clear_audio_cache()
 end
 
 return lfo

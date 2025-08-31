@@ -52,11 +52,13 @@ local function clear_destination_lfos(to_track)
 end
 
 function Mirror.copy_voice_params(from_track, to_track, mirror_pan)
-    -- Initialize if needed
-    Mirror.osc_positions = Mirror.osc_positions or {}
-    
     -- Clear destination LFOs first
     clear_destination_lfos(to_track)
+    
+    -- Copy the OSC position (actual playback position)
+    if Mirror.osc_positions[tonumber(from_track)] then
+        Mirror.osc_positions[tonumber(to_track)] = Mirror.osc_positions[tonumber(from_track)]
+    end
     
     -- Parameter list (static, no table creation each call)
     local static_params = {
@@ -104,12 +106,11 @@ function Mirror.copy_voice_params(from_track, to_track, mirror_pan)
         end
     end
 
-    -- Handle seek with single lookup
+    -- Handle seek
     local seek_value = safe_get(from_track .. "seek")
     safe_set(to_track .. "seek", seek_value)
-    local normalized = seek_value * 0.01  -- Faster than division by 100
+    local normalized = seek_value * 0.01
     engine.seek(to_track, normalized)
-    engine.seek(from_track, normalized)
 
     -- Optimized LFO mirroring with early exits and cached lookups
     local from_track_pattern = get_track_pattern(from_track)

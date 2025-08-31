@@ -34,20 +34,20 @@ local PARAM_SPECS = {
   -- Format: [param_name] = {range, {min, max}, group}
 
   -- EQ params
-  ["1eq_low_gain"] = {2, {-0.7, 0.7}, "eq"},
-  ["2eq_low_gain"] = {2, {-0.7, 0.7}, "eq"},
-  ["1eq_mid_gain"] = {2, {-0.7, 0.7}, "eq"},
-  ["2eq_mid_gain"] = {2, {-0.7, 0.7}, "eq"},
-  ["1eq_high_gain"] = {2, {-0.7, 0.7}, "eq"},
-  ["2eq_high_gain"] = {2, {-0.7, 0.7}, "eq"},
+  ["1eq_low_gain"] = {1, {-0.6, 0.5}, "eq"},
+  ["2eq_low_gain"] = {1, {-0.6, 0.5}, "eq"},
+  ["1eq_mid_gain"] = {0.5, {-0.5, 0.5}, "eq"},
+  ["2eq_mid_gain"] = {0.5, {-0.5, 0.5}, "eq"},
+  ["1eq_high_gain"] = {1, {-0.4, 0.6}, "eq"},
+  ["2eq_high_gain"] = {1, {-0.4, 0.6}, "eq"},
   
   -- Granular params
-  ["1direction_mod"] = {40, {0, 100}, "granular"},
-  ["2direction_mod"] = {40, {0, 100}, "granular"},
-  ["1size_variation"] = {40, {0, 100}, "granular"},
-  ["2size_variation"] = {40, {0, 100}, "granular"},
-  ["1density_mod_amt"] = {50, {0, 100}, "granular"},
-  ["2density_mod_amt"] = {50, {0, 100}, "granular"},
+  ["1direction_mod"] = {50, {0, 100}, "granular"},
+  ["2direction_mod"] = {50, {0, 100}, "granular"},
+  ["1size_variation"] = {50, {0, 100}, "granular"},
+  ["2size_variation"] = {50, {0, 100}, "granular"},
+  ["1density_mod_amt"] = {60, {0, 100}, "granular"},
+  ["2density_mod_amt"] = {60, {0, 100}, "granular"},
   ["1subharmonics_1"] = {1, {0, 1}, "granular"},
   ["2subharmonics_1"] = {1, {0, 1}, "granular"},
   ["1subharmonics_2"] = {1, {0, 1}, "granular"},
@@ -58,14 +58,8 @@ local PARAM_SPECS = {
   ["2overtones_1"] = {1, {0, 1}, "granular"},
   ["1overtones_2"] = {1, {0, 1}, "granular"},
   ["2overtones_2"] = {1, {0, 1}, "granular"},
-  ["1pitch_random_plus"] = {20, {0, 100}, "granular"},
-  ["1pitch_random_minus"] = {20, {0, 100}, "granular"},  
-  ["2pitch_random_plus"] = {20, {0, 100}, "granular"},
-  ["2pitch_random_minus"] = {20, {0, 100}, "granular"},  
 
   -- Global effects
-  ["delay_mix"] = {40, {0, 80}, "delay"},
-  ["delay_time"] = {2, {0.15, 2}, "delay"},
   ["delay_feedback"] = {40, {0, 100}, "delay"},
   ["stereo"] = {70, {0, 100}, "delay"},
   ["wiggle_depth"] = {20, {0, 75}, "delay"},
@@ -92,11 +86,11 @@ local PARAM_SPECS = {
   ["hipass"] = {500, {20, 4000}, "shimmer"},
   ["fb"] = {30, {0, 80}, "shimmer"},
   ["fbDelay"] = {0.2, {0.02, 1}, "shimmer"},
-  ["global_lfo_freq_scale"] = {3, {0.1, 5}, "lfo"},
   ["bitcrush_rate"] = {1000, {3500, 5500}, "bitcrush"},
   ["bitcrush_bits"] = {2, {12, 16}, "bitcrush"},
   ["chew_freq"] = {20, {1, 60}, "chew"},
-  ["chew_variance"] = {20, {0, 70}, "chew"}
+  ["chew_variance"] = {20, {0, 70}, "chew"},
+  ["global_lfo_freq_scale"] = {1.5, {0.1, 4}, "lfo"}
 }
 
 -- Lock parameter mapping
@@ -285,7 +279,7 @@ end
 
 local function start_interpolation(steps, symmetry)
   if not next(targets) then return end
-  steps = (steps and steps > 0) and steps or 30
+  --steps = (steps and steps > 0) and steps or 30
 
   randomize_metro.time = interpolation_speed
   randomize_metro.count = -1
