@@ -6,7 +6,7 @@ local interpolation_speed = 1 / 30
 local evolution_active = false
 local evolution_range = 0.15
 local evolution_states = {}
-local evolution_update_rate = 1/4
+local evolution_update_rate = 1/8
 local evolvable_params_cache = {}
 local cache_dirty = true
 local evolution_symmetry_state = false
@@ -152,7 +152,7 @@ local function evolve_parameter(param_name, state)
   
   -- Apply momentum with slight random component
   state.velocity = state.velocity * state.momentum_decay + 
-                   random_float(-1, 1) * (state.max_drift_range / 300)
+                   random_float(-1, 1) * (state.max_drift_range / 30)
   
   -- Update drift
   state.current_drift = state.current_drift + state.velocity
@@ -377,7 +377,7 @@ local param_configs = {
     params = {
       {name="t60", prob=0.5, default=4, random=function() return random_float(0.8, 6) end},
       {name="damp", prob=0.4, default=0, random=function() return random_float(0, 25) end},
-      {name="rsize", prob=0.3, default=function() return 1 end, random=function() return random_float(1, 4.5) end, direct_set=true},
+      {name="rsize", prob=0.3, default=function() return 1.25 end, random=function() return random_float(1, 4) end, direct_set=true},
       {name="earlyDiff", prob=0.5, default=70.7, random=function() return random_float(40.7, 100) end},
       {name="modDepth", prob=0.6, default=10, random=function() return math.random(0, 100) end},
       {name="modFreq", prob=0.6, default=2, random=function() return random_float(0.5, 4) end},

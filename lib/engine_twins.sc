@@ -79,7 +79,7 @@ alloc {
                 #sig_l, sig_r = [sig_l + ~grainBufFunc.(buf_l, grain_pitch * mult, grain_size, vol, grain_direction, pos_sig, jitter_sig3),
                                  sig_r + ~grainBufFunc.(buf_r, grain_pitch * mult, grain_size, vol, grain_direction, pos_sig, jitter_sig3)];};
             
-            pan_sig = TRand.kr(trig: grain_trig, lo: spread*0.2, hi: spread*0.9) * (ToggleFF.kr(grain_trig) * 2 - 1);
+            pan_sig = Lag.kr(TRand.kr(trig: grain_trig, lo: 0, hi: spread) * (ToggleFF.kr(grain_trig) * 2 - 1), grain_size * 0.15);
             granular_sig = Balance2.ar(sig_l, sig_r, pan + pan_sig);
             sig_mix = ((dry_sig * (1 - granular_gain)) + (granular_sig * granular_gain));
              
@@ -250,7 +250,7 @@ alloc {
             arg bus, mix=0.0, t60, damp, rsize, earlyDiff, modDepth, modFreq, low, mid, high, lowcut, highcut;
             var dry = In.ar(bus, 2);
             var wet = JPverb.ar(dry, t60, damp, rsize, earlyDiff, modDepth, modFreq, low, mid, high, lowcut, highcut);
-            ReplaceOut.ar(bus, XFade2.ar(dry, wet, mix * 2 - 1));
+            ReplaceOut.ar(bus, XFade2.ar(dry, dry + wet, mix * 2 - 1));
         }).add;
         
         SynthDef(\rotate, {
