@@ -180,9 +180,10 @@ local function register_tap()
 end
 
 local function update_pan_positioning()
-    local files_loaded = (is_audio_loaded(1) and 1 or 0) + (is_audio_loaded(2) and 1 or 0)
-    if files_loaded == 2 then params:set("1pan", -15) params:set("2pan", 15)
-    else params:set("1pan", 0) params:set("2pan", 0) end
+  local loaded1 = is_audio_loaded(1)
+  local loaded2 = is_audio_loaded(2)
+  if not is_lfo_active_for_param("1pan") then params:set("1pan", loaded2 and -15 or 0) end
+  if not is_lfo_active_for_param("2pan") then params:set("2pan", loaded1 and 15 or 0) end
 end
 
 local function setup_params()
@@ -361,7 +362,7 @@ local function setup_params()
     params:add_taper("min_density", "density (min)", 0.1, 50, 1, 5, "Hz")
     params:add_taper("max_density", "density (max)", 0.1, 50, 16, 5, "Hz")
     params:add_taper("min_spread", "spread (min)", 0, 100, 0, 0, "%")
-    params:add_taper("max_spread", "spread (max)", 0, 100, 80, 0, "%")
+    params:add_taper("max_spread", "spread (max)", 0, 100, 50, 0, "%")
     params:add_control("min_pitch", "pitch (min)", controlspec.new(-48, 48, "lin", 1, -31, "st"))
     params:add_control("max_pitch", "pitch (max)", controlspec.new(-48, 48, "lin", 1, 31, "st"))
     params:add_taper("min_speed", "speed (min)", -2, 2, -0.15, 0, "x")
@@ -665,6 +666,7 @@ function key(n, z)
                 randomize(1)
                 randpara.randomize_params(steps, 1)
                 randpara.reset_evolution_centers()
+                update_pan_positioning()
                 return
             elseif n == 3 then
                 stop_metro_safe(randomize_metro[n-1])
@@ -673,6 +675,7 @@ function key(n, z)
                 randomize(2)
                 randpara.randomize_params(steps, 2)
                 randpara.reset_evolution_centers()
+                update_pan_positioning()
                 return
             end
         end
