@@ -34,30 +34,30 @@ local PARAM_SPECS = {
   -- Format: [param_name] = {range, {min, max}, group}
 
   -- EQ params
-  ["1eq_low_gain"] = {1, {-0.6, 0.5}, "eq"},
-  ["2eq_low_gain"] = {1, {-0.6, 0.5}, "eq"},
-  ["1eq_mid_gain"] = {0.5, {-0.5, 0.5}, "eq"},
-  ["2eq_mid_gain"] = {0.5, {-0.5, 0.5}, "eq"},
-  ["1eq_high_gain"] = {1, {-0.4, 0.6}, "eq"},
-  ["2eq_high_gain"] = {1, {-0.4, 0.6}, "eq"},
+  ["1eq_low_gain"] = {0.15, {-1, 1}, "eq"},
+  ["2eq_low_gain"] = {0.15, {-1, 1}, "eq"},
+  ["1eq_mid_gain"] = {0.15, {-1, 1}, "eq"},
+  ["2eq_mid_gain"] = {0.15, {-1, 1}, "eq"},
+  ["1eq_high_gain"] = {0.15, {-1, 1}, "eq"},
+  ["2eq_high_gain"] = {0.15, {-1, 1}, "eq"},
   
   -- Granular params
-  ["1direction_mod"] = {50, {0, 100}, "granular"},
-  ["2direction_mod"] = {50, {0, 100}, "granular"},
-  ["1size_variation"] = {50, {0, 100}, "granular"},
-  ["2size_variation"] = {50, {0, 100}, "granular"},
-  ["1density_mod_amt"] = {60, {0, 100}, "granular"},
-  ["2density_mod_amt"] = {60, {0, 100}, "granular"},
-  ["1subharmonics_1"] = {1, {0, 1}, "granular"},
-  ["2subharmonics_1"] = {1, {0, 1}, "granular"},
-  ["1subharmonics_2"] = {1, {0, 1}, "granular"},
-  ["2subharmonics_2"] = {1, {0, 1}, "granular"},
-  ["1subharmonics_3"] = {1, {0, 1}, "granular"},
-  ["2subharmonics_3"] = {1, {0, 1}, "granular"},
-  ["1overtones_1"] = {1, {0, 1}, "granular"},
-  ["2overtones_1"] = {1, {0, 1}, "granular"},
-  ["1overtones_2"] = {1, {0, 1}, "granular"},
-  ["2overtones_2"] = {1, {0, 1}, "granular"},
+  ["1direction_mod"] = {15, {0, 100}, "granular"},
+  ["2direction_mod"] = {15, {0, 100}, "granular"},
+  ["1size_variation"] = {15, {0, 100}, "granular"},
+  ["2size_variation"] = {15, {0, 100}, "granular"},
+  ["1density_mod_amt"] = {15, {0, 100}, "granular"},
+  ["2density_mod_amt"] = {15, {0, 100}, "granular"},
+  ["1subharmonics_1"] = {0.1, {0, 1}, "granular"},
+  ["2subharmonics_1"] = {0.1, {0, 1}, "granular"},
+  ["1subharmonics_2"] = {0.1, {0, 1}, "granular"},
+  ["2subharmonics_2"] = {0.1, {0, 1}, "granular"},
+  ["1subharmonics_3"] = {0.1, {0, 1}, "granular"},
+  ["2subharmonics_3"] = {0.1, {0, 1}, "granular"},
+  ["1overtones_1"] = {0.5, {0, 1}, "granular"},
+  ["2overtones_1"] = {0.5, {0, 1}, "granular"},
+  ["1overtones_2"] = {0.5, {0, 1}, "granular"},
+  ["2overtones_2"] = {0.5, {0, 1}, "granular"},
 
   -- Global effects
   ["delay_feedback"] = {40, {0, 100}, "delay"},
@@ -90,7 +90,7 @@ local PARAM_SPECS = {
   ["bitcrush_bits"] = {2, {12, 16}, "bitcrush"},
   ["chew_freq"] = {20, {1, 60}, "chew"},
   ["chew_variance"] = {20, {0, 70}, "chew"},
-  ["global_lfo_freq_scale"] = {1.5, {0.1, 4}, "lfo"}
+  ["global_lfo_freq_scale"] = {0.5, {0.1, 4}, "lfo"}
 }
 
 -- Lock parameter mapping
