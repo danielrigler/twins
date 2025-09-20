@@ -69,6 +69,9 @@ local mode_list = {"pitch","spread","density","size","jitter","lpf","pan","speed
 local mode_indices = {}; for i,v in ipairs(mode_list) do mode_indices[v]=i end
 local mode_list2 = {"seek","speed","pan","lpf","jitter","size","density","spread","pitch"}
 local mode_indices2 = {}; for i,v in ipairs(mode_list2) do mode_indices2[v]=i end
+local current_scene_mode = "off"
+local current_scenes = {[1] = 1, [2] = 1} -- Current scene for each track (1 or 2)
+local scene_data = {[1] = {[1] = {}, [2] = {}}, [2] = {[1] = {}, [2] = {}}}
 local param_modes = {
     speed = {param = "speed", delta = 0.5, engine = false, has_lock = true},
     seek = {param = "seek", delta = 1, engine = true, has_lock = true},
@@ -111,6 +114,59 @@ local function setup_ui_metro()
     end
     ui_metro:start()
 end
+
+local function store_scene(track, scene)
+    scene_data[track][scene] = {}
+    local params_to_store = {"speed", "pitch", "jitter", "size", "density", "spread", "pan", "seek",
+                             "cutoff", "hpf", "lpfgain", "granular_gain", "subharmonics_3", "subharmonics_2",
+                             "subharmonics_1", "overtones_1", "overtones_2", "smoothbass", "pitch_random_plus",
+                             "pitch_random_minus", "size_variation", "direction_mod", "density_mod_amt",
+                             "pitch_mode", "trig_mode", "probability", "eq_low_gain", "eq_mid_gain", "eq_high_gain"}
+    for _, param in ipairs(params_to_store) do
+        local full_param = track .. param
+        if params.lookup[full_param] then
+            scene_data[track][scene][full_param] = params:get(full_param)
+        end
+    end
+    scene_data[track][scene].lfo_data = {}
+    for i = 1, 16 do
+        if params:get(i.."lfo") == 2 then
+            local target_index = params:get(i.."lfo_target")
+            local target_param = lfo.lfo_targets[target_index]
+            if target_param and target_param:sub(1, 1) == tostring(track) then
+                scene_data[track][scene].lfo_data[i] = {
+                    target = target_index,
+                    shape = params:get(i.."lfo_shape"),
+                    freq = params:get(i.."lfo_freq"),
+                    depth = params:get(i.."lfo_depth"),
+                    offset = params:get(i.."offset")}
+            end
+        end
+    end
+end
+
+local function recall_scene(track, scene)
+    if not scene_data[track][scene] then return end
+    for param, value in pairs(scene_data[track][scene]) do
+        if param ~= "lfo_data" and params.lookup[param] then
+            params:set(param, value)
+        end
+    end
+    if scene_data[track][scene].lfo_data then
+        lfo.clearLFOs(tostring(track))
+        for lfo_index, lfo_settings in pairs(scene_data[track][scene].lfo_data) do
+            params:set(lfo_index.."lfo_target", lfo_settings.target)
+            params:set(lfo_index.."lfo_shape", lfo_settings.shape)
+            params:set(lfo_index.."lfo_freq", lfo_settings.freq)
+            params:set(lfo_index.."lfo_depth", lfo_settings.depth)
+            params:set(lfo_index.."offset", lfo_settings.offset)
+            params:set(lfo_index.."lfo", 2)
+        end
+    end
+    current_scenes[track] = scene
+end
+
+local function initialize_scenes_with_current_params() for track = 1, 2 do for scene = 1, 2 do store_scene(track, scene) end end end
 
 local function is_lfo_active_for_param(param_name)
     for i = 1, 16 do
@@ -374,8 +430,9 @@ local function setup_params()
     params:add_binary("macro_more", "More+", "trigger", 0) params:set_action("macro_more", function() macro.macro_more() end)
     params:add_binary("macro_less", "Less-", "trigger", 0) params:set_action("macro_less", function() macro.macro_less() end)
     
-    params:add_group("Other", 6)
+    params:add_group("Other", 7)
     params:add_binary("dry_mode", "Dry Mode", "toggle", 0) params:set_action("dry_mode", function(x) drymode.toggle_dry_mode() end)
+    params:add_option("scene_mode", "Scene Mode", {"off", "on"}, 1) params:set_action("scene_mode", function(value) current_scene_mode = (value == 2) and "on" or "off" if current_scene_mode == "on" then initialize_scenes_with_current_params() end end)
     params:add_binary("unload_all", "Unload All Audio", "trigger", 0) params:set_action("unload_all", function() for i=1, 2 do params:set(i.."seek", 0) params:set(i.."sample", "-") params:set(i.."live_input", 0) params:set(i.."live_direct", 0) audio_active[i] = false osc_positions[i] = 0 end engine.unload_all() oscgo = 0 update_pan_positioning() end)
     params:add_option("steps", "Transition Time", {"short", "medium", "long"}, 2) params:set_action("steps", function(value) steps = ({20, 300, 800})[value] end)
     params:add_binary("evolution", "Evolve", "toggle", 0) params:set_action("evolution", function(value) if value == 1 then randpara.reset_evolution_centers() randpara.start_evolution() else randpara.stop_evolution() end end)
@@ -578,9 +635,7 @@ function enc(n, d)
         return true
     end
     local function handle_seek(track, config, delta)
-        if config.param ~= "seek" then
-            return false
-        end
+        if config.param ~= "seek" then return false end
         local p = track .. config.param
         handle_lfo(p, not sym)
         local current_pos = osc_positions[track] * 100
@@ -646,9 +701,7 @@ function enc(n, d)
             handle_lfo(p, sym)
             params:delta(p, 3 * d)
         else
-            local mode = (current_mode == "lpf" or current_mode == "hpf") 
-                        and current_filter_mode 
-                        or current_mode
+            local mode = (current_mode == "lpf" or current_mode == "hpf") and current_filter_mode or current_mode
             handle_param(track, param_modes[mode])
         end
     end
@@ -657,7 +710,22 @@ end
 function key(n, z)
     if not installer:ready() then installer:key(n, z) return end
     key_state[n] = z == 1 and true or false
+    
     if z == 1 then
+        if current_scene_mode == "on" and key_state[1] then
+            if n == 2 then
+                store_scene(1, current_scenes[1])
+                local new_scene = (current_scenes[1] % 2) + 1
+                recall_scene(1, new_scene)
+                return
+            elseif n == 3 then
+                store_scene(2, current_scenes[2])
+                local new_scene = (current_scenes[2] % 2) + 1
+                recall_scene(2, new_scene)
+                return
+            end
+        end
+        
         if key_state[1] then
             if n == 2 then
                 stop_metro_safe(randomize_metro[n-1])
@@ -679,6 +747,7 @@ function key(n, z)
                 return
             end
         end
+        
         if not key_state[1] then
             if n == 2 then
                 local idx = mode_indices[current_mode] or 1
@@ -689,6 +758,7 @@ function key(n, z)
             end
         end
     end
+    
     if key_state[2] and key_state[3] then
         if current_mode == "lpf" or current_mode == "hpf" then
             current_filter_mode = current_filter_mode == "lpf" and "hpf" or "lpf"
@@ -869,7 +939,7 @@ function redraw()
         table.insert(pixels[levels.highlight], {18,0})
         table.insert(pixels[levels.highlight], {20,0})
         table.insert(pixels[levels.highlight], {22,0})
-    end    
+    end  
     for _, lvl in ipairs({levels.dim, levels.value, levels.highlight}) do
         screen.level(lvl)
         for _, r in ipairs(rects[lvl]) do
@@ -885,7 +955,11 @@ function redraw()
             local x = (track == 1) and 51 or 92
             draw_recording_head(x, 63, rec_positions[track])
         end
-    end  
+    end
+    if current_scene_mode == "on" then
+        screen.move(45, 5) screen.text(current_scenes[1])
+        screen.move(86, 5) screen.text(current_scenes[2])
+    end
     screen.restore()
     screen.update()
 end
