@@ -411,8 +411,8 @@ local function setup_params()
     params:add_binary("copy_2_to_1", "Copy 1 ← 2", "trigger", 0) params:set_action("copy_2_to_1", function() Mirror.copy_voice_params("2", "1", true) end)
     
     params:add_group("Limits", 14) 
-    params:add_taper("min_jitter", "jitter (min)", 0, 4999, 100, 5, "ms")
-    params:add_taper("max_jitter", "jitter (max)", 0, 4999, 900, 5, "ms")
+    params:add_taper("min_jitter", "jitter (min)", 0, 4999, 0, 5, "ms")
+    params:add_taper("max_jitter", "jitter (max)", 0, 4999, 4999, 5, "ms")
     params:add_taper("min_size", "size (min)", 1, 999, 100, 5, "ms")
     params:add_taper("max_size", "size (max)", 1, 999, 499, 5, "ms")
     params:add_taper("min_density", "density (min)", 0.1, 50, 1, 5, "Hz")
@@ -785,6 +785,8 @@ local function format_density(value) return string.format("%.1f Hz", value) end
 local function format_pitch(value) if value > 0 then return string.format("+%.0f", value) else return string.format("%.0f", value) end end
 local function format_seek(value) return string.format("%.0f%%", value) end
 local function format_speed(speed) if math.abs(speed) < 0.01 then return ".00x" elseif math.abs(speed) < 1 then if speed < -0.01 then return string.format("-.%02dx", math.floor(math.abs(speed) * 100)) else return string.format(".%02dx", math.floor(math.abs(speed) * 100)) end else return string.format("%.2fx", speed) end end
+local function format_jitter(value) if value > 999 then return string.format("%.2f s", value / 1000) else return string.format("%.0f ms", value) end end
+local function format_size(value) if value > 999 then return string.format("%.2f s", value / 1000) else return string.format("%.0f ms", value) end end
 
 local function is_param_locked(track_num, param)
     return params:get(track_num .. "lock_" .. param) == 2
@@ -859,6 +861,8 @@ function redraw()
             if row.hz then screen.text(format_density(val))
             elseif row.st then screen.text(format_pitch(val))
             elseif param_name == "spread" then screen.text(string.format("%.0f%%", val))
+            elseif param_name == "jitter" then screen.text(format_jitter(val))
+            elseif param_name == "size" then screen.text(format_size(val)) 
             else screen.text(params:string(param)) end
             -- LFO modulation bars (dim rects)
             if param_name ~= "pitch" then
