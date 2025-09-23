@@ -55,7 +55,7 @@ local current_filter_mode = "lpf"
 local tap_times = {}
 local TAP_TIMEOUT = 2
 local animation_y = -64
-local animation_speed = 150
+local animation_speed = 100
 local animation_complete = false
 local animation_start_time = nil
 local initital_monitor_level
@@ -99,16 +99,15 @@ local function setup_ui_metro()
     ui_metro = metro.init()
     ui_metro.time = 1/60
     ui_metro.event = function()
-        if animation_complete then
-            redraw()
-            return
-        end
+        if animation_complete then redraw() return end
         animation_start_time = animation_start_time or util.time()
         local elapsed = util.time() - animation_start_time
-        animation_y = util.clamp(elapsed * animation_speed - 64, -64, 0)
-        if animation_y >= 0 then
-          animation_complete = true
-          animation_y = 0
+        local progress = util.clamp(elapsed * animation_speed / 64, 0, 1)
+        local eased = 1 - (1 - progress) * (1 - progress) * (1 - progress)
+        animation_y = -64 + (eased * 64)
+        if progress >= 1 then
+            animation_complete = true
+            animation_y = 0
         end
         redraw()
     end
@@ -445,7 +444,7 @@ local function setup_params()
       params:add_taper(i.. "speed", i.. " speed", -2, 2, 0.10, 0) params:set_action(i.. "speed", function(value) if math.abs(value) < 0.01 then engine.speed(i, 0) else engine.speed(i, value) end end) params:hide(i.. "speed")
       params:add_taper(i.. "density", i.. " density", 0.1, 300, 10, 5) params:set_action(i.. "density", function(value) engine.density(i, value) end) params:hide(i.. "density")
       params:add_control(i.. "pitch", i.. " pitch", controlspec.new(-48, 48, "lin", 1, 0, "st")) params:set_action(i.. "pitch", function(value) engine.pitch_offset(i, math.pow(0.5, -value / 12)) end) params:hide(i.. "pitch")
-      params:add_taper(i.. "jitter", i.. " jitter", 0, 4999, 250, 3, "ms") params:set_action(i.. "jitter", function(value) engine.jitter(i, value * 0.001) end) params:hide(i.. "jitter")
+      params:add_taper(i.. "jitter", i.. " jitter", 0, 9999, 2500, 3, "ms") params:set_action(i.. "jitter", function(value) engine.jitter(i, value * 0.001) end) params:hide(i.. "jitter")
       params:add_taper(i.. "size", i.. " size", 1, 5999, 200, 1, "ms") params:set_action(i.. "size", function(value) engine.size(i, value * 0.001) end) params:hide(i.. "size")
       params:add_taper(i.. "spread", i.. " spread", 0, 100, 30, 0, "%") params:set_action(i.. "spread", function(value) engine.spread(i, value * 0.01) end) params:hide(i.. "spread")
       params:add_control(i.. "seek", i.. " seek", controlspec.new(0, 100, "lin", 0.01, 0, "%")) params:set_action(i.. "seek", function(value) engine.seek(i, value * 0.01) end) params:hide(i.. "seek")
@@ -574,210 +573,218 @@ local function randomize(n)
     end
 end
 
+local function handle_lfo(param_name, force_disable)
+    if force_disable then
+        disable_lfos_for_param(param_name)
+    else
+        local active, idx = is_lfo_active_for_param(param_name)
+        if active then 
+            params:set(idx.."lfo", 1) 
+        end
+    end
+end
+
+local function handle_volume_lfo(track, delta, crossfade_mode)
+    local p = track .. "volume"
+    local other_track = 3 - track
+    local op = other_track .. "volume"
+    local a1, i1 = is_lfo_active_for_param(p)
+    local a2, i2 = is_lfo_active_for_param(op)
+    local lfo_delta = 1.5 * delta
+    local vol_delta = 3 * delta
+    if a1 and a2 then
+        params:delta(i1.."offset", lfo_delta)
+        params:delta(i2.."offset", crossfade_mode and -lfo_delta or lfo_delta)
+    elseif a1 then
+        params:delta(i1.."offset", lfo_delta)
+        params:delta(op, crossfade_mode and -vol_delta or vol_delta)
+    elseif a2 then
+        params:delta(i2.."offset", crossfade_mode and -lfo_delta or lfo_delta)
+        params:delta(p, vol_delta)
+    else
+        params:delta(p, vol_delta)
+        params:delta(op, crossfade_mode and -vol_delta or vol_delta)
+    end
+end
+
+local function handle_size_density_lock(track, config, delta)
+    local size_density_locked = params:get(track.."size_density_lock") == 1
+    local is_size = config.param == "size"
+    local is_density = config.param == "density"
+    if not (size_density_locked and (is_size or is_density)) then
+        return false
+    end
+    local sym = params:get("symmetry") == 1
+    local p = track .. config.param
+    handle_lfo(p, not sym)
+    handle_lfo(track .. (is_size and "density" or "size"), not sym)
+    local function update_track_ratio(tr, delta_mult, density_mult)
+        local ratio = _G["size_density_ratio_"..tr] or 1
+        if is_size then
+            local new_size = params:get(tr.."size") + delta_mult * delta
+            params:set(tr.."size", new_size)
+            params:set(tr.."density", (1000 / new_size) * ratio)
+        else
+            local new_density = params:get(tr.."density") + density_mult * delta
+            params:set(tr.."density", new_density)
+            params:set(tr.."size", (1000 / new_density) * ratio)
+        end
+    end
+    update_track_ratio(track, is_size and 3 or 0, is_density and 0.05 or 0)
+    if sym then
+        update_track_ratio(3 - track, is_size and 3 or 0, is_density and 0.05 or 0)
+    end
+    return true
+end
+
+local function handle_seek_param(track, config, delta)
+    if config.param ~= "seek" then return false end
+    local sym = params:get("symmetry") == 1
+    local p = track .. config.param
+    handle_lfo(p, not sym)
+    local current_pos = osc_positions[track] * 100
+    local new_pos = (current_pos + delta) % 100
+    if new_pos < 0 then new_pos = new_pos + 100 end
+    local norm_pos = new_pos * 0.01
+    local function update_seek_pos(tr)
+        osc_positions[tr] = norm_pos
+        params:set(tr.."seek", new_pos)
+        engine.seek(tr, norm_pos)
+    end
+    if sym then
+        update_seek_pos(1)
+        update_seek_pos(2)
+    else
+        update_seek_pos(track)
+    end
+    return true
+end
+
+local function handle_standard_param(track, config, delta)
+    local sym = params:get("symmetry") == 1
+    local p = track .. config.param
+    local other_track = 3 - track
+    local op = other_track .. config.param
+    if sym then
+        handle_lfo(p, true)
+        if config.param == "pan" then
+            params:delta(p, delta)
+            params:delta(op, -delta)
+            engine.pan(track, params:get(p) * 0.01)
+            engine.pan(other_track, params:get(op) * 0.01)
+        else
+            params:delta(p, delta)
+            params:delta(op, delta)
+        end
+    else
+        handle_lfo(p, false)
+        params:delta(p, delta)
+    end
+end
+
+local function handle_param_change(track, config, delta)
+    if handle_size_density_lock(track, config, delta) then return end
+    if handle_seek_param(track, config, delta) then return end
+    handle_standard_param(track, config, delta)
+end
+
+local function handle_scene_mode(n)
+    if current_scene_mode ~= "on" or not key_state[1] then
+        return false
+    end
+    local track = n - 1
+    if track >= 1 and track <= 2 then
+        store_scene(track, current_scenes[track])
+        local new_scene = (current_scenes[track] % 2) + 1
+        recall_scene(track, new_scene)
+        return true
+    end
+    return false
+end
+
+local function handle_randomize_track(n)
+    if not key_state[1] then return false end
+    local track = n - 1
+    if track >= 1 and track <= 2 then
+        stop_metro_safe(randomize_metro[track])
+        lfo.clearLFOs(track)
+        lfo.randomize_lfos(tostring(track), params:get("allow_volume_lfos") == 2)
+        randomize(track)
+        randpara.randomize_params(steps, track)
+        randpara.reset_evolution_centers()
+        update_pan_positioning()
+        return true
+    end
+    return false
+end
+
+local function handle_mode_navigation(n)
+    if key_state[1] then return end
+    if n == 2 then
+        local idx = mode_indices[current_mode] or 1
+        current_mode = mode_list[(idx % #mode_list) + 1]
+    elseif n == 3 then
+        local idx = mode_indices2[current_mode] or 1
+        current_mode = mode_list2[(idx % #mode_list2) + 1]
+    end
+end
+
+local function handle_parameter_lock()
+    local lockable_params = {"jitter", "size", "density", "spread", "pitch", "pan", "seek", "speed"}
+    if current_mode == "lpf" or current_mode == "hpf" then
+        current_filter_mode = current_filter_mode == "lpf" and "hpf" or "lpf"
+        return
+    end
+    local param_name = string.match(current_mode, "%a+")
+    if param_name and table_find(lockable_params, param_name) then
+        local is_locked1 = params:get("1lock_" .. param_name) == 2
+        local is_locked2 = params:get("2lock_" .. param_name) == 2
+        if is_locked1 ~= is_locked2 then
+            params:set("1lock_" .. param_name, 1)
+            params:set("2lock_" .. param_name, 1)
+        else
+            local new_state = is_locked1 and 1 or 2
+            params:set("1lock_" .. param_name, new_state)
+            params:set("2lock_" .. param_name, new_state)
+        end
+    end
+end
+
 function enc(n, d)
     if not installer:ready() then return end
-    local sym = params:get("symmetry") == 1
     local k1 = key_state[1]
-    local function handle_lfo(param_name, force_disable)
-        if force_disable then
-            disable_lfos_for_param(param_name)
-        else
-            local active, idx = is_lfo_active_for_param(param_name)
-            if active then 
-                params:set(idx.."lfo", 1) 
-            end
-        end
-    end
-    local function update_symmetric(track, param, delta_val, custom_handler)
-        local other_track = 3 - track
-        local p1 = track .. param
-        local p2 = other_track .. param
-        handle_lfo(p1, true)
-        if custom_handler then
-            custom_handler(track, other_track, p1, p2, delta_val)
-        else
-            params:delta(p1, delta_val)
-            params:delta(p2, delta_val)
-        end
-    end
-    local function update_single(track, param, delta_val)
-        local p = track .. param
-        handle_lfo(p, false)
-        params:delta(p, delta_val)
-    end
-    local function handle_size_density_lock(track, config, delta)
-        local size_density_locked = params:get(track.."size_density_lock") == 1
-        local is_size = config.param == "size"
-        local is_density = config.param == "density"
-        if not (size_density_locked and (is_size or is_density)) then
-            return false
-        end
-        local ratio = _G["size_density_ratio_"..track] or 1
-        local p = track .. config.param
-        handle_lfo(p, not sym)
-        handle_lfo(track .. (is_size and "density" or "size"), not sym)
-        local function update_track_ratio(tr, delta_mult, density_mult)
-            local ratio = _G["size_density_ratio_"..tr] or 1
-            if is_size then
-                local new_size = params:get(tr.."size") + delta_mult * delta
-                params:set(tr.."size", new_size)
-                params:set(tr.."density", (1000 / new_size) * ratio)
-            else
-                local new_density = params:get(tr.."density") + density_mult * delta
-                params:set(tr.."density", new_density)
-                params:set(tr.."size", (1000 / new_density) * ratio)
-            end
-        end
-        update_track_ratio(track, is_size and 3 or 0, is_density and 0.05 or 0)
-        if sym then
-            update_track_ratio(3 - track, is_size and 3 or 0, is_density and 0.05 or 0)
-        end
-        return true
-    end
-    local function handle_seek(track, config, delta)
-        if config.param ~= "seek" then return false end
-        local p = track .. config.param
-        handle_lfo(p, not sym)
-        local current_pos = osc_positions[track] * 100
-        local new_pos = (current_pos + delta) % 100
-        if new_pos < 0 then new_pos = new_pos + 100 end
-        local norm_pos = new_pos * 0.01
-        local function update_seek_pos(tr)
-            osc_positions[tr] = norm_pos
-            params:set(tr.."seek", new_pos)
-            engine.seek(tr, norm_pos)
-        end
-        if sym then
-            update_seek_pos(1)
-            update_seek_pos(2)
-        else
-            update_seek_pos(track)
-        end
-        return true
-    end
-    local function handle_param(track, config)
-        local delta = config.delta * d
-        if handle_size_density_lock(track, config, delta) then return end
-        if handle_seek(track, config, delta) then return end
-        local p = track .. config.param
-        if sym then
-            if config.param == "pan" then
-                update_symmetric(track, config.param, delta, function(t, ot, p1, p2, d)
-                    params:delta(p1, d)
-                    params:delta(p2, -d)
-                    engine.pan(t, params:get(p1) * 0.01)
-                    engine.pan(ot, params:get(p2) * 0.01)
-                end)
-            else
-                update_symmetric(track, config.param, delta)
-            end
-        else
-            update_single(track, config.param, delta)
-        end
-    end
     if n == 1 then
-        local a1, i1 = is_lfo_active_for_param("1volume")
-        local a2, i2 = is_lfo_active_for_param("2volume")
-        local ld = 1.5 * d
-        local vol_delta = 3 * d
-        if a1 and a2 then
-            params:delta(i1.."offset", ld)
-            params:delta(i2.."offset", k1 and -ld or ld)
-        elseif a1 then
-            params:delta(i1.."offset", ld)
-            params:delta("2volume", k1 and -vol_delta or vol_delta)
-        elseif a2 then
-            params:delta(i2.."offset", k1 and -ld or ld)
-            params:delta("1volume", vol_delta)
-        else
-            params:delta("1volume", vol_delta)
-            params:delta("2volume", k1 and -vol_delta or vol_delta)
-        end
+        handle_volume_lfo(1, d, k1)
     elseif n == 2 or n == 3 then
         local track = n - 1
         stop_metro_safe(randomize_metro[track])
         if k1 then
+            local sym = params:get("symmetry") == 1
             local p = track .. "volume"
             handle_lfo(p, sym)
             params:delta(p, 3 * d)
         else
             local mode = (current_mode == "lpf" or current_mode == "hpf") and current_filter_mode or current_mode
-            handle_param(track, param_modes[mode])
+            local config = param_modes[mode]
+            local delta = config.delta * d
+            handle_param_change(track, config, delta)
         end
     end
 end
 
 function key(n, z)
-    if not installer:ready() then installer:key(n, z) return end
-    key_state[n] = z == 1 and true or false
-    
-    if z == 1 then
-        if current_scene_mode == "on" and key_state[1] then
-            if n == 2 then
-                store_scene(1, current_scenes[1])
-                local new_scene = (current_scenes[1] % 2) + 1
-                recall_scene(1, new_scene)
-                return
-            elseif n == 3 then
-                store_scene(2, current_scenes[2])
-                local new_scene = (current_scenes[2] % 2) + 1
-                recall_scene(2, new_scene)
-                return
-            end
-        end
-        
-        if key_state[1] then
-            if n == 2 then
-                stop_metro_safe(randomize_metro[n-1])
-                lfo.clearLFOs(1)            
-                lfo.randomize_lfos("1", params:get("allow_volume_lfos") == 2)
-                randomize(1)
-                randpara.randomize_params(steps, 1)
-                randpara.reset_evolution_centers()
-                update_pan_positioning()
-                return
-            elseif n == 3 then
-                stop_metro_safe(randomize_metro[n-1])
-                lfo.clearLFOs(2)
-                lfo.randomize_lfos("2", params:get("allow_volume_lfos") == 2)
-                randomize(2)
-                randpara.randomize_params(steps, 2)
-                randpara.reset_evolution_centers()
-                update_pan_positioning()
-                return
-            end
-        end
-        
-        if not key_state[1] then
-            if n == 2 then
-                local idx = mode_indices[current_mode] or 1
-                current_mode = mode_list[(idx % #mode_list) + 1]
-            elseif n == 3 then
-                local idx = mode_indices2[current_mode] or 1
-                current_mode = mode_list2[(idx % #mode_list2) + 1]
-            end
-        end
+    if not installer:ready() then 
+        installer:key(n, z) 
+        return 
     end
-    
+    key_state[n] = z == 1
+    if z == 1 then
+        if handle_scene_mode(n) then return end
+        if handle_randomize_track(n) then return end
+        handle_mode_navigation(n)
+    end
     if key_state[2] and key_state[3] then
-        if current_mode == "lpf" or current_mode == "hpf" then
-            current_filter_mode = current_filter_mode == "lpf" and "hpf" or "lpf"
-        else
-            local lockable_params = {"jitter", "size", "density", "spread", "pitch", "pan", "seek", "speed"}
-            local param_name = string.match(current_mode, "%a+")
-            if param_name and table_find(lockable_params, param_name) then
-                local is_locked1 = params:get("1lock_" .. param_name) == 2
-                local is_locked2 = params:get("2lock_" .. param_name) == 2
-                if is_locked1 ~= is_locked2 then
-                    params:set("1lock_" .. param_name, 1)
-                    params:set("2lock_" .. param_name, 1)
-                else
-                    local new_state = is_locked1 and 1 or 2
-                    params:set("1lock_" .. param_name, new_state)
-                    params:set("2lock_" .. param_name, new_state)
-                end
-            end
-        end
+        handle_parameter_lock()
     end
 end
 
