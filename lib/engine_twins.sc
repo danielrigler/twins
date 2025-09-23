@@ -79,12 +79,12 @@ alloc {
                 #sig_l, sig_r = [sig_l + ~grainBufFunc.(buf_l, grain_pitch * mult, grain_size, vol, grain_direction, pos_sig, jitter_sig3),
                                  sig_r + ~grainBufFunc.(buf_r, grain_pitch * mult, grain_size, vol, grain_direction, pos_sig, jitter_sig3)];};
             
-            pan_sig = TRand.kr(trig: grain_trig, lo: spread.neg, hi: spread);
+            pan_sig = pan_sig = Lag.kr(TRand.kr(trig: grain_trig, lo: 0, hi: spread) * (ToggleFF.kr(grain_trig) * 2 - 1), grain_size * 0.15);
             granular_sig = Balance2.ar(sig_l, sig_r, pan + pan_sig);
             sig_mix = ((dry_sig * (1 - granular_gain)) + (granular_sig * granular_gain));
              
             sig_mix = BLowShelf.ar(sig_mix, 70, 6, low_gain);
-            sig_mix = BPeakEQ.ar(sig_mix, 780, 1, mid_gain);
+            sig_mix = BPeakEQ.ar(sig_mix, 850, 1, mid_gain);
             sig_mix = BHiShelf.ar(sig_mix, 3900, 6, high_gain);
             
             sig_mix = HPF.ar(sig_mix, Lag.kr(hpf, 0.5));
@@ -113,7 +113,7 @@ alloc {
             var sig = SoundIn.ar([0, 1]);
             sig = Select.ar(isMono, [sig, [sig[0], sig[0]] ]);
             sig = BLowShelf.ar(sig, 70, 6, low_gain);
-            sig = BPeakEQ.ar(sig, 750, 1, mid_gain);
+            sig = BPeakEQ.ar(sig, 850, 1, mid_gain);
             sig = BHiShelf.ar(sig, 3900, 6, high_gain);
             sig = HPF.ar(sig, Lag.kr(hpf));
             sig = MoogFF.ar(sig, Lag.kr(cutoff), lpfgain);
