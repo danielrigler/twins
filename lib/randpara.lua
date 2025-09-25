@@ -61,6 +61,7 @@ local PARAM_SPECS = {
 
   -- Global effects
   ["delay_feedback"] = {100, {0, 100}, "delay"},
+  ["delay_time"] = {2, {0, 2}, "delay"},
   ["stereo"] = {100, {0, 100}, "delay"},
   ["wiggle_depth"] = {75, {0, 100}, "delay"},
   ["wiggle_rate"] = {6, {0, 6}, "delay"},

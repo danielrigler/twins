@@ -72,6 +72,9 @@ local mode_indices2 = {}; for i,v in ipairs(mode_list2) do mode_indices2[v]=i en
 local current_scene_mode = "off"
 local current_scenes = {[1] = 1, [2] = 1} -- Current scene for each track (1 or 2)
 local scene_data = {[1] = {[1] = {}, [2] = {}}, [2] = {[1] = {}, [2] = {}}}
+local evolution_animation_phase = 0
+local evolution_animation_time = 0
+local patterns = {[0] = {}, [1] = {{6,0}}, [2] = {{6,0}, {8,0}}, [3] = {{6,0}, {8,0}, {10,0}}, [4] = {{6,0}, {8,0}}, [5] = {{6,0}}}
 local param_modes = {
     speed = {param = "speed", delta = 0.5, engine = false, has_lock = true},
     seek = {param = "seek", delta = 1, engine = true, has_lock = true},
@@ -95,10 +98,22 @@ local function is_audio_loaded(track_num) local file_path = params:get(track_num
 local function random_float(l, h) return l + math.random() * (h - l) end
 local function stop_metro_safe(m) if m then local ok, err = pcall(function() m:stop() end) if m then m.event = nil end end end
 
+local function update_evolution_animation()
+    if params:get("evolution") == 1 then
+        evolution_animation_time = evolution_animation_time + (1/60)
+        local cycle_duration = 0.3
+        evolution_animation_phase = math.floor((evolution_animation_time / cycle_duration) % 6)
+    else
+        evolution_animation_time = 0
+        evolution_animation_phase = 0
+    end
+end
+
 local function setup_ui_metro()
     ui_metro = metro.init()
     ui_metro.time = 1/60
     ui_metro.event = function()
+        update_evolution_animation()
         if animation_complete then redraw() return end
         animation_start_time = animation_start_time or util.time()
         local elapsed = util.time() - animation_start_time
@@ -434,7 +449,7 @@ local function setup_params()
     params:add_option("scene_mode", "Scene Mode", {"off", "on"}, 1) params:set_action("scene_mode", function(value) current_scene_mode = (value == 2) and "on" or "off" if current_scene_mode == "on" then initialize_scenes_with_current_params() end end)
     params:add_binary("unload_all", "Unload All Audio", "trigger", 0) params:set_action("unload_all", function() for i=1, 2 do params:set(i.."seek", 0) params:set(i.."sample", "-") params:set(i.."live_input", 0) params:set(i.."live_direct", 0) audio_active[i] = false osc_positions[i] = 0 end engine.unload_all() oscgo = 0 update_pan_positioning() end)
     params:add_option("steps", "Transition Time", {"short", "medium", "long"}, 2) params:set_action("steps", function(value) steps = ({20, 300, 800})[value] end)
-    params:add_binary("evolution", "Evolve", "toggle", 0) params:set_action("evolution", function(value) if value == 1 then randpara.reset_evolution_centers() randpara.start_evolution() else randpara.stop_evolution() end end)
+    params:add_binary("evolution", "Evolve!", "toggle", 0) params:set_action("evolution", function(value) if value == 1 then randpara.reset_evolution_centers() randpara.start_evolution() else randpara.stop_evolution() end end)
     params:add_control("evolution_range", "Evolution Range", controlspec.new(0, 100, "lin", 1, 25, "%")) params:set_action("evolution_range", function(value) randpara.set_evolution_range(value) end)
     params:add_option("evolution_rate", "Evolution Rate", {"slowest", "slow", "moderate", "medium", "fast", "crazy"}, 3) params:set_action("evolution_rate", function(value) local rates = {1/0.5, 1/1.5, 1/4, 1/8, 1/15, 1/30} randpara.set_evolution_rate(rates[value]) end)
 
@@ -936,21 +951,14 @@ function redraw()
         table.insert(rects[levels.dim], {pos - 1, 0, 4, 1})
     end
     -- Status indicators (highlight pixels)
-    if dry_mode == 1 then 
-        table.insert(pixels[levels.highlight], {6,0})
-        table.insert(pixels[levels.highlight], {10,0})
-        table.insert(pixels[levels.highlight], {14,0})
-    end
-    if symmetry == 1 then 
-        table.insert(pixels[levels.highlight], {6,0})
-        table.insert(pixels[levels.highlight], {8,0})
-        table.insert(pixels[levels.highlight], {10,0})
-    end
+    if dry_mode == 1 then table.insert(pixels[levels.highlight], {6,0}) table.insert(pixels[levels.highlight], {10,0}) table.insert(pixels[levels.highlight], {14,0}) table.insert(pixels[levels.highlight], {18,0}) end
+    if symmetry == 1 then table.insert(pixels[levels.highlight], {18,0}) table.insert(pixels[levels.highlight], {20,0}) table.insert(pixels[levels.highlight], {22,0}) end
     if params:get("evolution") == 1 then 
-        table.insert(pixels[levels.highlight], {18,0})
-        table.insert(pixels[levels.highlight], {20,0})
-        table.insert(pixels[levels.highlight], {22,0})
-    end  
+      local pattern = patterns[evolution_animation_phase] or patterns[0]
+      for _, pixel in ipairs(pattern) do
+        table.insert(pixels[levels.highlight], pixel)
+      end
+    end 
     for _, lvl in ipairs({levels.dim, levels.value, levels.highlight}) do
         screen.level(lvl)
         for _, r in ipairs(rects[lvl]) do
