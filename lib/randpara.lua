@@ -280,13 +280,12 @@ end
 
 local function start_interpolation(steps, symmetry)
   if not next(targets) then return end
-  --steps = (steps and steps > 0) and steps or 30
-
+  steps = steps or 30
+  steps = math.max(1, steps)
   randomize_metro.time = interpolation_speed
   randomize_metro.count = -1
   randomize_metro.event = function(count)
     local factor, all_done = count / steps, true
-
     for param, data in pairs(targets) do
       if active_interpolations[param] then
         local current, target, threshold = params:get(param), data.target, data.threshold
