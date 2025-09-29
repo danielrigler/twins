@@ -65,22 +65,21 @@ alloc {
             interval_minus = (LFNoise1.kr(density).range(0, 1) < pitch_random_minus) * TChoose.kr(grain_trig, negative_intervals);
             final_interval = interval_plus + interval_minus;
             grain_pitch = base_pitch * (2 ** (final_interval/12));
-            pitchWalk = Select.kr(pitch_walk_mode, [DC.kr(1),
-                {
-                    var walkTrig = Dust.kr(pitch_walk_rate);
-                    var step = TIRand.kr(0, pitch_walk_step, walkTrig);
-                    var direction = TChoose.kr(walkTrig, [1, -1]);
-                    var totalStep = step * direction;
-                    var scaleSize = 7;
-                    var scaleDegree = totalStep.mod(scaleSize);
-                    var octaves = (totalStep - scaleDegree) / scaleSize;
-                    var semitones = Select.kr(scaleDegree, [0,2,4,5,7,9,11]);
-                    var pitchOffsetSemitones = semitones + (octaves * 12);
-                    2 ** (pitchOffsetSemitones / 12);
-                }.value
-            ]);
+            pitchWalk = Select.kr(pitch_walk_mode, [DC.kr(1), { 
+                var walkTrig = Dust.kr(pitch_walk_rate); 
+                var step = TIRand.kr(0, pitch_walk_step, walkTrig, Array.fill(25, { |i| (25 - i).sqrt }));
+                var direction = TChoose.kr(walkTrig, [1, -1]); 
+                var reset = CoinGate.kr(0.1, walkTrig);
+                var totalStep = Select.kr(reset, [step * direction, 0]);
+                var scaleSize = 7; 
+                var scaleDegree = totalStep.mod(scaleSize); 
+                var octaves = (totalStep - scaleDegree) / scaleSize; 
+                var semitones = Select.kr(scaleDegree, [0,2,4,5,7,9,11]); 
+                var pitchOffsetSemitones = semitones + (octaves * 12); 
+                2 ** (pitchOffsetSemitones / 12); 
+            }.value ]);
             grain_pitch = grain_pitch * pitchWalk;
-            
+
             grain_size = size * (1 + TRand.kr(trig: grain_trig, lo: size_variation.neg, hi: size_variation)); 
 
             ~grainBufFunc = { |buf, pitch, size, vol, dir, pos, jitter| GrainBuf.ar(1, grain_trig, size, buf, pitch * dir, pos + jitter, 2, mul: vol)};

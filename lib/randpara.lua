@@ -57,8 +57,6 @@ local PARAM_SPECS = {
   ["1overtones_1"] = {1, {0, 1}, "granular"},
   ["2overtones_1"] = {1, {0, 1}, "granular"},
   ["2overtones_2"] = {1, {0, 1}, "granular"},
-  ["1pitch_walk_scale"] = {13, {1, 13}, "granular"},
-  ["2pitch_walk_scale"] = {13, {1, 13}, "granular"},
   ["1pitch_walk_rate"] = {20, {0.1, 20}, "granular"},
   ["2pitch_walk_rate"] = {20, {0.1, 20}, "granular"},
   ["1pitch_walk_step"] = {12, {1, 12}, "granular"},
@@ -453,10 +451,6 @@ local track_param_configs = {
         {name=track.."overtones_2", prob=0.4, default=0, random=function() return random_float(0, 0.6) end},
         {name=track.."pitch_random_plus", prob=0.8, default=0, random=function() return math.random(0, 25) end},
         {name=track.."pitch_random_minus", prob=0.8, default=0, random=function() return math.random(0, 25) end},
-        {name=track.."pitch_walk_mode", prob=0.75, default=1, random=function() return math.random(1, 2) end, direct_set=true, condition=function() return params:get(track.."lock_pitch") ~= 2 end},
-        {name=track.."pitch_walk_scale", prob=0.35, default=1, random=function() return math.random(1, 13) end, direct_set=true, condition=function() return params:get(track.."lock_pitch") ~= 2 end},
-        {name=track.."pitch_walk_rate", prob=0.6, default=1.5, random=function() return random_float(0.5, 8) end, condition=function() return params:get(track.."lock_pitch") ~= 2 end},
-        {name=track.."pitch_walk_step", prob=0.6, default=2, random=function() return math.random(1, 8) end, condition=function() return params:get(track.."lock_pitch") ~= 2 end},
       }
     }
   end,

@@ -70,7 +70,7 @@ local mode_indices = {}; for i,v in ipairs(mode_list) do mode_indices[v]=i end
 local mode_list2 = {"seek","speed","pan","lpf","jitter","size","density","spread","pitch"}
 local mode_indices2 = {}; for i,v in ipairs(mode_list2) do mode_indices2[v]=i end
 local current_scene_mode = "off"
-local current_scenes = {[1] = 1, [2] = 1} -- Current scene for each track (1 or 2)
+local current_scenes = {[1] = 1, [2] = 1}
 local scene_data = {[1] = {[1] = {}, [2] = {}}, [2] = {[1] = {}, [2] = {}}}
 local evolution_animation_phase = 0
 local evolution_animation_time = 0
@@ -268,7 +268,7 @@ local function setup_params()
       params:add_binary(i.."live_input", "Live Buffer "..i.." ● ►", "toggle", 0) params:set_action(i.."live_input", function(value) if value == 1 then if params:get(i.."live_direct") == 1 then params:set(i.."live_direct", 0) end engine.set_live_input(i, 1) engine.live_mono(i, params:get("isMono") - 1) audio_active[i] = true oscgo = 1 update_pan_positioning() else engine.set_live_input(i, 0) if not audio_active[i] and params:get(i.."live_direct") == 0 then osc_positions[i] = 0 else oscgo = 1 update_pan_positioning() end end end)
     end
     params:add_control("live_buffer_mix", "Overdub", controlspec.new(0, 100, "lin", 1, 100, "%")) params:set_action("live_buffer_mix", function(value) engine.live_buffer_mix(value * 0.01) end)
-    params:add_control("live_buffer_length", "Buffer Length", controlspec.new(0.1, 60, "lin", 0.1, 8, "s")) params:set_action("live_buffer_length", function(value) engine.live_buffer_length(value) end)
+    params:add_control("live_buffer_length", "Buffer Length", controlspec.new(0.1, 60, "lin", 0.1, 2, "s")) params:set_action("live_buffer_length", function(value) engine.live_buffer_length(value) end)
     params:add{type = "trigger", id = "save_live_buffer1", name = "Buffer1 to Tape", action = function() local timestamp = os.date("%Y%m%d_%H%M%S") local filename = "live1_"..timestamp..".wav" engine.save_live_buffer(1, filename) end}
     params:add{type = "trigger", id = "save_live_buffer2", name = "Buffer2 to Tape", action = function() local timestamp = os.date("%Y%m%d_%H%M%S") local filename = "live2_"..timestamp..".wav" engine.save_live_buffer(2, filename) end}
     for i = 1, 2 do
@@ -291,8 +291,8 @@ local function setup_params()
       params:add_control(i.. "pitch_random_plus", i.. " Octave Variation +", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.. "pitch_random_plus", function(value) engine.pitch_random_plus(i, value * 0.01) end)
       params:add_control(i.. "pitch_random_minus", i.. " Octave Variation -", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.. "pitch_random_minus", function(value) engine.pitch_random_minus(i, value * 0.01) end)
       params:add_option(i.."pitch_walk_mode", i.." Pitch Walk", {"off", "on"}, 1) params:set_action(i.."pitch_walk_mode", function(value) engine.pitch_walk_mode(i, value - 1) end)
-      params:add_control(i.."pitch_walk_rate", i.." Walk Rate", controlspec.new(0.1, 20, "exp", 0.1, 2, "Hz")) params:set_action(i.."pitch_walk_rate", function(value) engine.pitch_walk_rate(i, value) end)
-      params:add_control(i.."pitch_walk_step", i.." Max Step", controlspec.new(1, 24, "lin", 1, 3, "steps")) params:set_action(i.."pitch_walk_step", function(value) engine.pitch_walk_step(i, value) end)
+      params:add_control(i.."pitch_walk_rate", i.." Walk Rate", controlspec.new(0.1, 30, "exp", 0.1, 1, "Hz")) params:set_action(i.."pitch_walk_rate", function(value) engine.pitch_walk_rate(i, value) end)
+      params:add_control(i.."pitch_walk_step", i.." Walk Range", controlspec.new(1, 24, "lin", 1, 2, "steps")) params:set_action(i.."pitch_walk_step", function(value) engine.pitch_walk_step(i, value) end)
       params:add_control(i.. "size_variation", i.. " Size Variation", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.. "size_variation", function(value) engine.size_variation(i, value * 0.01) end)
       params:add_control(i.. "direction_mod", i.. " Reverse", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.. "direction_mod", function(value) engine.direction_mod(i, value * 0.01) end)
       params:add_control(i.. "density_mod_amt", i.. " Density Mod", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.. "density_mod_amt", function(value) engine.density_mod_amt(i, value * 0.01) end)      
