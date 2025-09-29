@@ -35,7 +35,7 @@ _some features might require a pi4 based unit. If you hear clicks and crackles t
 ### Discussion
 **[FORUM](https://llllllll.co/t/twins/71052)**
 ### Download
-**v0.40**
+**v0.41**
 install from Maiden Project Manager, or from Maiden REPL:
 ```
 ;install https://github.com/danielrigler/twins
@@ -43,6 +43,7 @@ install from Maiden Project Manager, or from Maiden REPL:
 do not forget to restart.
 
 ### Version history
+* **v0.41** - Added pitch walk.
 * **v0.40** - Added scene mode.
 * **v0.39** - Added parameter evolution.
 * **v0.38** - Improved seek display (now also in live mode), new record head indicator.
