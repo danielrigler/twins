@@ -6,7 +6,7 @@
 --           by: @dddstudio                       
 --
 --                          
---                           v0.40
+--                           v0.41
 -- E1: Master Volume
 -- K1+E2/E3: Volume 1/2
 -- K1+E1: Crossfade Volumes
@@ -278,7 +278,7 @@ local function setup_params()
     params:add_binary("dry_mode2", "Dry Mode", "toggle", 0) params:set_action("dry_mode2", function(x) drymode.toggle_dry_mode2() end)
 
     params:add_separator("Settings")
-    params:add_group("Granular", 35)
+    params:add_group("Granular", 41)
     for i = 1, 2 do
       params:add_separator("Sample "..i)
       params:add_control(i.. "granular_gain", i.. " Mix", controlspec.new(0, 100, "lin", 1, 100, "%")) params:set_action(i.. "granular_gain", function(value) engine.granular_gain(i, value * 0.01) if value < 100 then lfo.clearLFOs(i, "seek") end end)
@@ -290,6 +290,9 @@ local function setup_params()
       params:add_option(i.. "smoothbass", i.." Smooth Sub", {"off", "on"}, 1) params:set_action(i.. "smoothbass", function(x) local engine_value = (x == 2) and 2.5 or 1 engine.smoothbass(i, engine_value) end)
       params:add_control(i.. "pitch_random_plus", i.. " Octave Variation +", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.. "pitch_random_plus", function(value) engine.pitch_random_plus(i, value * 0.01) end)
       params:add_control(i.. "pitch_random_minus", i.. " Octave Variation -", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.. "pitch_random_minus", function(value) engine.pitch_random_minus(i, value * 0.01) end)
+      params:add_option(i.."pitch_walk_mode", i.." Pitch Walk", {"off", "on"}, 1) params:set_action(i.."pitch_walk_mode", function(value) engine.pitch_walk_mode(i, value - 1) end)
+      params:add_control(i.."pitch_walk_rate", i.." Walk Rate", controlspec.new(0.1, 20, "exp", 0.1, 2, "Hz")) params:set_action(i.."pitch_walk_rate", function(value) engine.pitch_walk_rate(i, value) end)
+      params:add_control(i.."pitch_walk_step", i.." Max Step", controlspec.new(1, 24, "lin", 1, 3, "steps")) params:set_action(i.."pitch_walk_step", function(value) engine.pitch_walk_step(i, value) end)
       params:add_control(i.. "size_variation", i.. " Size Variation", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.. "size_variation", function(value) engine.size_variation(i, value * 0.01) end)
       params:add_control(i.. "direction_mod", i.. " Reverse", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.. "direction_mod", function(value) engine.direction_mod(i, value * 0.01) end)
       params:add_control(i.. "density_mod_amt", i.. " Density Mod", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.. "density_mod_amt", function(value) engine.density_mod_amt(i, value * 0.01) end)      
@@ -804,7 +807,14 @@ function key(n, z)
 end
 
 local function format_density(value) return string.format("%.1f Hz", value) end
-local function format_pitch(value) if value > 0 then return string.format("+%.0f", value) else return string.format("%.0f", value) end end
+local function format_pitch(value, track)
+    local pitch_walk_enabled = track and params:get(track.."pitch_walk_mode") == 2
+    if value > 0 then 
+        return string.format("+%.0f%s", value, pitch_walk_enabled and ".." or "")
+    else 
+        return string.format("%.0f%s", value, pitch_walk_enabled and ".." or "")
+    end
+end
 local function format_seek(value) return string.format("%.0f%%", value) end
 local function format_speed(speed) if math.abs(speed) < 0.01 then return ".00x" elseif math.abs(speed) < 1 then if speed < -0.01 then return string.format("-.%02dx", math.floor(math.abs(speed) * 100)) else return string.format(".%02dx", math.floor(math.abs(speed) * 100)) end else return string.format("%.2fx", speed) end end
 local function format_jitter(value) if value > 999 then return string.format("%.2f s", value / 1000) else return string.format("%.0f ms", value) end end
@@ -876,12 +886,10 @@ function redraw()
             -- Text values
             screen.move(x, row.y)
             screen.level(is_highlighted and levels.highlight or levels.value)
-            
             local lfo_mod = get_lfo_modulation(param)
             local val = lfo_mod or params:get(param)
-            
             if row.hz then screen.text(format_density(val))
-            elseif row.st then screen.text(format_pitch(val))
+            elseif row.st then screen.text(format_pitch(val, track))
             elseif param_name == "spread" then screen.text(string.format("%.0f%%", val))
             elseif param_name == "jitter" then screen.text(format_jitter(val))
             elseif param_name == "size" then screen.text(format_size(val)) 

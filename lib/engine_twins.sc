@@ -2,7 +2,7 @@ Engine_twins : CroneEngine {
 
 var haasEffect, bitcrushEffect, delayEffect, saturationEffect,jpverbEffect, shimmerEffect, tapeEffect, chewEffect, widthEffect, monobassEffect, sineEffect, wobbleEffect, lossdegradeEffect, tascamEffect, rotateEffect, outputSynth;
 var <buffersL, <buffersR, wobbleBuffer, mixBus, <voices, bufSine, pg, <liveInputBuffersL, <liveInputBuffersR, <liveInputRecorders, o, o_rec;
-var currentSpeed, currentJitter, currentSize, currentDensity, currentDensityModAmt, currentPitch, currentPan, currentSpread, currentVolume, currentGranularGain, currentCutoff, currentHpf, currentlpfgain, currentSubharmonics1, currentSubharmonics2, currentSubharmonics3, currentOvertones1, currentOvertones2, currentPitchMode, currentTrigMode, currentDirectionMod, currentSizeVariation, currentPitchRandomPlus, currentPitchRandomMinus, currentSmoothbass, currentLowGain, currentHighGain, currentProbability, liveBufferMix = 1.0;
+var currentSpeed, currentJitter, currentSize, currentDensity, currentDensityModAmt, currentPitch, currentPan, currentSpread, currentVolume, currentGranularGain, currentCutoff, currentHpf, currentlpfgain, currentSubharmonics1, currentSubharmonics2, currentSubharmonics3, currentOvertones1, currentOvertones2, currentPitchMode, currentTrigMode, currentDirectionMod, currentSizeVariation, currentPitchRandomPlus, currentPitchRandomMinus, currentSmoothbass, currentLowGain, currentHighGain, currentProbability, liveBufferMix = 1.0, currentPitchWalkMode, currentPitchWalkRate, currentPitchWalkStep;
 
 *new { arg context, doneCallback; ^super.new(context, doneCallback); }
 
@@ -27,12 +27,12 @@ alloc {
 
         context.server.sync;
         
-        currentSpeed = [0.1, 0.1]; currentJitter = [0.25, 0.25]; currentSize = [0.1, 0.1]; currentDensity = [10, 10]; currentPitch = [1, 1]; currentPan = [0, 0]; currentSpread = [0, 0]; currentVolume = [1, 1]; currentGranularGain = [1, 1]; currentCutoff = [20000, 20000]; currentlpfgain = [0.1, 0.1]; currentHpf = [20, 20]; currentSubharmonics1 = [0, 0]; currentSubharmonics2 = [0, 0]; currentSubharmonics3 = [0, 0]; currentOvertones1 = [0, 0]; currentOvertones2 = [0, 0]; currentPitchMode = [0, 0]; currentTrigMode = [0, 0]; currentDirectionMod = [0, 0]; currentSizeVariation = [0, 0]; currentPitchRandomPlus = [0, 0]; currentPitchRandomMinus = [0, 0]; currentSmoothbass = [1, 1]; currentDensityModAmt = [0, 0]; currentLowGain = [0, 0]; currentHighGain = [0, 0]; currentProbability = [100, 100]; liveBufferMix = 1.0;
+        currentSpeed = [0.1, 0.1]; currentJitter = [0.25, 0.25]; currentSize = [0.1, 0.1]; currentDensity = [10, 10]; currentPitch = [1, 1]; currentPan = [0, 0]; currentSpread = [0, 0]; currentVolume = [1, 1]; currentGranularGain = [1, 1]; currentCutoff = [20000, 20000]; currentlpfgain = [0.1, 0.1]; currentHpf = [20, 20]; currentSubharmonics1 = [0, 0]; currentSubharmonics2 = [0, 0]; currentSubharmonics3 = [0, 0]; currentOvertones1 = [0, 0]; currentOvertones2 = [0, 0]; currentPitchMode = [0, 0]; currentTrigMode = [0, 0]; currentDirectionMod = [0, 0]; currentSizeVariation = [0, 0]; currentPitchRandomPlus = [0, 0]; currentPitchRandomMinus = [0, 0]; currentSmoothbass = [1, 1]; currentDensityModAmt = [0, 0]; currentLowGain = [0, 0]; currentHighGain = [0, 0]; currentProbability = [100, 100]; liveBufferMix = 1.0; currentPitchWalkMode = [0, 0]; currentPitchWalkRate = [2, 2]; currentPitchWalkStep = [2, 2]; 
 
         SynthDef(\synth1, {
             arg out, voice, buf_l, buf_r, pos, speed, jitter, size, density, density_mod_amt, pitch_offset, pan, spread, gain, t_reset_pos,
             granular_gain, pitch_mode, trig_mode, subharmonics_1, subharmonics_2, subharmonics_3, overtones_1, overtones_2, 
-            cutoff, hpf, hpfq, lpfgain, direction_mod, size_variation, low_gain, mid_gain, high_gain, smoothbass, pitch_random_plus, pitch_random_minus, probability;
+            cutoff, hpf, hpfq, lpfgain, direction_mod, size_variation, low_gain, mid_gain, high_gain, smoothbass, pitch_random_plus, pitch_random_minus, probability, pitch_walk_mode, pitch_walk_rate, pitch_walk_step;
  
             var grain_trig, jitter_sig1, jitter_sig2, jitter_sig3, buf_dur, pan_sig, buf_pos, pos_sig, sig_l, sig_r, sig_mix, density_mod, dry_sig, granular_sig, base_pitch, grain_pitch, shaped, grain_size;
             var invDenom = 1 / (1 + subharmonics_1 + subharmonics_2 + subharmonics_3 + overtones_1 + overtones_2);
@@ -46,6 +46,7 @@ alloc {
             var positive_intervals = [12, 24], negative_intervals = [-12, -24];
             var interval_plus, interval_minus, final_interval;
             var base_trig;
+            var pitchWalk;
             
             speed = Lag.kr(speed);
             density_mod = density * (2**(LFNoise1.kr(density) * density_mod_amt));
@@ -63,8 +64,23 @@ alloc {
             interval_plus = (LFNoise1.kr(density).range(0, 1) < pitch_random_plus) * TChoose.kr(grain_trig, positive_intervals);
             interval_minus = (LFNoise1.kr(density).range(0, 1) < pitch_random_minus) * TChoose.kr(grain_trig, negative_intervals);
             final_interval = interval_plus + interval_minus;
-
             grain_pitch = base_pitch * (2 ** (final_interval/12));
+            pitchWalk = Select.kr(pitch_walk_mode, [DC.kr(1),
+                {
+                    var walkTrig = Dust.kr(pitch_walk_rate);
+                    var step = TIRand.kr(0, pitch_walk_step, walkTrig);
+                    var direction = TChoose.kr(walkTrig, [1, -1]);
+                    var totalStep = step * direction;
+                    var scaleSize = 7;
+                    var scaleDegree = totalStep.mod(scaleSize);
+                    var octaves = (totalStep - scaleDegree) / scaleSize;
+                    var semitones = Select.kr(scaleDegree, [0,2,4,5,7,9,11]);
+                    var pitchOffsetSemitones = semitones + (octaves * 12);
+                    2 ** (pitchOffsetSemitones / 12);
+                }.value
+            ]);
+            grain_pitch = grain_pitch * pitchWalk;
+            
             grain_size = size * (1 + TRand.kr(trig: grain_trig, lo: size_variation.neg, hi: size_variation)); 
 
             ~grainBufFunc = { |buf, pitch, size, vol, dir, pos, jitter| GrainBuf.ar(1, grain_trig, size, buf, pitch * dir, pos + jitter, 2, mul: vol)};
@@ -389,6 +405,10 @@ alloc {
         this.addCommand("monobass_mix", "f", { arg msg; var mix = msg[1]; monobassEffect.set(\mix, mix); monobassEffect.run(mix > 0); });
         this.addCommand("rspeed", "f", { arg msg; var rspeed = msg[1]; rotateEffect.set(\rspeed, rspeed); rotateEffect.run(rspeed > 0); });
         this.addCommand("haas", "i", { arg msg; var haas = msg[1]; haasEffect.set(\haas, haas); haasEffect.run(haas > 0); });
+        
+        this.addCommand("pitch_walk_mode", "ii", { arg msg; var voice = msg[1] - 1; currentPitchWalkMode[voice] = msg[2]; voices[voice].set(\pitch_walk_mode, msg[2]); });
+        this.addCommand("pitch_walk_rate", "if", { arg msg; var voice = msg[1] - 1; currentPitchWalkRate[voice] = msg[2]; voices[voice].set(\pitch_walk_rate, msg[2]); });
+        this.addCommand("pitch_walk_step", "if", { arg msg; var voice = msg[1] - 1; currentPitchWalkStep[voice] = msg[2]; voices[voice].set(\pitch_walk_step, msg[2]); });
         
         this.addCommand("set_live_input", "ii", { arg msg; var voice = msg[1] - 1; var enable = msg[2]; if (enable == 1, { if (liveInputRecorders[voice].notNil, { liveInputRecorders[voice].free; }); liveInputRecorders[voice] = Synth.new(\liveInputRecorder, [ \bufL, liveInputBuffersL[voice], \bufR, liveInputBuffersR[voice], \mix, liveBufferMix, \voice, voice ], context.xg, 'addToHead'); voices[voice].set( \buf_l, liveInputBuffersL[voice], \buf_r, liveInputBuffersR[voice], \t_reset_pos, 1); }, { if (liveInputRecorders[voice].notNil, { liveInputRecorders[voice].free; }); liveInputRecorders[voice] = nil; }); });
         this.addCommand("live_buffer_mix", "f", { arg msg; liveBufferMix = msg[1]; liveInputRecorders.do({ arg recorder; if (recorder.notNil, {recorder.set(\mix, liveBufferMix);}); }); });

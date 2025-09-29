@@ -67,7 +67,7 @@ function Mirror.copy_voice_params(from_track, to_track, mirror_pan)
         "granular_gain", "subharmonics_3", "subharmonics_2", "subharmonics_1",
         "overtones_1", "overtones_2", "smoothbass", "pitch_random_plus",
         "pitch_random_minus", "size_variation", "density_mod_amt", "direction_mod",
-        "pitch_mode", "trig_mode", "probability"
+        "pitch_mode", "trig_mode", "probability", "pitch_walk_mode","pitch_walk_scale","pitch_walk_rate","pitch_walk_step"
     }
 
     -- Check for volume LFO more efficiently
