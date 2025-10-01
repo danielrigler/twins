@@ -1,7 +1,7 @@
 local number_of_outputs = 16
 
 local options = {
-  lfotypes = { "sine", "random", "square" }
+  lfotypes = { "sine", "random", "square", "walk" }
 }
 
 local lfo = {}
@@ -56,7 +56,9 @@ for i = 1, number_of_outputs do
     slope = 0, 
     depth = 50, 
     offset = 0,
-    prev = 0
+    prev = 0,
+    walk_value = 0,
+    walk_velocity = 0
   }
 end
 
@@ -444,6 +446,33 @@ function lfo.process()
           lfo_obj.prev = math.random() * (math.random(0, 1) * 2 - 1)
         end
         slope = lfo_obj.prev
+      elseif lfo_obj.waveform == "walk" then
+        -- Smooth random walk using velocity and inertia (more analog-like)
+        local step_size = lfo_obj.freq * 0.4  -- Smaller steps for smoother motion
+        local random_acceleration = (math.random() - 0.5) * step_size
+        
+        -- Add inertia/momentum to the walk
+        local damping = 0.92  -- How much previous velocity is retained
+        lfo_obj.walk_velocity = lfo_obj.walk_velocity * damping + random_acceleration
+        
+        -- Apply velocity to position
+        lfo_obj.walk_value = lfo_obj.walk_value + lfo_obj.walk_velocity
+        
+        -- Soft boundaries - gently push back when approaching limits
+        local boundary_softness = 0.75
+        if lfo_obj.walk_value > boundary_softness then
+          lfo_obj.walk_velocity = lfo_obj.walk_velocity - (lfo_obj.walk_value - boundary_softness) * 0.1
+        elseif lfo_obj.walk_value < -boundary_softness then
+          lfo_obj.walk_velocity = lfo_obj.walk_velocity - (lfo_obj.walk_value + boundary_softness) * 0.1
+        end
+        
+        -- Hard clamp as safety
+        lfo_obj.walk_value = util.clamp(lfo_obj.walk_value, -1.0, 1.0)
+        
+        -- Additional low-pass filtering for extra smoothness
+        local filter_strength = 0.80
+        slope = lfo_obj.prev * filter_strength + lfo_obj.walk_value * (1 - filter_strength)
+        lfo_obj.prev = slope
       end
       
       lfo_obj.slope = util.clamp(slope, -1.0, 1.0) * (lfo_obj.depth * 0.01) + lfo_obj.offset
