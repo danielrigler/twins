@@ -6,7 +6,7 @@
 --           by: @dddstudio                       
 --
 --                          
---                           v0.41
+--                           v0.42
 -- E1: Master Volume
 -- K1+E2/E3: Volume 1/2
 -- K1+E1: Crossfade Volumes
@@ -75,6 +75,7 @@ local scene_data = {[1] = {[1] = {}, [2] = {}}, [2] = {[1] = {}, [2] = {}}}
 local evolution_animation_phase = 0
 local evolution_animation_time = 0
 local patterns = {[0] = {}, [1] = {{6,0}}, [2] = {{6,0}, {8,0}}, [3] = {{6,0}, {8,0}, {10,0}}, [4] = {{6,0}, {8,0}}, [5] = {{6,0}}}
+local grain_positions = {[1] = {}, [2] = {}}
 local param_modes = {
     speed = {param = "speed", delta = 0.5, engine = false, has_lock = true},
     seek = {param = "seek", delta = 1, engine = true, has_lock = true},
@@ -249,11 +250,15 @@ local function register_tap()
     end
 end
 
+local function is_param_locked(track_num, param)
+    return params:get(track_num .. "lock_" .. param) == 2
+end
+
 local function update_pan_positioning()
   local loaded1 = is_audio_loaded(1)
   local loaded2 = is_audio_loaded(2)
-  if not is_lfo_active_for_param("1pan") then params:set("1pan", loaded2 and -15 or 0) end
-  if not is_lfo_active_for_param("2pan") then params:set("2pan", loaded1 and 15 or 0) end
+  if not is_param_locked(1, "pan") and not is_lfo_active_for_param("1pan") then params:set("1pan", loaded2 and -15 or 0) end
+  if not is_param_locked(2, "pan") and not is_lfo_active_for_param("2pan") then params:set("2pan", loaded1 and 15 or 0) end
 end
 
 local function setup_params()
@@ -462,7 +467,7 @@ local function setup_params()
       params:add_taper(i.. "speed", i.. " speed", -2, 2, 0.10, 0) params:set_action(i.. "speed", function(value) if math.abs(value) < 0.01 then engine.speed(i, 0) else engine.speed(i, value) end end) params:hide(i.. "speed")
       params:add_taper(i.. "density", i.. " density", 0.1, 300, 10, 5) params:set_action(i.. "density", function(value) engine.density(i, value) end) params:hide(i.. "density")
       params:add_control(i.. "pitch", i.. " pitch", controlspec.new(-48, 48, "lin", 1, 0, "st")) params:set_action(i.. "pitch", function(value) engine.pitch_offset(i, math.pow(0.5, -value / 12)) end) params:hide(i.. "pitch")
-      params:add_taper(i.. "jitter", i.. " jitter", 0, 9999, 2500, 3, "ms") params:set_action(i.. "jitter", function(value) engine.jitter(i, value * 0.001) end) params:hide(i.. "jitter")
+      params:add_taper(i.. "jitter", i.. " jitter", 0, 99999, 2500, 6, "ms") params:set_action(i.. "jitter", function(value) engine.jitter(i, value * 0.001) end) params:hide(i.. "jitter")
       params:add_taper(i.. "size", i.. " size", 1, 5999, 200, 1, "ms") params:set_action(i.. "size", function(value) engine.size(i, value * 0.001) end) params:hide(i.. "size")
       params:add_taper(i.. "spread", i.. " spread", 0, 100, 30, 0, "%") params:set_action(i.. "spread", function(value) engine.spread(i, value * 0.01) end) params:hide(i.. "spread")
       params:add_control(i.. "seek", i.. " seek", controlspec.new(0, 100, "lin", 0.01, 0, "%")) params:set_action(i.. "seek", function(value) engine.seek(i, value * 0.01) end) params:hide(i.. "seek")
@@ -820,10 +825,6 @@ local function format_speed(speed) if math.abs(speed) < 0.01 then return ".00x" 
 local function format_jitter(value) if value > 999 then return string.format("%.2f s", value / 1000) else return string.format("%.0f ms", value) end end
 local function format_size(value) if value > 999 then return string.format("%.2f s", value / 1000) else return string.format("%.0f ms", value) end end
 
-local function is_param_locked(track_num, param)
-    return params:get(track_num .. "lock_" .. param) == 2
-end
-
 local function draw_l_shape(x, y)
     local pulse_level = math.floor(util.linlin(-1, 1, 1, 8, math.sin(util.time() * 4)))
     screen.level(pulse_level)
@@ -870,7 +871,7 @@ function redraw()
     local symmetry      = params:get("symmetry")
     local rects = { [levels.highlight] = {}, [levels.dim] = {}, [levels.value] = {} }
     local pixels = { [levels.highlight] = {}, [levels.dim] = {}, [levels.value] = {} }
-    -- Draw upper 5 parameter rows
+    -- Draw upper 5 parameter rows (unchanged behaviour)
     for _, row in ipairs(param_rows) do
         local param_name = string.match(row.label, "%a+")
         local is_highlighted = (current_mode == row.mode)
@@ -967,6 +968,26 @@ function redraw()
         table.insert(pixels[levels.highlight], pixel)
       end
     end 
+    -- grains
+    if bottom_row_mode == "seek" then
+        for track = 1, 2 do
+            local base_x = (track == 1) and 51 or 92
+            local kept = {}
+            local size_ms = params:get(track .. "size") or 0
+            local lifetime = (size_ms > 0) and (size_ms * 0.001) or 0.01
+            for _, g in ipairs(grain_positions[track]) do
+                local age = util.time() - (g.t or 0)
+                if age <= lifetime then
+                    local x = base_x + math.floor(util.clamp(g.pos or 0, 0, 1) * 30)
+                    local y = 63
+                    table.insert(pixels[levels.highlight], {x, y})
+                    table.insert(kept, g)
+                end
+            end
+            grain_positions[track] = kept
+        end
+    end
+    -- draw rects and pixels (unchanged drawing order)
     for _, lvl in ipairs({levels.dim, levels.value, levels.highlight}) do
         screen.level(lvl)
         for _, r in ipairs(rects[lvl]) do
@@ -977,6 +998,7 @@ function redraw()
         end
         screen.fill()
     end
+    -- draw recording head if live input
     for track = 1, 2 do
         if params:get(track.."live_input") == 1 and bottom_row_mode == "seek" then
             local x = (track == 1) and 51 or 92
@@ -1002,6 +1024,12 @@ local osc_handlers = {
     ["/twins/rec_pos"] = function(args)
         local vid, pos = args[1] + 1, args[2]
         if params:get(vid.."live_input") == 1 then rec_positions[vid] = pos end
+    end,
+    ["/twins/grain_pos"] = function(args)
+        local vid, pos = args[1] + 1, args[2]
+        if audio_active[vid] or params:get(vid.."live_input") == 1 or params:get(vid.."live_direct") == 1 then
+            table.insert(grain_positions[vid], {pos = pos, t = util.time()})
+        end
     end}
 local function osc_event(path, args) if osc_handlers[path] then osc_handlers[path](args) end end
 local function setup_osc() osc.event = osc_event end
