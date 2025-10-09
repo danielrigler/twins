@@ -1,10 +1,10 @@
 --
 --
---  __ __|         _)          
---     | \ \  \  / |  \ |  (_< 
---     |  \_/\_/ _| _| _| __/ 
---           by: @dddstudio                       
---
+--   __ __|         _)          
+--      | \ \  \  / |  \ |  (_< 
+--      |  \_/\_/ _| _| _| __/ 
+--            by: @dddstudio                       
+-- 
 --                          
 --                           v0.42
 -- E1: Master Volume
@@ -315,7 +315,7 @@ local function setup_params()
     params:add_binary("tap", "↳ TAP!", "trigger", 0) params:set_action("tap", function() register_tap() end)
     params:add_taper("delay_feedback", "Feedback", 0, 120, 30, 1, "%") params:set_action("delay_feedback", function(value) engine.fb_amt(value * 0.01) end)
     params:add_control("delay_lowpass", "LPF", controlspec.new(20, 20000, 'exp', 1, 20000, "Hz")) params:set_action('delay_lowpass', function(value) engine.lpf(value) end)
-    params:add_control("delay_highpass", "HPF", controlspec.new(20, 20000, 'exp', 1, 20, "Hz")) params:set_action("delay_highpass", function(value) engine.dhpf(value) end)
+    params:add_control("delay_highpass", "HPF", controlspec.new(20, 20000, 'exp', 1, 20, "Hz")) params:set_action('delay_highpass', function(value) engine.dhpf(value) end)
     params:add_taper("wiggle_depth", "Mod Depth", 0, 100, 1, 0, "%") params:set_action("wiggle_depth", function(value) engine.w_depth(value * 0.01) end)
     params:add_taper("wiggle_rate", "Mod Freq", 0, 20, 2, 1, "Hz") params:set_action("wiggle_rate", function(value) engine.w_rate(value) end)
     params:add_taper("stereo", "Ping-Pong", 0, 100, 30, 1, "%") params:set_action("stereo", function(value) engine.stereo(value * 0.01) end)
@@ -870,8 +870,15 @@ function redraw()
     local dry_mode      = params:get("dry_mode")
     local symmetry      = params:get("symmetry")
     local rects = { [levels.highlight] = {}, [levels.dim] = {}, [levels.value] = {} }
-    local pixels = { [levels.highlight] = {}, [levels.dim] = {}, [levels.value] = {} }
-    -- Draw upper 5 parameter rows (unchanged behaviour)
+    local pixels_by_level = {}
+
+    local function add_pixel(x, y, lvl)
+        lvl = math.max(0, math.min(15, math.floor(lvl or levels.highlight)))
+        pixels_by_level[lvl] = pixels_by_level[lvl] or {}
+        table.insert(pixels_by_level[lvl], {x, y})
+    end
+
+    -- Draw upper 5 parameter rows
     for _, row in ipairs(param_rows) do
         local param_name = string.match(row.label, "%a+")
         local is_highlighted = (current_mode == row.mode)
@@ -895,7 +902,7 @@ function redraw()
             elseif param_name == "jitter" then screen.text(format_jitter(val))
             elseif param_name == "size" then screen.text(format_size(val)) 
             else screen.text(params:string(param)) end
-            -- LFO modulation bars (dim rects)
+            -- LFO modulation bars
             if param_name ~= "pitch" then
                 local min_val, max_val = lfo.get_parameter_range(param)
                 local lfo_mod = get_lfo_modulation(param)
@@ -947,25 +954,25 @@ function redraw()
             screen.text(string.format("%.0f", filter_param))
         end
     end
-    -- Volume meters (dim rects)
+    -- Volume meters
     for track = 1, 2 do
         local x = (track == 1) and 0 or 127
         local height = util.linlin(-70, 10, 0, 64, cached_volume[track])
         table.insert(rects[levels.dim], {x, 64 - height, 1, height})
     end
-    -- Pan indicators (dim rects)
+    -- Pan indicators
     for track = 1, 2 do
         local center_start = (track == 1) and 52 or 93
         local pos = util.linlin(-100, 100, center_start, center_start + 25, cached_pan[track])
         table.insert(rects[levels.dim], {pos - 1, 0, 4, 1})
     end
-    -- Status indicators (highlight pixels)
-    if dry_mode == 1 then table.insert(pixels[levels.highlight], {6,0}) table.insert(pixels[levels.highlight], {10,0}) table.insert(pixels[levels.highlight], {14,0}) table.insert(pixels[levels.highlight], {18,0}) end
-    if symmetry == 1 then table.insert(pixels[levels.highlight], {18,0}) table.insert(pixels[levels.highlight], {20,0}) table.insert(pixels[levels.highlight], {22,0}) end
+    -- Status indicators
+    if dry_mode == 1 then add_pixel(6,0, levels.highlight) add_pixel(10,0, levels.highlight) add_pixel(14,0, levels.highlight) add_pixel(18,0, levels.highlight) end
+    if symmetry == 1 then add_pixel(18,0, levels.highlight) add_pixel(20,0, levels.highlight) add_pixel(22,0, levels.highlight) end
     if params:get("evolution") == 1 then 
       local pattern = patterns[evolution_animation_phase] or patterns[0]
       for _, pixel in ipairs(pattern) do
-        table.insert(pixels[levels.highlight], pixel)
+        add_pixel(pixel[1], pixel[2], levels.highlight)
       end
     end 
     -- grains
@@ -980,25 +987,42 @@ function redraw()
                 if age <= lifetime then
                     local x = base_x + math.floor(util.clamp(g.pos or 0, 0, 1) * 30)
                     local y = 63
-                    table.insert(pixels[levels.highlight], {x, y})
+                    local bright
+                    if lifetime > 0 then
+                        bright = util.linlin(0, lifetime, levels.highlight, levels.dim, age)
+                    else
+                        bright = levels.highlight
+                    end
+                    add_pixel(x, y, bright)
                     table.insert(kept, g)
                 end
             end
             grain_positions[track] = kept
         end
     end
-    -- draw rects and pixels (unchanged drawing order)
-    for _, lvl in ipairs({levels.dim, levels.value, levels.highlight}) do
+    local level_keys_map = {}
+    for _, v in ipairs({levels.dim, levels.value, levels.highlight}) do level_keys_map[v] = true end
+    for lvl, _ in pairs(pixels_by_level) do level_keys_map[lvl] = true end
+    local level_keys = {}
+    for k, _ in pairs(level_keys_map) do table.insert(level_keys, k) end
+    table.sort(level_keys)
+    for _, lvl in ipairs(level_keys) do
         screen.level(lvl)
-        for _, r in ipairs(rects[lvl]) do
-            screen.rect(table.unpack(r))
+        -- draw rects for this level
+        if rects[lvl] then
+            for _, r in ipairs(rects[lvl]) do
+                screen.rect(table.unpack(r))
+            end
         end
-        for _, p in ipairs(pixels[lvl]) do
-            screen.pixel(table.unpack(p))
+        -- draw pixel points for this level
+        if pixels_by_level[lvl] then
+            for _, p in ipairs(pixels_by_level[lvl]) do
+                screen.pixel(p[1], p[2])
+            end
         end
         screen.fill()
     end
-    -- draw recording head if live input
+    -- draw recording head
     for track = 1, 2 do
         if params:get(track.."live_input") == 1 and bottom_row_mode == "seek" then
             local x = (track == 1) and 51 or 92
@@ -1027,7 +1051,7 @@ local osc_handlers = {
     end,
     ["/twins/grain_pos"] = function(args)
         local vid, pos = args[1] + 1, args[2]
-        if audio_active[vid] or params:get(vid.."live_input") == 1 or params:get(vid.."live_direct") == 1 then
+        if audio_active[vid] then
             table.insert(grain_positions[vid], {pos = pos, t = util.time()})
         end
     end}
