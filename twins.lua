@@ -869,7 +869,7 @@ function redraw()
     local cached_hpf    = {params:get("1hpf"), params:get("2hpf")}
     local dry_mode      = params:get("dry_mode")
     local symmetry      = params:get("symmetry")
-    local rects = { [levels.highlight] = {}, [levels.dim] = {}, [levels.value] = {} }
+    local rects = {[1] = {}, [levels.highlight] = {}, [levels.dim] = {}, [levels.value] = {} }
     local pixels_by_level = {}
 
     local function add_pixel(x, y, lvl)
@@ -933,7 +933,11 @@ function redraw()
             if params:get(track.."live_input") == 1 then screen.text("live")
             elseif params:get(track.."live_direct") == 1 then screen.text("direct")
             else screen.text(string.format("%.0f%%", osc_positions[track] * 100)) end
-            if params:get(track.."live_direct") ~= 1 then table.insert(rects[levels.dim], {x, 63, 30 * osc_positions[track], 1}) end
+            if params:get(track.."live_direct") ~= 1 then 
+                table.insert(rects[1], {x, 63, 30, 1})  -- background
+                table.insert(rects[levels.dim], {x, 63, 30 * osc_positions[track], 1})
+                add_pixel(x + math.floor(osc_positions[track] * 30), 63, 15)  -- playhead
+            end
         elseif bottom_row_mode == "speed" then
             if is_param_locked(track, "speed") then draw_l_shape(x, 61) end
             screen.move(x, 61)
@@ -989,7 +993,7 @@ function redraw()
                     local y = 63
                     local bright
                     if lifetime > 0 then
-                        bright = util.linlin(0, lifetime, levels.highlight, levels.dim, age)
+                        bright = util.linlin(0, lifetime, levels.highlight-2, levels.dim, age)
                     else
                         bright = levels.highlight
                     end
@@ -1000,7 +1004,7 @@ function redraw()
             grain_positions[track] = kept
         end
     end
-    local level_keys_map = {}
+    local level_keys_map = {[1] = true}
     for _, v in ipairs({levels.dim, levels.value, levels.highlight}) do level_keys_map[v] = true end
     for lvl, _ in pairs(pixels_by_level) do level_keys_map[lvl] = true end
     local level_keys = {}
