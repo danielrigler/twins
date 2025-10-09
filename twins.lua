@@ -211,6 +211,25 @@ local function disable_lfos_for_param(param_name, only_self)
     end
 end
 
+local function get_audio_duration(filepath)
+    if not filepath or filepath == "" or filepath == "none" or filepath == "-" then return nil end
+    if not util.file_exists(filepath) then return nil end
+    local ch, samples, rate = audio.file_info(filepath)
+    if samples and rate and rate > 0 then return samples / rate end
+    return nil
+end
+
+local function handle_lfo(param_name, force_disable)
+    if force_disable then
+        disable_lfos_for_param(param_name)
+    else
+        local active, idx = is_lfo_active_for_param(param_name)
+        if active then 
+            params:set(idx.."lfo", 1) 
+        end
+    end
+end
+
 local last_selected = nil
 local function load_random_tape_file(track_num)
     if params:get(track_num .. "live_input") == 1 then return false end
@@ -264,10 +283,9 @@ end
 local function setup_params()
     params:add_separator("Input")
     for i = 1, 2 do
-      params:add_file(i.. "sample", "Sample " ..i) params:set_action(i.."sample", function(file) if file ~= nil and file ~= "" and file ~= "none" and file ~= "-" then engine.read(i, file) audio_active[i] = true oscgo = 1 update_pan_positioning() else audio_active[i] = false osc_positions[i] = 0 update_pan_positioning() end end)
-    end
+        params:add_file(i.. "sample", "Sample " ..i) params:set_action(i.."sample", function(file) if file ~= nil and file ~= "" and file ~= "none" and file ~= "-" then engine.read(i, file) audio_active[i] = true oscgo = 1 update_pan_positioning() local duration = get_audio_duration(file) if duration then local duration_ms = duration * 1000 params:set(i.."max_jitter", math.min(duration_ms, 99999)) params:set(i.."min_jitter", 0) if not is_param_locked(i, "jitter") then local jitter_param = i.."jitter" handle_lfo(jitter_param, true) local jitter_value = (duration * 0.2) * 1000 jitter_value = util.clamp(jitter_value, 0, 99999) params:set(i.."jitter", jitter_value) end end else audio_active[i] = false osc_positions[i] = 0 update_pan_positioning() end end) end
     params:add_binary("randomtapes", "Random Tapes", "trigger", 0) params:set_action("randomtapes", function() load_random_tape_file(1) load_random_tape_file(2) end)
-
+    
     params:add_group("Live!", 10)
     for i = 1, 2 do
       params:add_binary(i.."live_input", "Live Buffer "..i.." ● ►", "toggle", 0) params:set_action(i.."live_input", function(value) if value == 1 then if params:get(i.."live_direct") == 1 then params:set(i.."live_direct", 0) end engine.set_live_input(i, 1) engine.live_mono(i, params:get("isMono") - 1) audio_active[i] = true oscgo = 1 update_pan_positioning() else engine.set_live_input(i, 0) if not audio_active[i] and params:get(i.."live_direct") == 0 then osc_positions[i] = 0 else oscgo = 1 update_pan_positioning() end end end)
@@ -432,22 +450,25 @@ local function setup_params()
     params:add_binary("copy_1_to_2", "Copy 1 → 2", "trigger", 0) params:set_action("copy_1_to_2", function() Mirror.copy_voice_params("1", "2", true) end)
     params:add_binary("copy_2_to_1", "Copy 1 ← 2", "trigger", 0) params:set_action("copy_2_to_1", function() Mirror.copy_voice_params("2", "1", true) end)
     
-    params:add_group("Limits", 14) 
-    params:add_taper("min_jitter", "jitter (min)", 0, 4999, 0, 5, "ms")
-    params:add_taper("max_jitter", "jitter (max)", 0, 4999, 4999, 5, "ms")
-    params:add_taper("min_size", "size (min)", 1, 999, 100, 5, "ms")
-    params:add_taper("max_size", "size (max)", 1, 999, 499, 5, "ms")
-    params:add_taper("min_density", "density (min)", 0.1, 50, 1, 5, "Hz")
-    params:add_taper("max_density", "density (max)", 0.1, 50, 16, 5, "Hz")
-    params:add_taper("min_spread", "spread (min)", 0, 100, 0, 0, "%")
-    params:add_taper("max_spread", "spread (max)", 0, 100, 75, 0, "%")
-    params:add_control("min_pitch", "pitch (min)", controlspec.new(-48, 48, "lin", 1, -31, "st"))
-    params:add_control("max_pitch", "pitch (max)", controlspec.new(-48, 48, "lin", 1, 31, "st"))
-    params:add_taper("min_speed", "speed (min)", -2, 2, -0.15, 0, "x")
-    params:add_taper("max_speed", "speed (max)", -2, 2, 0.5, 0, "x")
-    params:add_taper("min_seek", "seek (min)", 0, 100, 0, 0, "%")
-    params:add_taper("max_seek", "seek (max)", 0, 100, 100, 0, "%")
-    
+    params:add_group("Limits", 30) 
+    for i = 1, 2 do
+        params:add_separator("Voice "..i)
+        params:add_taper(i.."min_jitter", i.." jitter (min)", 0, 999999, 0, 5, "ms")
+        params:add_taper(i.."max_jitter", i.." jitter (max)", 0, 999999, 4999, 5, "ms")
+        params:add_taper(i.."min_size", i.." size (min)", 1, 999, 100, 5, "ms")
+        params:add_taper(i.."max_size", i.." size (max)", 1, 999, 499, 5, "ms")
+        params:add_taper(i.."min_density", i.." density (min)", 0.1, 50, 1, 5, "Hz")
+        params:add_taper(i.."max_density", i.." density (max)", 0.1, 50, 16, 5, "Hz")
+        params:add_taper(i.."min_spread", i.." spread (min)", 0, 100, 0, 0, "%")
+        params:add_taper(i.."max_spread", i.." spread (max)", 0, 100, 75, 0, "%")
+        params:add_control(i.."min_pitch", i.." pitch (min)", controlspec.new(-48, 48, "lin", 1, -31, "st"))
+        params:add_control(i.."max_pitch", i.." pitch (max)", controlspec.new(-48, 48, "lin", 1, 31, "st"))
+        params:add_taper(i.."min_speed", i.." speed (min)", -2, 2, -0.15, 0, "x")
+        params:add_taper(i.."max_speed", i.." speed (max)", -2, 2, 0.5, 0, "x")
+        params:add_taper(i.."min_seek", i.." seek (min)", 0, 100, 0, 0, "%")
+        params:add_taper(i.."max_seek", i.." seek (max)", 0, 100, 100, 0, "%")
+    end
+
     params:add_group("Actions", 2)
     params:add_binary("macro_more", "More+", "trigger", 0) params:set_action("macro_more", function() macro.macro_more() end)
     params:add_binary("macro_less", "Less-", "trigger", 0) params:set_action("macro_less", function() macro.macro_less() end)
@@ -467,7 +488,7 @@ local function setup_params()
       params:add_taper(i.. "speed", i.. " speed", -2, 2, 0.10, 0) params:set_action(i.. "speed", function(value) if math.abs(value) < 0.01 then engine.speed(i, 0) else engine.speed(i, value) end end) params:hide(i.. "speed")
       params:add_taper(i.. "density", i.. " density", 0.1, 300, 10, 5) params:set_action(i.. "density", function(value) engine.density(i, value) end) params:hide(i.. "density")
       params:add_control(i.. "pitch", i.. " pitch", controlspec.new(-48, 48, "lin", 1, 0, "st")) params:set_action(i.. "pitch", function(value) engine.pitch_offset(i, math.pow(0.5, -value / 12)) end) params:hide(i.. "pitch")
-      params:add_taper(i.. "jitter", i.. " jitter", 0, 99999, 2500, 6, "ms") params:set_action(i.. "jitter", function(value) engine.jitter(i, value * 0.001) end) params:hide(i.. "jitter")
+      params:add_taper(i.. "jitter", i.. " jitter", 0, 999900, 2500, 10, "ms") params:set_action(i.. "jitter", function(value) engine.jitter(i, value * 0.001) end) params:hide(i.. "jitter")
       params:add_taper(i.. "size", i.. " size", 1, 5999, 200, 1, "ms") params:set_action(i.. "size", function(value) engine.size(i, value * 0.001) end) params:hide(i.. "size")
       params:add_taper(i.. "spread", i.. " spread", 0, 100, 30, 0, "%") params:set_action(i.. "spread", function(value) engine.spread(i, value * 0.01) end) params:hide(i.. "spread")
       params:add_control(i.. "seek", i.. " seek", controlspec.new(0, 100, "lin", 0.01, 0, "%")) params:set_action(i.. "seek", function(value) engine.seek(i, value * 0.01) end) params:hide(i.. "seek")
@@ -477,8 +498,8 @@ end
 
 local function randomize_pitch(track, other_track, symmetry)
     local current_pitch = params:get(track .. "pitch")
-    local min_pitch = math.max(params:get("min_pitch"), current_pitch - 48)
-    local max_pitch = math.min(params:get("max_pitch"), current_pitch + 48)
+    local min_pitch = math.max(params:get(track.."min_pitch"), current_pitch - 48)
+    local max_pitch = math.min(params:get(track.."max_pitch"), current_pitch + 48)
     if min_pitch >= max_pitch then return end
     local base_pitch = params:get(other_track .. "pitch")
     local weighted_intervals = {[-12] = 3, [-7] = 2, [-5] = 2, [-3] = 1, [0] = 2, [3] = 1, [5] = 2, [7] = 2, [12] = 3}
@@ -538,13 +559,13 @@ local function randomize(n)
         pitch   = params:get(n .. "lock_pitch") == 1,
         seek    = params:get(n .. "lock_seek") == 1}
     local param_config = {
-        speed   = {min = "min_speed",   max = "max_speed",   name = n .. "speed"},
-        jitter  = {min = "min_jitter",  max = "max_jitter",  name = n .. "jitter"},
-        size    = {min = "min_size",    max = "max_size",    name = n .. "size"},
-        density = {min = "min_density", max = "max_density", name = n .. "density"},
-        spread  = {min = "min_spread",  max = "max_spread",  name = n .. "spread"},
+        speed   = {min = n.."min_speed",   max = n.."max_speed",   name = n .. "speed"},
+        jitter  = {min = n.."min_jitter",  max = n.."max_jitter",  name = n .. "jitter"},
+        size    = {min = n.."min_size",    max = n.."max_size",    name = n .. "size"},
+        density = {min = n.."min_density", max = n.."max_density", name = n .. "density"},
+        spread  = {min = n.."min_spread",  max = n.."max_spread",  name = n .. "spread"},
         pitch   = {name = n .. "pitch"},
-        seek    = {min = "min_seek",    max = "max_seek",    name = n .. "seek"}}
+        seek    = {min = n.."min_seek",    max = n.."max_seek",    name = n .. "seek"}}
     local targets = {}
     if locked_params.pitch and not active_controlled_params[param_config.pitch.name] then
         randomize_pitch(n, other_track, symmetry)
@@ -593,17 +614,6 @@ local function randomize(n)
             if all_done then stop_metro_safe(m_rand) end
         end
         m_rand:start()
-    end
-end
-
-local function handle_lfo(param_name, force_disable)
-    if force_disable then
-        disable_lfos_for_param(param_name)
-    else
-        local active, idx = is_lfo_active_for_param(param_name)
-        if active then 
-            params:set(idx.."lfo", 1) 
-        end
     end
 end
 
@@ -812,17 +822,10 @@ function key(n, z)
 end
 
 local function format_density(value) return string.format("%.1f Hz", value) end
-local function format_pitch(value, track)
-    local pitch_walk_enabled = track and params:get(track.."pitch_walk_mode") == 2
-    if value > 0 then 
-        return string.format("+%.0f%s", value, pitch_walk_enabled and ".." or "")
-    else 
-        return string.format("%.0f%s", value, pitch_walk_enabled and ".." or "")
-    end
-end
+local function format_pitch(value, track) local pitch_walk_enabled = track and params:get(track.."pitch_walk_mode") == 2 if value > 0 then return string.format("+%.0f%s", value, pitch_walk_enabled and ".." or "") else return string.format("%.0f%s", value, pitch_walk_enabled and ".." or "") end end
 local function format_seek(value) return string.format("%.0f%%", value) end
 local function format_speed(speed) if math.abs(speed) < 0.01 then return ".00x" elseif math.abs(speed) < 1 then if speed < -0.01 then return string.format("-.%02dx", math.floor(math.abs(speed) * 100)) else return string.format(".%02dx", math.floor(math.abs(speed) * 100)) end else return string.format("%.2fx", speed) end end
-local function format_jitter(value) if value > 999 then return string.format("%.2f s", value / 1000) else return string.format("%.0f ms", value) end end
+local function format_jitter(value) if value > 999 then return string.format("%.1f s", value / 1000) else return string.format("%.0f ms", value) end end
 local function format_size(value) if value > 999 then return string.format("%.2f s", value / 1000) else return string.format("%.0f ms", value) end end
 
 local function draw_l_shape(x, y)
@@ -877,7 +880,6 @@ function redraw()
         pixels_by_level[lvl] = pixels_by_level[lvl] or {}
         table.insert(pixels_by_level[lvl], {x, y})
     end
-
     -- Draw upper 5 parameter rows
     for _, row in ipairs(param_rows) do
         local param_name = string.match(row.label, "%a+")
@@ -1012,13 +1014,11 @@ function redraw()
     table.sort(level_keys)
     for _, lvl in ipairs(level_keys) do
         screen.level(lvl)
-        -- draw rects for this level
         if rects[lvl] then
             for _, r in ipairs(rects[lvl]) do
                 screen.rect(table.unpack(r))
             end
         end
-        -- draw pixel points for this level
         if pixels_by_level[lvl] then
             for _, p in ipairs(pixels_by_level[lvl]) do
                 screen.pixel(p[1], p[2])
