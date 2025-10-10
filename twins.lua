@@ -6,7 +6,7 @@
 --            by: @dddstudio                       
 -- 
 --                          
---                           v0.42
+--                           v0.43
 -- E1: Master Volume
 -- K1+E2/E3: Volume 1/2
 -- K1+E1: Crossfade Volumes
@@ -926,39 +926,36 @@ function redraw()
     if bottom_row_mode == "lpf" or bottom_row_mode == "hpf" then screen.text(current_filter_mode == "lpf" and "lpf:      " or "hpf:      ")
     else screen.text(bottom_row_mode .. ":     ") end
     -- Bottom row values
-for track = 1, 2 do
-    local x = (track == 1) and 51 or 92
-    if bottom_row_mode == "seek" then
-        if is_param_locked(track, "seek") then draw_l_shape(x, 61) end
-        local current_speed = cached_speed[track]
-        local is_loaded = audio_active[track] or params:get(track.."live_input") == 1 or params:get(track.."live_direct") == 1
-        screen.level(is_bottom_active and levels.highlight or levels.value)
-        screen.move(x, 61)
-        if params:get(track.."live_input") == 1 then 
-            screen.text("live")
-        elseif params:get(track.."live_direct") == 1 then 
-            screen.text("direct")
-        else 
-            screen.text(string.format("%.0f%%", osc_positions[track] * 100))
-        end
-        if is_loaded and params:get(track.."live_direct") ~= 1 then
-            local symbol
-            if math.abs(current_speed) < 0.01 then
-                symbol = "⏸"
-            elseif current_speed > 0 then
-                symbol = "▶"
-            else
-                symbol = "◀"
+    for track = 1, 2 do
+        local x = (track == 1) and 51 or 92
+        if bottom_row_mode == "seek" then
+            if is_param_locked(track, "seek") then draw_l_shape(x, 61) end
+            local current_speed = cached_speed[track]
+            local is_loaded = audio_active[track] or params:get(track.."live_input") == 1 or params:get(track.."live_direct") == 1
+            screen.level(is_bottom_active and levels.highlight or levels.value)
+            screen.move(x, 61)
+            if params:get(track.."live_input") == 1 then 
+                screen.text("live")
+            elseif params:get(track.."live_direct") == 1 then 
+                screen.text("direct")
+            else 
+                screen.text(string.format("%.0f%%", osc_positions[track] * 100))
             end
-            local symbol_x = (track == 1) and 75 or 116
-            screen.move(symbol_x, 61)
-            screen.text(symbol)
-        end
-        if params:get(track.."live_direct") ~= 1 then 
-            table.insert(rects[1], {x, 63, 30, 1})
-            table.insert(rects[levels.dim], {x, 63, 30 * osc_positions[track], 1})
-            add_pixel(x + math.floor(osc_positions[track] * 30), 63, 15)
-        end
+            if is_loaded and params:get(track.."live_direct") ~= 1 then
+                local symbol
+                if math.abs(current_speed) < 0.01 then symbol = "⏸"
+                elseif current_speed > 0 then symbol = "▶"
+                else symbol = "◀"
+                end
+                local symbol_x = (track == 1) and 75 or 116
+                screen.move(symbol_x, 61)
+                screen.text(symbol)
+            end
+            if params:get(track.."live_direct") ~= 1 then 
+                table.insert(rects[1], {x, 63, 30, 1})
+                table.insert(rects[levels.dim], {x, 63, 30 * osc_positions[track], 1})
+                add_pixel(x + math.floor(osc_positions[track] * 30), 63, 15)
+            end
         elseif bottom_row_mode == "speed" then
             if is_param_locked(track, "speed") then draw_l_shape(x, 61) end
             screen.move(x, 61)
