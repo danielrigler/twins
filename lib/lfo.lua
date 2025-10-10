@@ -162,8 +162,17 @@ local param_ranges_cache = {
 }
 
 function lfo.get_parameter_range(param_name)
-  local range = param_ranges_cache[param_name]
-  return range[1], range[2]
+    if param_name:match("jitter$") then
+        local track = param_name:sub(1, 1)
+        local max_jitter = params:get(track .. "max_jitter") or 4999
+        return 0, max_jitter
+    end
+    local range = param_ranges_cache[param_name]
+    if range then
+        return range[1], range[2]
+    else
+        return 0, 100
+    end
 end
 
 function lfo.assign_to_current_row(current_mode, current_filter_mode)
