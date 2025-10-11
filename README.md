@@ -6,7 +6,7 @@ A randomized dual granular sample playground for Monome Norns.
 
 Inspired by @cfd90’s Twine and contains influence and code from a lot of other norns users. This is basically Twine on steroids. A granular playground. It contains a lot of effects and extra granular parameters. You can turn off granular processing and use this as a normal sample player with effects. Live input processing is also possible. My main goal was building a tool for creating nice ambient soundscapes. And no problem if you do not have external controllers. I have tweaked the GUI and controls, so it is playable even with only a norns. Let me know if you find this useful.
 
-![Screenshot](https://llllllll.co/uploads/default/original/3X/3/d/3dcf4b7e9ca0bf8d52917c89f0b49da3ed672b09.png)
+![Screenshot](https://llllllll.co/uploads/default/original/3X/5/c/5c1fa51fe8c1c6d515c61753aded0462c10e3b4e.png)
 
 **Some of the new features:**
 * Reverb, delay, tape effects, shimmer, EQ, filters, bit reduction, etc.
@@ -35,7 +35,7 @@ _some features might require a pi4 based unit. If you hear clicks and crackles t
 ### Discussion
 **[FORUM](https://llllllll.co/t/twins/71052)**
 ### Download
-**v0.42**
+**v0.43**
 install from Maiden Project Manager, or from Maiden REPL:
 ```
 ;install https://github.com/danielrigler/twins
@@ -43,6 +43,7 @@ install from Maiden Project Manager, or from Maiden REPL:
 do not forget to restart.
 
 ### Version history
+* **v0.43** - Seamless output saving / bouncing. 
 * **v0.42** - Added grain cloud visualization.
 * **v0.41** - Added pitch walk.
 * **v0.40** - Added scene mode.
