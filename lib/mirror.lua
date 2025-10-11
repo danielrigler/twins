@@ -1,43 +1,42 @@
 local Mirror = {}
 
--- Cache frequently accessed values
 local params_lookup = nil
 local lfo_targets = nil
+
+local param_exists, safe_get, safe_set, clear_destination_lfos
 
 function Mirror.init(osc_positions_ref, lfo_ref)
     Mirror.osc_positions = osc_positions_ref or {}
     Mirror.lfo = lfo_ref
-    
-    -- Cache references for performance
     params_lookup = params.lookup
     lfo_targets = lfo_ref and lfo_ref.lfo_targets
 end
 
--- Optimized parameter functions with reduced lookups
-local function param_exists(name)
+function param_exists(name)
     return params_lookup[name] ~= nil
 end
 
-local function safe_get(name)
+function safe_get(name)
     return params_lookup[name] and params:get(name) or 0
 end
 
-local function safe_set(name, value)
+function safe_set(name, value)
     if params_lookup[name] and value ~= nil then
         params:set(name, value)
     end
 end
 
--- Pre-compiled pattern for better performance
 local track_pattern_cache = {}
 local function get_track_pattern(track)
-    if not track_pattern_cache[track] then
-        track_pattern_cache[track] = "^" .. track
+    local pattern = track_pattern_cache[track]
+    if not pattern then
+        pattern = "^" .. track
+        track_pattern_cache[track] = pattern
     end
-    return track_pattern_cache[track]
+    return pattern
 end
 
-local function clear_destination_lfos(to_track)
+function clear_destination_lfos(to_track)
     local track_pattern = get_track_pattern(to_track)
     
     for lfo_num = 1, 16 do
@@ -51,26 +50,26 @@ local function clear_destination_lfos(to_track)
     end
 end
 
+local static_params = {
+    "speed", "pitch", "jitter", "spread", "density", "size", "pan",
+    "cutoff", "hpf", "eq_low_gain", "eq_high_gain",
+    "granular_gain", "subharmonics_3", "subharmonics_2", "subharmonics_1",
+    "overtones_1", "overtones_2", "smoothbass", "pitch_random_plus",
+    "pitch_random_minus", "size_variation", "density_mod_amt", "direction_mod",
+    "pitch_mode", "trig_mode", "probability", "pitch_walk_mode","pitch_walk_scale","pitch_walk_rate","pitch_walk_step"
+}
+
 function Mirror.copy_voice_params(from_track, to_track, mirror_pan)
     -- Clear destination LFOs first
     clear_destination_lfos(to_track)
     
     -- Copy the OSC position (actual playback position)
-    if Mirror.osc_positions[tonumber(from_track)] then
-        Mirror.osc_positions[tonumber(to_track)] = Mirror.osc_positions[tonumber(from_track)]
+    local from_track_num = tonumber(from_track)
+    local to_track_num = tonumber(to_track)
+    if Mirror.osc_positions[from_track_num] then
+        Mirror.osc_positions[to_track_num] = Mirror.osc_positions[from_track_num]
     end
     
-    -- Parameter list (static, no table creation each call)
-    local static_params = {
-        "speed", "pitch", "jitter", "spread", "density", "size", "pan",
-        "cutoff", "hpf", "eq_low_gain", "eq_high_gain",
-        "granular_gain", "subharmonics_3", "subharmonics_2", "subharmonics_1",
-        "overtones_1", "overtones_2", "smoothbass", "pitch_random_plus",
-        "pitch_random_minus", "size_variation", "density_mod_amt", "direction_mod",
-        "pitch_mode", "trig_mode", "probability", "pitch_walk_mode","pitch_walk_scale","pitch_walk_rate","pitch_walk_step"
-    }
-
-    -- Check for volume LFO more efficiently
     local volume_has_lfo = false
     local from_volume_target = from_track .. "volume"
     
@@ -92,7 +91,6 @@ function Mirror.copy_voice_params(from_track, to_track, mirror_pan)
         safe_set(to_track .. "volume", safe_get(from_track .. "volume"))
     end
 
-    -- Copy regular parameters with batch operations
     for i = 1, #static_params do
         local param = static_params[i]
         local from_param = from_track .. param
@@ -112,7 +110,6 @@ function Mirror.copy_voice_params(from_track, to_track, mirror_pan)
     local normalized = seek_value * 0.01
     engine.seek(to_track, normalized)
 
-    -- Optimized LFO mirroring with early exits and cached lookups
     local from_track_pattern = get_track_pattern(from_track)
     local to_track_len = #to_track
     local global_freq_scale = params:get("global_lfo_freq_scale") or 1
@@ -172,7 +169,7 @@ function Mirror.copy_voice_params(from_track, to_track, mirror_pan)
                         safe_set(dest_lfo .. "offset", src_offset)
                         safe_set(dest_lfo .. "lfo", 2)
                         
-                        -- Update LFO object efficiently
+                        -- Update LFO object
                         local dest_lfo_obj = Mirror.lfo[dest_lfo]
                         if dest_lfo_obj then
                             dest_lfo_obj.target = dest_target_index

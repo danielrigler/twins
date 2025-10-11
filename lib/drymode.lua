@@ -5,7 +5,6 @@ local dry_mode_state2 = false
 local prev_settings = {}
 local lfo
 
--- Configuration tables for better maintainability
 local DRY_VALUES = {
     filter_lock_ratio = 0,
     reverb_mix = 0,
@@ -49,6 +48,8 @@ local LFO_TARGETS = {
     volume = {["1volume"] = true, ["2volume"] = true}
 }
 
+local LFO_TARGET_TYPES = {"speed", "seek", "pan", "volume"}
+
 function drymode.set_lfo_reference(lfo_module)
     lfo = lfo_module
 end
@@ -68,6 +69,8 @@ local function store_params(param_list, stereo)
 end
 
 local function restore_params(settings, stereo)
+    if not settings then return end
+    
     if stereo then
         for p, vals in pairs(settings) do
             if vals and #vals >= 2 then
@@ -86,9 +89,8 @@ end
 
 local function set_stereo_params(values)
     for param, value in pairs(values) do
-        for i = 1, 2 do
-            params:set(i..param, value)
-        end
+        params:set("1"..param, value)
+        params:set("2"..param, value)
     end
 end
 
@@ -141,18 +143,15 @@ function drymode.toggle_dry_mode()
         prev_settings = store_params(STEREO_PARAMS, true)
         
         -- Store mono parameters
-        for k, v in pairs(store_params(MONO_PARAMS, false)) do
+        local mono_settings = store_params(MONO_PARAMS, false)
+        for k, v in pairs(mono_settings) do
             prev_settings[k] = v
         end
 
         -- Store and disable LFOs for all target types
-        prev_settings.speed_lfos = {}
-        prev_settings.seek_lfos = {}
-        prev_settings.pan_lfos = {}
-        prev_settings.volume_lfos = {}
-        
-        for target_type, targets in pairs(LFO_TARGETS) do
-            store_and_disable_lfos(targets, prev_settings[target_type.."_lfos"])
+        for _, target_type in ipairs(LFO_TARGET_TYPES) do
+            prev_settings[target_type.."_lfos"] = {}
+            store_and_disable_lfos(LFO_TARGETS[target_type], prev_settings[target_type.."_lfos"])
         end
 
         -- Apply dry settings
@@ -166,16 +165,13 @@ function drymode.toggle_dry_mode()
         -- Exiting dry mode - restore settings
         if next(prev_settings) then
             -- Restore stereo parameters
-            restore_params({
-                granular_gain = prev_settings.granular_gain,
-                speed = prev_settings.speed,
-                eq_low_gain = prev_settings.eq_low_gain,
-                eq_mid_gain = prev_settings.eq_mid_gain,
-                eq_high_gain = prev_settings.eq_high_gain,
-                cutoff = prev_settings.cutoff,
-                hpf = prev_settings.hpf,
-                lpfgain = prev_settings.lpfgain
-            }, true)
+            local stereo_settings = {}
+            for _, param in ipairs(STEREO_PARAMS) do
+                if prev_settings[param] then
+                    stereo_settings[param] = prev_settings[param]
+                end
+            end
+            restore_params(stereo_settings, true)
 
             -- Restore mono parameters
             local mono_settings = {}
@@ -187,10 +183,9 @@ function drymode.toggle_dry_mode()
             restore_params(mono_settings, false)
 
             -- Restore LFOs
-            restore_lfos(prev_settings.speed_lfos)
-            restore_lfos(prev_settings.seek_lfos)
-            restore_lfos(prev_settings.pan_lfos)
-            restore_lfos(prev_settings.volume_lfos)
+            for _, target_type in ipairs(LFO_TARGET_TYPES) do
+                restore_lfos(prev_settings[target_type.."_lfos"])
+            end
         end
     end
 end
