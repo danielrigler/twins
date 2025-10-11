@@ -39,7 +39,7 @@ alloc {
             granular_gain, pitch_mode, trig_mode, subharmonics_1, subharmonics_2, subharmonics_3, overtones_1, overtones_2, 
             cutoff, hpf, hpfq, lpfgain, direction_mod, size_variation, low_gain, mid_gain, high_gain, smoothbass, pitch_random_plus, pitch_random_minus, probability, pitch_walk_mode, pitch_walk_rate, pitch_walk_step;
  
-            var grain_trig, jitter_sig1, jitter_sig2, jitter_sig3, buf_dur, pan_sig, buf_pos, pos_sig, sig_l, sig_r, sig_mix, density_mod, dry_sig, granular_sig, base_pitch, grain_pitch, shaped, grain_size;
+            var grain_trig, jitter_sig, buf_dur, pan_sig, buf_pos, pos_sig, sig_l, sig_r, sig_mix, density_mod, dry_sig, granular_sig, base_pitch, grain_pitch, shaped, grain_size;
             var invDenom = 1 / (1 + subharmonics_1 + subharmonics_2 + subharmonics_3 + overtones_1 + overtones_2);
             var subharmonic_1_vol = subharmonics_1 * invDenom * 2;
             var subharmonic_2_vol = subharmonics_2 * invDenom * 2;
@@ -57,9 +57,10 @@ alloc {
             density_mod = density * (2**(LFNoise1.kr(density) * density_mod_amt));
             base_trig = Select.kr(trig_mode, [Impulse.kr(density_mod), Dust.kr(density_mod)]);
             grain_trig = base_trig * (TRand.kr(trig: base_trig, lo: 0, hi: 1) < probability);
+            grain_size = size * (1 + TRand.kr(trig: grain_trig, lo: size_variation.neg, hi: size_variation));
             buf_dur = BufDur.kr(buf_l);
             
-            #jitter_sig1, jitter_sig2, jitter_sig3 = {TRand.kr(trig: grain_trig, lo: buf_dur.reciprocal.neg * jitter, hi: buf_dur.reciprocal * jitter) }.dup(3);  
+            jitter_sig = TRand.kr(trig: grain_trig, lo: buf_dur.reciprocal.neg * jitter, hi: buf_dur.reciprocal * jitter);  
             buf_pos = Phasor.kr(trig: t_reset_pos, rate: buf_dur.reciprocal / ControlRate.ir * speed, resetPos: pos);
             pos_sig = Wrap.kr(buf_pos);
             dry_sig = [PlayBuf.ar(1, buf_l, speed, startPos: pos * BufFrames.kr(buf_l), trigger: t_reset_pos, loop: 1), PlayBuf.ar(1, buf_r, speed, startPos: pos * BufFrames.kr(buf_r), trigger: t_reset_pos, loop: 1)];
@@ -81,25 +82,17 @@ alloc {
                 var octaves = (totalStep - scaleDegree) / scaleSize; 
                 var semitones = Select.kr(scaleDegree, [0,2,4,5,7,9,11]); 
                 var pitchOffsetSemitones = semitones + (octaves * 12); 
-                2 ** (pitchOffsetSemitones / 12); 
-            }.value ]);
+                2 ** (pitchOffsetSemitones / 12); }.value ]);
             grain_pitch = grain_pitch * pitchWalk;
 
-            grain_size = size * (1 + TRand.kr(trig: grain_trig, lo: size_variation.neg, hi: size_variation)); 
-
             ~grainBufFunc = { |buf, pitch, size, vol, dir, pos, jitter| GrainBuf.ar(1, grain_trig, size, buf, pitch * dir, pos + jitter, 2, mul: vol)};
-            ~processGrains = { |buf_l, buf_r, pitch, size, vol, dir, pos, jitter| [~grainBufFunc.(buf_l, pitch, size, vol, dir, pos, jitter), ~grainBufFunc.(buf_r, pitch, size, vol, dir, pos, jitter)]};
-            #sig_l, sig_r = ~processGrains.(buf_l, buf_r, grain_pitch, grain_size, invDenom, grain_direction, pos_sig, jitter_sig1);
-            [1/2, 1/4, 1/8].do { |div, i|
-                var vol = [subharmonic_1_vol, subharmonic_2_vol, subharmonic_3_vol][i];
-                #sig_l, sig_r = [sig_l + ~grainBufFunc.(buf_l, grain_pitch * div, grain_size * smoothbass, vol, grain_direction, pos_sig, jitter_sig2),
-                                 sig_r + ~grainBufFunc.(buf_r, grain_pitch * div, grain_size * smoothbass, vol, grain_direction, pos_sig, jitter_sig2)];};
-            [2, 4].do { |mult, i|
-                var vol = [overtone_1_vol, overtone_2_vol][i];
-                #sig_l, sig_r = [sig_l + ~grainBufFunc.(buf_l, grain_pitch * mult, grain_size, vol, grain_direction, pos_sig, jitter_sig3),
-                                 sig_r + ~grainBufFunc.(buf_r, grain_pitch * mult, grain_size, vol, grain_direction, pos_sig, jitter_sig3)];};
+            ~processGrains = { |buf_l, buf_r, pitch, size, vol, dir, pos, jitter| [buf_l, buf_r].collect { |buf| ~grainBufFunc.(buf, pitch, size, vol, dir, pos, jitter) }};
+            #sig_l, sig_r = ~processGrains.(buf_l, buf_r, grain_pitch, grain_size, invDenom, grain_direction, pos_sig, jitter_sig);
+            ([1/2, 1/4, 1/8] ++ [2, 4]).do { |harmonic, i| var vol = [subharmonic_1_vol, subharmonic_2_vol, subharmonic_3_vol, overtone_1_vol, overtone_2_vol][i]; 
+                var size_mult = if(i < 3) { smoothbass } { 1 }; var grains = ~processGrains.(buf_l, buf_r, grain_pitch * harmonic, grain_size * size_mult, vol, grain_direction, pos_sig, jitter_sig);
+                #sig_l, sig_r = [sig_l + grains[0], sig_r + grains[1]];};
             
-            pan_sig = pan_sig = Lag.kr(TRand.kr(trig: grain_trig, lo: 0, hi: spread) * (ToggleFF.kr(grain_trig) * 2 - 1), grain_size * 0.15);
+            pan_sig = Lag.kr(TRand.kr(trig: grain_trig, lo: 0, hi: spread) * (ToggleFF.kr(grain_trig) * 2 - 1), grain_size * 0.15);
             granular_sig = Balance2.ar(sig_l, sig_r, pan + pan_sig);
             sig_mix = ((dry_sig * (1 - granular_gain)) + (granular_sig * granular_gain));
              
@@ -111,7 +104,7 @@ alloc {
             sig_mix = MoogFF.ar(sig_mix, Lag.kr(cutoff, 0.5), lpfgain);
             
             SendReply.kr(Impulse.kr(15), '/buf_pos', [voice, buf_pos]);
-            SendReply.kr(grain_trig, '/grain_pos', [voice, Wrap.kr(pos_sig + jitter_sig1)]);
+            SendReply.kr(grain_trig, '/grain_pos', [voice, Wrap.kr(pos_sig + jitter_sig)]);
 
             Out.ar(out, sig_mix * gain * 1.4);
         }).add;
@@ -137,8 +130,8 @@ alloc {
             sig = BLowShelf.ar(sig, 70, 6, low_gain);
             sig = BPeakEQ.ar(sig, 850, 1, mid_gain);
             sig = BHiShelf.ar(sig, 3900, 6, high_gain);
-            sig = HPF.ar(sig, Lag.kr(hpf));
-            sig = MoogFF.ar(sig, Lag.kr(cutoff), lpfgain);
+            sig = HPF.ar(sig, Lag.kr(hpf, 0.5));
+            sig = MoogFF.ar(sig, Lag.kr(cutoff, 0.5), lpfgain);
             sig = Balance2.ar(sig[0], sig[1], pan);
             Out.ar(out, sig * gain);
         }).add;
