@@ -43,7 +43,7 @@ install from Maiden Project Manager, or from Maiden REPL:
 do not forget to restart.
 
 ### Version history
-* **v0.43** - Seamless output saving / bouncing. 
+* **v0.43** - Added an always-listening recording buffer. 
 * **v0.42** - Added grain cloud visualization.
 * **v0.41** - Added pitch walk.
 * **v0.40** - Added scene mode.
