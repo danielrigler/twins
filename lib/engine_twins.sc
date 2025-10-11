@@ -1,12 +1,14 @@
 Engine_twins : CroneEngine {
 
 var haasEffect, bitcrushEffect, delayEffect, saturationEffect,jpverbEffect, shimmerEffect, tapeEffect, chewEffect, widthEffect, monobassEffect, sineEffect, wobbleEffect, lossdegradeEffect, tascamEffect, rotateEffect, outputSynth;
-var <buffersL, <buffersR, wobbleBuffer, mixBus, <voices, bufSine, pg, <liveInputBuffersL, <liveInputBuffersR, <liveInputRecorders, o, o_rec, o_grain;
+var <buffersL, <buffersR, wobbleBuffer, mixBus, <voices, bufSine, pg, <liveInputBuffersL, <liveInputBuffersR, <liveInputRecorders, o, o_output, o_rec, o_grain;
 var currentSpeed, currentJitter, currentSize, currentDensity, currentDensityModAmt, currentPitch, currentPan, currentSpread, currentVolume, currentGranularGain, currentCutoff, currentHpf, currentlpfgain, currentSubharmonics1, currentSubharmonics2, currentSubharmonics3, currentOvertones1, currentOvertones2, currentPitchMode, currentTrigMode, currentDirectionMod, currentSizeVariation, currentPitchRandomPlus, currentPitchRandomMinus, currentSmoothbass, currentLowGain, currentHighGain, currentProbability, liveBufferMix = 1.0, currentPitchWalkMode, currentPitchWalkRate, currentPitchWalkStep;
+var <outputRecordBufferL, <outputRecordBufferR, <outputRecorder;
+var outputBufferLength = 8, currentOutputWritePos;
 
 *new { arg context, doneCallback; ^super.new(context, doneCallback); }
 
-readBuf { arg i, path; if(buffersL[i].notNil && buffersR[i].notNil, { if (File.exists(path), { var numChannels = SoundFile.use(path.asString(), { |f| f.numChannels }); Buffer.readChannel(context.server, path, 0, -1, [0], { |b| voices[i].set(\buf_l, b); buffersL[i].free; buffersL[i] = b; voices[i].set(\t_reset_pos, 1); if (numChannels > 1, { Buffer.readChannel(context.server, path, 0, -1, [1], { |b| voices[i].set(\buf_r, b); buffersR[i].free; buffersR[i] = b; }); }, { voices[i].set(\buf_r, b); buffersR[i].free; buffersR[i] = b; }); }); }); }); }
+readBuf { arg i, path; if(buffersL[i].notNil && buffersR[i].notNil, { if (File.exists(path), { var numChannels = SoundFile.use(path.asString(), { |f| f.numChannels }); Buffer.readChannel(context.server, path, 0, -1, [0], { |b| voices[i].set(\buf_l, b);         buffersL[i].free; buffersL[i] = b; voices[i].set(\t_reset_pos, 1); if (numChannels > 1, { Buffer.readChannel(context.server, path, 0, -1, [1], { |b| voices[i].set(\buf_r, b); buffersR[i].free; buffersR[i] = b; voices[i].set(\t_reset_pos, 1); }); }, {          voices[i].set(\buf_r, b); buffersR[i].free; buffersR[i] = b; voices[i].set(\t_reset_pos, 1); }); }); }); }); }
 
 unloadAll { 2.do({ arg i, live_buffer_length; var newBufL = Buffer.alloc(context.server, context.server.sampleRate * live_buffer_length); var newBufR = Buffer.alloc(context.server, context.server.sampleRate * live_buffer_length); if(buffersL[i].notNil, { buffersL[i].free; }); if(buffersR[i].notNil, { buffersR[i].free; }); buffersL.put(i, newBufL); buffersR.put(i, newBufR); if(voices[i].notNil, { voices[i].set( \buf_l, newBufL, \buf_r, newBufR, \t_reset_pos, 1 ); }); liveInputBuffersL[i].zero; liveInputBuffersR[i].zero; if(liveInputRecorders[i].notNil, { liveInputRecorders[i].free; liveInputRecorders[i] = nil; }); }); wobbleBuffer.zero; }
 
@@ -19,6 +21,9 @@ alloc {
         liveInputBuffersL = Array.fill(2, {Buffer.alloc(context.server, context.server.sampleRate * 8); });
         liveInputBuffersR = Array.fill(2, {Buffer.alloc(context.server, context.server.sampleRate * 8); });
         liveInputRecorders = Array.fill(2, { nil });
+        
+        outputRecordBufferL = Buffer.alloc(context.server, context.server.sampleRate * outputBufferLength);
+        outputRecordBufferR = Buffer.alloc(context.server, context.server.sampleRate * outputBufferLength);
 
         bufSine = Buffer.alloc(context.server, 1024 * 16, 1);
         bufSine.sine2([2], [0.5], false);
@@ -151,6 +156,17 @@ alloc {
             BufWr.ar(mixedL, bufL, phasor);
             BufWr.ar(mixedR, bufR, phasor);
             SendReply.kr(Impulse.kr(15), '/rec_pos', [voice, phasor / BufFrames.kr(bufL)]);
+        }).add;
+        
+        SynthDef(\outputRecorder, {
+            arg bufL, bufR, inBus;
+            var sig, phasor, numFrames;
+            sig = In.ar(inBus, 2);
+            numFrames = BufFrames.kr(bufL);
+            phasor = Phasor.ar(0, 1, 0, numFrames);
+            BufWr.ar(sig[0], bufL, phasor);
+            BufWr.ar(sig[1], bufR, phasor);
+            SendReply.kr(Impulse.kr(10), '/output_write_pos', [phasor / numFrames]);
         }).add;
 
         SynthDef(\monobass, {
@@ -317,6 +333,7 @@ alloc {
         monobassEffect = Synth.new(\monobass, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
         rotateEffect = Synth.new(\rotate, [\bus, mixBus.index], context.xg, 'addToTail');
         outputSynth = Synth.new(\output, [\in, mixBus.index,\out, context.out_b.index], context.xg, 'addToTail');
+        outputRecorder = Synth.new(\outputRecorder, [\bufL, outputRecordBufferL, \bufR, outputRecordBufferR, \inBus, mixBus.index], context.xg, 'addToTail');
 
         this.addCommand(\mix, "f", { |msg| var mix = msg[1]; delayEffect.set(\mix, mix); delayEffect.run(mix > 0); });
         this.addCommand(\delay, "f", { |msg| delayEffect.set(\delay, msg[1]);	});
@@ -419,10 +436,15 @@ alloc {
         this.addCommand("unload_all", "", {this.unloadAll(); });
         this.addCommand("save_live_buffer", "is", { arg msg; var voice = msg[1] - 1; var filename = msg[2]; var bufL = liveInputBuffersL[voice]; var bufR = liveInputBuffersR[voice]; this.saveLiveBufferToTape(voice, filename); });
         this.addCommand("live_buffer_length", "f", { arg msg; var length = msg[1]; liveInputBuffersL.do({ arg buf; buf.free; }); liveInputBuffersR.do({ arg buf; buf.free; }); liveInputBuffersL = Array.fill(2, {Buffer.alloc(context.server, context.server.sampleRate * length);}); liveInputBuffersR = Array.fill(2, {Buffer.alloc(context.server, context.server.sampleRate * length);}); liveInputRecorders.do({ arg recorder, i; if (recorder.notNil, {recorder.free; liveInputRecorders[i] = Synth.new(\liveInputRecorder, [ \bufL, liveInputBuffersL[i], \bufR, liveInputBuffersR[i], \mix, liveBufferMix ], context.xg, 'addToHead'); voices[i].set( \buf_l, liveInputBuffersL[i], \buf_r, liveInputBuffersR[i], \t_reset_pos, 1); }); }); });
-    
+        this.addCommand("set_output_buffer_length", "f", { arg msg; var newLength = msg[1]; outputBufferLength = newLength; if (outputRecorder.notNil) { outputRecorder.free; }; if (outputRecordBufferL.notNil) { outputRecordBufferL.free; }; if (outputRecordBufferR.notNil) { outputRecordBufferR.free; }; outputRecordBufferL = Buffer.alloc(context.server, context.server.sampleRate * outputBufferLength);    outputRecordBufferR = Buffer.alloc(context.server, context.server.sampleRate * outputBufferLength); outputRecorder = Synth.new(\outputRecorder, [\bufL, outputRecordBufferL, \bufR, outputRecordBufferR, \inBus, mixBus.index], context.xg, 'addToTail'); });
+        this.addCommand("save_output_buffer", "s", { arg msg; var filename, path, interleaved, gainBoost, crossfadeSamples, actualLength; var splitPoint, finalLength, writePos; filename = msg[1]; path = "/home/we/dust/audio/tape/" ++ filename; gainBoost = 2.8; crossfadeSamples = context.server.sampleRate.asInteger; actualLength = outputRecordBufferL.numFrames; writePos = (currentOutputWritePos ? 0.5) * actualLength; splitPoint = writePos.asInteger; finalLength = actualLength - crossfadeSamples; interleaved = Buffer.alloc(context.server, finalLength, 2); outputRecordBufferL.loadToFloatArray(action: { |leftData| outputRecordBufferR.loadToFloatArray(action: { |rightData| var interleavedData, i, fadeIn, fadeOut, blendL, blendR; var beforeL, beforeR, afterL, afterR; interleavedData = Array.new(finalLength * 2); finalLength.do { |sampleIdx| var sourceIdx, crossfadePos, fadeInGain, fadeOutGain; if (sampleIdx < crossfadeSamples) {crossfadePos = sampleIdx / crossfadeSamples; fadeInGain = (1 - cos(crossfadePos * pi)) * 0.5; fadeOutGain = (1 + cos(crossfadePos * pi)) * 0.5; afterL = leftData[(splitPoint + sampleIdx) % actualLength]; afterR = rightData[(splitPoint + sampleIdx) % actualLength]; beforeL = leftData[(splitPoint - crossfadeSamples + sampleIdx) % actualLength]; beforeR = rightData[(splitPoint - crossfadeSamples + sampleIdx) % actualLength]; blendL = (afterL * fadeInGain) + (beforeL * fadeOutGain); blendR = (afterR * fadeInGain) + (beforeR * fadeOutGain); } {sourceIdx = (splitPoint + sampleIdx) % actualLength; blendL = leftData[sourceIdx]; blendR = rightData[sourceIdx]; }; interleavedData.add(blendL * gainBoost); interleavedData.add(blendR * gainBoost); }; interleaved.loadCollection(interleavedData, action: { interleaved.write(path, "WAV", "float"); NetAddr("127.0.0.1", 10111).sendMsg("/twins/output_saved", path); NetAddr("127.0.0.1", 10111).sendMsg("/twins/save_complete"); interleaved.free; }); }); }); });
+        this.addCommand("save_output_buffer_only", "s", { arg msg; var filename, path, interleaved, gainBoost, crossfadeSamples, actualLength; var splitPoint, finalLength, writePos; filename = msg[1]; path = "/home/we/dust/audio/tape/" ++ filename; gainBoost = 2.8; crossfadeSamples = context.server.sampleRate.asInteger; actualLength = outputRecordBufferL.numFrames; writePos = (currentOutputWritePos ? 0.5) * actualLength; splitPoint = writePos.asInteger; finalLength = actualLength - crossfadeSamples; interleaved = Buffer.alloc(context.server, finalLength, 2); outputRecordBufferL.loadToFloatArray(action: { |leftData| outputRecordBufferR.loadToFloatArray(action: { |rightData| var interleavedData, blendL, blendR; var afterL, afterR, beforeL, beforeR; interleavedData = Array.new(finalLength * 2); finalLength.do { |sampleIdx| var sourceIdx, crossfadePos, fadeInGain, fadeOutGain; if (sampleIdx < crossfadeSamples) {crossfadePos = sampleIdx / crossfadeSamples; fadeInGain = (1 - cos(crossfadePos * pi)) * 0.5; fadeOutGain = (1 + cos(crossfadePos * pi)) * 0.5; afterL = leftData[(splitPoint + sampleIdx) % actualLength]; afterR = rightData[(splitPoint + sampleIdx) % actualLength]; beforeL = leftData[(splitPoint - crossfadeSamples + sampleIdx) % actualLength]; beforeR = rightData[(splitPoint - crossfadeSamples + sampleIdx) % actualLength]; blendL = (afterL * fadeInGain) + (beforeL * fadeOutGain); blendR = (afterR * fadeInGain) + (beforeR * fadeOutGain);} {sourceIdx = (splitPoint + sampleIdx) % actualLength; blendL = leftData[sourceIdx]; blendR = rightData[sourceIdx]; }; interleavedData.add(blendL * gainBoost); interleavedData.add(blendR * gainBoost); }; interleaved.loadCollection(interleavedData, action: { interleaved.write(path, "WAV", "float"); NetAddr("127.0.0.1", 10111).sendMsg("/twins/save_complete"); interleaved.free; }); }); }); });
+
         o = OSCFunc({ |msg| var voice, pos; voice = msg[3].asInteger; pos = msg[4]; NetAddr("127.0.0.1", 10111).sendMsg("/twins/buf_pos", voice, pos); }, '/buf_pos', context.server.addr);
         o_rec = OSCFunc({ |msg| var voice, pos; voice = msg[3].asInteger; pos = msg[4]; NetAddr("127.0.0.1", 10111).sendMsg("/twins/rec_pos", voice, pos); }, '/rec_pos', context.server.addr);
         o_grain = OSCFunc({ |msg| var voice, pos; voice = msg[3].asInteger; pos = msg[4]; NetAddr("127.0.0.1", 10111).sendMsg("/twins/grain_pos", voice, pos); }, '/grain_pos', context.server.addr);   
+        o_output = OSCFunc({ |msg| var pos; pos = msg[3]; currentOutputWritePos = pos;}, '/output_write_pos', context.server.addr);
+
     }
 
     free {
@@ -432,7 +454,10 @@ alloc {
         liveInputBuffersL.do({ arg b; b.free; });
         liveInputBuffersR.do({ arg b; b.free; });
         liveInputRecorders.do({ arg s; if (s.notNil) { s.free; }; });
-        o.free; o_rec.free; o_grain.free;
+        if (outputRecorder.notNil) { outputRecorder.free; };
+        if (outputRecordBufferL.notNil) { outputRecordBufferL.free; };
+        if (outputRecordBufferR.notNil) { outputRecordBufferR.free; };
+        o.free; o_rec.free; o_grain.free; o_output.free;
         wobbleBuffer.free; mixBus.free; bufSine.free; jpverbEffect.free; shimmerEffect.free; saturationEffect.free; tapeEffect.free; chewEffect.free; widthEffect.free; monobassEffect.free; lossdegradeEffect.free; sineEffect.free; wobbleEffect.free; outputSynth.free; delayEffect.free; bitcrushEffect.free; rotateEffect.free; tascamEffect.free; haasEffect.free; 
     }
 }

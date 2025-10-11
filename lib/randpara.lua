@@ -342,13 +342,12 @@ end
 ------------------------------------------------------------
 
 local function set_param(param, prob, default, random, direct, condition)
-  -- Check if condition function exists and returns false
   if condition and not condition() then
-    return  -- Skip this parameter
+    return
   end
   
   if direct then
-    local val = (math.random() <= prob)
+    local val = (math.random() > prob)
       and (type(default) == "function" and default() or default)
       or random()
     params:set(param, val)
@@ -360,7 +359,7 @@ local function set_param(param, prob, default, random, direct, condition)
     return
   end
 
-  local val = (math.random() <= prob)
+  local val = (math.random() > prob)
     and (type(default) == "function" and default() or default)
     or random()
 
@@ -401,12 +400,12 @@ local param_configs = {
   shimmer = {
     lock_param = "lock_shimmer",
     params = {
-      {name="o2", prob=0.9, default=function() return 1 end, random=function() return 2 end, direct_set=true},
+      {name="o2", prob=0.1, default=function() return 1 end, random=function() return 2 end, direct_set=true},
       {name="pitchv", prob=0.5, default=0.0, random=function() return math.random(0, 2) end},
       {name="lowpass", prob=0.5, default=13000, random=function() return math.random(6000, 15000) end},
       {name="hipass", prob=0.5, default=1300, random=function() return math.random(400, 1500) end},
-      {name="fb", prob=0.7, default=15, random=function() return math.random(10, 25) end},
-      {name="fbDelay", prob=0.7, default=0.2, random=function() return random_float(0.15, 0.35) end},
+      {name="fb", prob=0.3, default=15, random=function() return math.random(10, 35) end},
+      {name="fbDelay", prob=0.3, default=0.2, random=function() return random_float(0.15, 0.35) end},
     }
   },
 
@@ -415,12 +414,12 @@ local param_configs = {
     params = {
       {name="delay_mix", prob=0.5, default=0, random=function() return math.random(0, 80) end},
       {name="delay_time", prob=0.3, default=function() return 0.5 end, random=function() return random_float(0.15, 1) end, direct_set=true},
-      {name="delay_feedback", prob=0.5, default=nil, random=function() return math.random(20, 80) end},
+      {name="delay_feedback", prob=1, default=nil, random=function() return math.random(20, 80) end},
       {name="stereo", prob=0.5, default=25, random=function() return math.random(0, 70) end},
       {name="delay_lowpass", prob=0, default=nil, random=function() return math.random(600, 20000) end},
       {name="delay_highpass", prob=0, default=nil, random=function() return math.random(20, 250) end},
-      {name="wiggle_depth", prob=0.7, default=1, random=function() return math.random(0, 10) end},
-      {name="wiggle_rate", prob=0.6, default=2, random=function() return random_float(0.5, 4) end},
+      {name="wiggle_depth", prob=0.5, default=1, random=function() return math.random(0, 10) end},
+      {name="wiggle_rate", prob=0.5, default=2, random=function() return random_float(0.5, 4) end},
     }
   },
 
@@ -443,14 +442,14 @@ local track_param_configs = {
       params = {
         {name=track.."direction_mod", prob=0.5, default=0, random=function() return math.random(0, 20) end},
         {name=track.."size_variation", prob=0.5, default=0, random=function() return math.random(0, 40) end},
-        {name=track.."density_mod_amt", prob=0.5, default=0, random=function() return math.random(0, 75) end},
-        {name=track.."subharmonics_1", prob=0.4, default=0, random=function() return random_float(0, 0.6) end},
-        {name=track.."subharmonics_2", prob=0.4, default=0, random=function() return random_float(0, 0.6) end},
-        {name=track.."subharmonics_3", prob=0.4, default=0, random=function() return random_float(0, 0.6) end},
-        {name=track.."overtones_1", prob=0.4, default=0, random=function() return random_float(0, 0.6) end},
-        {name=track.."overtones_2", prob=0.4, default=0, random=function() return random_float(0, 0.6) end},
-        {name=track.."pitch_random_plus", prob=0.8, default=0, random=function() return math.random(0, 25) end},
-        {name=track.."pitch_random_minus", prob=0.8, default=0, random=function() return math.random(0, 25) end},
+        {name=track.."density_mod_amt", prob=0.5, default=0, random=function() return math.random(0, 6) end},
+        {name=track.."subharmonics_1", prob=0.5, default=0, random=function() return random_float(0, 0.6) end},
+        {name=track.."subharmonics_2", prob=0.5, default=0, random=function() return random_float(0, 0.6) end},
+        {name=track.."subharmonics_3", prob=0.5, default=0, random=function() return random_float(0, 0.6) end},
+        {name=track.."overtones_1", prob=0.5, default=0, random=function() return random_float(0, 0.6) end},
+        {name=track.."overtones_2", prob=0.5, default=0, random=function() return random_float(0, 0.6) end},
+        {name=track.."pitch_random_plus", prob=0.2, default=0, random=function() return math.random(0, 25) end},
+        {name=track.."pitch_random_minus", prob=0.2, default=0, random=function() return math.random(0, 25) end},
       }
     }
   end,
