@@ -1084,20 +1084,25 @@ function redraw()
     if bottom_row_mode == "seek" then
         local current_time = util.time()
         for track = 1, 2 do
-            local base_x = track == 1 and 51 or 92
-            local kept = {}
-            local size_ms = cached_size[track]
-            local lifetime = size_ms > 0 and (size_ms * 0.001) or 0.01
-            for _, g in ipairs(grain_positions[track]) do
-                local age = current_time - (g.t or 0)
-                if age <= lifetime then
-                    local x = base_x + math.floor((g.pos or 0) * 30)
-                    local bright = lifetime > 0 and util.linlin(0, lifetime, levels.highlight-2, levels.dim, age) or levels.highlight
-                    add_pixel(x, 63, bright)
-                    kept[#kept + 1] = g
+            local granular_gain = params:get(track.."granular_gain")
+            if granular_gain > 0 then
+                local base_x = track == 1 and 51 or 92
+                local kept = {}
+                local size_ms = cached_size[track]
+                local lifetime = size_ms > 0 and (size_ms * 0.001) or 0.01
+                for _, g in ipairs(grain_positions[track]) do
+                    local age = current_time - (g.t or 0)
+                    if age <= lifetime then
+                        local x = base_x + math.floor((g.pos or 0) * 30)
+                        local bright = lifetime > 0 and util.linlin(0, lifetime, levels.highlight-2, levels.dim, age) or levels.highlight
+                        add_pixel(x, 63, bright)
+                        kept[#kept + 1] = g
+                    end
                 end
+                grain_positions[track] = kept
+            else
+                grain_positions[track] = {}
             end
-            grain_positions[track] = kept
         end
     end
     
