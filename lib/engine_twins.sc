@@ -1,6 +1,6 @@
 Engine_twins : CroneEngine {
 
-var dimensionEffect, haasEffect, bitcrushEffect, delayEffect, saturationEffect,jpverbEffect, shimmerEffect, tapeEffect, chewEffect, widthEffect, widthEffect2, monobassEffect, sineEffect, wobbleEffect, lossdegradeEffect, rotateEffect, outputSynth;
+var dimensionEffect, haasEffect, bitcrushEffect, delayEffect, saturationEffect,jpverbEffect, shimmerEffect, tapeEffect, chewEffect, widthEffect, monobassEffect, sineEffect, wobbleEffect, lossdegradeEffect, rotateEffect, outputSynth;
 var <buffersL, <buffersR, wobbleBuffer, mixBus, <voices, bufSine, pg, <liveInputBuffersL, <liveInputBuffersR, <liveInputRecorders, o, o_output, o_rec, o_grain;
 var currentSpeed, currentJitter, currentSize, currentDensity, currentDensityModAmt, currentPitch, currentPan, currentSpread, currentVolume, currentGranularGain, currentCutoff, currentHpf, currentlpfgain, currentSubharmonics1, currentSubharmonics2, currentSubharmonics3, currentOvertones1, currentOvertones2, currentPitchMode, currentTrigMode, currentDirectionMod, currentSizeVariation, currentPitchRandomPlus, currentPitchRandomMinus, currentSmoothbass, currentLowGain, currentHighGain, currentProbability, liveBufferMix = 1.0, currentPitchWalkMode, currentPitchWalkRate, currentPitchWalkStep;
 var <outputRecordBufferL, <outputRecordBufferR, <outputRecorder;
@@ -200,7 +200,7 @@ alloc {
         SynthDef(\dimension, {
             arg bus, mix=0;
             var sig = In.ar(bus, 2);
-            var wet, depth = 0.3, rate = 0.6, predelay = 0.025, voice1, voice2, voice3, voice4;
+            var wet, depth = 0.3, rate = 0.6, predelay = 0.025, voice1, voice2, voice3, voice4, mid, side, wide;
             var chorus = { |input, delayTime, rate, depth| var mod = SinOsc.kr(rate, [0, pi/2, pi, 3*pi/2]).range(-1, 1) * depth; var delays = delayTime + (mod * 0.02); DelayC.ar(input, 0.05, delays); };
             voice1 = chorus.(sig, predelay * 0.5, rate * 0.99, depth * 0.8);
             voice2 = chorus.(sig, predelay * 0.65, rate * 1.01, depth * 0.9);
@@ -208,7 +208,10 @@ alloc {
             voice4 = chorus.(sig, predelay * 1.05, rate * 1.02, depth * 0.7);
             wet = [voice1[0] * 0.25 + voice2[0] * 0.25 + voice3[1] * 0.25 + voice4[1] * 0.25,
                    voice1[1] * 0.25 + voice2[1] * 0.25 + voice3[0] * 0.25 + voice4[0] * 0.25];
-            ReplaceOut.ar(bus, XFade2.ar(sig, wet * 4, mix * 2 - 1));
+            mid = (wet[0] + wet[1]) * 0.5;
+            side = ((wet[0] - wet[1]) * 0.5 * 1.5);
+            wide = [mid + side, mid - side];
+            ReplaceOut.ar(bus, XFade2.ar(sig, wide * 4, mix * 2 - 1));
         }).add;
         
         SynthDef(\tape, {
@@ -262,7 +265,7 @@ alloc {
             local = LocalIn.ar(2);
             fb = [input[0] + (local[1] * fb_amt), input[1] + (local[0] * fb_amt)]; 
             fb = Limiter.ar(fb, 0.9).softclip;
-            modRate = w_rate * (1 + LFNoise1.kr(0.2, 0.05));
+            modRate = w_rate * (1 + LFNoise1.kr(0.25, 0.05));
             delayed = DelayC.ar(input + fb, 2, Lag.kr(delay, 1) + LFPar.kr(modRate, mul: w_depth));
             delayed = LPF.ar(HPF.ar(delayed, dhpf), lpf);
             panPos = LFPar.kr(1/(delay*2)).range(-1, 1) * stereo;
@@ -277,7 +280,7 @@ alloc {
             var wet = JPverb.ar(dry, t60, damp, rsize, earlyDiff, modDepth, modFreq, low, mid, high, lowcut, highcut);
             ReplaceOut.ar(bus, XFade2.ar(dry, dry + wet, mix * 2 - 1));
         }).add;
-        
+    
         SynthDef(\rotate, {
             arg bus, rspeed;
             var sig = In.ar(bus, 2);
@@ -300,15 +303,6 @@ alloc {
             sig = [mid + side, mid - side];
             ReplaceOut.ar(bus, sig);
         }).add;
-        
-        SynthDef(\width2, {
-            arg bus, width=1.0;
-            var sig = In.ar(bus, 2);
-            var mid = (sig[0] + sig[1]) * 0.5;
-            var side = ((sig[0] - sig[1]) * 0.5 * width);
-            sig = [mid + side, mid - side];
-            ReplaceOut.ar(bus, sig);
-        }).add;
                
         SynthDef(\output, {
             arg in, out;
@@ -318,9 +312,9 @@ alloc {
 
         context.server.sync;
         
-        bitcrushEffect = Synth.new(\bitcrush, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');    
-        shimmerEffect = Synth.new(\shimmer, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');    
-        sineEffect = Synth.new(\sine, [\bus, mixBus.index, \sine_drive, 0.0], context.xg, 'addToTail');  
+        bitcrushEffect = Synth.new(\bitcrush, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
+        shimmerEffect = Synth.new(\shimmer, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
+        sineEffect = Synth.new(\sine, [\bus, mixBus.index, \sine_drive, 0.0], context.xg, 'addToTail');
         tapeEffect = Synth.new(\tape, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');  
         wobbleEffect = Synth.new(\wobble, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
         chewEffect = Synth.new(\chew, [\bus, mixBus.index, \chew_depth, 0.0], context.xg, 'addToTail');
@@ -329,7 +323,6 @@ alloc {
         saturationEffect = Synth.new(\saturation, [\bus, mixBus.index, \drive, 0.0], context.xg, 'addToTail');
         widthEffect = Synth.new(\width, [\bus, mixBus.index, \width, 1.0], context.xg, 'addToTail');
         dimensionEffect = Synth.new(\dimension, [\bus, mixBus.index], context.xg, 'addToTail');
-        widthEffect2 = Synth.new(\width, [\bus, mixBus.index, \width, 1.0], context.xg, 'addToTail');
         haasEffect = Synth.new(\haas, [\bus, mixBus.index, \haas, 0.0], context.xg, 'addToTail');
         monobassEffect = Synth.new(\monobass, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
         jpverbEffect = Synth.new(\jpverb, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
@@ -405,7 +398,7 @@ alloc {
         this.addCommand("tape_mix", "f", { arg msg; tapeEffect.set(\mix, msg[1]); tapeEffect.run(msg[1] > 0); });
         this.addCommand("sine_drive", "f", { arg msg; sineEffect.set(\sine_drive, msg[1]); sineEffect.run(msg[1] > 0); });
         this.addCommand("drive", "f", { arg msg; saturationEffect.set(\drive, msg[1]); saturationEffect.run(msg[1] > 0); });
-        
+
         this.addCommand("wobble_mix", "f", { arg msg; wobbleEffect.set(\mix, msg[1]); wobbleEffect.run(msg[1] > 0); });
         this.addCommand("wobble_amp", "f", { arg msg; wobbleEffect.set(\wobble_amp, msg[1]); });
         this.addCommand("wobble_rpm", "f", { arg msg; wobbleEffect.set(\wobble_rpm, msg[1]); });
@@ -421,7 +414,7 @@ alloc {
         this.addCommand("eq_mid_gain", "if", { arg msg; var voice = msg[1] - 1; currentLowGain[voice] = msg[2]; voices[voice].set(\mid_gain, msg[2]); });
         this.addCommand("eq_high_gain", "if", { arg msg; var voice = msg[1] - 1; currentHighGain[voice] = msg[2]; voices[voice].set(\high_gain, msg[2]); });
 
-        this.addCommand("width", "f", { arg msg; widthEffect.set(\width, msg[1]); widthEffect2.set(\width, msg[1]); widthEffect.run(msg[1] != 1); widthEffect2.run(msg[1] != 1); });
+        this.addCommand("width", "f", { arg msg; widthEffect.set(\width, msg[1]); widthEffect.run(msg[1] != 1); });
         this.addCommand("dimension_mix", "f", { arg msg; dimensionEffect.set(\mix, msg[1]); dimensionEffect.run(msg[1] > 0); });
         this.addCommand("monobass_mix", "f", { arg msg; monobassEffect.set(\mix, msg[1]); monobassEffect.run(msg[1] > 0); });
         this.addCommand("rspeed", "f", { arg msg; rotateEffect.set(\rspeed, msg[1]); rotateEffect.run(msg[1] > 0); });
@@ -461,6 +454,6 @@ alloc {
         if (outputRecordBufferL.notNil) { outputRecordBufferL.free; };
         if (outputRecordBufferR.notNil) { outputRecordBufferR.free; };
         o.free; o_rec.free; o_grain.free; o_output.free;
-        wobbleBuffer.free; mixBus.free; bufSine.free; jpverbEffect.free; shimmerEffect.free; saturationEffect.free; tapeEffect.free; chewEffect.free; widthEffect.free; monobassEffect.free; lossdegradeEffect.free; sineEffect.free; wobbleEffect.free; outputSynth.free; delayEffect.free; bitcrushEffect.free; rotateEffect.free; haasEffect.free; dimensionEffect.free; widthEffect2.free;
+        wobbleBuffer.free; mixBus.free; bufSine.free; jpverbEffect.free; shimmerEffect.free; saturationEffect.free; tapeEffect.free; chewEffect.free; widthEffect.free; monobassEffect.free; lossdegradeEffect.free; sineEffect.free; wobbleEffect.free; outputSynth.free; delayEffect.free; bitcrushEffect.free; rotateEffect.free; haasEffect.free; dimensionEffect.free;
     }
 }
