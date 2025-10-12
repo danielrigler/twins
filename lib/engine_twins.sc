@@ -1,6 +1,6 @@
 Engine_twins : CroneEngine {
 
-var dimensionEffect, haasEffect, bitcrushEffect, delayEffect, saturationEffect,jpverbEffect, shimmerEffect, tapeEffect, chewEffect, widthEffect, widthEffect2, monobassEffect, sineEffect, wobbleEffect, lossdegradeEffect, tascamEffect, rotateEffect, outputSynth;
+var dimensionEffect, haasEffect, bitcrushEffect, delayEffect, saturationEffect,jpverbEffect, shimmerEffect, tapeEffect, chewEffect, widthEffect, widthEffect2, monobassEffect, sineEffect, wobbleEffect, lossdegradeEffect, rotateEffect, outputSynth;
 var <buffersL, <buffersR, wobbleBuffer, mixBus, <voices, bufSine, pg, <liveInputBuffersL, <liveInputBuffersR, <liveInputRecorders, o, o_output, o_rec, o_grain;
 var currentSpeed, currentJitter, currentSize, currentDensity, currentDensityModAmt, currentPitch, currentPan, currentSpread, currentVolume, currentGranularGain, currentCutoff, currentHpf, currentlpfgain, currentSubharmonics1, currentSubharmonics2, currentSubharmonics3, currentOvertones1, currentOvertones2, currentPitchMode, currentTrigMode, currentDirectionMod, currentSizeVariation, currentPitchRandomPlus, currentPitchRandomMinus, currentSmoothbass, currentLowGain, currentHighGain, currentProbability, liveBufferMix = 1.0, currentPitchWalkMode, currentPitchWalkRate, currentPitchWalkStep;
 var <outputRecordBufferL, <outputRecordBufferR, <outputRecorder;
@@ -200,43 +200,21 @@ alloc {
         SynthDef(\dimension, {
             arg bus, mix=0;
             var sig = In.ar(bus, 2);
-            var wet;
-            var depth = 0.3;
-            var rate = 0.6;
-            var predelay = 0.025;
-            var voice1, voice2, voice3, voice4;
-            var chorus = { |input, delayTime, rate, depth|
-              var mod = SinOsc.kr(rate, [0, pi/2, pi, 3*pi/2]).range(-1, 1) * depth;
-              var delays = delayTime + (mod * 0.015);
-              DelayC.ar(input, 0.05, delays);};
-            voice1 = chorus.(sig, predelay, rate * 0.99, depth * 0.8);
-            voice2 = chorus.(sig, predelay * 1.3, rate * 1.01, depth * 0.9);
-            voice3 = chorus.(sig, predelay * 1.7, rate * 0.98, depth * 1.0);
-            voice4 = chorus.(sig, predelay * 2.1, rate * 1.02, depth * 0.7);
+            var wet, depth = 0.3, rate = 0.6, predelay = 0.025, voice1, voice2, voice3, voice4;
+            var chorus = { |input, delayTime, rate, depth| var mod = SinOsc.kr(rate, [0, pi/2, pi, 3*pi/2]).range(-1, 1) * depth; var delays = delayTime + (mod * 0.02); DelayC.ar(input, 0.05, delays); };
+            voice1 = chorus.(sig, predelay * 0.5, rate * 0.99, depth * 0.8);
+            voice2 = chorus.(sig, predelay * 0.65, rate * 1.01, depth * 0.9);
+            voice3 = chorus.(sig, predelay * 0.85, rate * 0.98, depth * 1.0);
+            voice4 = chorus.(sig, predelay * 1.05, rate * 1.02, depth * 0.7);
             wet = [voice1[0] * 0.25 + voice2[0] * 0.25 + voice3[1] * 0.25 + voice4[1] * 0.25,
                    voice1[1] * 0.25 + voice2[1] * 0.25 + voice3[0] * 0.25 + voice4[0] * 0.25];
-            ReplaceOut.ar(bus, XFade2.ar(sig, wet*4, mix * 2 - 1));
-        }).add;
-
-        SynthDef(\tascam, {
-            arg bus, mix=0.0;
-            var orig = In.ar(bus, 2);
-			      var tascam_snd=BHiPass.ar(orig,30);
-			      tascam_snd=BPeakEQ.ar(tascam_snd,freq:60,rq:3,db:4);
-			      tascam_snd=BPeakEQ.ar(tascam_snd,freq:150,rq:1.5,db:4);
-			      tascam_snd=BPeakEQ.ar(tascam_snd,210,db:3);
-			      tascam_snd=BPeakEQ.ar(tascam_snd,250,db:-1.5);
-			      tascam_snd=BPeakEQ.ar(tascam_snd,300,db:3);
-			      tascam_snd=BPeakEQ.ar(tascam_snd,400,db:-3);
-			      tascam_snd=BPeakEQ.ar(tascam_snd,7000,db:1);
-			      tascam_snd=BLowPass.ar(tascam_snd,10000);
-			      ReplaceOut.ar(bus, XFade2.ar(orig, tascam_snd, mix * 2 - 1));
+            ReplaceOut.ar(bus, XFade2.ar(sig, wet * 4, mix * 2 - 1));
         }).add;
         
         SynthDef(\tape, {
             arg bus, mix=0.0;
             var orig = In.ar(bus, 2);
-            var wet = AnalogTape.ar(orig, 0.9, 0.8, 0.9, 2, 0);
+            var wet = AnalogTape.ar(orig, 0.9, 1.05, 1.1, 0, 0) * 0.93;
             ReplaceOut.ar(bus, XFade2.ar(orig, wet, mix * 2 - 1));
         }).add;
         
@@ -342,7 +320,6 @@ alloc {
         
         bitcrushEffect = Synth.new(\bitcrush, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');    
         shimmerEffect = Synth.new(\shimmer, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');    
-        tascamEffect = Synth.new(\tascam, [\bus, mixBus.index, \mix, 0.0,], context.xg, 'addToTail');
         sineEffect = Synth.new(\sine, [\bus, mixBus.index, \sine_drive, 0.0], context.xg, 'addToTail');  
         tapeEffect = Synth.new(\tape, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');  
         wobbleEffect = Synth.new(\wobble, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
@@ -360,16 +337,16 @@ alloc {
         outputSynth = Synth.new(\output, [\in, mixBus.index,\out, context.out_b.index], context.xg, 'addToTail');
         outputRecorder = Synth.new(\outputRecorder, [\bufL, outputRecordBufferL, \bufR, outputRecordBufferR, \inBus, mixBus.index], context.xg, 'addToTail');
 
-        this.addCommand(\mix, "f", { |msg| var mix = msg[1]; delayEffect.set(\mix, mix); delayEffect.run(mix > 0); });
-        this.addCommand(\delay, "f", { |msg| delayEffect.set(\delay, msg[1]);	});
-    	  this.addCommand(\fb_amt, "f", { |msg| delayEffect.set(\fb_amt, msg[1]);	});
-    	  this.addCommand(\dhpf, "f", { |msg| delayEffect.set(\dhpf, msg[1]);	});
-    	  this.addCommand(\lpf, "f", { |msg| delayEffect.set(\lpf, msg[1]);	});
-    	  this.addCommand(\w_rate, "f", { |msg| delayEffect.set(\w_rate, msg[1]);	});
-    	  this.addCommand(\w_depth, "f", { |msg| delayEffect.set(\w_depth, msg[1]/100);	});
-    	  this.addCommand("stereo", "f", { arg msg; var stereo = msg[1]; delayEffect.set(\stereo, stereo); });
+        this.addCommand(\mix, "f", { arg msg; delayEffect.set(\mix, msg[1]); delayEffect.run(msg[1] > 0); });
+        this.addCommand(\delay, "f", { arg msg; delayEffect.set(\delay, msg[1]);	});
+    	  this.addCommand(\fb_amt, "f", { arg msg; delayEffect.set(\fb_amt, msg[1]);	});
+    	  this.addCommand(\dhpf, "f", { arg msg; delayEffect.set(\dhpf, msg[1]);	});
+    	  this.addCommand(\lpf, "f", { arg msg; delayEffect.set(\lpf, msg[1]);	});
+    	  this.addCommand(\w_rate, "f", { arg msg; delayEffect.set(\w_rate, msg[1]);	});
+    	  this.addCommand(\w_depth, "f", { arg msg; delayEffect.set(\w_depth, msg[1]/100);	});
+    	  this.addCommand("stereo", "f", { arg msg; delayEffect.set(\stereo, msg[1]); });
 
-        this.addCommand("reverb_mix", "f", { arg msg; var mix = msg[1]; jpverbEffect.set(\mix, mix); jpverbEffect.run(mix > 0); });
+        this.addCommand("reverb_mix", "f", { arg msg; jpverbEffect.set(\mix, msg[1]); jpverbEffect.run(msg[1] > 0); });
         this.addCommand("t60", "f", { arg msg; jpverbEffect.set(\t60, msg[1]); });
         this.addCommand("damp", "f", { arg msg; jpverbEffect.set(\damp, msg[1]); });
         this.addCommand("rsize", "f", { arg msg; jpverbEffect.set(\rsize, msg[1]); });
@@ -403,11 +380,11 @@ alloc {
         this.addCommand("smoothbass", "if", { arg msg; var voice = msg[1] - 1; currentSmoothbass[voice] = msg[2]; voices[voice].set(\smoothbass, msg[2]); });
         this.addCommand("probability", "if", { arg msg; var voice = msg[1] - 1; currentProbability[voice] = msg[2]; voices[voice].set(\probability, msg[2]); });
         
-        this.addCommand("bitcrush_mix", "f", { arg msg; var mix = msg[1]; bitcrushEffect.set(\mix, mix); bitcrushEffect.run(mix > 0); });
+        this.addCommand("bitcrush_mix", "f", { arg msg; bitcrushEffect.set(\mix, msg[1]); bitcrushEffect.run(msg[1] > 0); });
         this.addCommand("bitcrush_rate", "f", { arg msg; bitcrushEffect.set(\rate, msg[1]); });
         this.addCommand("bitcrush_bits", "f", { arg msg; bitcrushEffect.set(\bits, msg[1]); });
         
-        this.addCommand("shimmer_mix", "f", { arg msg; var mix = msg[1]; shimmerEffect.set(\mix, mix); shimmerEffect.run(mix > 0); });
+        this.addCommand("shimmer_mix", "f", { arg msg; shimmerEffect.set(\mix, msg[1]); shimmerEffect.run(msg[1] > 0); });
         this.addCommand("lowpass", "f", { arg msg; shimmerEffect.set(\lowpass, msg[1]); });
         this.addCommand("hipass", "f", { arg msg; shimmerEffect.set(\hipass, msg[1]); });
         this.addCommand("pitchv", "f", { arg msg; shimmerEffect.set(\pitchv, msg[1]); });
@@ -418,37 +395,37 @@ alloc {
         this.addCommand("read", "is", { arg msg; this.readBuf(msg[1] - 1, msg[2]); });
         this.addCommand("seek", "if", { arg msg; var voice = msg[1] - 1; var pos = msg[2]; voices[voice].set(\pos, pos); voices[voice].set(\t_reset_pos, 1); });
         this.addCommand("speed", "if", { arg msg; var voice = msg[1] - 1; currentSpeed[voice] = msg[2]; voices[voice].set(\speed, msg[2]); });
-        this.addCommand("jitter", "if", { arg msg; var voice = msg[1] - 1; currentJitter[voice] = msg[2]; voices[voice].set(\jitter, msg[2]/2); });
+        this.addCommand("jitter", "if", { arg msg; var voice = msg[1] - 1; currentJitter[voice] = msg[2]; voices[voice].set(\jitter, msg[2] / 2); });
         this.addCommand("size", "if", { arg msg; var voice = msg[1] - 1; currentSize[voice] = msg[2]; voices[voice].set(\size, msg[2]); });
         this.addCommand("density", "if", { arg msg; var voice = msg[1] - 1; currentDensity[voice] = msg[2]; voices[voice].set(\density, msg[2]); });
         this.addCommand("pan", "if", { arg msg; var voice = msg[1] - 1; currentPan[voice] = msg[2]; voices[voice].set(\pan, msg[2]); });
         this.addCommand("spread", "if", { arg msg; var voice = msg[1] - 1; currentSpread[voice] = msg[2]; voices[voice].set(\spread, msg[2]); });
         this.addCommand("volume", "if", { arg msg; var voice = msg[1] - 1; currentVolume[voice] = msg[2]; voices[voice].set(\gain, msg[2]); });
 
-        this.addCommand("tape_mix", "f", { arg msg; var mix = msg[1]; tapeEffect.set(\mix, mix); tapeEffect.run(mix > 0); });
-        this.addCommand("tascam", "f", { arg msg; var mix = msg[1]; tascamEffect.set(\mix, mix); tascamEffect.run(mix > 0); });
-        this.addCommand("sine_drive", "f", { arg msg; var sine_drive = msg[1]; sineEffect.set(\sine_drive, sine_drive); sineEffect.run(sine_drive > 0); });
-        this.addCommand("drive", "f", { arg msg; var drive = msg[1]; saturationEffect.set(\drive, drive); saturationEffect.run(drive > 0); });
-        this.addCommand("wobble_mix", "f", { arg msg; var mix = msg[1]; wobbleEffect.set(\mix, mix); wobbleEffect.run(mix > 0); });
+        this.addCommand("tape_mix", "f", { arg msg; tapeEffect.set(\mix, msg[1]); tapeEffect.run(msg[1] > 0); });
+        this.addCommand("sine_drive", "f", { arg msg; sineEffect.set(\sine_drive, msg[1]); sineEffect.run(msg[1] > 0); });
+        this.addCommand("drive", "f", { arg msg; saturationEffect.set(\drive, msg[1]); saturationEffect.run(msg[1] > 0); });
+        
+        this.addCommand("wobble_mix", "f", { arg msg; wobbleEffect.set(\mix, msg[1]); wobbleEffect.run(msg[1] > 0); });
         this.addCommand("wobble_amp", "f", { arg msg; wobbleEffect.set(\wobble_amp, msg[1]); });
         this.addCommand("wobble_rpm", "f", { arg msg; wobbleEffect.set(\wobble_rpm, msg[1]); });
         this.addCommand("flutter_amp", "f", { arg msg; wobbleEffect.set(\flutter_amp, msg[1]); });
         this.addCommand("flutter_freq", "f", { arg msg; wobbleEffect.set(\flutter_freq, msg[1]); });
         this.addCommand("flutter_var", "f", { arg msg; wobbleEffect.set(\flutter_var, msg[1]); });
-        this.addCommand("chew_depth", "f", { arg msg; var chew_depth = msg[1]; chewEffect.set(\chew_depth, chew_depth); chewEffect.run(chew_depth > 0); });
+        this.addCommand("chew_depth", "f", { arg msg; chewEffect.set(\chew_depth, msg[1]); chewEffect.run(msg[1] > 0); });
         this.addCommand("chew_freq", "f", { arg msg; chewEffect.set(\chew_freq, msg[1]); });
         this.addCommand("chew_variance", "f", { arg msg; chewEffect.set(\chew_variance, msg[1]); });
-        this.addCommand("lossdegrade_mix", "f", { arg msg; var mix = msg[1]; lossdegradeEffect.set(\mix, mix); lossdegradeEffect.run(mix > 0); });
+        this.addCommand("lossdegrade_mix", "f", { arg msg; lossdegradeEffect.set(\mix, msg[1]); lossdegradeEffect.run(msg[1] > 0); });
         
         this.addCommand("eq_low_gain", "if", { arg msg; var voice = msg[1] - 1; currentLowGain[voice] = msg[2]; voices[voice].set(\low_gain, msg[2]); });
         this.addCommand("eq_mid_gain", "if", { arg msg; var voice = msg[1] - 1; currentLowGain[voice] = msg[2]; voices[voice].set(\mid_gain, msg[2]); });
         this.addCommand("eq_high_gain", "if", { arg msg; var voice = msg[1] - 1; currentHighGain[voice] = msg[2]; voices[voice].set(\high_gain, msg[2]); });
 
-        this.addCommand("width", "f", { arg msg; var width = msg[1]; widthEffect.set(\width, width); widthEffect2.set(\width, width); widthEffect.run(width != 1); widthEffect2.run(width != 1); });
-        this.addCommand("dimension_mix", "f", { arg msg; var mix = msg[1]; dimensionEffect.set(\mix, mix); dimensionEffect.run(mix > 0); });
-        this.addCommand("monobass_mix", "f", { arg msg; var mix = msg[1]; monobassEffect.set(\mix, mix); monobassEffect.run(mix > 0); });
-        this.addCommand("rspeed", "f", { arg msg; var rspeed = msg[1]; rotateEffect.set(\rspeed, rspeed); rotateEffect.run(rspeed > 0); });
-        this.addCommand("haas", "i", { arg msg; var haas = msg[1]; haasEffect.set(\haas, haas); haasEffect.run(haas > 0); });
+        this.addCommand("width", "f", { arg msg; widthEffect.set(\width, msg[1]); widthEffect2.set(\width, msg[1]); widthEffect.run(msg[1] != 1); widthEffect2.run(msg[1] != 1); });
+        this.addCommand("dimension_mix", "f", { arg msg; dimensionEffect.set(\mix, msg[1]); dimensionEffect.run(msg[1] > 0); });
+        this.addCommand("monobass_mix", "f", { arg msg; monobassEffect.set(\mix, msg[1]); monobassEffect.run(msg[1] > 0); });
+        this.addCommand("rspeed", "f", { arg msg; rotateEffect.set(\rspeed, msg[1]); rotateEffect.run(msg[1] > 0); });
+        this.addCommand("haas", "i", { arg msg; haasEffect.set(\haas, msg[1]); haasEffect.run(msg[1] > 0); });
 
         this.addCommand("pitch_walk_mode", "ii", { arg msg; var voice = msg[1] - 1; currentPitchWalkMode[voice] = msg[2]; voices[voice].set(\pitch_walk_mode, msg[2]); });
         this.addCommand("pitch_walk_rate", "if", { arg msg; var voice = msg[1] - 1; currentPitchWalkRate[voice] = msg[2]; voices[voice].set(\pitch_walk_rate, msg[2]); });
@@ -484,6 +461,6 @@ alloc {
         if (outputRecordBufferL.notNil) { outputRecordBufferL.free; };
         if (outputRecordBufferR.notNil) { outputRecordBufferR.free; };
         o.free; o_rec.free; o_grain.free; o_output.free;
-        wobbleBuffer.free; mixBus.free; bufSine.free; jpverbEffect.free; shimmerEffect.free; saturationEffect.free; tapeEffect.free; chewEffect.free; widthEffect.free; monobassEffect.free; lossdegradeEffect.free; sineEffect.free; wobbleEffect.free; outputSynth.free; delayEffect.free; bitcrushEffect.free; rotateEffect.free; tascamEffect.free; haasEffect.free; dimensionEffect.free; widthEffect2.free; 
+        wobbleBuffer.free; mixBus.free; bufSine.free; jpverbEffect.free; shimmerEffect.free; saturationEffect.free; tapeEffect.free; chewEffect.free; widthEffect.free; monobassEffect.free; lossdegradeEffect.free; sineEffect.free; wobbleEffect.free; outputSynth.free; delayEffect.free; bitcrushEffect.free; rotateEffect.free; haasEffect.free; dimensionEffect.free; widthEffect2.free;
     }
 }

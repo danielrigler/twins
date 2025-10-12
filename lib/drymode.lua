@@ -20,7 +20,6 @@ local DRY_VALUES = {
     lossdegrade_mix = 0,
     rspeed = 0,
     haas = 0,
-    tascam = 0,
     sine_drive = 0,
     dimension_mix = 0
 }
@@ -40,7 +39,7 @@ local DRY_VALUES_STEREO = {
 local STEREO_PARAMS = {"granular_gain", "speed", "eq_low_gain", "eq_mid_gain", "eq_high_gain", "cutoff", "hpf", "lpfgain"}
 local MONO_PARAMS = {"filter_lock_ratio", "reverb_mix", "delay_mix", "bitcrush_mix", "shimmer_mix", "tape_mix", 
                      "drive", "Width", "monobass_mix", "sine_drive", "wobble_mix", "chew_depth", "lossdegrade_mix", 
-                     "rspeed", "haas", "tascam", "dimension_mix"}
+                     "rspeed", "haas", "dimension_mix"}
 
 local LFO_TARGETS = {
     speed = {["1speed"] = true, ["2speed"] = true},
