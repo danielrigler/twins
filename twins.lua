@@ -58,11 +58,10 @@ local animation_y = -64
 local animation_speed = 100
 local animation_complete = false
 local animation_start_time = nil
-local initital_monitor_level
-local initital_reverb_onoff
+local initial_monitor_level
+local initial_reverb_onoff
 local filter_lock_ratio = false
 local filter_differences = {[1] = 0, [2] = 0}
-local oscgo = 0
 local audio_active = {[1] = false, [2] = false}
 local valid_audio_exts = {[".wav"]=true,[".aif"]=true,[".aiff"]=true,[".flac"]=true}
 local mode_list = {"pitch","spread","density","size","jitter","lpf","pan","speed","seek"}
@@ -249,7 +248,6 @@ local function load_random_tape_file(track_num)
     else selected = audio_files[math.random(#audio_files)] end
     last_selected = selected
     if params:get(track_num .. "sample") ~= selected then params:set(track_num .. "sample", selected) end
-    oscgo = 1
     return true
 end
 
@@ -283,20 +281,20 @@ end
 local function setup_params()
     params:add_separator("Input")
     for i = 1, 2 do
-        params:add_file(i.. "sample", "Sample " ..i) params:set_action(i.."sample", function(file) if file ~= nil and file ~= "" and file ~= "none" and file ~= "-" then lfo.clearLFOs(tostring(i), "jitter") engine.read(i, file) audio_active[i] = true oscgo = 1 update_pan_positioning() local duration = get_audio_duration(file) if duration then local duration_ms = duration * 1000 params:set(i.."max_jitter", math.min(duration_ms, 99999)) params:set(i.."min_jitter", 0) if not is_param_locked(i, "jitter") then local jitter_param = i.."jitter" handle_lfo(jitter_param, true) local jitter_value = (duration * math.random()) * 1000 jitter_value = util.clamp(jitter_value, 0, 99999) params:set(i.."jitter", jitter_value) end if math.random() < 0.3 and not lfo.is_param_locked(tostring(i), "jitter") then clock.run(function() clock.sleep(0.1) for slot = 1, 16 do if params.lookup[slot.."lfo"] and params:get(slot.."lfo") == 1 then randomize_lfo(slot, i.."jitter") break end end end) end end else lfo.clearLFOs(tostring(i), "jitter") audio_active[i] = false osc_positions[i] = 0 update_pan_positioning() end end)
+        params:add_file(i.. "sample", "Sample " ..i) params:set_action(i.."sample", function(file) if file ~= nil and file ~= "" and file ~= "none" and file ~= "-" then lfo.clearLFOs(tostring(i), "jitter") engine.read(i, file) audio_active[i] = true update_pan_positioning() local duration = get_audio_duration(file) if duration then local duration_ms = duration * 1000 params:set(i.."max_jitter", math.min(duration_ms, 99999)) params:set(i.."min_jitter", 0) if not is_param_locked(i, "jitter") then local jitter_param = i.."jitter" handle_lfo(jitter_param, true) local jitter_value = (duration * math.random()) * 1000 jitter_value = util.clamp(jitter_value, 0, 99999) params:set(i.."jitter", jitter_value) end if math.random() < 0.3 and not lfo.is_param_locked(tostring(i), "jitter") then clock.run(function() clock.sleep(0.1) for slot = 1, 16 do if params.lookup[slot.."lfo"] and params:get(slot.."lfo") == 1 then randomize_lfo(slot, i.."jitter") break end end end) end end else lfo.clearLFOs(tostring(i), "jitter") audio_active[i] = false osc_positions[i] = 0 update_pan_positioning() end end)
     end
     params:add_binary("randomtapes", "Random Tapes", "trigger", 0) params:set_action("randomtapes", function() load_random_tape_file(1) load_random_tape_file(2) end)
     
     params:add_group("Live!", 10)
     for i = 1, 2 do
-      params:add_binary(i.."live_input", "Live Buffer "..i.." ● ►", "toggle", 0) params:set_action(i.."live_input", function(value) if value == 1 then if params:get(i.."live_direct") == 1 then params:set(i.."live_direct", 0) end engine.set_live_input(i, 1) engine.live_mono(i, params:get("isMono") - 1) audio_active[i] = true oscgo = 1 update_pan_positioning() else engine.set_live_input(i, 0) if not audio_active[i] and params:get(i.."live_direct") == 0 then osc_positions[i] = 0 else oscgo = 1 update_pan_positioning() end end end)
+      params:add_binary(i.."live_input", "Live Buffer "..i.." ● ►", "toggle", 0) params:set_action(i.."live_input", function(value) if value == 1 then if params:get(i.."live_direct") == 1 then params:set(i.."live_direct", 0) end engine.set_live_input(i, 1) engine.live_mono(i, params:get("isMono") - 1) audio_active[i] = true update_pan_positioning() else engine.set_live_input(i, 0) if not audio_active[i] and params:get(i.."live_direct") == 0 then osc_positions[i] = 0 else update_pan_positioning() end end end)
     end
     params:add_control("live_buffer_mix", "Overdub", controlspec.new(0, 100, "lin", 1, 100, "%")) params:set_action("live_buffer_mix", function(value) engine.live_buffer_mix(value * 0.01) end)
     params:add_control("live_buffer_length", "Buffer Length", controlspec.new(0.1, 60, "lin", 0.1, 2, "s")) params:set_action("live_buffer_length", function(value) engine.live_buffer_length(value) end)
     params:add{type = "trigger", id = "save_live_buffer1", name = "Buffer1 to Tape", action = function() local timestamp = os.date("%Y%m%d_%H%M%S") local filename = "live1_"..timestamp..".wav" engine.save_live_buffer(1, filename) end}
     params:add{type = "trigger", id = "save_live_buffer2", name = "Buffer2 to Tape", action = function() local timestamp = os.date("%Y%m%d_%H%M%S") local filename = "live2_"..timestamp..".wav" engine.save_live_buffer(2, filename) end}
     for i = 1, 2 do
-      params:add_binary(i.."live_direct", "Direct "..i.." ►", "toggle", 0) params:set_action(i.."live_direct", function(value) if value == 1 then local was_live = params:get(i.."live_input") _G["prev_live_state_"..i] = was_live if was_live == 1 then params:set(i.."live_input", 0) end engine.live_direct(i, 1) audio_active[i] = true oscgo = 1 update_pan_positioning() else engine.live_direct(i, 0) if not audio_active[i] and params:get(i.."live_input") == 0 then osc_positions[i] = 0 else oscgo = 1 update_pan_positioning() end end end)
+      params:add_binary(i.."live_direct", "Direct "..i.." ►", "toggle", 0) params:set_action(i.."live_direct", function(value) if value == 1 then local was_live = params:get(i.."live_input") _G["prev_live_state_"..i] = was_live if was_live == 1 then params:set(i.."live_input", 0) end engine.live_direct(i, 1) audio_active[i] = true update_pan_positioning() else engine.live_direct(i, 0) if not audio_active[i] and params:get(i.."live_input") == 0 then osc_positions[i] = 0 else update_pan_positioning() end end end)
     end
     params:add_option("isMono", "Input Mode", {"stereo", "mono"}, 1) params:set_action("isMono", function(value) local monoValue = value - 1 for i = 1, 2 do if params:get(i.."live_direct") == 1 then engine.isMono(i, monoValue) end if params:get(i.."live_input") == 1 then engine.live_mono(i, monoValue) end end end)
     params:add_binary("dry_mode2", "Dry Mode", "toggle", 0) params:set_action("dry_mode2", function(x) drymode.toggle_dry_mode2() end)
@@ -488,7 +486,7 @@ local function setup_params()
     params:add_binary("dry_mode", "Dry Mode", "toggle", 0) params:set_action("dry_mode", function(x) drymode.toggle_dry_mode() end)
     params:add_binary("randomtape1", "Random Tape 1", "trigger", 0) params:set_action("randomtape1", function() load_random_tape_file(1) end)
     params:add_binary("randomtape2", "Random Tape 2", "trigger", 0) params:set_action("randomtape2", function() load_random_tape_file(2) end)
-    params:add_binary("unload_all", "Unload All Audio", "trigger", 0) params:set_action("unload_all", function() for i=1, 2 do params:set(i.."seek", 0) params:set(i.."sample", "-") params:set(i.."live_input", 0) params:set(i.."live_direct", 0) audio_active[i] = false osc_positions[i] = 0 end engine.unload_all() oscgo = 0 update_pan_positioning() end)
+    params:add_binary("unload_all", "Unload All Audio", "trigger", 0) params:set_action("unload_all", function() for i=1, 2 do params:set(i.."seek", 0) params:set(i.."sample", "-") params:set(i.."live_input", 0) params:set(i.."live_direct", 0) audio_active[i] = false osc_positions[i] = 0 end engine.unload_all() update_pan_positioning() end)
     params:add_option("scene_mode", "Scene Mode", {"off", "on"}, 1) params:set_action("scene_mode", function(value) current_scene_mode = (value == 2) and "on" or "off" if current_scene_mode == "on" then initialize_scenes_with_current_params() end end)
     params:add_option("steps", "Transition Time", {"short", "medium", "long"}, 2) params:set_action("steps", function(value) steps = ({20, 300, 800})[value] end)
 
@@ -563,7 +561,7 @@ end
 local function randomize(n)
 		randomize_metro[n] = randomize_metro[n] or metro.init()
 		local m_rand = randomize_metro[n]
-		active_controlled_params = {}
+		local active_controlled_params = {}
 		
 		local symmetry = params:get("symmetry") == 1
 		local other_track = 3 - n
@@ -1218,9 +1216,9 @@ local function osc_event(path, args) if osc_handlers[path] then osc_handlers[pat
 local function setup_osc() osc.event = osc_event end
 
 function init()
-    initital_reverb_onoff = params:get('reverb')
+    initial_reverb_onoff = params:get('reverb')
     params:set('reverb', 1)
-    initital_monitor_level = params:get('monitor_level')
+    initial_monitor_level = params:get('monitor_level')
     params:set('monitor_level', -math.huge)
     if not installer:ready() then clock.run(function() while true do redraw() clock.sleep(1 / 10) end end) do return end end
     setup_ui_metro()
@@ -1233,7 +1231,7 @@ function cleanup()
     stop_metro_safe(m_rand)
     for i = 1, 2 do stop_metro_safe(randomize_metro[i]) end
     randpara.cleanup()
-    params:set('monitor_level', initital_monitor_level)
-    params:set('reverb', initital_reverb_onoff)
+    params:set('monitor_level', initial_monitor_level)
+    params:set('reverb', initial_reverb_onoff)
     osc.event = nil
 end
