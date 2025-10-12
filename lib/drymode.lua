@@ -41,6 +41,9 @@ local MONO_PARAMS = {"filter_lock_ratio", "reverb_mix", "delay_mix", "bitcrush_m
                      "drive", "Width", "monobass_mix", "sine_drive", "wobble_mix", "chew_depth", "lossdegrade_mix", 
                      "rspeed", "haas", "dimension_mix"}
 
+-- Add seek parameters to be preserved
+local SEEK_PARAMS = {"1seek", "2seek"}
+
 local LFO_TARGETS = {
     speed = {["1speed"] = true, ["2speed"] = true},
     seek = {["1seek"] = true, ["2seek"] = true},
@@ -147,6 +150,11 @@ function drymode.toggle_dry_mode()
         for k, v in pairs(mono_settings) do
             prev_settings[k] = v
         end
+        
+        -- Store seek parameters (don't set them to 0)
+        for _, param in ipairs(SEEK_PARAMS) do
+            prev_settings[param] = params:get(param)
+        end
 
         -- Store and disable LFOs for all target types
         for _, target_type in ipairs(LFO_TARGET_TYPES) do
@@ -181,6 +189,13 @@ function drymode.toggle_dry_mode()
                 end
             end
             restore_params(mono_settings, false)
+            
+            -- Restore seek parameters
+            for _, param in ipairs(SEEK_PARAMS) do
+                if prev_settings[param] ~= nil then
+                    params:set(param, prev_settings[param])
+                end
+            end
 
             -- Restore LFOs
             for _, target_type in ipairs(LFO_TARGET_TYPES) do
@@ -205,7 +220,6 @@ function drymode.toggle_dry_mode2()
     end
 end
 
--- Utility functions for external use
 function drymode.get_dry_mode_state()
     return dry_mode_state
 end

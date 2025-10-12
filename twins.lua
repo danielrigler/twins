@@ -283,7 +283,8 @@ end
 local function setup_params()
     params:add_separator("Input")
     for i = 1, 2 do
-        params:add_file(i.. "sample", "Sample " ..i) params:set_action(i.."sample", function(file) if file ~= nil and file ~= "" and file ~= "none" and file ~= "-" then engine.read(i, file) audio_active[i] = true oscgo = 1 update_pan_positioning() local duration = get_audio_duration(file) if duration then local duration_ms = duration * 1000 params:set(i.."max_jitter", math.min(duration_ms, 99999)) params:set(i.."min_jitter", 0) if not is_param_locked(i, "jitter") then local jitter_param = i.."jitter" handle_lfo(jitter_param, true) local jitter_value = (duration * 0.2) * 1000 jitter_value = util.clamp(jitter_value, 0, 99999) params:set(i.."jitter", jitter_value) end end else audio_active[i] = false osc_positions[i] = 0 update_pan_positioning() end end) end
+        params:add_file(i.. "sample", "Sample " ..i) params:set_action(i.."sample", function(file) if file ~= nil and file ~= "" and file ~= "none" and file ~= "-" then lfo.clearLFOs(tostring(i), "jitter") engine.read(i, file) audio_active[i] = true oscgo = 1 update_pan_positioning() local duration = get_audio_duration(file) if duration then local duration_ms = duration * 1000 params:set(i.."max_jitter", math.min(duration_ms, 99999)) params:set(i.."min_jitter", 0) if not is_param_locked(i, "jitter") then local jitter_param = i.."jitter" handle_lfo(jitter_param, true) local jitter_value = (duration * math.random()) * 1000 jitter_value = util.clamp(jitter_value, 0, 99999) params:set(i.."jitter", jitter_value) end if math.random() < 0.3 and not lfo.is_param_locked(tostring(i), "jitter") then clock.run(function() clock.sleep(0.1) for slot = 1, 16 do if params.lookup[slot.."lfo"] and params:get(slot.."lfo") == 1 then randomize_lfo(slot, i.."jitter") break end end end) end end else lfo.clearLFOs(tostring(i), "jitter") audio_active[i] = false osc_positions[i] = 0 update_pan_positioning() end end)
+    end
     params:add_binary("randomtapes", "Random Tapes", "trigger", 0) params:set_action("randomtapes", function() load_random_tape_file(1) load_random_tape_file(2) end)
     
     params:add_group("Live!", 10)
@@ -328,7 +329,7 @@ local function setup_params()
     params:add_option("lock_granular", "Lock Parameters", {"off", "on"}, 1)
 
     params:add_group("Delay", 12)
-    params:add_taper("delay_mix", "Mix", 0, 100, 0, 1, "%") params:set_action("delay_mix", function(value) engine.mix(value * 0.01) end)
+    params:add_control("delay_mix", "Mix", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("delay_mix", function(x) engine.mix(x * 0.01) end)
     params:add_taper("delay_time", "Time", 0.02, 2, 0.5, 0.1, "s") params:set_action("delay_time", function(value) engine.delay(value) end)
     params:add_binary("tap", "↳ TAP!", "trigger", 0) params:set_action("tap", function() register_tap() end)
     params:add_taper("delay_feedback", "Feedback", 0, 120, 30, 1, "%") params:set_action("delay_feedback", function(value) engine.fb_amt(value * 0.01) end)
@@ -336,7 +337,7 @@ local function setup_params()
     params:add_control("delay_highpass", "HPF", controlspec.new(20, 20000, 'exp', 1, 20, "Hz")) params:set_action('delay_highpass', function(value) engine.dhpf(value) end)
     params:add_taper("wiggle_depth", "Mod Depth", 0, 100, 1, 0, "%") params:set_action("wiggle_depth", function(value) engine.w_depth(value * 0.01) end)
     params:add_taper("wiggle_rate", "Mod Freq", 0, 20, 2, 1, "Hz") params:set_action("wiggle_rate", function(value) engine.w_rate(value) end)
-    params:add_taper("stereo", "Ping-Pong", 0, 100, 30, 1, "%") params:set_action("stereo", function(value) engine.stereo(value * 0.01) end)
+    params:add_control("stereo", "Ping-Pong", controlspec.new(0, 100, "lin", 1, 30, "%")) params:set_action("stereo", function(x) engine.stereo(x * 0.01) end)
     params:add_separator("   ")
     params:add_binary("randomize_delay_params", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_delay_params", function() randpara.randomize_delay_params(steps) end)
     params:add_option("lock_delay", "Lock Parameters", {"off", "on"}, 1)
