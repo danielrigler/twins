@@ -35,7 +35,7 @@ _some features might require a pi4 based unit. If you hear clicks and crackles t
 ### Discussion
 **[FORUM](https://llllllll.co/t/twins/71052)**
 ### Download
-**v0.43**
+**v0.44**
 install from Maiden Project Manager, or from Maiden REPL:
 ```
 ;install https://github.com/danielrigler/twins
@@ -43,6 +43,7 @@ install from Maiden Project Manager, or from Maiden REPL:
 do not forget to restart.
 
 ### Version history
+* **v0.44** - Added dimension chorus and grain envelopes.
 * **v0.43** - Added an always-listening recording buffer. 
 * **v0.42** - Added grain cloud visualization.
 * **v0.41** - Added pitch walk.
