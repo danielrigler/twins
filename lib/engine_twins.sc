@@ -3,7 +3,7 @@ Engine_twins : CroneEngine {
 var dimensionEffect, haasEffect, bitcrushEffect, delayEffect, saturationEffect,jpverbEffect, shimmerEffect, tapeEffect, chewEffect, widthEffect, monobassEffect, sineEffect, wobbleEffect, lossdegradeEffect, rotateEffect, outputSynth;
 var <buffersL, <buffersR, wobbleBuffer, mixBus, <voices, bufSine, pg, <liveInputBuffersL, <liveInputBuffersR, <liveInputRecorders, o, o_output, o_rec, o_grain;
 var currentSpeed, currentJitter, currentSize, currentDensity, currentDensityModAmt, currentPitch, currentPan, currentSpread, currentVolume, currentGranularGain, currentCutoff, currentHpf, currentlpfgain, currentSubharmonics1, currentSubharmonics2, currentSubharmonics3, currentOvertones1, currentOvertones2, currentPitchMode, currentTrigMode, currentDirectionMod, currentSizeVariation, currentPitchRandomPlus, currentPitchRandomMinus, currentSmoothbass, currentLowGain, currentHighGain, currentProbability, liveBufferMix = 1.0, currentPitchWalkMode, currentPitchWalkRate, currentPitchWalkStep;
-var <outputRecordBufferL, <outputRecordBufferR, <outputRecorder;
+var <outputRecordBuffer, <outputRecorder;
 var outputBufferLength = 8, currentOutputWritePos;
 
 *new { arg context, doneCallback; ^super.new(context, doneCallback); }
@@ -17,13 +17,12 @@ saveLiveBufferToTape { arg voice, filename; var path = "/home/we/dust/audio/tape
 alloc {
         buffersL = Array.fill(2, { arg i; Buffer.alloc(context.server, context.server.sampleRate * 1); });
         buffersR = Array.fill(2, { arg i; Buffer.alloc(context.server, context.server.sampleRate * 1); });
-        
+
         liveInputBuffersL = Array.fill(2, {Buffer.alloc(context.server, context.server.sampleRate * 8); });
         liveInputBuffersR = Array.fill(2, {Buffer.alloc(context.server, context.server.sampleRate * 8); });
         liveInputRecorders = Array.fill(2, { nil });
-        
-        outputRecordBufferL = Buffer.alloc(context.server, context.server.sampleRate * outputBufferLength);
-        outputRecordBufferR = Buffer.alloc(context.server, context.server.sampleRate * outputBufferLength);
+
+        outputRecordBuffer = Buffer.alloc(context.server, context.server.sampleRate * outputBufferLength, 2);
 
         bufSine = Buffer.alloc(context.server, 1024 * 16, 1);
         bufSine.sine2([2], [0.5], false);
@@ -165,13 +164,12 @@ alloc {
         }).add;
         
         SynthDef(\outputRecorder, {
-            arg bufL, bufR, inBus;
+            arg buf, inBus;
             var sig, phasor, numFrames;
             sig = In.ar(inBus, 2);
-            numFrames = BufFrames.kr(bufL);
+            numFrames = BufFrames.kr(buf);
             phasor = Phasor.ar(0, 1, 0, numFrames);
-            BufWr.ar(sig[0], bufL, phasor);
-            BufWr.ar(sig[1], bufR, phasor);
+            BufWr.ar(sig, buf, phasor);
             SendReply.kr(Impulse.kr(10), '/output_write_pos', [phasor / numFrames]);
         }).add;
 
@@ -341,7 +339,7 @@ alloc {
         jpverbEffect = Synth.new(\jpverb, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
         rotateEffect = Synth.new(\rotate, [\bus, mixBus.index], context.xg, 'addToTail');
         outputSynth = Synth.new(\output, [\in, mixBus.index,\out, context.out_b.index], context.xg, 'addToTail');
-        outputRecorder = Synth.new(\outputRecorder, [\bufL, outputRecordBufferL, \bufR, outputRecordBufferR, \inBus, mixBus.index], context.xg, 'addToTail');
+        outputRecorder = Synth.new(\outputRecorder, [\buf, outputRecordBuffer, \inBus, mixBus.index], context.xg, 'addToTail');
 
         this.addCommand(\mix, "f", { arg msg; delayEffect.set(\mix, msg[1]); delayEffect.run(msg[1] > 0); });
         this.addCommand(\delay, "f", { arg msg; delayEffect.set(\delay, msg[1]);	});
@@ -446,15 +444,15 @@ alloc {
         this.addCommand("unload_all", "", {this.unloadAll(); });
         this.addCommand("save_live_buffer", "is", { arg msg; var voice = msg[1] - 1; var filename = msg[2]; var bufL = liveInputBuffersL[voice]; var bufR = liveInputBuffersR[voice]; this.saveLiveBufferToTape(voice, filename); });
         this.addCommand("live_buffer_length", "f", { arg msg; var length = msg[1]; liveInputBuffersL.do({ arg buf; buf.free; }); liveInputBuffersR.do({ arg buf; buf.free; }); liveInputBuffersL = Array.fill(2, {Buffer.alloc(context.server, context.server.sampleRate * length);}); liveInputBuffersR = Array.fill(2, {Buffer.alloc(context.server, context.server.sampleRate * length);}); liveInputRecorders.do({ arg recorder, i; if (recorder.notNil, {recorder.free; liveInputRecorders[i] = Synth.new(\liveInputRecorder, [ \bufL, liveInputBuffersL[i], \bufR, liveInputBuffersR[i], \mix, liveBufferMix ], context.xg, 'addToHead'); voices[i].set( \buf_l, liveInputBuffersL[i], \buf_r, liveInputBuffersR[i], \t_reset_pos, 1); }); }); });
-        this.addCommand("set_output_buffer_length", "f", { arg msg; var newLength = msg[1]; outputBufferLength = newLength; if (outputRecorder.notNil) { outputRecorder.free; }; if (outputRecordBufferL.notNil) { outputRecordBufferL.free; }; if (outputRecordBufferR.notNil) { outputRecordBufferR.free; }; outputRecordBufferL = Buffer.alloc(context.server, context.server.sampleRate * outputBufferLength); outputRecordBufferR = Buffer.alloc(context.server, context.server.sampleRate * outputBufferLength); outputRecorder = Synth.new(\outputRecorder, [\bufL, outputRecordBufferL, \bufR, outputRecordBufferR, \inBus, mixBus.index], context.xg, 'addToTail'); });
-        this.addCommand("save_output_buffer", "s", { arg msg; var filename, path, interleaved, gainBoost = 2.8, crossfadeSamples, actualLength, splitPoint, finalLength, writePos; filename = msg[1]; path = "/home/we/dust/audio/tape/" ++ filename; crossfadeSamples = context.server.sampleRate.asInteger; actualLength = outputRecordBufferL.numFrames; writePos = (currentOutputWritePos ? 0.5) * actualLength; splitPoint = writePos.asInteger; finalLength = actualLength - crossfadeSamples; interleaved = Buffer.alloc(context.server, finalLength, 2); outputRecordBufferL.loadToFloatArray(action: { |leftData| outputRecordBufferR.loadToFloatArray(action: { |rightData| var interleavedData = FloatArray.newClear(finalLength * 2), idx = 0, piInv = pi.reciprocal, crossfadeInv = crossfadeSamples.reciprocal; finalLength.do { |sampleIdx| var blendL, blendR; if (sampleIdx < crossfadeSamples) {var crossfadePos = sampleIdx * crossfadeInv, fadeInGain = (1 - cos(crossfadePos * pi)) * 0.5, fadeOutGain = (1 + cos(crossfadePos * pi)) * 0.5, splitIdx = (splitPoint + sampleIdx) % actualLength, beforeIdx = (splitPoint - crossfadeSamples + sampleIdx) % actualLength; blendL = (leftData[splitIdx] * fadeInGain) + (leftData[beforeIdx] * fadeOutGain); blendR = (rightData[splitIdx] * fadeInGain) + (rightData[beforeIdx] * fadeOutGain);} {var sourceIdx = (splitPoint + sampleIdx) % actualLength; blendL = leftData[sourceIdx]; blendR = rightData[sourceIdx]; }; interleavedData[idx] = blendL * gainBoost; interleavedData[idx + 1] = blendR * gainBoost; idx = idx + 2; }; interleaved.loadCollection(interleavedData, action: { interleaved.write(path, "WAV", "float"); NetAddr("127.0.0.1", 10111).sendMsg("/twins/output_saved", path); NetAddr("127.0.0.1", 10111).sendMsg("/twins/save_complete"); interleaved.free; }); }); }); });
-        this.addCommand("save_output_buffer_only", "s", { arg msg; var filename, path, interleaved, gainBoost = 2.8, crossfadeSamples, actualLength, splitPoint, finalLength, writePos; filename = msg[1]; path = "/home/we/dust/audio/tape/" ++ filename; crossfadeSamples = context.server.sampleRate.asInteger; actualLength = outputRecordBufferL.numFrames; writePos = (currentOutputWritePos ? 0.5) * actualLength; splitPoint = writePos.asInteger; finalLength = actualLength - crossfadeSamples; interleaved = Buffer.alloc(context.server, finalLength, 2); outputRecordBufferL.loadToFloatArray(action: { |leftData| outputRecordBufferR.loadToFloatArray(action: { |rightData| var interleavedData = FloatArray.newClear(finalLength * 2), idx = 0, crossfadeInv = crossfadeSamples.reciprocal; finalLength.do { |sampleIdx| var blendL, blendR; if (sampleIdx < crossfadeSamples) {var crossfadePos = sampleIdx * crossfadeInv, fadeInGain = (1 - cos(crossfadePos * pi)) * 0.5, fadeOutGain = (1 + cos(crossfadePos * pi)) * 0.5, splitIdx = (splitPoint + sampleIdx) % actualLength, beforeIdx = (splitPoint - crossfadeSamples + sampleIdx) % actualLength; blendL = (leftData[splitIdx] * fadeInGain) + (leftData[beforeIdx] * fadeOutGain); blendR = (rightData[splitIdx] * fadeInGain) + (rightData[beforeIdx] * fadeOutGain);} {var sourceIdx = (splitPoint + sampleIdx) % actualLength; blendL = leftData[sourceIdx]; blendR = rightData[sourceIdx]; }; interleavedData[idx] = blendL * gainBoost; interleavedData[idx + 1] = blendR * gainBoost; idx = idx + 2; }; interleaved.loadCollection(interleavedData, action: { interleaved.write(path, "WAV", "float"); NetAddr("127.0.0.1", 10111).sendMsg("/twins/save_complete"); interleaved.free; }); }); }); });
+        
+        this.addCommand("set_output_buffer_length", "f", { arg msg; var newLength = msg[1]; outputBufferLength = newLength; if (outputRecorder.notNil) { outputRecorder.free; }; if (outputRecordBuffer.notNil) {outputRecordBuffer.free; }; outputRecordBuffer = Buffer.alloc(context.server, context.server.sampleRate * outputBufferLength, 2); outputRecorder = Synth.new(\outputRecorder, [\buf, outputRecordBuffer, \inBus, mixBus.index], context.xg, 'addToTail'); });
+        this.addCommand("save_output_buffer", "s", { arg msg; var filename, path, interleaved, gainBoost = 2.8, crossfadeSamples, actualLength, splitPoint, finalLength, writePos; filename = msg[1]; path = "/home/we/dust/audio/tape/" ++ filename; crossfadeSamples = context.server.sampleRate.asInteger; actualLength = outputRecordBuffer.numFrames; writePos = (currentOutputWritePos ? 0.5) * actualLength; splitPoint = writePos.asInteger;  finalLength = actualLength - crossfadeSamples; interleaved = Buffer.alloc(context.server, finalLength, 2); outputRecordBuffer.loadToFloatArray(action: { |stereoData| var interleavedData = FloatArray.newClear(finalLength * 2), idx = 0, piInv = pi.reciprocal, crossfadeInv = crossfadeSamples.reciprocal; finalLength.do { |sampleIdx| var blendL, blendR; if (sampleIdx < crossfadeSamples) {var crossfadePos = sampleIdx * crossfadeInv, fadeInGain = (1 - cos(crossfadePos * pi)) * 0.5, fadeOutGain = (1 + cos(crossfadePos * pi)) * 0.5, splitIdx = (splitPoint + sampleIdx) % actualLength, beforeIdx = (splitPoint - crossfadeSamples + sampleIdx) % actualLength; blendL = (stereoData[splitIdx * 2] * fadeInGain) + (stereoData[beforeIdx * 2] * fadeOutGain); blendR = (stereoData[splitIdx * 2 + 1] * fadeInGain) + (stereoData[beforeIdx * 2 + 1] * fadeOutGain);} {var sourceIdx = (splitPoint + sampleIdx) % actualLength; blendL = stereoData[sourceIdx * 2]; blendR = stereoData[sourceIdx * 2 + 1];}; interleavedData[idx] = blendL * gainBoost; interleavedData[idx + 1] = blendR * gainBoost; idx = idx + 2; }; interleaved.loadCollection(interleavedData, action: { interleaved.write(path, "WAV", "float"); NetAddr("127.0.0.1", 10111).sendMsg("/twins/output_saved", path); NetAddr("127.0.0.1", 10111).sendMsg("/twins/save_complete"); interleaved.free; }); }); });
+        this.addCommand("save_output_buffer_only", "s", { arg msg; var filename, path, interleaved, gainBoost = 2.8, crossfadeSamples, actualLength, splitPoint, finalLength, writePos; filename = msg[1]; path = "/home/we/dust/audio/tape/" ++ filename; crossfadeSamples = context.server.sampleRate.asInteger; actualLength = outputRecordBuffer.numFrames; writePos = (currentOutputWritePos ? 0.5) * actualLength; splitPoint = writePos.asInteger; finalLength = actualLength - crossfadeSamples; interleaved = Buffer.alloc(context.server, finalLength, 2); outputRecordBuffer.loadToFloatArray(action: { |stereoData| var interleavedData = FloatArray.newClear(finalLength * 2), idx = 0, crossfadeInv = crossfadeSamples.reciprocal; finalLength.do { |sampleIdx| var blendL, blendR; if (sampleIdx < crossfadeSamples) {var crossfadePos = sampleIdx * crossfadeInv, fadeInGain = (1 - cos(crossfadePos * pi)) * 0.5, fadeOutGain = (1 + cos(crossfadePos * pi)) * 0.5, splitIdx = (splitPoint + sampleIdx) % actualLength, beforeIdx = (splitPoint - crossfadeSamples + sampleIdx) % actualLength; blendL = (stereoData[splitIdx * 2] * fadeInGain) + (stereoData[beforeIdx * 2] * fadeOutGain); blendR = (stereoData[splitIdx * 2 + 1] * fadeInGain) + (stereoData[beforeIdx * 2 + 1] * fadeOutGain);} {var sourceIdx = (splitPoint + sampleIdx) % actualLength; blendL = stereoData[sourceIdx * 2]; blendR = stereoData[sourceIdx * 2 + 1]; }; interleavedData[idx] = blendL * gainBoost; interleavedData[idx + 1] = blendR * gainBoost; idx = idx + 2; }; interleaved.loadCollection(interleavedData, action: { interleaved.write(path, "WAV", "float"); NetAddr("127.0.0.1", 10111).sendMsg("/twins/save_complete"); interleaved.free; }); }); });
 
         o = OSCFunc({ |msg| var voice, pos; voice = msg[3].asInteger; pos = msg[4]; NetAddr("127.0.0.1", 10111).sendMsg("/twins/buf_pos", voice, pos); }, '/buf_pos', context.server.addr);
         o_rec = OSCFunc({ |msg| var voice, pos; voice = msg[3].asInteger; pos = msg[4]; NetAddr("127.0.0.1", 10111).sendMsg("/twins/rec_pos", voice, pos); }, '/rec_pos', context.server.addr);
         o_grain = OSCFunc({ |msg| var voice, pos; voice = msg[3].asInteger; pos = msg[4]; NetAddr("127.0.0.1", 10111).sendMsg("/twins/grain_pos", voice, pos); }, '/grain_pos', context.server.addr);   
         o_output = OSCFunc({ |msg| var pos; pos = msg[3]; currentOutputWritePos = pos;}, '/output_write_pos', context.server.addr);
-
     }
 
     free {
@@ -466,8 +464,7 @@ alloc {
         liveInputRecorders.do({ arg s; if (s.notNil) { s.free; }; });
         ~grainEnvs.do({ arg buf; buf.free; });
         if (outputRecorder.notNil) { outputRecorder.free; };
-        if (outputRecordBufferL.notNil) { outputRecordBufferL.free; };
-        if (outputRecordBufferR.notNil) { outputRecordBufferR.free; };
+        if (outputRecordBuffer.notNil) { outputRecordBuffer.free; };
         o.free; o_rec.free; o_grain.free; o_output.free;
         wobbleBuffer.free; mixBus.free; bufSine.free; jpverbEffect.free; shimmerEffect.free; saturationEffect.free; tapeEffect.free; chewEffect.free; widthEffect.free; monobassEffect.free; lossdegradeEffect.free; sineEffect.free; wobbleEffect.free; outputSynth.free; delayEffect.free; bitcrushEffect.free; rotateEffect.free; haasEffect.free; dimensionEffect.free;
     }

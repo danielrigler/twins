@@ -54,10 +54,6 @@ local current_mode = "seek"
 local current_filter_mode = "lpf"
 local tap_times = {}
 local TAP_TIMEOUT = 2
-local animation_y = -64
-local animation_speed = 100
-local animation_complete = false
-local animation_start_time = nil
 local initial_monitor_level
 local initial_reverb_onoff
 local filter_lock_ratio = false
@@ -92,12 +88,12 @@ local param_rows = {
     {y = 31, label = "density:  ", mode = "density", param1 = "1density", param2 = "2density", hz = true},
     {y = 41, label = "spread:   ", mode = "spread", param1 = "1spread", param2 = "2spread"},
     {y = 51, label = "pitch:    ", mode = "pitch", param1 = "1pitch", param2 = "2pitch", st = true}}
-
+local animation_x = 0 animation_y = -64 animation_speed = 100 animation_complete = false animation_start_time = nil
+      animation_directions = {"top", "bottom", "left", "right"} current_animation_direction = "top"
 local function table_find(tbl, value) for i = 1, #tbl do if tbl[i] == value then return i end end return nil end
 local function is_audio_loaded(track_num) local file_path = params:get(track_num .. "sample") return (file_path and file_path ~= "-") or audio_active[track_num] end
 local function random_float(l, h) return l + math.random() * (h - l) end
 local function stop_metro_safe(m) if m then local ok, err = pcall(function() m:stop() end) if m then m.event = nil end end end
-
 local function update_evolution_animation()
     if params:get("evolution") == 1 then
         evolution_animation_time = evolution_animation_time + (1/60)
@@ -110,6 +106,7 @@ local function update_evolution_animation()
 end
 
 local function setup_ui_metro()
+    current_animation_direction = animation_directions[math.random(4)]
     ui_metro = metro.init()
     ui_metro.time = 1/60
     ui_metro.event = function()
@@ -119,11 +116,11 @@ local function setup_ui_metro()
         local elapsed = util.time() - animation_start_time
         local progress = util.clamp(elapsed * animation_speed / 64, 0, 1)
         local eased = 1 - (1 - progress) * (1 - progress) * (1 - progress)
-        animation_y = -64 + (eased * 64)
-        if progress >= 1 then
-            animation_complete = true
-            animation_y = 0
-        end
+        if current_animation_direction == "top" then animation_y = -64 + (eased * 64) animation_x = 0
+        elseif current_animation_direction == "bottom" then animation_y = 64 - (eased * 64) animation_x = 0
+        elseif current_animation_direction == "left" then animation_x = -128 + (eased * 128) animation_y = 0
+        elseif current_animation_direction == "right" then animation_x = 128 - (eased * 128) animation_y = 0 end
+        if progress >= 1 then animation_complete = true animation_x = 0 animation_y = 0 end
         redraw()
     end
     ui_metro:start()
@@ -298,7 +295,7 @@ end
 local function setup_params()
     params:add_separator("Input")
     for i = 1, 2 do
-        params:add_file(i.. "sample", "Sample " ..i) params:set_action(i.."sample", function(file) if file ~= nil and file ~= "" and file ~= "none" and file ~= "-" then lfo.clearLFOs(tostring(i), "jitter") engine.read(i, file) audio_active[i] = true update_pan_positioning() local duration = get_audio_duration(file) if duration then local duration_ms = duration * 1000 params:set(i.."max_jitter", math.min(duration_ms, 99999)) params:set(i.."min_jitter", 0) if not is_param_locked(i, "jitter") then local jitter_param = i.."jitter" handle_lfo(jitter_param, true) local jitter_value = (duration * math.random()) * 1000 jitter_value = util.clamp(jitter_value, 0, 99999) params:set(i.."jitter", jitter_value) end if math.random() < 0.3 and not lfo.is_param_locked(tostring(i), "jitter") then clock.run(function() clock.sleep(0.1) for slot = 1, 16 do if params.lookup[slot.."lfo"] and params:get(slot.."lfo") == 1 then randomize_lfo(slot, i.."jitter") break end end end) end end else lfo.clearLFOs(tostring(i), "jitter") audio_active[i] = false osc_positions[i] = 0 update_pan_positioning() end end)
+      params:add_file(i.."sample","Sample "..i)params:set_action(i.."sample",function(file)if file~=nil and file~=""and file~="none"and file~="-"then lfo.clearLFOs(tostring(i),"jitter")engine.read(i,file)audio_active[i]=true update_pan_positioning()local d=get_audio_duration(file)if d then local ms=d*1000 local max_jit=math.min(ms,99999)params:set(i.."max_jitter",max_jit)params:set(i.."min_jitter",0)if not is_param_locked(i,"jitter")then local jp=i.."jitter"handle_lfo(jp,true)params:set(jp,util.clamp(d*math.random()*1000,0,99999))end if math.random()<0.3 and not lfo.is_param_locked(tostring(i),"jitter")then clock.run(function()clock.sleep(0.1)for s=1,16 do if params.lookup[s.."lfo"]and params:get(s.."lfo")==1 then randomize_lfo(s,i.."jitter")break end end end)end end else lfo.clearLFOs(tostring(i),"jitter")audio_active[i]=false osc_positions[i]=0 update_pan_positioning()end end)
     end
     params:add_binary("randomtapes", "Random Tapes", "trigger", 0) params:set_action("randomtapes", function() load_random_tape_file() end)
     
@@ -540,8 +537,7 @@ local function randomize_pitch(track, other_track, symmetry)
 		local base_pitch = params:get(other_track .. "pitch")
 		local weighted_intervals = {[-12] = 3, [-7] = 2, [-5] = 2, [-3] = 1, [0] = 2, [3] = 1, [5] = 2, [7] = 2, [12] = 3}
 		local larger_intervals = {-24, -19, -17, -15, 15, 17, 19, 24}
-		
-		-- Try weighted intervals first
+	
 		local valid_intervals = {}
 		local total_weight = 0
 		
@@ -580,37 +576,29 @@ local function randomize(n)
 		randomize_metro[n] = randomize_metro[n] or metro.init()
 		local m_rand = randomize_metro[n]
 		local active_controlled_params = {}
-		
 		local symmetry = params:get("symmetry") == 1
 		local other_track = 3 - n
-		
 		-- Build locked params table
 		local locked_params = {}
 		local param_names = {"speed", "jitter", "size", "density", "spread", "pitch", "seek"}
 		for _, name in ipairs(param_names) do
 			locked_params[name] = params:get(n .. "lock_" .. name) == 1
 		end
-		
 		-- Handle pitch randomization
 		if locked_params.pitch and not active_controlled_params[n .. "pitch"] then
 			randomize_pitch(n, other_track, symmetry)
 		end
-		
 		local targets = {}
-		
 		-- Process other parameters
 		for _, key in ipairs(param_names) do
 			if key == "pitch" then goto continue end
-			
 			local cfg_name = n .. key
 			if not locked_params[key] or active_controlled_params[cfg_name] then goto continue end
-			
 			if key == "seek" then
 				local min_val = params:get(n .. "min_seek")
 				local max_val = params:get(n .. "max_seek")
 				local val = random_float(min_val, max_val)
 				local val_norm = val * 0.01
-				
 				if symmetry then
 					for _, track in ipairs({n, other_track}) do
 						params:set(track .. "seek", val)
@@ -624,11 +612,9 @@ local function randomize(n)
 			else
 				local min_val = params:get(n .. "min_" .. key)
 				local max_val = params:get(n .. "max_" .. key)
-				
 				if min_val and max_val and min_val < max_val and not is_lfo_active_for_param(cfg_name) then
 					local val = random_float(min_val, max_val)
 					targets[cfg_name] = val
-					
 					if symmetry then
 						local other_name = other_track .. key
 						targets[other_name] = (key == "pan") and -val or val
@@ -637,14 +623,12 @@ local function randomize(n)
 			end
 			::continue::
 		end
-		
 		if next(targets) then
 			m_rand.time = 1 / 30
 			m_rand.event = function(count)
 				local tolerance = 0.01
 				local factor = count / steps
 				local all_done = true
-				
 				for param, target in pairs(targets) do
 					if not active_controlled_params[param] then
 						local current = params:get(param)
@@ -653,7 +637,6 @@ local function randomize(n)
 						all_done = all_done and (math.abs(new_val - target) < tolerance)
 					end
 				end
-				
 				if all_done then stop_metro_safe(m_rand) end
 			end
 			m_rand:start()
@@ -668,7 +651,6 @@ local function handle_volume_lfo(track, delta, crossfade_mode)
 		local a2, i2 = is_lfo_active_for_param(op)
 		local lfo_delta = delta * 1.5
 		local vol_delta = delta * 3
-		
 		if a1 then
 			params:delta(i1.."offset", lfo_delta)
 			if a2 then
@@ -903,7 +885,7 @@ local function get_lfo_modulation(param_name)
     return nil
 end
 
-local LEVELS = {highlight = 15, dim = 6, value = 4}
+local LEVELS = {highlight = 15, dim = 6, value = 3}
 local UPPER_MODES = {jitter=true, size=true, density=true, spread=true, pitch=true}
 local format_lookup = {
     hz = function(val, track) return format_density(val) end,
@@ -917,7 +899,7 @@ function redraw()
     if not installer:ready() then installer:redraw() return end
     screen.clear()
     screen.save()
-    screen.translate(0, animation_y)
+    screen.translate(animation_x, animation_y)
     local cached = {
         volume = {params:get("1volume"), params:get("2volume")},
         pan = {params:get("1pan"), params:get("2pan")},
@@ -1027,11 +1009,12 @@ function redraw()
                 screen.text(string.format("%.0f%%", osc_positions[track] * 100))
             end
 
+            -- Show play/pause symbols for loaded audio (moved outside the if/else block)
             if is_loaded and cached.live_direct[track] ~= 1 then
                 local current_speed = cached.speed[track]
                 local symbol = math.abs(current_speed) < 0.01 and "⏸" or (current_speed > 0 and "▶" or "◀")
                 screen.move(track == 1 and 75 or 116, 61)
-                screen.level(LEVELS.value)
+                screen.level(1)
                 screen.text(symbol)
             end
         
@@ -1047,6 +1030,16 @@ function redraw()
             screen.level(LEVELS.highlight)
             screen.move(x, 61)
             screen.text(format_speed(cached.speed[track]))
+            
+            -- ADDED: Show play/pause symbols for speed page too
+            local is_loaded = audio_active[track] or cached.live_input[track] == 1 or cached.live_direct[track] == 1
+            if is_loaded and cached.live_direct[track] ~= 1 then
+                local current_speed = cached.speed[track]
+                local symbol = math.abs(current_speed) < 0.01 and "⏸" or (current_speed > 0 and "▶" or "◀")
+                screen.move(track == 1 and 75 or 116, 61)
+                screen.level(1)
+                screen.text(symbol)
+            end
         
         elseif bottom_row_mode == "pan" then
             if is_param_locked(track, "pan") then draw_l_shape(x, 61) end
