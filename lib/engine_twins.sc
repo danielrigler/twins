@@ -105,7 +105,7 @@ alloc {
                 var size_mult = if(i < 3) { smoothbass } { 1 }; var grains = processGrains.(buf_l, buf_r, grain_pitch * harmonic, grain_size * size_mult, vol, grain_direction, pos_sig, jitter_sig);
                 #sig_l, sig_r = [sig_l + grains[0], sig_r + grains[1]];};
             
-            pan_sig = Lag.kr(TRand.kr(trig: grain_trig, lo: spread * 0.5, hi: spread) * (ToggleFF.kr(grain_trig) * 2 - 1), grain_size * 0.15);
+            pan_sig = TRand.kr(trig: grain_trig, lo: spread * 0.5, hi: spread) * (ToggleFF.kr(grain_trig) * 2 - 1);
             granular_sig = Balance2.ar(sig_l, sig_r, pan + pan_sig);
             sig_mix = ((dry_sig * (1 - granular_gain)) + (granular_sig * granular_gain));
              
