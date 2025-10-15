@@ -492,10 +492,10 @@ local function setup_params()
     params:add_binary("macro_more", "More+", "trigger", 0) params:set_action("macro_more", function() macro.macro_more() end)
     params:add_binary("macro_less", "Less-", "trigger", 0) params:set_action("macro_less", function() macro.macro_less() end)
     
-    params:add_group("Output", 3)
-    params:add{type = "trigger", id = "save_output_buffer_only", name = "Save Output", action = function() local filename = "twins_output.wav" if engine.save_output_buffer_only then showing_save_message = true engine.save_output_buffer_only(filename) end end}
-    params:add{type = "trigger", id = "save_output_buffer", name = "Bounce Output", action = function() local filename = "twins_output.wav" if engine.save_output_buffer then showing_save_message = true engine.save_output_buffer(filename) end end}
-    params:add_control("output_buffer_length", "Buffer Length", controlspec.new(1, 60, "lin", 1, 8, "s")) params:set_action("output_buffer_length", function(value) engine.set_output_buffer_length(value + 1) end)    
+    params:add_group("Loop", 3)
+    params:add{type = "trigger", id = "save_output_buffer_only", name = "Save", action = function() local filename = "twins_output.wav" if engine.save_output_buffer_only then showing_save_message = true engine.save_output_buffer_only(filename) end end}
+    params:add{type = "trigger", id = "save_output_buffer", name = "Bounce", action = function() local filename = "twins_output.wav" if engine.save_output_buffer then showing_save_message = true engine.save_output_buffer(filename) end end}
+    params:add_control("output_buffer_length", "Loop Length", controlspec.new(1, 60, "lin", 1, 8, "s")) params:set_action("output_buffer_length", function(value) engine.set_output_buffer_length(value + 1) end)    
     
     params:add_group("Other", 6)
     params:add_binary("dry_mode", "Dry Mode", "toggle", 0) params:set_action("dry_mode", function(x) drymode.toggle_dry_mode() end)
@@ -885,7 +885,7 @@ local function get_lfo_modulation(param_name)
     return nil
 end
 
-local LEVELS = {highlight = 15, dim = 6, value = 3}
+local LEVELS = {highlight = 15, dim = 6, value = 2}
 local UPPER_MODES = {jitter=true, size=true, density=true, spread=true, pitch=true}
 local format_lookup = {
     hz = function(val, track) return format_density(val) end,
@@ -1009,12 +1009,10 @@ function redraw()
                 screen.text(string.format("%.0f%%", osc_positions[track] * 100))
             end
 
-            -- Show play/pause symbols for loaded audio (moved outside the if/else block)
             if is_loaded and cached.live_direct[track] ~= 1 then
                 local current_speed = cached.speed[track]
                 local symbol = math.abs(current_speed) < 0.01 and "⏸" or (current_speed > 0 and "▶" or "◀")
                 screen.move(track == 1 and 75 or 116, 61)
-                screen.level(1)
                 screen.text(symbol)
             end
         
@@ -1031,13 +1029,11 @@ function redraw()
             screen.move(x, 61)
             screen.text(format_speed(cached.speed[track]))
             
-            -- ADDED: Show play/pause symbols for speed page too
             local is_loaded = audio_active[track] or cached.live_input[track] == 1 or cached.live_direct[track] == 1
             if is_loaded and cached.live_direct[track] ~= 1 then
                 local current_speed = cached.speed[track]
                 local symbol = math.abs(current_speed) < 0.01 and "⏸" or (current_speed > 0 and "▶" or "◀")
                 screen.move(track == 1 and 75 or 116, 61)
-                screen.level(1)
                 screen.text(symbol)
             end
         
