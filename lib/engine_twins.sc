@@ -47,7 +47,8 @@ alloc {
         SynthDef(\synth1, {
             arg out, voice, buf_l, buf_r, pos, speed, jitter, size, density, density_mod_amt, pitch_offset, pan, spread, gain, t_reset_pos,
             granular_gain, pitch_mode, trig_mode, subharmonics_1, subharmonics_2, subharmonics_3, overtones_1, overtones_2, 
-            cutoff, hpf, hpfq, lpfgain, direction_mod, size_variation, low_gain, mid_gain, high_gain, smoothbass, pitch_random_plus, pitch_random_minus, probability, pitch_walk_mode, pitch_walk_rate, pitch_walk_step, env_select = 0;
+            cutoff, hpf, hpfq, lpfgain, direction_mod, size_variation, low_gain, mid_gain, high_gain, smoothbass, pitch_random_plus,
+            pitch_random_minus, probability, pitch_walk_mode, pitch_walk_rate, pitch_walk_step, env_select = 0;
  
             var grainBufFunc, processGrains;
             var grain_trig, jitter_sig, buf_dur, pan_sig, buf_pos, pos_sig, sig_l, sig_r, sig_mix, density_mod, dry_sig, granular_sig, base_pitch, grain_pitch, shaped, grain_size;
@@ -55,9 +56,8 @@ alloc {
             var subharmonic_1_vol = subharmonics_1 * invDenom * 2;
             var subharmonic_2_vol = subharmonics_2 * invDenom * 2;
             var subharmonic_3_vol = subharmonics_3 * invDenom * 2;
-            var overtone_1_vol = overtones_1 * invDenom * 1.6;
-            var overtone_2_vol = overtones_2 * invDenom * 1.6;
-            var lagPitchOffset = Lag.kr(pitch_offset);
+            var overtone_1_vol = overtones_1 * invDenom * 1.8;
+            var overtone_2_vol = overtones_2 * invDenom * 1.8;
             var grain_direction = Select.kr(pitch_mode, [1, Select.kr(speed.abs > 0.001, [1, speed.sign])]) * Select.kr((LFNoise1.kr(density).range(0,1) < direction_mod), [1, -1]);
             var positive_intervals = [12, 24], negative_intervals = [-12, -24];
             var interval_plus, interval_minus, final_interval;
@@ -77,7 +77,7 @@ alloc {
             dry_sig = [PlayBuf.ar(1, buf_l, speed, startPos: pos * BufFrames.kr(buf_l), trigger: t_reset_pos, loop: 1), PlayBuf.ar(1, buf_r, speed, startPos: pos * BufFrames.kr(buf_r), trigger: t_reset_pos, loop: 1)];
             dry_sig = Balance2.ar(dry_sig[0], dry_sig[1], pan);
             
-            base_pitch = Select.kr(pitch_mode, [speed * lagPitchOffset, lagPitchOffset]);
+            base_pitch = Select.kr(pitch_mode, [speed * pitch_offset, pitch_offset]);
             interval_plus = (LFNoise1.kr(density).range(0, 1) < pitch_random_plus) * TChoose.kr(grain_trig, positive_intervals);
             interval_minus = (LFNoise1.kr(density).range(0, 1) < pitch_random_minus) * TChoose.kr(grain_trig, negative_intervals);
             final_interval = interval_plus + interval_minus;
@@ -91,7 +91,7 @@ alloc {
                 var scaleSize = 7; 
                 var scaleDegree = totalStep.mod(scaleSize); 
                 var octaves = (totalStep - scaleDegree) / scaleSize; 
-                var semitones = Select.kr(scaleDegree, [0,2,4,5,7,9,11]); 
+                var semitones = Select.kr(scaleDegree, [0,1,2,3,5,7,9]); 
                 var pitchOffsetSemitones = semitones + (octaves * 12); 
                 2 ** (pitchOffsetSemitones / 12); }.value ]);
             grain_pitch = grain_pitch * pitchWalk;
@@ -118,7 +118,7 @@ alloc {
             SendReply.kr(Impulse.kr(15), '/buf_pos', [voice, buf_pos]);
             SendReply.kr(grain_trig, '/grain_pos', [voice, Wrap.kr(pos_sig + jitter_sig)]);
 
-            Out.ar(out, sig_mix * gain * 1.4);
+            Out.ar(out, sig_mix * gain * 1.5);
         }).add;
         
         context.server.sync;
