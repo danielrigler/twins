@@ -5,7 +5,6 @@ var <buffersL, <buffersR, wobbleBuffer, mixBus, <voices, bufSine, pg, <liveInput
 var currentSpeed, currentJitter, currentSize, currentDensity, currentDensityModAmt, currentPitch, currentPan, currentSpread, currentVolume, currentGranularGain, currentCutoff, currentHpf, currentlpfgain, currentSubharmonics1, currentSubharmonics2, currentSubharmonics3, currentOvertones1, currentOvertones2, currentPitchMode, currentTrigMode, currentDirectionMod, currentSizeVariation, currentPitchRandomPlus, currentPitchRandomMinus, currentSmoothbass, currentLowGain, currentHighGain, currentProbability, liveBufferMix = 1.0, currentPitchWalkMode, currentPitchWalkRate, currentPitchWalkStep;
 var <outputRecordBuffer, <outputRecorder;
 var outputBufferLength = 8, currentOutputWritePos;
-var noise;
 
 *new { arg context, doneCallback; ^super.new(context, doneCallback); }
 
@@ -30,16 +29,16 @@ alloc {
         wobbleBuffer = Buffer.alloc(context.server, 48000 * 5, 2);
         mixBus = Bus.audio(context.server, 2);
 
-        ~grainEnvs = Array.fill(8, { |i| var env, envBuffer;
-                     case { i == 0 } { env = Env.sine(1, 1); }
-                          { i == 1 } { env = Env.triangle(1, 1); }
-                          { i == 2 } { env = Env.step([0, 1], [1, 1]); }
-                          { i == 3 } { env = Env.new([0, 1], [1]); }
-                          { i == 4 } { env = Env.new([1, 0], [1]); }
-                          { i == 5 } { env = Env.perc(0.01, 1, 1, -4); }
-                          { i == 6 } { env = Env.perc(0.99, 0.01, 1, 4); }
-                          { i == 7 } { env = Env.adsr(0.25, 0.15, 0.65, 1, 1, -4, 0); };
-                     envBuffer = Buffer.sendCollection(context.server, env.discretize); });
+        ~grainEnvs = [
+            Env.sine(1, 1),
+            Env.triangle(1, 1), 
+            Env.step([0, 1], [1, 1]),
+            Env.new([0, 1], [1]),
+            Env.new([1, 0], [1]),
+            Env.perc(0.01, 1, 1, -4),
+            Env.perc(0.99, 0.01, 1, 4),
+            Env.adsr(0.25, 0.15, 0.65, 1, 1, -4, 0)
+        ].collect { |env| Buffer.sendCollection(context.server, env.discretize) };
         
         currentSpeed = [0.1, 0.1]; currentJitter = [0.25, 0.25]; currentSize = [0.1, 0.1]; currentDensity = [10, 10]; currentPitch = [1, 1]; currentPan = [0, 0]; currentSpread = [0, 0]; currentVolume = [1, 1]; currentGranularGain = [1, 1]; currentCutoff = [20000, 20000]; currentlpfgain = [0.1, 0.1]; currentHpf = [20, 20]; currentSubharmonics1 = [0, 0]; currentSubharmonics2 = [0, 0]; currentSubharmonics3 = [0, 0]; currentOvertones1 = [0, 0]; currentOvertones2 = [0, 0]; currentPitchMode = [0, 0]; currentTrigMode = [0, 0]; currentDirectionMod = [0, 0]; currentSizeVariation = [0, 0]; currentPitchRandomPlus = [0, 0]; currentPitchRandomMinus = [0, 0]; currentSmoothbass = [1, 1]; currentDensityModAmt = [0, 0]; currentLowGain = [0, 0]; currentHighGain = [0, 0]; currentProbability = [100, 100]; liveBufferMix = 1.0; currentPitchWalkMode = [0, 0]; currentPitchWalkRate = [2, 2]; currentPitchWalkStep = [2, 2]; 
 
@@ -57,16 +56,16 @@ alloc {
             var subharmonic_1_vol = subharmonics_1 * invDenom * 2;
             var subharmonic_2_vol = subharmonics_2 * invDenom * 2;
             var subharmonic_3_vol = subharmonics_3 * invDenom * 2;
-            var overtone_1_vol = overtones_1 * invDenom * 1.8;
-            var overtone_2_vol = overtones_2 * invDenom * 1.8;
-            var grain_direction = Select.kr(pitch_mode, [1, Select.kr(speed.abs > 0.001, [1, speed.sign])]) * Select.kr((LFNoise1.kr(density).range(0,1) < direction_mod), [1, -1]);
+            var overtone_1_vol = overtones_1 * invDenom * 2;
+            var overtone_2_vol = overtones_2 * invDenom * 2;
+            var noise = LFNoise1.kr(density).range(0, 1);
+            var grain_direction = Select.kr(pitch_mode, [1, Select.kr(speed.abs > 0.001, [1, speed.sign])]) * Select.kr((noise < direction_mod), [1, -1]);
             var positive_intervals = [12, 24], negative_intervals = [-12, -24];
             var interval_plus, interval_minus, final_interval;
             var base_trig;
-            var pitchWalk;
-            
+       
             speed = Lag.kr(speed);
-            density_mod = density * (2**(LFNoise1.kr(density) * density_mod_amt));
+            density_mod = density * (2**(noise * density_mod_amt));
             base_trig = Select.kr(trig_mode, [Impulse.kr(density_mod), Dust.kr(density_mod)]);
             grain_trig = base_trig * (TRand.kr(trig: base_trig, lo: 0, hi: 1) < probability);
             grain_size = size * (1 + TRand.kr(trig: grain_trig, lo: size_variation.neg, hi: size_variation));
@@ -79,18 +78,16 @@ alloc {
             dry_sig = Balance2.ar(dry_sig[0], dry_sig[1], pan);
             
             base_pitch = Select.kr(pitch_mode, [speed * pitch_offset, pitch_offset]);
-            noise = LFNoise1.kr(density).range(0, 1);
             interval_plus = (noise < pitch_random_plus) * TChoose.kr(grain_trig, positive_intervals);
             interval_minus = (noise < pitch_random_minus) * TChoose.kr(grain_trig, negative_intervals);
             grain_pitch = base_pitch * (2 ** ((interval_plus + interval_minus)/12));
-            pitchWalk = Select.kr(pitch_walk_mode, [DC.kr(1), { var walkTrig = Dust.kr(pitch_walk_rate);
-                                                                var step = TIRand.kr(0, pitch_walk_step, walkTrig, Array.fill(25, { |i| (25 - i).sqrt }));
-                                                                var direction = TChoose.kr(walkTrig, [1, -1]);
-                                                                var totalStep = Select.kr(CoinGate.kr(0.1, walkTrig), [step * direction, 0]);
-                                                                var scaleDegree = totalStep.mod(7);
-                                                                var octaves = (totalStep - scaleDegree) / 7;
-                                                                2 ** ((Select.kr(scaleDegree, [0,1,2,3,5,7,9]) + (octaves * 12)) / 12); }.value ]);
-            grain_pitch = grain_pitch * pitchWalk;
+            grain_pitch = grain_pitch * Select.kr(pitch_walk_mode, [DC.kr(1), { var walkTrig = Dust.kr(pitch_walk_rate);
+                                                                                var step = TIRand.kr(0, pitch_walk_step, walkTrig, Array.fill(25, { |i| (25 - i).sqrt }));
+                                                                                var direction = TChoose.kr(walkTrig, [1, -1]);
+                                                                                var totalStep = Select.kr(CoinGate.kr(0.1, walkTrig), [step * direction, 0]);
+                                                                                var scaleDegree = totalStep.mod(7);
+                                                                                var octaves = (totalStep - scaleDegree) / 7;
+                                                                                2 ** ((Select.kr(scaleDegree, [0,1,2,3,5,7,9]) + (octaves * 12)) / 12); }.value ]);
             
             grainBufFunc = { |buf, pitch, size, vol, dir, pos, jitter| var envBuf = Select.kr(env_select, ~grainEnvs); 
                 GrainBuf.ar(1, grain_trig, size, buf, pitch * dir, pos + jitter, 2, envbufnum: envBuf, mul: vol)};            
@@ -114,7 +111,7 @@ alloc {
             SendReply.kr(Impulse.kr(15), '/buf_pos', [voice, buf_pos]);
             SendReply.kr(grain_trig, '/grain_pos', [voice, Wrap.kr(pos_sig + jitter_sig)]);
 
-            Out.ar(out, sig_mix * gain * 1.5);
+            Out.ar(out, sig_mix * gain * 1.4);
         }).add;
         
         context.server.sync;

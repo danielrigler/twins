@@ -23,9 +23,6 @@ local function clear_table(t) for k in pairs(t) do t[k] = nil end end
 
 -- Parameter Specifications
 local PARAM_SPECS = {
-  ["1eq_low_gain"] = {1, {-0.5, 0.5}, "eq"}, ["2eq_low_gain"] = {1, {-0.5, 0.5}, "eq"},
-  ["1eq_mid_gain"] = {1, {-0.5, 0.5}, "eq"}, ["2eq_mid_gain"] = {1, {-0.5, 0.5}, "eq"},
-  ["1eq_high_gain"] = {1, {-0.5, 0.5}, "eq"}, ["2eq_high_gain"] = {1, {-0.5, 0.5}, "eq"},
   ["1direction_mod"] = {100, {0, 100}, "granular"}, ["2direction_mod"] = {100, {0, 100}, "granular"},
   ["1size_variation"] = {100, {0, 100}, "granular"}, ["2size_variation"] = {100, {0, 100}, "granular"},
   ["1density_mod_amt"] = {100, {0, 100}, "granular"}, ["2density_mod_amt"] = {100, {0, 100}, "granular"},
@@ -33,7 +30,7 @@ local PARAM_SPECS = {
   ["1subharmonics_2"] = {1, {0, 1}, "granular"}, ["2subharmonics_2"] = {1, {0, 1}, "granular"},
   ["1subharmonics_3"] = {1, {0, 1}, "granular"}, ["2subharmonics_3"] = {1, {0, 1}, "granular"},
   ["1overtones_1"] = {1, {0, 1}, "granular"}, ["2overtones_1"] = {1, {0, 1}, "granular"},
-  ["2overtones_2"] = {1, {0, 1}, "granular"}, ["1pitch_walk_rate"] = {20, {0.1, 20}, "granular"},
+  ["1overtones_2"] = {1, {0, 1}, "granular"}, ["2overtones_2"] = {1, {0, 1}, "granular"}, ["1pitch_walk_rate"] = {20, {0.1, 20}, "granular"},
   ["2pitch_walk_rate"] = {20, {0.1, 20}, "granular"}, ["1pitch_walk_step"] = {12, {1, 12}, "granular"},
   ["2pitch_walk_step"] = {12, {1, 12}, "granular"}, ["delay_feedback"] = {100, {0, 100}, "delay"},
   ["delay_time"] = {2, {0, 2}, "delay"}, ["stereo"] = {100, {0, 100}, "delay"},
@@ -304,18 +301,18 @@ local track_param_configs = {
     {name=track.."direction_mod", prob=0.5, default=0, random=function() return math.random(0, 20) end},
     {name=track.."size_variation", prob=0.5, default=0, random=function() return math.random(0, 40) end},
     {name=track.."density_mod_amt", prob=0.5, default=0, random=function() return math.random(0, 6) end},
-    {name=track.."subharmonics_1", prob=0.5, default=0, random=function() return random_float(0, 0.6) end},
-    {name=track.."subharmonics_2", prob=0.5, default=0, random=function() return random_float(0, 0.6) end},
-    {name=track.."subharmonics_3", prob=0.5, default=0, random=function() return random_float(0, 0.6) end},
-    {name=track.."overtones_1", prob=0.5, default=0, random=function() return random_float(0, 0.6) end},
-    {name=track.."overtones_2", prob=0.5, default=0, random=function() return random_float(0, 0.6) end},
+    {name=track.."subharmonics_1", prob=0.5, default=0, random=function() return random_float(0, 0.4) end},
+    {name=track.."subharmonics_2", prob=0.5, default=0, random=function() return random_float(0, 0.4) end},
+    {name=track.."subharmonics_3", prob=0.5, default=0, random=function() return random_float(0, 0.4) end},
+    {name=track.."overtones_1", prob=0.5, default=0, random=function() return random_float(0, 0.4) end},
+    {name=track.."overtones_2", prob=0.5, default=0, random=function() return random_float(0, 0.4) end},
     {name=track.."pitch_random_plus", prob=0.2, default=0, random=function() return math.random(0, 25) end},
     {name=track.."pitch_random_minus", prob=0.2, default=0, random=function() return math.random(0, 25) end},
   }} end,
   eq = function(track) return { lock_param = "lock_eq", params = {
-    {name=track.."eq_low_gain", prob=0.4, default=0, random=function() return random_float(-0.15, 0.15) end},
-    {name=track.."eq_mid_gain", prob=0.6, default=0, random=function() return random_float(-0.2, 0.05) end},
-    {name=track.."eq_high_gain", prob=0.4, default=0.2, random=function() return random_float(-0.1, 0.35) end},
+    {name=track.."eq_low_gain", prob=0.4, default=0, random=function() return random_float(-0.2, 0.1) end},
+    {name=track.."eq_mid_gain", prob=0.6, default=0, random=function() return random_float(-0.1, 0) end},
+    {name=track.."eq_high_gain", prob=0.4, default=0.2, random=function() return random_float(0, 0.35) end},
   }} end
 }
 
