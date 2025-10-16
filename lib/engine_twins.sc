@@ -5,6 +5,7 @@ var <buffersL, <buffersR, wobbleBuffer, mixBus, <voices, bufSine, pg, <liveInput
 var currentSpeed, currentJitter, currentSize, currentDensity, currentDensityModAmt, currentPitch, currentPan, currentSpread, currentVolume, currentGranularGain, currentCutoff, currentHpf, currentlpfgain, currentSubharmonics1, currentSubharmonics2, currentSubharmonics3, currentOvertones1, currentOvertones2, currentPitchMode, currentTrigMode, currentDirectionMod, currentSizeVariation, currentPitchRandomPlus, currentPitchRandomMinus, currentSmoothbass, currentLowGain, currentHighGain, currentProbability, liveBufferMix = 1.0, currentPitchWalkMode, currentPitchWalkRate, currentPitchWalkStep;
 var <outputRecordBuffer, <outputRecorder;
 var outputBufferLength = 8, currentOutputWritePos;
+var noise;
 
 *new { arg context, doneCallback; ^super.new(context, doneCallback); }
 
@@ -78,22 +79,17 @@ alloc {
             dry_sig = Balance2.ar(dry_sig[0], dry_sig[1], pan);
             
             base_pitch = Select.kr(pitch_mode, [speed * pitch_offset, pitch_offset]);
-            interval_plus = (LFNoise1.kr(density).range(0, 1) < pitch_random_plus) * TChoose.kr(grain_trig, positive_intervals);
-            interval_minus = (LFNoise1.kr(density).range(0, 1) < pitch_random_minus) * TChoose.kr(grain_trig, negative_intervals);
-            final_interval = interval_plus + interval_minus;
-            grain_pitch = base_pitch * (2 ** (final_interval/12));
-            pitchWalk = Select.kr(pitch_walk_mode, [DC.kr(1), { 
-                var walkTrig = Dust.kr(pitch_walk_rate); 
-                var step = TIRand.kr(0, pitch_walk_step, walkTrig, Array.fill(25, { |i| (25 - i).sqrt }));
-                var direction = TChoose.kr(walkTrig, [1, -1]); 
-                var reset = CoinGate.kr(0.1, walkTrig);
-                var totalStep = Select.kr(reset, [step * direction, 0]);
-                var scaleSize = 7; 
-                var scaleDegree = totalStep.mod(scaleSize); 
-                var octaves = (totalStep - scaleDegree) / scaleSize; 
-                var semitones = Select.kr(scaleDegree, [0,1,2,3,5,7,9]); 
-                var pitchOffsetSemitones = semitones + (octaves * 12); 
-                2 ** (pitchOffsetSemitones / 12); }.value ]);
+            noise = LFNoise1.kr(density).range(0, 1);
+            interval_plus = (noise < pitch_random_plus) * TChoose.kr(grain_trig, positive_intervals);
+            interval_minus = (noise < pitch_random_minus) * TChoose.kr(grain_trig, negative_intervals);
+            grain_pitch = base_pitch * (2 ** ((interval_plus + interval_minus)/12));
+            pitchWalk = Select.kr(pitch_walk_mode, [DC.kr(1), { var walkTrig = Dust.kr(pitch_walk_rate);
+                                                                var step = TIRand.kr(0, pitch_walk_step, walkTrig, Array.fill(25, { |i| (25 - i).sqrt }));
+                                                                var direction = TChoose.kr(walkTrig, [1, -1]);
+                                                                var totalStep = Select.kr(CoinGate.kr(0.1, walkTrig), [step * direction, 0]);
+                                                                var scaleDegree = totalStep.mod(7);
+                                                                var octaves = (totalStep - scaleDegree) / 7;
+                                                                2 ** ((Select.kr(scaleDegree, [0,1,2,3,5,7,9]) + (octaves * 12)) / 12); }.value ]);
             grain_pitch = grain_pitch * pitchWalk;
             
             grainBufFunc = { |buf, pitch, size, vol, dir, pos, jitter| var envBuf = Select.kr(env_select, ~grainEnvs); 
