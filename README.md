@@ -6,17 +6,17 @@ A randomized dual granular sample playground for Monome Norns.
 
 Inspired by @cfd90’s Twine and contains influence and code from a lot of other norns users. This is basically Twine on steroids. A granular playground. It contains a lot of effects and extra granular parameters. You can turn off granular processing and use this as a normal sample player with effects. Live input processing is also possible. My main goal was building a tool for creating nice ambient soundscapes. And no problem if you do not have external controllers. I have tweaked the GUI and controls, so it is playable even with only a norns. Let me know if you find this useful.
 
-![Screenshot](https://llllllll.co/uploads/default/original/3X/5/c/5c1fa51fe8c1c6d515c61753aded0462c10e3b4e.png)
+![Screenshot](https://llllllll.co/uploads/default/original/3X/7/d/7d0d8431253b4f904a04397f4162c6fa2e794e1a.png)
 
 **Some of the new features:**
-* Reverb, delay, tape effects, shimmer, EQ, filters, bit reduction, etc.
-* Flexible volume control
+* Reverb, delay, chorus, tape effects, shimmer, EQ, filters, bit reduction, etc.
 * Extra granular parameters, increased parameter ranges
-* Smooth transition interpolation / evolution
 * Freely assignable LFOs with randomization
 * On screen navigation with parameter locking
 * Symmetry mode and mirroring
 * Live input processing
+* Flexible volume control
+* Morphing
 
 ### Requirements
 norns / norns shield  
@@ -25,6 +25,7 @@ _some features might require a pi4 based unit. If you hear clicks and crackles t
 ### Documentation
 **E1**: Master Volume  
 **K1**+**E2** or **K1**+**E3**: Volume 1/2  
+Hold **K1**: Mode Select
 **K1**+**E1**: Crossfade Volumes  
 **K2**/**K3**: Navigate  
 **E2**/**E3**: Adjust Parameters  
@@ -35,7 +36,7 @@ _some features might require a pi4 based unit. If you hear clicks and crackles t
 ### Discussion
 **[FORUM](https://llllllll.co/t/twins/71052)**
 ### Download
-**v0.44**
+**v0.45**
 install from Maiden Project Manager, or from Maiden REPL:
 ```
 ;install https://github.com/danielrigler/twins
@@ -43,6 +44,7 @@ install from Maiden Project Manager, or from Maiden REPL:
 do not forget to restart.
 
 ### Version history
+* **v0.45** - Added morphing and a preset system.
 * **v0.44** - Added dimension chorus and grain envelopes.
 * **v0.43** - Added an always-listening recording buffer. 
 * **v0.42** - Added grain cloud visualization.
