@@ -25,7 +25,7 @@ _some features might require a pi4 based unit. If you hear clicks and crackles t
 ### Documentation
 **E1**: Master Volume  
 **K1**+**E2** or **K1**+**E3**: Volume 1/2  
-Hold **K1**: Mode Select
+Hold **K1**: Mode Select  
 **K1**+**E1**: Crossfade Volumes  
 **K2**/**K3**: Navigate  
 **E2**/**E3**: Adjust Parameters  
