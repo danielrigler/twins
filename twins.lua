@@ -194,7 +194,6 @@ local function apply_morph()
     local scene2_track1 = scene_data[1] and scene_data[1][2] or {}
     local scene1_track2 = scene_data[2] and scene_data[2][1] or {}
     local scene2_track2 = scene_data[2] and scene_data[2][2] or {}
-    local inv_t = 1 - t
     local function get_scene_param_value(scene_idx)
         return function(param)
             if scene_idx == 1 then return scene1_track1[param] or scene1_track2[param]
@@ -233,7 +232,6 @@ local function apply_morph()
             end
         end
     end
-    -- Morph global parameters
     for i = 1, #morph_global_params do
         local param = morph_global_params[i]
         local sceneA_val = get_scene1_param(param)
@@ -245,66 +243,44 @@ local function apply_morph()
     for i = 1, 16 do
         local A_entry = scene_lfo_entry(1, i)
         local B_entry = scene_lfo_entry(2, i)
-        if not A_entry and not B_entry then
-            params:set(i.."lfo", 1)
-        elseif A_entry and not B_entry then
-            local target_param = lfo.lfo_targets[A_entry.target]
-            if target_param and target_param ~= "none" then
-                local sceneB_value = get_scene2_param(target_param)
-                if sceneB_value then
-                    local depth = A_entry.depth * inv_t
-                    if depth > 0.1 then
-                        params:set(i.."lfo_target", A_entry.target)
-                        params:set(i.."lfo_shape", A_entry.shape)
-                        params:set(i.."lfo_freq", A_entry.freq)
-                        params:set(i.."lfo_depth", depth)
-                        local min_val, max_val = lfo.get_parameter_range(target_param)
-                        local target_offset = util.linlin(min_val, max_val, -1, 1, sceneB_value)
-                        params:set(i.."offset", A_entry.offset + (target_offset - A_entry.offset) * t)
-                        params:set(i.."lfo", 2)
-                    else
-                        params:set(i.."lfo", 1)
-                        params:set(target_param, sceneB_value)
-                    end
-                end
-            end
-        elseif not A_entry and B_entry then
-            local target_param = lfo.lfo_targets[B_entry.target]
-            if target_param and target_param ~= "none" then
-                local sceneA_value = get_scene1_param(target_param)
-                if sceneA_value then
-                    local depth = B_entry.depth * t
-                    if depth > 0.1 then
-                        params:set(i.."lfo_target", B_entry.target)
-                        params:set(i.."lfo_shape", B_entry.shape)
-                        params:set(i.."lfo_freq", B_entry.freq)
-                        params:set(i.."lfo_depth", depth)
-                        local min_val, max_val = lfo.get_parameter_range(target_param)
-                        local target_offset = util.linlin(min_val, max_val, -1, 1, sceneA_value)
-                        params:set(i.."offset", target_offset + (B_entry.offset - target_offset) * t)
-                        params:set(i.."lfo", 2)
-                    else
-                        params:set(i.."lfo", 1)
-                        local current_val = params:get(target_param)
-                        params:set(target_param, sceneA_value + (current_val - sceneA_value) * t)
-                    end
-                end
-            end
-        else
+        if A_entry and B_entry then
+            local target = A_entry.target
+            local shape = A_entry.shape
             local freq = A_entry.freq + (B_entry.freq - A_entry.freq) * t
             local depth = A_entry.depth + (B_entry.depth - A_entry.depth) * t
             local offset = A_entry.offset + (B_entry.offset - A_entry.offset) * t
-            if depth > 0.1 then
-                local target = t < 0.5 and A_entry.target or B_entry.target
-                local shape = t < 0.5 and A_entry.shape or B_entry.shape
-                params:set(i.."lfo_target", target)
-                params:set(i.."lfo_shape", shape)
-                params:set(i.."lfo_freq", freq)
+            params:set(i.."lfo_target", target)
+            params:set(i.."lfo_shape", shape)
+            params:set(i.."lfo_freq", freq)
+            params:set(i.."lfo_depth", depth)
+            params:set(i.."offset", offset)
+            params:set(i.."lfo", 2)
+        elseif A_entry then
+            if t < 1.0 then
+                local depth = A_entry.depth * (1 - t)
+                params:set(i.."lfo_target", A_entry.target)
+                params:set(i.."lfo_shape", A_entry.shape)
+                params:set(i.."lfo_freq", A_entry.freq)
                 params:set(i.."lfo_depth", depth)
-                params:set(i.."offset", offset)
+                params:set(i.."offset", A_entry.offset)
                 params:set(i.."lfo", 2)
-            else params:set(i.."lfo", 1)
+            else
+                params:set(i.."lfo", 1)
             end
+        elseif B_entry then
+            if t > 0.0 then
+                local depth = B_entry.depth * t
+                params:set(i.."lfo_target", B_entry.target)
+                params:set(i.."lfo_shape", B_entry.shape)
+                params:set(i.."lfo_freq", B_entry.freq)
+                params:set(i.."lfo_depth", depth)
+                params:set(i.."offset", B_entry.offset)
+                params:set(i.."lfo", 2)
+            else
+                params:set(i.."lfo", 1)
+            end
+        else
+            params:set(i.."lfo", 1)
         end
     end
 end
@@ -591,7 +567,7 @@ local function setup_params()
         params:add_taper(i.."min_jitter", i.." jitter (min)", 0, 999999, 0, 5, "ms")
         params:add_taper(i.."max_jitter", i.." jitter (max)", 0, 999999, 4999, 5, "ms")
         params:add_taper(i.."min_size", i.." size (min)", 20, 999, 50, 5, "ms")
-        params:add_taper(i.."max_size", i.." size (max)", 20, 999, 600, 5, "ms")
+        params:add_taper(i.."max_size", i.." size (max)", 20, 999, 599, 5, "ms")
         params:add_taper(i.."min_density", i.." density (min)", 0.1, 50, 0.5, 5, "Hz")
         params:add_taper(i.."max_density", i.." density (max)", 0.1, 50, 30, 5, "Hz")
         params:add_taper(i.."min_spread", i.." spread (min)", 0, 100, 0, 0, "%")
