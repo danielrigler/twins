@@ -79,16 +79,16 @@ local grain_positions = {[1] = {}, [2] = {}}
 local osc_positions = {[1] = 0, [2] = 0}
 local rec_positions = {[1] = 0, [2] = 0}
 local param_modes = {
-    speed = {param = "speed", delta = 0.5, engine = false, has_lock = true},
+    speed = {param = "speed", delta = 0.5, engine = true, has_lock = true},
     seek = {param = "seek", delta = 1, engine = true, has_lock = true},
-    pan = {param = "pan", delta = 5, engine = false, has_lock = true, invert = true},
-    lpf = {param = "cutoff", delta = 1, engine = false, has_lock = false},
-    hpf = {param = "hpf", delta = 1, engine = false, has_lock = false},
-    jitter = {param = "jitter", delta = 2, engine = false, has_lock = true},
-    size = {param = "size", delta = 2, engine = false, has_lock = true},
-    density = {param = "density", delta = 2, engine = false, has_lock = true},
-    spread = {param = "spread", delta = 2, engine = false, has_lock = true},
-    pitch = {param = "pitch", delta = 1, engine = false, has_lock = true}}
+    pan = {param = "pan", delta = 5, engine = true, has_lock = true, invert = true},
+    lpf = {param = "cutoff", delta = 1, engine = true, has_lock = false},
+    hpf = {param = "hpf", delta = 1, engine = true, has_lock = false},
+    jitter = {param = "jitter", delta = 2, engine = true, has_lock = true},
+    size = {param = "size", delta = 2, engine = true, has_lock = true},
+    density = {param = "density", delta = 2, engine = true, has_lock = true},
+    spread = {param = "spread", delta = 2, engine = true, has_lock = true},
+    pitch = {param = "pitch", delta = 1, engine = true, has_lock = true}}
 local param_rows = {
     {y = 11, label = "jitter:    ", mode = "jitter", param1 = "1jitter", param2 = "2jitter"},
     {y = 21, label = "size:     ", mode = "size", param1 = "1size", param2 = "2size"},
@@ -145,29 +145,37 @@ local morph_global_params = { "delay_mix", "delay_time", "delay_feedback", "dela
 
 local function store_scene(track, scene)
     scene_data[track][scene] = {}
+    
+    -- Store voice parameters for this track
     for _, param in ipairs(morph_voice_params) do
         local full_param = track .. param
-        if params.lookup[full_param] then scene_data[track][scene][full_param] = params:get(full_param) end
+        if params.lookup[full_param] then
+            scene_data[track][scene][full_param] = params:get(full_param)
+        end
     end
+    
+    -- Store global parameters
     for _, param in ipairs(morph_global_params) do
-        if params.lookup[param] then scene_data[track][scene][param] = params:get(param) end
+        if params.lookup[param] then
+            scene_data[track][scene][param] = params:get(param)
+        end
     end
+    
+    -- Store LFO data - SIMPLIFIED: store ALL active LFOs for this scene
     scene_data[track][scene].lfo_data = {}
     for i = 1, 16 do
         if params:get(i.."lfo") == 2 then
-            local target_index = params:get(i.."lfo_target")
-            local target_param = lfo.lfo_targets[target_index]
-            if target_param and (target_param:sub(1, 1) == tostring(track) or not target_param:match("^[12]")) then
-                scene_data[track][scene].lfo_data[i] = {
-                    target = target_index,
-                    shape = params:get(i.."lfo_shape"),
-                    freq = params:get(i.."lfo_freq"),
-                    depth = params:get(i.."lfo_depth"),
-                    offset = params:get(i.."offset")}
-            end
+            scene_data[track][scene].lfo_data[i] = {
+                target = params:get(i.."lfo_target"),
+                shape = params:get(i.."lfo_shape"),
+                freq = params:get(i.."lfo_freq"),
+                depth = params:get(i.."lfo_depth"),
+                offset = params:get(i.."offset")
+            }
         end
     end
 end
+
 
 local function setup_key1_monitor()
     key1_monitor_metro = metro.init()
@@ -188,115 +196,233 @@ local function setup_key1_monitor()
     key1_monitor_metro:start()
 end
 
+local function recall_scene(track, scene)
+    if not scene_data[track] or not scene_data[track][scene] then return end
+    
+    -- First, disable all LFOs to prevent conflicts
+    for i = 1, 16 do
+        params:set(i.."lfo", 1)
+    end
+    
+    -- Apply the stored parameters for this scene
+    local scene_params = scene_data[track][scene]
+    
+    -- Apply regular parameters
+    for param_name, value in pairs(scene_params) do
+        if param_name ~= "lfo_data" and params.lookup[param_name] then
+            params:set(param_name, value)
+        end
+    end
+    
+    -- Apply LFO data if present
+    if scene_params.lfo_data then
+        for i = 1, 16 do
+            if scene_params.lfo_data[i] then
+                local lfo_entry = scene_params.lfo_data[i]
+                params:set(i.."lfo_target", lfo_entry.target)
+                params:set(i.."lfo_shape", lfo_entry.shape)
+                params:set(i.."lfo_freq", lfo_entry.freq)
+                params:set(i.."lfo_depth", lfo_entry.depth)
+                params:set(i.."offset", lfo_entry.offset)
+                params:set(i.."lfo", 2) -- Enable LFO
+            end
+        end
+    end
+end
+
+
 local function apply_morph()
     local t = morph_amount * 0.01
+    
+    -- Handle exact endpoints first for precision
+    if morph_amount == 0 then
+        recall_scene(1, 1)
+        recall_scene(2, 1)
+        return
+    elseif morph_amount == 100 then
+        recall_scene(1, 2)
+        recall_scene(2, 2)
+        return
+    end
+    
+    -- Get scene data for each track separately
     local scene1_track1 = scene_data[1] and scene_data[1][1] or {}
     local scene2_track1 = scene_data[1] and scene_data[1][2] or {}
     local scene1_track2 = scene_data[2] and scene_data[2][1] or {}
     local scene2_track2 = scene_data[2] and scene_data[2][2] or {}
-    local function get_scene_param_value(scene_idx)
-        return function(param)
-            if scene_idx == 1 then return scene1_track1[param] or scene1_track2[param]
-            else return scene2_track1[param] or scene2_track2[param]
-            end
-        end
-    end
-    local get_scene1_param = get_scene_param_value(1)
-    local get_scene2_param = get_scene_param_value(2)
-    local function scene_lfo_entry(scene_idx, slot_idx)
-        local scene_data_1 = scene_idx == 1 and scene1_track1 or scene2_track1
-        local scene_data_2 = scene_idx == 1 and scene1_track2 or scene2_track2
-        if scene_data_1 and scene_data_1.lfo_data and scene_data_1.lfo_data[slot_idx] then
-            return scene_data_1.lfo_data[slot_idx]
-        elseif scene_data_2 and scene_data_2.lfo_data and scene_data_2.lfo_data[slot_idx] then return scene_data_2.lfo_data[slot_idx] end
-        return nil
-    end
-    local all_params = {}
-    for param, valueA in pairs(scene1_track1) do
-        if param ~= "lfo_data" and params.lookup[param] then all_params[param] = true end
-    end
-    for param, valueA in pairs(scene1_track2) do
-        if param ~= "lfo_data" and params.lookup[param] then all_params[param] = true end
-    end
-    for param in pairs(all_params) do
-        local valueA = get_scene1_param(param)
-        local valueB = get_scene2_param(param)
-        local active = select(1, is_lfo_active_for_param(param))
-        if not active then
-            if valueA and valueB then
-                params:set(param, valueA + (valueB - valueA) * t)
-            elseif valueA then
-                params:set(param, valueA)
-            elseif valueB then
-                params:set(param, valueB)
-            end
-        end
-    end
-    for i = 1, #morph_global_params do
-        local param = morph_global_params[i]
-        local sceneA_val = get_scene1_param(param)
-        local sceneB_val = get_scene2_param(param)
-        if sceneA_val and sceneB_val and params.lookup[param] then
-            params:set(param, sceneA_val + (sceneB_val - sceneA_val) * t)
-        end
-    end
+    
+    -- First disable all LFOs to prevent conflicts during morph
     for i = 1, 16 do
-        local A_entry = scene_lfo_entry(1, i)
-        local B_entry = scene_lfo_entry(2, i)
-        if A_entry and B_entry then
-            local target = A_entry.target
-            local shape = A_entry.shape
-            local freq = A_entry.freq + (B_entry.freq - A_entry.freq) * t
-            local depth = A_entry.depth + (B_entry.depth - A_entry.depth) * t
-            local offset = A_entry.offset + (B_entry.offset - A_entry.offset) * t
+        params:set(i.."lfo", 1)
+    end
+    
+    -- Apply morph separately for each track
+    for track = 1, 2 do
+        local scene1_data = track == 1 and scene1_track1 or scene1_track2
+        local scene2_data = track == 1 and scene2_track1 or scene2_track2
+        
+        -- Apply regular parameters for this track
+        for _, param_name in ipairs(morph_voice_params) do
+            local full_param = track .. param_name
+            if params.lookup[full_param] then
+                local valueA = scene1_data[full_param]
+                local valueB = scene2_data[full_param]
+                
+                if valueA and valueB then
+                    local interpolated_value = valueA * (1.0 - t) + valueB * t
+                    params:set(full_param, interpolated_value)
+                elseif valueA then
+                    params:set(full_param, valueA)
+                elseif valueB then
+                    params:set(full_param, valueB)
+                end
+            end
+        end
+    end
+    
+    -- Apply global parameters
+    for _, param in ipairs(morph_global_params) do
+        local valueA = scene1_track1[param] or scene1_track2[param]
+        local valueB = scene2_track1[param] or scene2_track2[param]
+        if valueA and valueB and params.lookup[param] then
+            local interpolated_value = valueA * (1.0 - t) + valueB * t
+            params:set(param, interpolated_value)
+        end
+    end
+    
+     -- Now handle LFO morphing - process ALL LFO slots
+    for i = 1, 16 do
+        -- Get LFO data from all scenes
+        local lfo_A_track1 = scene1_track1.lfo_data and scene1_track1.lfo_data[i]
+        local lfo_B_track1 = scene2_track1.lfo_data and scene2_track1.lfo_data[i]
+        local lfo_A_track2 = scene1_track2.lfo_data and scene1_track2.lfo_data[i]
+        local lfo_B_track2 = scene2_track2.lfo_data and scene2_track2.lfo_data[i]
+        
+        -- Determine which LFO data to use (prioritize track-specific, then global)
+        local lfo_data_A = lfo_A_track1 or lfo_A_track2
+        local lfo_data_B = lfo_B_track1 or lfo_B_track2
+        
+        if lfo_data_A and lfo_data_B then
+            -- Interpolate between both LFOs
+            local target = lfo_data_A.target
+            local shape = lfo_data_A.shape
+            local freq = lfo_data_A.freq * (1.0 - t) + lfo_data_B.freq * t
+            local depth = lfo_data_A.depth * (1.0 - t) + lfo_data_B.depth * t
+            local offset = lfo_data_A.offset * (1.0 - t) + lfo_data_B.offset * t
+            
             params:set(i.."lfo_target", target)
             params:set(i.."lfo_shape", shape)
             params:set(i.."lfo_freq", freq)
             params:set(i.."lfo_depth", depth)
             params:set(i.."offset", offset)
             params:set(i.."lfo", 2)
-        elseif A_entry then
-            if t < 1.0 then
-                local depth = A_entry.depth * (1 - t)
-                params:set(i.."lfo_target", A_entry.target)
-                params:set(i.."lfo_shape", A_entry.shape)
-                params:set(i.."lfo_freq", A_entry.freq)
-                params:set(i.."lfo_depth", depth)
-                params:set(i.."offset", A_entry.offset)
-                params:set(i.."lfo", 2)
-            else
-                params:set(i.."lfo", 1)
+        elseif lfo_data_A then
+            -- Scene A has LFO, Scene B has constant value
+            -- Get the target parameter name
+            local target_param = lfo.lfo_targets[lfo_data_A.target]
+            if target_param and params.lookup[target_param] then
+                -- Find the constant value from Scene B
+                local constant_value = nil
+                if scene2_track1[target_param] then constant_value = scene2_track1[target_param] end
+                if scene2_track2[target_param] then constant_value = scene2_track2[target_param] end
+                
+                if constant_value then
+                    -- Calculate offset to center LFO around the constant value
+                    local min_val, max_val = lfo.get_parameter_range(target_param)
+                    if min_val and max_val then
+                        local range = max_val - min_val
+                        local target_offset = ((constant_value - min_val) / range) * 2 - 1  -- Convert to -1 to +1 range
+                        
+                        -- Morph LFO depth from full to zero, and offset to center around constant
+                        local depth = lfo_data_A.depth * (1.0 - t)
+                        local offset = lfo_data_A.offset * (1.0 - t) + target_offset * t
+                        
+                        params:set(i.."lfo_target", lfo_data_A.target)
+                        params:set(i.."lfo_shape", lfo_data_A.shape)
+                        params:set(i.."lfo_freq", lfo_data_A.freq)
+                        params:set(i.."lfo_depth", depth)
+                        params:set(i.."offset", offset)
+                        params:set(i.."lfo", 2)
+                    else
+                        -- Fallback: just fade out depth
+                        local depth = lfo_data_A.depth * (1.0 - t)
+                        params:set(i.."lfo_target", lfo_data_A.target)
+                        params:set(i.."lfo_shape", lfo_data_A.shape)
+                        params:set(i.."lfo_freq", lfo_data_A.freq)
+                        params:set(i.."lfo_depth", depth)
+                        params:set(i.."offset", lfo_data_A.offset)
+                        params:set(i.."lfo", 2)
+                    end
+                else
+                    -- No constant value found, just fade out
+                    local depth = lfo_data_A.depth * (1.0 - t)
+                    params:set(i.."lfo_target", lfo_data_A.target)
+                    params:set(i.."lfo_shape", lfo_data_A.shape)
+                    params:set(i.."lfo_freq", lfo_data_A.freq)
+                    params:set(i.."lfo_depth", depth)
+                    params:set(i.."offset", lfo_data_A.offset)
+                    params:set(i.."lfo", 2)
+                end
             end
-        elseif B_entry then
-            if t > 0.0 then
-                local depth = B_entry.depth * t
-                params:set(i.."lfo_target", B_entry.target)
-                params:set(i.."lfo_shape", B_entry.shape)
-                params:set(i.."lfo_freq", B_entry.freq)
-                params:set(i.."lfo_depth", depth)
-                params:set(i.."offset", B_entry.offset)
-                params:set(i.."lfo", 2)
-            else
-                params:set(i.."lfo", 1)
+        elseif lfo_data_B then
+            -- Scene A has constant value, Scene B has LFO
+            -- Get the target parameter name
+            local target_param = lfo.lfo_targets[lfo_data_B.target]
+            if target_param and params.lookup[target_param] then
+                -- Find the constant value from Scene A
+                local constant_value = nil
+                if scene1_track1[target_param] then constant_value = scene1_track1[target_param] end
+                if scene1_track2[target_param] then constant_value = scene1_track2[target_param] end
+                
+                if constant_value then
+                    -- Calculate offset to center LFO around the constant value
+                    local min_val, max_val = lfo.get_parameter_range(target_param)
+                    if min_val and max_val then
+                        local range = max_val - min_val
+                        local target_offset = ((constant_value - min_val) / range) * 2 - 1  -- Convert to -1 to +1 range
+                        
+                        -- Morph LFO depth from zero to full, and offset from constant to LFO's offset
+                        local depth = lfo_data_B.depth * t
+                        local offset = target_offset * (1.0 - t) + lfo_data_B.offset * t
+                        
+                        params:set(i.."lfo_target", lfo_data_B.target)
+                        params:set(i.."lfo_shape", lfo_data_B.shape)
+                        params:set(i.."lfo_freq", lfo_data_B.freq)
+                        params:set(i.."lfo_depth", depth)
+                        params:set(i.."offset", offset)
+                        params:set(i.."lfo", 2)
+                    else
+                        -- Fallback: just fade in depth
+                        local depth = lfo_data_B.depth * t
+                        params:set(i.."lfo_target", lfo_data_B.target)
+                        params:set(i.."lfo_shape", lfo_data_B.shape)
+                        params:set(i.."lfo_freq", lfo_data_B.freq)
+                        params:set(i.."lfo_depth", depth)
+                        params:set(i.."offset", lfo_data_B.offset)
+                        params:set(i.."lfo", 2)
+                    end
+                else
+                    -- No constant value found, just fade in
+                    local depth = lfo_data_B.depth * t
+                    params:set(i.."lfo_target", lfo_data_B.target)
+                    params:set(i.."lfo_shape", lfo_data_B.shape)
+                    params:set(i.."lfo_freq", lfo_data_B.freq)
+                    params:set(i.."lfo_depth", depth)
+                    params:set(i.."offset", lfo_data_B.offset)
+                    params:set(i.."lfo", 2)
+                end
             end
-        else
-            params:set(i.."lfo", 1)
         end
+        -- If no LFO data for this slot in either scene, it remains disabled (lfo=1)
     end
 end
+
 
 local function auto_save_to_scene()
     if current_scene_mode ~= "on" then return end
     if morph_amount == 0 then store_scene(1, 1) store_scene(2, 1)
     elseif morph_amount == 100 then store_scene(1, 2) store_scene(2, 2)
     end
-end
-
-local function recall_scene(track, scene)
-    if not scene_data[track][scene] then return end
-    local target_morph = (scene == 1) and 0 or 100
-    params:set("morph_amount", target_morph)
-    current_scenes[track] = scene
 end
 
 local function initialize_scenes_with_current_params() for track = 1, 2 do for scene = 1, 2 do store_scene(track, scene) end end end
@@ -598,7 +724,7 @@ local function setup_params()
     params:add{type = "trigger", id = "save_to_scene1", name = "Morph Target A", action = function() store_scene(1, 1) store_scene(2, 1) end}
     params:add{type = "trigger", id = "save_to_scene2", name = "Morph Target B", action = function() store_scene(1, 2) store_scene(2, 2) end}
     params:add_option("steps", "Transition Time", {"short", "medium", "long"}, 1) params:set_action("steps", function(value) steps = ({20, 300, 800})[value] end)
-    params:add_option("scene_mode", "Scene Mode", {"off", "on"}, 1) params:set_action("scene_mode", function(value) current_scene_mode = (value == 2) and "on" or "off"  end) params:hide("scene_mode")
+    params:add_option("scene_mode", "Scene Mode", {"off", "on"}, 1) params:set_action("scene_mode", function(value) current_scene_mode = (value == 2) and "on" or "off" end) params:hide("scene_mode")
     
     for i = 1, 2 do
       params:add_taper(i.. "volume", i.. " volume", -70, 10, -15, 0, "dB") params:set_action(i.. "volume", function(value) if value == -70 then engine.volume(i, 0) else engine.volume(i, math.pow(10, value / 20)) end end) params:hide(i.. "volume")
