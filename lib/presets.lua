@@ -38,14 +38,6 @@ local function get_all_params_state()
     return state
 end
 
-local function restore_all_params(state)
-    for param_id, value in pairs(state) do
-        if params.lookup[param_id] then
-            params:set(param_id, value, true)
-        end
-    end
-end
-
 function presets.save_complete_preset(preset_name, scene_data_ref, current_scene_mode_ref, initialize_scenes_fn)
     local function get_next_preset_number_for_time(time_prefix)
         local existing_presets = presets.list_presets()
@@ -119,13 +111,11 @@ function presets.load_complete_preset(preset_name, scene_data_ref, update_pan_po
             clock.run(function()
                 clock.sleep(0.05)
                 if preset_data.params then
-                    local params_to_restore = {}
                     for param_id, value in pairs(preset_data.params) do
-                        if param_id ~= "scene_mode" then
-                            params_to_restore[param_id] = value
+                        if param_id ~= "scene_mode" and params.lookup[param_id] then
+                            params:set(param_id, value)
                         end
                     end
-                    restore_all_params(params_to_restore)
                 end
                 if preset_data.morph then
                     for track = 1, 2 do
