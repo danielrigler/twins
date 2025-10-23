@@ -45,6 +45,7 @@ local function get_all_params_state()
         end
     end
     state.scene_mode = params:get("scene_mode")
+    state.morph_amount = params:get("morph_amount")
     return state
 end
 
@@ -138,69 +139,79 @@ function presets.load_complete_preset(preset_name, scene_data_ref, update_pan_po
         print("Error: Could not parse preset")
         return false
     end
+
+    -- Set loading flag to prevent morph from overriding our values
+    preset_loading = true
+
+    -- First, completely disable ALL LFO slots
+    for i = 1, 16 do
+        params:set(i.."lfo", 1)
+    end
+
+    -- Restore scene data for future morphing
+    if preset_data.scene_data then
+        for track = 1, 2 do
+            for scene = 1, 2 do
+                scene_data_ref[track][scene] = preset_data.scene_data[track] and 
+                preset_data.scene_data[track][scene] or {}
+            end
+        end
+    elseif preset_data.morph then  -- Backward compatibility
+        for track = 1, 2 do
+            for scene = 1, 2 do
+                scene_data_ref[track][scene] = preset_data.morph[track] and 
+                preset_data.morph[track][scene] or {}
+            end
+        end
+    end
+
+    -- Set ALL the actual parameter values that were saved
+    if preset_data.params then
+        for param_id, value in pairs(preset_data.params) do
+            if params.lookup[param_id] then
+                params:set(param_id, value)
+            end
+        end
+    end
+
+    -- Restore LFO states
+    if preset_data.lfo_states then
+        for slot, lfo_state in pairs(preset_data.lfo_states) do
+            params:set(slot.."lfo_target", lfo_state.target)
+            params:set(slot.."lfo_shape", lfo_state.shape)
+            params:set(slot.."lfo_freq", lfo_state.freq)
+            params:set(slot.."lfo_depth", lfo_state.depth)
+            params:set(slot.."offset", lfo_state.offset)
+            params:set(slot.."lfo", 2)
+        end
+    end
+
+    -- Load samples
+    for i = 1, 2 do
+        local sample_path = params:get(i .. "sample")
+        if sample_path and sample_path ~= "-" and sample_path ~= "" and sample_path ~= "none" then
+            engine.read(i, sample_path)
+            audio_active_ref[i] = true
+        end
+    end
     
-        -- First, completely disable ALL LFO slots
-        for i = 1, 16 do
-            params:set(i.."lfo", 1)
-        end
-
-        -- Restore scene data FIRST (this is crucial for morph)
-        if preset_data.morph then
-            for track = 1, 2 do
-                for scene = 1, 2 do
-                    scene_data_ref[track][scene] = preset_data.morph[track] and 
-                    preset_data.morph[track][scene] or {}
-                end
-            end
-        end
-
-        -- Set regular parameters
-        if preset_data.params then
-            for param_id, value in pairs(preset_data.params) do
-                if not param_id:match("^%d+lfo") and param_id ~= "scene_mode" and 
-                   param_id ~= "lfo_pause" and params.lookup[param_id] then
-                    params:set(param_id, value)
-                end
-            end
-            -- restore scene_mode
-            if preset_data.params.scene_mode then
-                params:set("scene_mode", preset_data.params.scene_mode)
-            end
-        end
-
-        -- Restore LFO states
-        if preset_data.lfo_states then
-            for slot, lfo_state in pairs(preset_data.lfo_states) do
-                params:set(slot.."lfo_target", lfo_state.target)
-                params:set(slot.."lfo_shape", lfo_state.shape)
-                params:set(slot.."lfo_freq", lfo_state.freq)
-                params:set(slot.."lfo_depth", lfo_state.depth)
-                params:set(slot.."offset", lfo_state.offset)
-                params:set(slot.."lfo", 2)
-            end
-        end
-
-        -- Load samples
-        for i = 1, 2 do
-            local sample_path = params:get(i .. "sample")
-            if sample_path and sample_path ~= "-" and sample_path ~= "" and sample_path ~= "none" then
-                engine.read(i, sample_path)
-                audio_active_ref[i] = true
-            end
-        end
-        
-        update_pan_positioning_fn()
-        
-        -- Handle morph amount
-        if preset_data.params and preset_data.params.morph_amount then
-            params:set("morph_amount", preset_data.params.morph_amount)
-            local apply_morph = _G.apply_morph
-            if apply_morph then
-                apply_morph()
-            end
-        end
+    update_pan_positioning_fn()
+    
+    -- Set morph amount (this won't trigger apply_morph because preset_loading is true)
+    if preset_data.morph_amount then
+        morph_amount = preset_data.morph_amount
+        -- Update the parameter value silently
+        params:set("morph_amount", preset_data.morph_amount)
+    end
+    
+    -- Clear loading flag after a short delay to ensure everything is loaded
+    clock.run(function()
+        clock.sleep(0.1)
+        preset_loading = false
+        print("Preset loading complete, morph system re-enabled")
+    end)
      
-        redraw()
+    redraw()
     
     return true
 end

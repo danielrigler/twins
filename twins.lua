@@ -71,6 +71,7 @@ local key1_monitor_metro = nil
 local key1_has_other_interaction = false
 local KEY1_LONG_PRESS_THRESHOLD = 1 
 local current_scene_mode = "off"
+local preset_loading = false
 local scene_data = {[1] = {[1] = {}, [2] = {}}, [2] = {[1] = {}, [2] = {}}}
 local evolution_animation_phase = 0
 local evolution_animation_time = 0
@@ -130,7 +131,7 @@ end
 local morph_voice_params = { "speed", "pitch", "jitter", "size", "density", "spread", "pan", "seek",
                              "cutoff", "hpf", "lpfgain", "granular_gain", "subharmonics_3", "subharmonics_2",
                              "subharmonics_1", "overtones_1", "overtones_2", "smoothbass",
-                             "pitch_walk_rate", "pitch_walk_step", 
+                             "pitch_walk_rate", "pitch_walk_step", "ratcheting_prob",
                              "size_variation", "direction_mod", "density_mod_amt", "pitch_random_scale_type", "pitch_random_prob",
                              "pitch_mode", "trig_mode", "probability", "eq_low_gain", "eq_mid_gain", "eq_high_gain", "env_select", "volume" }
                        
@@ -170,8 +171,7 @@ local function store_scene(track, scene)
                 shape = params:get(i.."lfo_shape"),
                 freq = params:get(i.."lfo_freq"),
                 depth = params:get(i.."lfo_depth"),
-                offset = params:get(i.."offset")
-            }
+                offset = params:get(i.."offset")}
         end
     end
 end
@@ -203,6 +203,7 @@ local function recall_scene(track, scene)
 end
 
 local function apply_morph()
+    if preset_loading then return end
     local t = morph_amount * 0.01
     if morph_amount == 0 then 
         recall_scene(1, 1) 
@@ -211,7 +212,7 @@ local function apply_morph()
     elseif morph_amount == 100 then 
         recall_scene(1, 2) 
         recall_scene(2, 2) 
-        return 
+        return
     end
     local scene1_track1 = scene_data[1] and scene_data[1][1] or {}
     local scene2_track1 = scene_data[1] and scene_data[1][2] or {}
@@ -468,7 +469,7 @@ local function setup_params()
     params:add{type = "trigger", id = "load_preset_menu", name = "Preset Browser", action = function() presets.open_menu() end}
 
     params:add_separator("Settings")
-    params:add_group("Granular", 41)
+    params:add_group("Granular", 43)
     for i = 1, 2 do
       params:add_separator("Sample "..i)
       params:add_control(i.. "granular_gain", i.. " Mix", controlspec.new(0, 100, "lin", 1, 100, "%")) params:set_action(i.. "granular_gain", function(value) engine.granular_gain(i, value * 0.01) if value < 100 then lfo.clearLFOs(i, "seek") end end)
@@ -482,6 +483,7 @@ local function setup_params()
       params:add_control(i.."pitch_walk_step", i.." Walk Range", controlspec.new(1, 24, "lin", 1, 2, "steps")) params:set_action(i.."pitch_walk_step", function(value) engine.pitch_walk_step(i, value) end)
       params:add_control(i.."pitch_random_prob", i.." Pitch Randomize", controlspec.new(-100, 100, "lin", 1, 0, "%")) params:set_action(i.."pitch_random_prob", function(value) engine.pitch_random_prob(i, value) end)
       params:add_option(i.."pitch_random_scale_type", i.." Pitch Quantize", {"5th+oct", "5th+oct 2", "1 oct", "2 oct", "chrom", "maj", "min", "penta", "whole"}, 1) params:set_action(i.."pitch_random_scale_type", function(value) engine.pitch_random_scale_type(i, value - 1) end)
+      params:add_control(i.."ratcheting_prob", i.." Ratcheting", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.."ratcheting_prob", function(value) engine.ratcheting_prob(i, value) end)
       params:add_option(i.."env_select", i.." Grain Envelope", {"Sine", "Tukey", "Triangle", "Square", "Perc.", "Rev. Perc.", "ADSR", "Ramp", "Rev. Ramp"}, 1) params:set_action(i.."env_select", function(value) engine.env_select(i, value - 1) end)
       params:add_control(i.. "size_variation", i.. " Size Variation", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.. "size_variation", function(value) engine.size_variation(i, value * 0.01) end)
       params:add_control(i.. "direction_mod", i.. " Reverse", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.. "direction_mod", function(value) engine.direction_mod(i, value * 0.01) end)
