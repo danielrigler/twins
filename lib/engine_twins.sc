@@ -34,11 +34,11 @@ alloc {
             Env.new([0, 1, 1, 0], [0.15, 0.7, 0.15], [4, 0, -4]),
             Env.triangle(1, 1), 
             Env.step([0, 1], [1, 1]),
-            Env.new([0, 1], [1]),
-            Env.new([1, 0], [1]),
             Env.perc(0.01, 1, 1, -4),
             Env.perc(0.99, 0.01, 1, 4),
-            Env.adsr(0.25, 0.15, 0.65, 1, 1, -4, 0)
+            Env.adsr(0.25, 0.15, 0.65, 1, 1, -4, 0),
+            Env.new([0, 1], [1]),
+            Env.new([1, 0], [1])
         ].collect { |env| Buffer.sendCollection(context.server, env.discretize) };
         
         currentSpeed = [0.1, 0.1]; currentJitter = [0.25, 0.25]; currentSize = [0.1, 0.1]; currentDensity = [10, 10]; currentPitch = [1, 1]; currentPan = [0, 0]; currentSpread = [0, 0]; currentVolume = [1, 1]; currentGranularGain = [1, 1]; currentCutoff = [20000, 20000]; currentlpfgain = [0.1, 0.1]; currentHpf = [20, 20]; currentSubharmonics1 = [0, 0]; currentSubharmonics2 = [0, 0]; currentSubharmonics3 = [0, 0]; currentOvertones1 = [0, 0]; currentOvertones2 = [0, 0]; currentPitchMode = [0, 0]; currentTrigMode = [0, 0]; currentDirectionMod = [0, 0]; currentSizeVariation = [0, 0]; currentSmoothbass = [1, 1]; currentDensityModAmt = [0, 0]; currentLowGain = [0, 0]; currentHighGain = [0, 0]; currentProbability = [100, 100]; liveBufferMix = 1.0; currentPitchWalkRate = [2, 2]; currentPitchWalkStep = [2, 2]; currentPitchRandomProb = [0, 0]; currentPitchRandomScale = [[0], [0]];
