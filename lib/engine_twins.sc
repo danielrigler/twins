@@ -78,6 +78,14 @@ alloc {
             dry_sig = [PlayBuf.ar(1, buf_l, speed, startPos: pos * BufFrames.kr(buf_l), trigger: t_reset_pos, loop: 1), PlayBuf.ar(1, buf_r, speed, startPos: pos * BufFrames.kr(buf_r), trigger: t_reset_pos, loop: 1)];
             dry_sig = Balance2.ar(dry_sig[0], dry_sig[1], pan);
 
+            grain_pitch = Lag.kr(pitch_offset) * if(pitch_walk_rate > 0, {
+                var trig = Dust.kr(pitch_walk_rate);
+                var step = TIRand.kr(0, pitch_walk_step, trig, Array.series(25, 25, -1).sqrt);
+                var totalStep = step * TChoose.kr(trig, [1, -1]);
+                var scaleDegree = totalStep.mod(7);
+                2 ** ((Select.kr(scaleDegree, [0,1,2,3,5,7,9]) + ((totalStep - scaleDegree) / 7 * 12)) / 12);
+            }, 1);
+
             random_interval = Select.kr(pitch_random_scale_type, [
                 Select.kr((rand_val * 2).floor, [7,12]),
                 Select.kr((rand_val * 4).floor, [7,12,19,24]),
@@ -88,15 +96,7 @@ alloc {
                 Select.kr((rand_val * 6).floor, [2,3,5,7,8,10]),
                 Select.kr((rand_val * 4).floor, [2,4,7,9]),
                 Select.kr((rand_val * 5).floor, [2,4,6,8,10]) ]);
-            grain_pitch = pitch_offset * (2 ** (((rand_val2 < pitch_random_prob) * random_interval * pitch_random_direction)/12));
-            
-grain_pitch = grain_pitch * if(pitch_walk_rate > 0, {
-    var trig = Dust.kr(pitch_walk_rate);
-    var step = TIRand.kr(0, pitch_walk_step, trig, Array.series(25, 25, -1).sqrt);
-    var totalStep = step * TChoose.kr(trig, [1, -1]);
-    var scaleDegree = totalStep.mod(7);
-    2 ** ((Select.kr(scaleDegree, [0,1,2,3,5,7,9]) + ((totalStep - scaleDegree) / 7 * 12)) / 12);
-}, 1);
+            grain_pitch = grain_pitch * (2 ** (((rand_val2 < pitch_random_prob) * random_interval * pitch_random_direction)/12));
             
             grainBufFunc = { |buf, pitch, size, vol, dir, pos, jitter| var envBuf = Select.kr(env_select, ~grainEnvs); 
                 GrainBuf.ar(1, grain_trig, size, buf, pitch * dir, pos + jitter, 2, envbufnum: envBuf, mul: vol)};            

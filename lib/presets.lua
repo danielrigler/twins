@@ -44,13 +44,11 @@ local function get_all_params_state()
             state[param.id] = params:get(param.id)
         end
     end
-    -- Explicitly include scene_mode even if it's hidden
     state.scene_mode = params:get("scene_mode")
     return state
 end
 
 function presets.save_complete_preset(preset_name, scene_data_ref, update_pan_positioning_fn, audio_active_ref)
-    -- Generate preset name (existing code remains the same)
     if not preset_name or preset_name:match("^%d%d%d%d%d%d%d%d_%d%d%d%d%d%d$") then
         local time_prefix = os.date("%Y%m%d_%H%M")
         local existing_presets = presets.list_presets()
@@ -69,7 +67,7 @@ function presets.save_complete_preset(preset_name, scene_data_ref, update_pan_po
         preset_name = "twins_" .. preset_name
     end
     
-    -- Collect LFO states exactly as they are
+    -- Collect LFO states
     local lfo_states = {}
     for i = 1, 16 do
         if params:get(i.."lfo") == 2 then
@@ -85,7 +83,7 @@ function presets.save_complete_preset(preset_name, scene_data_ref, update_pan_po
         end
     end
     
-    -- Build preset data - ADD MORPH_AMOUNT and ensure scene data is properly saved
+    -- Build preset data
     local preset_data = {
         name = preset_name,
         timestamp = os.time(),
@@ -141,32 +139,22 @@ function presets.load_complete_preset(preset_name, scene_data_ref, update_pan_po
         return false
     end
     
-    -- Pause LFOs
-    params:set("lfo_pause", 1)
-    
-    clock.run(function()
-        clock.sleep(0.05)
-        
         -- First, completely disable ALL LFO slots
         for i = 1, 16 do
             params:set(i.."lfo", 1)
         end
-        
-        clock.sleep(0.05)
-        
+
         -- Restore scene data FIRST (this is crucial for morph)
         if preset_data.morph then
             for track = 1, 2 do
                 for scene = 1, 2 do
                     scene_data_ref[track][scene] = preset_data.morph[track] and 
-                                                  preset_data.morph[track][scene] or {}
+                    preset_data.morph[track][scene] or {}
                 end
             end
         end
-        
-        clock.sleep(0.05)
-        
-        -- Set regular parameters (excluding LFO params)
+
+        -- Set regular parameters
         if preset_data.params then
             for param_id, value in pairs(preset_data.params) do
                 if not param_id:match("^%d+lfo") and param_id ~= "scene_mode" and 
@@ -174,15 +162,13 @@ function presets.load_complete_preset(preset_name, scene_data_ref, update_pan_po
                     params:set(param_id, value)
                 end
             end
-            -- Explicitly restore scene_mode
+            -- restore scene_mode
             if preset_data.params.scene_mode then
                 params:set("scene_mode", preset_data.params.scene_mode)
             end
         end
-        
-        clock.sleep(0.05)
-        
-        -- Restore LFO states to their exact slots
+
+        -- Restore LFO states
         if preset_data.lfo_states then
             for slot, lfo_state in pairs(preset_data.lfo_states) do
                 params:set(slot.."lfo_target", lfo_state.target)
@@ -193,9 +179,7 @@ function presets.load_complete_preset(preset_name, scene_data_ref, update_pan_po
                 params:set(slot.."lfo", 2)
             end
         end
-        
-        clock.sleep(0.02)
-        
+
         -- Load samples
         for i = 1, 2 do
             local sample_path = params:get(i .. "sample")
@@ -207,24 +191,16 @@ function presets.load_complete_preset(preset_name, scene_data_ref, update_pan_po
         
         update_pan_positioning_fn()
         
-        -- Handle morph amount - THIS IS THE KEY FIX
+        -- Handle morph amount
         if preset_data.params and preset_data.params.morph_amount then
-            -- Set the morph_amount parameter
             params:set("morph_amount", preset_data.params.morph_amount)
-            -- Force apply the morph interpolation
             local apply_morph = _G.apply_morph
             if apply_morph then
                 apply_morph()
             end
         end
-        
-        clock.sleep(0.05)
-        
-        -- Resume LFOs
-        params:set("lfo_pause", 0)
-        
+     
         redraw()
-    end)
     
     return true
 end
@@ -244,7 +220,6 @@ function presets.list_presets()
         end
     end
     
-    -- Optimized sorting using timestamp comparison
     table.sort(presets_list, function(a, b)
         local a_date, a_time, a_num = a:match("^twins_(%d%d%d%d%d%d%d%d)_(%d%d%d%d)_(%d+)$")
         local b_date, b_time, b_num = b:match("^twins_(%d%d%d%d%d%d%d%d)_(%d%d%d%d)_(%d+)$")
@@ -273,7 +248,7 @@ function presets.delete_preset(preset_name)
     return false
 end
 
--- Menu functions (optimized)
+-- Menu functions
 function presets.open_menu()
     presets.preset_list = presets.list_presets()
     if #presets.preset_list == 0 then
