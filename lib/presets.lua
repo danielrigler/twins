@@ -37,7 +37,6 @@ local function string_to_table(str)
     return chunk and chunk() or nil
 end
 
--- Optimized parameter state collection
 local function get_all_params_state()
     local state = {}
     for _, param in pairs(params.params) do
@@ -45,11 +44,13 @@ local function get_all_params_state()
             state[param.id] = params:get(param.id)
         end
     end
+    -- Explicitly include scene_mode even if it's hidden
+    state.scene_mode = params:get("scene_mode")
     return state
 end
 
-function presets.save_complete_preset(preset_name, scene_data_ref)
-    -- Generate preset name
+function presets.save_complete_preset(preset_name, scene_data_ref, update_pan_positioning_fn, audio_active_ref)
+    -- Generate preset name (existing code remains the same)
     if not preset_name or preset_name:match("^%d%d%d%d%d%d%d%d_%d%d%d%d%d%d$") then
         local time_prefix = os.date("%Y%m%d_%H%M")
         local existing_presets = presets.list_presets()
@@ -84,7 +85,7 @@ function presets.save_complete_preset(preset_name, scene_data_ref)
         end
     end
     
-    -- Build preset data
+    -- Build preset data - ADD MORPH_AMOUNT and ensure scene data is properly saved
     local preset_data = {
         name = preset_name,
         timestamp = os.time(),
@@ -94,7 +95,8 @@ function presets.save_complete_preset(preset_name, scene_data_ref)
         morph = {
             [1] = { scene_data_ref[1][1] or {}, scene_data_ref[1][2] or {} },
             [2] = { scene_data_ref[2][1] or {}, scene_data_ref[2][2] or {} }
-        }
+        },
+        morph_amount = params:get("morph_amount") or 0  -- ADD THIS LINE
     }
     
     -- Save to file
@@ -152,6 +154,18 @@ function presets.load_complete_preset(preset_name, scene_data_ref, update_pan_po
         
         clock.sleep(0.05)
         
+        -- Restore scene data FIRST (this is crucial for morph)
+        if preset_data.morph then
+            for track = 1, 2 do
+                for scene = 1, 2 do
+                    scene_data_ref[track][scene] = preset_data.morph[track] and 
+                                                  preset_data.morph[track][scene] or {}
+                end
+            end
+        end
+        
+        clock.sleep(0.05)
+        
         -- Set regular parameters (excluding LFO params)
         if preset_data.params then
             for param_id, value in pairs(preset_data.params) do
@@ -159,6 +173,10 @@ function presets.load_complete_preset(preset_name, scene_data_ref, update_pan_po
                    param_id ~= "lfo_pause" and params.lookup[param_id] then
                     params:set(param_id, value)
                 end
+            end
+            -- Explicitly restore scene_mode
+            if preset_data.params.scene_mode then
+                params:set("scene_mode", preset_data.params.scene_mode)
             end
         end
         
@@ -178,16 +196,6 @@ function presets.load_complete_preset(preset_name, scene_data_ref, update_pan_po
         
         clock.sleep(0.02)
         
-        -- Restore morph data
-        if preset_data.morph then
-            for track = 1, 2 do
-                for scene = 1, 2 do
-                    scene_data_ref[track][scene] = preset_data.morph[track] and 
-                                                  preset_data.morph[track][scene] or {}
-                end
-            end
-        end
-        
         -- Load samples
         for i = 1, 2 do
             local sample_path = params:get(i .. "sample")
@@ -199,9 +207,15 @@ function presets.load_complete_preset(preset_name, scene_data_ref, update_pan_po
         
         update_pan_positioning_fn()
         
-        -- Handle morph amount
+        -- Handle morph amount - THIS IS THE KEY FIX
         if preset_data.params and preset_data.params.morph_amount then
+            -- Set the morph_amount parameter
             params:set("morph_amount", preset_data.params.morph_amount)
+            -- Force apply the morph interpolation
+            local apply_morph = _G.apply_morph
+            if apply_morph then
+                apply_morph()
+            end
         end
         
         clock.sleep(0.05)
