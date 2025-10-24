@@ -984,37 +984,26 @@ end
 
 function key(n, z)
     if not installer:ready() then installer:key(n, z) return end
-    if presets.is_menu_open() then if n == 1 and z == 1 then presets.close_menu() redraw() return end
-        local handled = presets.menu_key(n, z, scene_data, update_pan_positioning, audio_active)
-        if handled then redraw() return end
+    if presets.is_menu_open() then 
+        if n == 1 and z == 1 then presets.close_menu() redraw() return end
+        if presets.menu_key(n, z, scene_data, update_pan_positioning, audio_active) then redraw() return end
     end
+    local is_press = z == 1
+    key_state[n] = is_press
     if n == 1 then
-        if z == 1 then
-            key_state[1] = true
-            key1_press_time = util.time()
-            key1_long_press_triggered = false
-            key1_has_other_interaction = false
+        if is_press then
+            key1_press_time, key1_long_press_triggered, key1_has_other_interaction = util.time(), false, false
         else
             local press_duration = key1_press_time and (util.time() - key1_press_time) or 0
-            if press_duration < KEY1_LONG_PRESS_THRESHOLD and not key1_has_other_interaction then
-                if handle_randomize_track(1) then 
-                    key1_press_time = nil
-                    key_state[1] = false
-                    return 
-                end
-                handle_mode_navigation(1)
+            if press_duration < KEY1_LONG_PRESS_THRESHOLD and not key1_has_other_interaction then 
+                handle_mode_navigation(1) 
             end
-            key_state[1] = false
-            key1_press_time = nil
-            key1_long_press_triggered = false
-            key1_has_other_interaction = false
+            key1_press_time, key1_long_press_triggered, key1_has_other_interaction = nil, false, false
         end
     else
-        key_state[n] = z == 1
         if key1_press_time then key1_has_other_interaction = true end
-        if z == 1 then
-            if handle_randomize_track(n) then return end
-            handle_mode_navigation(n)
+        if is_press and (handle_randomize_track(n) or true) then 
+            handle_mode_navigation(n) 
         end
     end
     if key_state[2] and key_state[3] then handle_parameter_lock() end
@@ -1108,7 +1097,7 @@ local cached = {
         local param_name = string.match(row.label, "%a+")
         local is_highlighted = current_mode == row.mode
         local label_text = is_highlighted and string.upper(row.label) or row.label
-        local label_brightness = is_highlighted and 15 or 7
+        local label_brightness = is_highlighted and 15 or 8
         add_text(label_brightness, 5, row.y, label_text, nil)
         for track = 1, 2 do
             local param = track == 1 and row.param1 or row.param2
@@ -1144,7 +1133,7 @@ local cached = {
     if bottom_row_mode == "lpf" or bottom_row_mode == "hpf" then bottom_label = current_filter_mode == "lpf" and "lpf:      " or "hpf:      " 
     else bottom_label = bottom_row_mode .. ":     " end
     if is_bottom_active then bottom_label = string.upper(bottom_label) end
-    local bottom_label_brightness = is_bottom_active and 15 or 7
+    local bottom_label_brightness = is_bottom_active and 15 or 8
     add_text(bottom_label_brightness, 5, BOTTOM_ROW_Y, bottom_label, nil)
     -- Bottom row values
     local current_time = util.time()
