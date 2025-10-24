@@ -61,9 +61,9 @@ local filter_differences = {[1] = 0, [2] = 0}
 local audio_active = {[1] = false, [2] = false}
 local morph_amount = 0
 local valid_audio_exts = {[".wav"]=true,[".aif"]=true,[".aiff"]=true,[".flac"]=true}
-local mode_list = {"pitch","spread","density","size","jitter","lpf","pan","speed","seek"}
+local mode_list = {"spread","pitch","density","size","jitter","lpf","pan","speed","seek"}
 local mode_indices = {}; for i,v in ipairs(mode_list) do mode_indices[v]=i end
-local mode_list2 = {"seek","speed","pan","lpf","jitter","size","density","spread","pitch"}
+local mode_list2 = {"seek","speed","pan","lpf","jitter","size","density","pitch","spread"}
 local mode_indices2 = {}; for i,v in ipairs(mode_list2) do mode_indices2[v]=i end
 local key1_press_time = nil
 local key1_long_press_triggered = false
@@ -71,7 +71,6 @@ local key1_monitor_metro = nil
 local key1_has_other_interaction = false
 local KEY1_LONG_PRESS_THRESHOLD = 1 
 local current_scene_mode = "off"
-local preset_loading = false
 local scene_data = {[1] = {[1] = {}, [2] = {}}, [2] = {[1] = {}, [2] = {}}}
 local evolution_animation_phase = 0
 local evolution_animation_time = 0
@@ -94,8 +93,8 @@ local param_rows = {
     {y = 11, label = "jitter:    ", mode = "jitter", param1 = "1jitter", param2 = "2jitter"},
     {y = 21, label = "size:     ", mode = "size", param1 = "1size", param2 = "2size"},
     {y = 31, label = "density:  ", mode = "density", param1 = "1density", param2 = "2density", hz = true},
-    {y = 41, label = "spread:   ", mode = "spread", param1 = "1spread", param2 = "2spread"},
-    {y = 51, label = "pitch:    ", mode = "pitch", param1 = "1pitch", param2 = "2pitch", st = true}}
+    {y = 41, label = "pitch:   ", mode = "pitch", param1 = "1pitch", param2 = "2pitch", st = true},
+    {y = 51, label = "spread:    ", mode = "spread", param1 = "1spread", param2 = "2spread"}}
 local animation_x = 0 animation_y = -64 animation_speed = 100 animation_complete = false animation_start_time = nil animation_directions = {"top", "bottom", "left", "right"} current_animation_direction = "top"
 
 local function table_find(tbl, value) for i = 1, #tbl do if tbl[i] == value then return i end end return nil end
@@ -203,16 +202,9 @@ local function recall_scene(track, scene)
 end
 
 local function apply_morph()
-    if preset_loading then return end
     local t = morph_amount * 0.01
-    if morph_amount == 0 then 
-        recall_scene(1, 1) 
-        recall_scene(2, 1) 
-        return
-    elseif morph_amount == 100 then 
-        recall_scene(1, 2) 
-        recall_scene(2, 2) 
-        return
+    if morph_amount == 0 then recall_scene(1, 1) recall_scene(2, 1) return
+    elseif morph_amount == 100 then recall_scene(1, 2) recall_scene(2, 2) return
     end
     local scene1_track1 = scene_data[1] and scene_data[1][1] or {}
     local scene2_track1 = scene_data[1] and scene_data[1][2] or {}
@@ -327,20 +319,14 @@ end
 
 local function auto_save_to_scene()
     if current_scene_mode ~= "on" then return end
-    if morph_amount == 0 then 
-        store_scene(1, 1) 
-        store_scene(2, 1)
-    elseif morph_amount == 100 then 
-        store_scene(1, 2) 
-        store_scene(2, 2)
+    if morph_amount == 0 then store_scene(1, 1) store_scene(2, 1)
+    elseif morph_amount == 100 then store_scene(1, 2) store_scene(2, 2)
     end
 end
 
 local function initialize_scenes_with_current_params()
     for track = 1, 2 do
-        for scene = 1, 2 do
-            store_scene(track, scene)
-        end
+        for scene = 1, 2 do store_scene(track, scene) end
     end
 end
 
@@ -608,20 +594,16 @@ local function setup_params()
     params:add_binary("randomizefilters", "RaNd0m1ze!", "trigger", 0) params:set_action("randomizefilters", function(value) for i = 1, 2 do local cutoff = math.random(20, 20000) params:set(i.."cutoff", cutoff) params:set(i.."lpfgain", math.random()) params:set(i.."hpf", math.random(20, math.floor(cutoff))) end end)
     params:add_binary("resetfilters", "Reset", "trigger", 0) params:set_action("resetfilters", function(value) params:set("filter_lock_ratio", 0) for i=1, 2 do params:set(i.."cutoff", 20000) params:set(i.."hpf", 20) params:set(i.."lpfgain", 0.0) end end)
 
-    params:add_group("Locking", 19)
+    params:add_group("Locking", 16)
     for i = 1, 2 do
-      params:add_binary(i.."size_density_lock", i.." Size-Density Lock", "toggle", 0) params:set_action(i.."size_density_lock", function(value) if value == 1 then local size = params:get(i.."size") local density = params:get(i.."density") if size > 0 and density > 0 then _G["size_density_ratio_"..i] = size / (1000 / density) end end end)
-    end
-    params:add_separator("                  ")
-    for i = 1, 2 do
-      params:add_option(i.. "lock_jitter", i.. " Lock Jitter", {"off", "on"}, 1)
-      params:add_option(i.. "lock_size", i.. " Lock Size", {"off", "on"}, 1)
-      params:add_option(i.. "lock_density", i.. " Lock Density", {"off", "on"}, 1)
-      params:add_option(i.. "lock_spread", i.. " Lock Spread", {"off", "on"}, 1)
-      params:add_option(i.. "lock_pitch", i.. " Lock Pitch", {"off", "on"}, 1)
-      params:add_option(i.. "lock_speed", i.. " Lock Speed", {"off", "on"}, 1)
-      params:add_option(i.. "lock_seek", i.. " Lock Seek", {"off", "on"}, 1)
-      params:add_option(i.. "lock_pan", i.. " Lock Pan", {"off", "on"}, 1)
+        params:add_option(i.. "lock_jitter", i.. " Lock Jitter", {"off", "on"}, 1)
+        params:add_option(i.. "lock_size", i.. " Lock Size", {"off", "on"}, 1)
+        params:add_option(i.. "lock_density", i.. " Lock Density", {"off", "on"}, 1)
+        params:add_option(i.. "lock_spread", i.. " Lock Spread", {"off", "on"}, 1)
+        params:add_option(i.. "lock_pitch", i.. " Lock Pitch", {"off", "on"}, 1)
+        params:add_option(i.. "lock_speed", i.. " Lock Speed", {"off", "on"}, 1)
+        params:add_option(i.. "lock_seek", i.. " Lock Seek", {"off", "on"}, 1)
+        params:add_option(i.. "lock_pan", i.. " Lock Pan", {"off", "on"}, 1)
     end
 
     params:add_group("Limits", 30) 
@@ -647,21 +629,25 @@ local function setup_params()
     params:add_binary("macro_more", "More+", "trigger", 0) params:set_action("macro_more", function() macro.macro_more() end)
     params:add_binary("macro_less", "Less-", "trigger", 0) params:set_action("macro_less", function() macro.macro_less() end)
     
+    params:add_group("Morphing", 5)
+    params:add_control("morph_amount", "Morph", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("morph_amount", function(value) morph_amount = value apply_morph() end)
+    params:add{type = "trigger", id = "save_to_scene1", name = "Morph Target A", action = function() store_scene(1, 1) store_scene(2, 1) end}
+    params:add{type = "trigger", id = "save_to_scene2", name = "Morph Target B", action = function() store_scene(1, 2) store_scene(2, 2) end}
+    params:add_option("scene_mode", "Morph Mode", {"off", "on"}, 1) params:set_action("scene_mode", function(value) current_scene_mode = (value == 2) and "on" or "off" if current_scene_mode == "on" then local scenes_empty = true for track = 1, 2 do for scene = 1, 2 do if scene_data[track] and scene_data[track][scene] and next(scene_data[track][scene]) ~= nil then scenes_empty = false break end end if not scenes_empty then break end end if scenes_empty then initialize_scenes_with_current_params() end end end)
+    params:add{type = "trigger", id = "delete_morph_data", name = "Delete Morph Data", action = function() scene_data = {[1] = {[1] = {}, [2] = {}}, [2] = {[1] = {}, [2] = {}}} morph_amount = 0 params:set("morph_amount", 0) params:set("scene_mode", 1) current_scene_mode = "off" end}
+    
     params:add_group("Loop", 3)
     params:add{type = "trigger", id = "save_output_buffer_only", name = "Save", action = function() local filename = "twins_output.wav" if engine.save_output_buffer_only then showing_save_message = true engine.save_output_buffer_only(filename) end end}
     params:add{type = "trigger", id = "save_output_buffer", name = "Bounce", action = function() local filename = "twins_output.wav" if engine.save_output_buffer then showing_save_message = true engine.save_output_buffer(filename) end end}
     params:add_control("output_buffer_length", "Loop Length", controlspec.new(1, 60, "lin", 1, 8, "s")) params:set_action("output_buffer_length", function(value) engine.set_output_buffer_length(value + 1) end)    
     
-    params:add_group("Other", 8)
+    params:add_group("Other", 7)
     params:add_binary("dry_mode", "Dry Mode", "toggle", 0) params:set_action("dry_mode", function(x) drymode.toggle_dry_mode() end)
     params:add_binary("randomtape1", "Random Tape 1", "trigger", 0) params:set_action("randomtape1", function() load_random_tape_file(1) end)
     params:add_binary("randomtape2", "Random Tape 2", "trigger", 0) params:set_action("randomtape2", function() load_random_tape_file(2) end)
     params:add_binary("unload_all", "Unload All Audio", "trigger", 0) params:set_action("unload_all", function() for i=1, 2 do params:set(i.."seek", 0) params:set(i.."sample", "-") params:set(i.."live_input", 0) params:set(i.."live_direct", 0) audio_active[i] = false osc_positions[i] = 0 end engine.unload_all() update_pan_positioning() end)
-    params:add_control("morph_amount", "Morph", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("morph_amount", function(value) morph_amount = value apply_morph() end)
-    params:add{type = "trigger", id = "save_to_scene1", name = "Morph Target A", action = function() store_scene(1, 1) store_scene(2, 1) end}
-    params:add{type = "trigger", id = "save_to_scene2", name = "Morph Target B", action = function() store_scene(1, 2) store_scene(2, 2) end}
+    params:add_binary("global_pitch_size_density_link", "Linked Mode", "toggle", 0) params:set_action("global_pitch_size_density_link", function(value) if value == 1 then for i = 1, 2 do local pitch = params:get(i.."pitch") local size = params:get(i.."size") local density = params:get(i.."density") if size > 0 and density > 0 then _G["base_pitch_"..i] = pitch _G["base_size_"..i] = size _G["base_density_"..i] = density _G["size_density_product_"..i] = size * density end end end end)
     params:add_option("steps", "Transition Time", {"short", "medium", "long"}, 1) params:set_action("steps", function(value) steps = ({20, 300, 800})[value] end)
-    params:add_option("scene_mode", "Morph Mode", {"off", "on"}, 1) params:set_action("scene_mode", function(value) current_scene_mode = (value == 2) and "on" or "off" end) params:hide("scene_mode")
     
     for i = 1, 2 do
       params:add_taper(i.. "volume", i.. " volume", -70, 10, -15, 0, "dB") params:set_action(i.. "volume", function(value) if value == -70 then engine.volume(i, 0) else engine.volume(i, math.pow(10, value / 20)) end end) params:hide(i.. "volume")
@@ -675,7 +661,6 @@ local function setup_params()
       params:add_control(i.. "seek", i.. " seek", controlspec.new(0, 100, "lin", 0.01, 0, "%")) params:set_action(i.. "seek", function(value) engine.seek(i, value * 0.01) end) params:hide(i.. "seek")
     end
     params:bang()
-    initialize_scenes_with_current_params()
 end
 
 local function randomize_pitch(track, other_track, symmetry)
@@ -807,31 +792,78 @@ local function handle_volume_lfo(track, delta, crossfade_mode)
 		end
 end
 
-local function handle_size_density_lock(track, config, delta)
-    local size_density_locked = params:get(track.."size_density_lock") == 1
+local function handle_pitch_size_density_link(track, config, delta)
+    local pitch_size_density_linked = params:get("global_pitch_size_density_link") == 1
+    local is_pitch = config.param == "pitch"
     local is_size = config.param == "size"
     local is_density = config.param == "density"
-    if not (size_density_locked and (is_size or is_density)) then
-        return false
-    end
-    local sym = params:get("symmetry") == 1
+    if not (pitch_size_density_linked and (is_pitch or is_size or is_density)) then return false end
+    disable_lfos_for_param(track.."size") 
+    disable_lfos_for_param(track.."density") 
+    disable_lfos_for_param(track.."pitch")
     local p = track .. config.param
-    handle_lfo(p, not sym)
-    handle_lfo(track .. (is_size and "density" or "size"), not sym)
-    local function update_track_ratio(tr, delta_mult, density_mult)
-        local ratio = _G["size_density_ratio_"..tr] or 1
-        if is_size then
-            local new_size = params:get(tr.."size") + delta_mult * delta
+    handle_lfo(p, false)
+    local function update_track_three_way_link(tr, delta_mult, param_type)
+        local base_pitch = _G["base_pitch_"..tr]
+        local base_size = _G["base_size_"..tr]
+        local base_density = _G["base_density_"..tr]
+        local size_density_product = _G["size_density_product_"..tr]
+        if not (base_pitch and base_size and base_density and size_density_product) then return end
+        local min_size = 20
+        local max_size = 4999
+        local min_density = 0.1
+        local max_density = 50
+        local min_pitch = -48
+        local max_pitch = 48
+        if param_type == "pitch" then
+            local new_pitch = util.clamp(params:get(tr.."pitch") + delta_mult * delta, min_pitch, max_pitch)
+            local pitch_ratio = (new_pitch - base_pitch) / 12
+            local new_size = util.clamp(base_size * (2 ^ (-pitch_ratio * 0.5)), min_size, max_size)
+            local new_density = util.clamp(base_density * (2 ^ (pitch_ratio * 0.5)), min_density, max_density)
+            params:set(tr.."pitch", new_pitch)
             params:set(tr.."size", new_size)
-            params:set(tr.."density", (1000 / new_size) * ratio)
-        else
-            local new_density = params:get(tr.."density") + density_mult * delta
             params:set(tr.."density", new_density)
-            params:set(tr.."size", (1000 / new_density) * ratio)
+            _G["base_pitch_"..tr] = new_pitch
+            _G["base_size_"..tr] = new_size
+            _G["base_density_"..tr] = new_density
+            _G["size_density_product_"..tr] = new_size * new_density
+        elseif param_type == "size" then
+            local new_size = util.clamp(params:get(tr.."size") + delta_mult * delta, min_size, max_size)
+            local new_density = util.clamp(size_density_product / new_size, min_density, max_density)
+            if new_density == min_density or new_density == max_density then 
+                new_size = util.clamp(size_density_product / new_density, min_size, max_size) 
+            end
+            params:set(tr.."size", new_size)
+            params:set(tr.."density", new_density)
+            _G["base_size_"..tr] = new_size
+            _G["base_density_"..tr] = new_density
+            _G["size_density_product_"..tr] = new_size * new_density
+        elseif param_type == "density" then
+            local new_density = util.clamp(params:get(tr.."density") + delta_mult * delta * 0.5, min_density, max_density)
+            local new_size = util.clamp(size_density_product / new_density, min_size, max_size)
+            if new_size == min_size or new_size == max_size then 
+                new_density = util.clamp(size_density_product / new_size, min_density, max_density) 
+            end
+            params:set(tr.."size", new_size)
+            params:set(tr.."density", new_density)
+            _G["base_size_"..tr] = new_size
+            _G["base_density_"..tr] = new_density
+            _G["size_density_product_"..tr] = new_size * new_density
         end
     end
-    update_track_ratio(track, is_size and 3 or 0, is_density and 0.05 or 0)
-    if sym then update_track_ratio(3 - track, is_size and 3 or 0, is_density and 0.05 or 0) end
+    local delta_multiplier = 1
+    local param_type = ""
+    if is_pitch then 
+        delta_multiplier = 1
+        param_type = "pitch"
+    elseif is_size then 
+        delta_multiplier = 5
+        param_type = "size"
+    elseif is_density then 
+        delta_multiplier = 0.5
+        param_type = "density"
+    end
+    update_track_three_way_link(track, delta_multiplier, param_type)
     return true
 end
 
@@ -874,25 +906,21 @@ local function handle_standard_param(track, config, delta)
 end
 
 local function handle_param_change(track, config, delta)
-    if handle_size_density_lock(track, config, delta) then return end
+    if handle_pitch_size_density_link(track, config, delta) then return end
     if handle_seek_param(track, config, delta) then return end
     handle_standard_param(track, config, delta)
 end
 
 local function handle_randomize_track(n)
     if not key_state[1] then return false end
-    local track = n - 1
-    if track >= 1 and track <= 2 then
-        stop_metro_safe(randomize_metro[track])
-        lfo.clearLFOs(track)
-        lfo.randomize_lfos(tostring(track), params:get("allow_volume_lfos") == 2)
-        randomize(track)
-        randpara.randomize_params(steps, track)
-        randpara.reset_evolution_centers()
-        update_pan_positioning()
-        return true
-    end
-    return false
+    local track = (n == 3) and 2 or 1
+    stop_metro_safe(randomize_metro[track])
+    lfo.clearLFOs(tostring(track))
+    lfo.randomize_lfos(tostring(track), params:get("allow_volume_lfos") == 2)
+    randomize(track)
+    randpara.randomize_params(steps, track)
+    randpara.reset_evolution_centers()
+    update_pan_positioning()
 end
 
 local function handle_mode_navigation(n)
@@ -1027,18 +1055,22 @@ local PAN_CENTER_START = {52, 93}
 
 -- Draw lock shape
 local function add_l_shape(draw_ops, x, y)
-    local pulse_level = math.floor(util.linlin(-1, 1, 1, 8, math.sin(util.time() * 4)))
-    draw_ops.pixels[#draw_ops.pixels + 1] = {pulse_level, x - 2, y-1}
-    draw_ops.pixels[#draw_ops.pixels + 1] = {pulse_level, x - 3, y-1}
-    draw_ops.pixels[#draw_ops.pixels + 1] = {pulse_level, x - 3, y - 2}
-    draw_ops.pixels[#draw_ops.pixels + 1] = {pulse_level, x - 3, y - 3}
+    draw_ops.pixels[#draw_ops.pixels + 1] = {4, x - 2, y-1}
+    draw_ops.pixels[#draw_ops.pixels + 1] = {4, x - 3, y-1}
+    draw_ops.pixels[#draw_ops.pixels + 1] = {4, x - 3, y - 2}
+    draw_ops.pixels[#draw_ops.pixels + 1] = {4, x - 3, y - 3}
 end
 
--- Draw size-density lock
-local function add_lock_shape(draw_ops, x, y)
-    draw_ops.pixels[#draw_ops.pixels + 1] = {4, x - 3, y + 1}
-    draw_ops.pixels[#draw_ops.pixels + 1] = {4, x - 3, y + 3}
-    draw_ops.pixels[#draw_ops.pixels + 1] = {4, x - 3, y + 5}
+-- Draw linked mode
+local function add_three_way_link_shape(draw_ops, x, y, param_type)
+    if param_type == "size" then
+        draw_ops.pixels[#draw_ops.pixels + 1] = {4, x - 3, y + 1}
+        draw_ops.pixels[#draw_ops.pixels + 1] = {4, x - 3, y + 3}
+        draw_ops.pixels[#draw_ops.pixels + 1] = {4, x - 3, y + 5}
+        draw_ops.pixels[#draw_ops.pixels + 1] = {4, x - 3, y + 11}
+        draw_ops.pixels[#draw_ops.pixels + 1] = {4, x - 3, y + 13}
+        draw_ops.pixels[#draw_ops.pixels + 1] = {4, x - 3, y + 15}
+    end
 end
 
 local function add_recording_head(draw_ops, x, y, position)
@@ -1051,20 +1083,21 @@ function redraw()
     screen.clear()
     screen.save()
     screen.translate(animation_x, animation_y)
-    local cached = {
-        volume = {params:get("1volume"), params:get("2volume")},
-        pan = {params:get("1pan"), params:get("2pan")},
-        seek = {params:get("1seek"), params:get("2seek")},
-        speed = {params:get("1speed"), params:get("2speed")},
-        cutoff = {params:get("1cutoff"), params:get("2cutoff")},
-        hpf = {params:get("1hpf"), params:get("2hpf")},
-        live_input = {params:get("1live_input"), params:get("2live_input")},
-        live_direct = {params:get("1live_direct"), params:get("2live_direct")},
-        size_density_lock = {params:get("1size_density_lock"), params:get("2size_density_lock")},
-        size = {params:get("1size"), params:get("2size")},
-        dry_mode = params:get("dry_mode"),
-        symmetry = params:get("symmetry"),
-        evolution = params:get("evolution")    }
+local cached = {
+    volume = {params:get("1volume"), params:get("2volume")},
+    pan = {params:get("1pan"), params:get("2pan")},
+    seek = {params:get("1seek"), params:get("2seek")},
+    speed = {params:get("1speed"), params:get("2speed")},
+    cutoff = {params:get("1cutoff"), params:get("2cutoff")},
+    hpf = {params:get("1hpf"), params:get("2hpf")},
+    live_input = {params:get("1live_input"), params:get("2live_input")},
+    live_direct = {params:get("1live_direct"), params:get("2live_direct")},
+    global_pitch_size_density_link = params:get("global_pitch_size_density_link"),
+    size = {params:get("1size"), params:get("2size")},
+    dry_mode = params:get("dry_mode"),
+    symmetry = params:get("symmetry"),
+    evolution = params:get("evolution")}
+  
     local draw_ops = {rects = {}, pixels = {}, text = {}}
     local function add_rect(lvl, x, y, w, h) draw_ops.rects[#draw_ops.rects + 1] = {lvl, x, y, w, h} end
     local function add_pixel(lvl, x, y) draw_ops.pixels[#draw_ops.pixels + 1] = {lvl, x, y} end
@@ -1077,11 +1110,14 @@ function redraw()
         local label_text = is_highlighted and string.upper(row.label) or row.label
         local label_brightness = is_highlighted and 15 or 7
         add_text(label_brightness, 5, row.y, label_text, nil)
-    
         for track = 1, 2 do
             local param = track == 1 and row.param1 or row.param2
             local x = TRACK_X[track]
-            if param_name == "size" and cached.size_density_lock[track] == 1 then add_lock_shape(draw_ops, x, row.y) end
+            local param_name = string.match(row.label, "%a+")
+            -- Link
+            local global_link_enabled = cached.global_pitch_size_density_link == 1
+            if param_name == "size" and global_link_enabled then add_three_way_link_shape(draw_ops, x, row.y, "size") end
+            -- Locks
             if is_param_locked(track, param_name) then add_l_shape(draw_ops, x, row.y) end
             -- Text values
             local value_level = is_highlighted and LEVELS.highlight or LEVELS.value

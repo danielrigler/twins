@@ -10,11 +10,9 @@ local function table_to_string(tbl, indent)
     indent = indent or ""
     local result = {"{"}
     local items = {}
-    
     for k, v in pairs(tbl) do
         local key_str = type(k) == "string" and ("%q"):format(k) or tostring(k)
         local value_str
-        
         if type(v) == "table" then
             value_str = table_to_string(v, indent .. "  ")
         elseif type(v) == "string" then
@@ -22,13 +20,10 @@ local function table_to_string(tbl, indent)
         else
             value_str = tostring(v)
         end
-        
         items[#items + 1] = indent .. "  [" .. key_str .. "] = " .. value_str
     end
-    
     result[#result + 1] = table.concat(items, ",\n")
     result[#result + 1] = indent .. "}"
-    
     return table.concat(result, "\n")
 end
 
@@ -139,11 +134,8 @@ function presets.load_complete_preset(preset_name, scene_data_ref, update_pan_po
         print("Error: Could not parse preset")
         return false
     end
-
-    -- Set loading flag to prevent morph from overriding our values
     preset_loading = true
 
-    -- First, completely disable ALL LFO slots
     for i = 1, 16 do
         params:set(i.."lfo", 1)
     end
@@ -156,7 +148,7 @@ function presets.load_complete_preset(preset_name, scene_data_ref, update_pan_po
                 preset_data.scene_data[track][scene] or {}
             end
         end
-    elseif preset_data.morph then  -- Backward compatibility
+    elseif preset_data.morph then
         for track = 1, 2 do
             for scene = 1, 2 do
                 scene_data_ref[track][scene] = preset_data.morph[track] and 
@@ -165,16 +157,19 @@ function presets.load_complete_preset(preset_name, scene_data_ref, update_pan_po
         end
     end
 
-    -- Set ALL the actual parameter values that were saved
+    if preset_data.morph_amount then
+        morph_amount = preset_data.morph_amount
+        params:set("morph_amount", preset_data.morph_amount)
+    end
+
     if preset_data.params then
         for param_id, value in pairs(preset_data.params) do
-            if params.lookup[param_id] then
+            if params.lookup[param_id] and param_id ~= "morph_amount" then
                 params:set(param_id, value)
             end
         end
     end
 
-    -- Restore LFO states
     if preset_data.lfo_states then
         for slot, lfo_state in pairs(preset_data.lfo_states) do
             params:set(slot.."lfo_target", lfo_state.target)
@@ -186,7 +181,6 @@ function presets.load_complete_preset(preset_name, scene_data_ref, update_pan_po
         end
     end
 
-    -- Load samples
     for i = 1, 2 do
         local sample_path = params:get(i .. "sample")
         if sample_path and sample_path ~= "-" and sample_path ~= "" and sample_path ~= "none" then
@@ -197,22 +191,12 @@ function presets.load_complete_preset(preset_name, scene_data_ref, update_pan_po
     
     update_pan_positioning_fn()
     
-    -- Set morph amount (this won't trigger apply_morph because preset_loading is true)
-    if preset_data.morph_amount then
-        morph_amount = preset_data.morph_amount
-        -- Update the parameter value silently
-        params:set("morph_amount", preset_data.morph_amount)
-    end
-    
-    -- Clear loading flag after a short delay to ensure everything is loaded
     clock.run(function()
         clock.sleep(0.1)
         preset_loading = false
-        print("Preset loading complete, morph system re-enabled")
+        print("Preset loading complete")
     end)
-     
     redraw()
-    
     return true
 end
 
