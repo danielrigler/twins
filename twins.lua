@@ -798,11 +798,22 @@ local function handle_pitch_size_density_link(track, config, delta)
     local is_size = config.param == "size"
     local is_density = config.param == "density"
     if not (pitch_size_density_linked and (is_pitch or is_size or is_density)) then return false end
-    disable_lfos_for_param(track.."size") 
-    disable_lfos_for_param(track.."density") 
-    disable_lfos_for_param(track.."pitch")
+    local symmetry = params:get("symmetry") == 1
+    local other_track = 3 - track
+    if symmetry then
+        disable_lfos_for_param(track.."size") 
+        disable_lfos_for_param(track.."density") 
+        disable_lfos_for_param(track.."pitch")
+        disable_lfos_for_param(other_track.."size") 
+        disable_lfos_for_param(other_track.."density") 
+        disable_lfos_for_param(other_track.."pitch")
+    else
+        disable_lfos_for_param(track.."size") 
+        disable_lfos_for_param(track.."density") 
+        disable_lfos_for_param(track.."pitch")
+    end
     local p = track .. config.param
-    handle_lfo(p, false)
+    handle_lfo(p, symmetry)
     local function update_track_three_way_link(tr, delta_mult, param_type)
         local base_pitch = _G["base_pitch_"..tr]
         local base_size = _G["base_size_"..tr]
@@ -830,9 +841,7 @@ local function handle_pitch_size_density_link(track, config, delta)
         elseif param_type == "size" then
             local new_size = util.clamp(params:get(tr.."size") + delta_mult * delta, min_size, max_size)
             local new_density = util.clamp(size_density_product / new_size, min_density, max_density)
-            if new_density == min_density or new_density == max_density then 
-                new_size = util.clamp(size_density_product / new_density, min_size, max_size) 
-            end
+            if new_density == min_density or new_density == max_density then new_size = util.clamp(size_density_product / new_density, min_size, max_size) end
             params:set(tr.."size", new_size)
             params:set(tr.."density", new_density)
             _G["base_size_"..tr] = new_size
@@ -841,9 +850,7 @@ local function handle_pitch_size_density_link(track, config, delta)
         elseif param_type == "density" then
             local new_density = util.clamp(params:get(tr.."density") + delta_mult * delta * 0.5, min_density, max_density)
             local new_size = util.clamp(size_density_product / new_density, min_size, max_size)
-            if new_size == min_size or new_size == max_size then 
-                new_density = util.clamp(size_density_product / new_size, min_density, max_density) 
-            end
+            if new_size == min_size or new_size == max_size then new_density = util.clamp(size_density_product / new_size, min_density, max_density) end
             params:set(tr.."size", new_size)
             params:set(tr.."density", new_density)
             _G["base_size_"..tr] = new_size
@@ -853,17 +860,12 @@ local function handle_pitch_size_density_link(track, config, delta)
     end
     local delta_multiplier = 1
     local param_type = ""
-    if is_pitch then 
-        delta_multiplier = 1
-        param_type = "pitch"
-    elseif is_size then 
-        delta_multiplier = 5
-        param_type = "size"
-    elseif is_density then 
-        delta_multiplier = 0.5
-        param_type = "density"
+    if is_pitch then delta_multiplier = 1 param_type = "pitch"
+    elseif is_size then delta_multiplier = 5 param_type = "size"
+    elseif is_density then delta_multiplier = 0.5 param_type = "density"
     end
     update_track_three_way_link(track, delta_multiplier, param_type)
+    if symmetry then update_track_three_way_link(other_track, delta_multiplier, param_type) end
     return true
 end
 
@@ -1072,20 +1074,20 @@ function redraw()
     screen.clear()
     screen.save()
     screen.translate(animation_x, animation_y)
-local cached = {
-    volume = {params:get("1volume"), params:get("2volume")},
-    pan = {params:get("1pan"), params:get("2pan")},
-    seek = {params:get("1seek"), params:get("2seek")},
-    speed = {params:get("1speed"), params:get("2speed")},
-    cutoff = {params:get("1cutoff"), params:get("2cutoff")},
-    hpf = {params:get("1hpf"), params:get("2hpf")},
-    live_input = {params:get("1live_input"), params:get("2live_input")},
-    live_direct = {params:get("1live_direct"), params:get("2live_direct")},
-    global_pitch_size_density_link = params:get("global_pitch_size_density_link"),
-    size = {params:get("1size"), params:get("2size")},
-    dry_mode = params:get("dry_mode"),
-    symmetry = params:get("symmetry"),
-    evolution = params:get("evolution")}
+    local cached = {
+        volume = {params:get("1volume"), params:get("2volume")},
+        pan = {params:get("1pan"), params:get("2pan")},
+        seek = {params:get("1seek"), params:get("2seek")},
+        speed = {params:get("1speed"), params:get("2speed")},
+        cutoff = {params:get("1cutoff"), params:get("2cutoff")},
+        hpf = {params:get("1hpf"), params:get("2hpf")},
+        live_input = {params:get("1live_input"), params:get("2live_input")},
+        live_direct = {params:get("1live_direct"), params:get("2live_direct")},
+        global_pitch_size_density_link = params:get("global_pitch_size_density_link"),
+        size = {params:get("1size"), params:get("2size")},
+        dry_mode = params:get("dry_mode"),
+        symmetry = params:get("symmetry"),
+        evolution = params:get("evolution")}
   
     local draw_ops = {rects = {}, pixels = {}, text = {}}
     local function add_rect(lvl, x, y, w, h) draw_ops.rects[#draw_ops.rects + 1] = {lvl, x, y, w, h} end
@@ -1310,6 +1312,7 @@ local osc_handlers = {
         showing_save_message = false
         output_save_start_time = nil
     end}
+
 local function osc_event(path, args) if osc_handlers[path] then osc_handlers[path](args) end end
 local function setup_osc() osc.event = osc_event end
 
