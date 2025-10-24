@@ -993,21 +993,7 @@ function key(n, z)
 end
 
 local function format_density(value) return string.format("%.1f Hz", value) end
-local function format_pitch(value, track) if track then local pitch_walk_rate = params:get(track.."pitch_walk_rate") or 0
-        local pitch_walk_enabled = pitch_walk_rate > 0
-        if value > 0 then 
-            return string.format("+%.0f%s", value, pitch_walk_enabled and ".." or "")
-        else 
-            return string.format("%.0f%s", value, pitch_walk_enabled and ".." or "") 
-        end
-    else
-        if value > 0 then 
-            return string.format("+%.0f", value)
-        else 
-            return string.format("%.0f", value) 
-        end
-    end
-end
+local function format_pitch(value, track) if track then local pitch_walk_rate = params:get(track.."pitch_walk_rate") or 0 local pitch_walk_enabled = pitch_walk_rate > 0 if value > 0 then return string.format("+%.0f%s", value, pitch_walk_enabled and ".." or "") else return string.format("%.0f%s", value, pitch_walk_enabled and ".." or "") end else if value > 0 then return string.format("+%.0f", value) else return string.format("%.0f", value) end end end
 local function format_seek(value) return string.format("%.0f%%", value) end
 local function format_speed(speed) if math.abs(speed) < 0.01 then return ".00x" elseif math.abs(speed) < 1 then if speed < -0.01 then return string.format("-.%02dx", math.floor(math.abs(speed) * 100)) else return string.format(".%02dx", math.floor(math.abs(speed) * 100)) end else return string.format("%.2fx", speed) end end
 local function format_jitter(value) if value > 999 then return string.format("%.1f s", value / 1000) else return string.format("%.0f ms", value) end end
@@ -1024,7 +1010,7 @@ local function get_lfo_modulation(param_name)
     return nil
 end
 
-local LEVELS = {highlight = 15, dim = 8, value = 2}
+local LEVELS = {highlight = 15, dim = 9, value = 2}
 local UPPER_MODES = {jitter=true, size=true, density=true, spread=true, pitch=true}
 local format_lookup = {
     hz = function(val, track) return format_density(val) end,
@@ -1088,7 +1074,10 @@ function redraw()
     for _, row in ipairs(param_rows) do
         local param_name = string.match(row.label, "%a+")
         local is_highlighted = current_mode == row.mode
-        add_text(LEVELS.highlight, 5, row.y, row.label, nil)
+        local label_text = is_highlighted and string.upper(row.label) or row.label
+        local label_brightness = is_highlighted and 15 or 7
+        add_text(label_brightness, 5, row.y, label_text, nil)
+    
         for track = 1, 2 do
             local param = track == 1 and row.param1 or row.param2
             local x = TRACK_X[track]
@@ -1116,8 +1105,11 @@ function redraw()
     local is_bottom_active = not is_upper_row_active
     -- Bottom row label
     local bottom_label
-    if bottom_row_mode == "lpf" or bottom_row_mode == "hpf" then bottom_label = current_filter_mode == "lpf" and "lpf:      " or "hpf:      " else bottom_label = bottom_row_mode .. ":     " end
-    add_text(LEVELS.highlight, 5, BOTTOM_ROW_Y, bottom_label, nil)
+    if bottom_row_mode == "lpf" or bottom_row_mode == "hpf" then bottom_label = current_filter_mode == "lpf" and "lpf:      " or "hpf:      " 
+    else bottom_label = bottom_row_mode .. ":     " end
+    if is_bottom_active then bottom_label = string.upper(bottom_label) end
+    local bottom_label_brightness = is_bottom_active and 15 or 7
+    add_text(bottom_label_brightness, 5, BOTTOM_ROW_Y, bottom_label, nil)
     -- Bottom row values
     local current_time = util.time()
     for track = 1, 2 do
@@ -1212,7 +1204,7 @@ function redraw()
         local bar_width = 22
         local morph_pos = util.linlin(0, 100, 0, bar_width, morph_amount)
         add_rect(1, 6, 0, bar_width, 1)
-        add_rect(8, 6, 0, morph_pos, 1)
+        add_rect(LEVELS.dim, 6, 0, morph_pos, 1)
     end 
     -- Draw save message
     if showing_save_message then add_rect(15, 40, 25, 48, 10) add_text(0, 64, 32, "SAVING...", "center") end

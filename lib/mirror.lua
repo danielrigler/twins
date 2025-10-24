@@ -62,13 +62,12 @@ function Mirror.copy_voice_params(from_track, to_track, mirror_pan)
         safe_set(to_track .. "volume", safe_get(from_track .. "volume"))
     end
 
-    local static_params = {
-        "speed", "pitch", "jitter", "spread", "density", "size", "pan",
-        "cutoff", "hpf", "eq_low_gain", "eq_high_gain",
-        "granular_gain", "subharmonics_3", "subharmonics_2", "subharmonics_1",
-        "overtones_1", "overtones_2", "smoothbass", "size_variation", "density_mod_amt", "direction_mod",
-        "pitch_mode", "trig_mode", "probability", "pitch_walk_mode", "pitch_walk_rate","pitch_walk_step"
-    }
+    local static_params = { "speed", "pitch", "jitter", "size", "density", "spread", "pan", "seek",
+                             "cutoff", "hpf", "lpfgain", "granular_gain", "subharmonics_3", "subharmonics_2",
+                             "subharmonics_1", "overtones_1", "overtones_2", "smoothbass",
+                             "pitch_walk_rate", "pitch_walk_step", "ratcheting_prob",
+                             "size_variation", "direction_mod", "density_mod_amt", "pitch_random_scale_type", "pitch_random_prob",
+                             "pitch_mode", "trig_mode", "probability", "eq_low_gain", "eq_mid_gain", "eq_high_gain", "env_select", "volume" }
 
     for _, param in ipairs(static_params) do
         local value = safe_get(from_track .. param)
@@ -78,11 +77,6 @@ function Mirror.copy_voice_params(from_track, to_track, mirror_pan)
             safe_set(to_track .. param, value)
         end
     end
-
-    -- Seek copy and engine seek
-    local seek_value = safe_get(from_track .. "seek")
-    safe_set(to_track .. "seek", seek_value)
-    engine.seek(to_num, seek_value * 0.01)
 
     -- Build a lookup for target names -> index
     local target_lookup = {}
