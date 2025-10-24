@@ -1097,7 +1097,7 @@ local cached = {
         local param_name = string.match(row.label, "%a+")
         local is_highlighted = current_mode == row.mode
         local label_text = is_highlighted and string.upper(row.label) or row.label
-        local label_brightness = is_highlighted and 15 or 8
+        local label_brightness = LEVELS.highlight
         add_text(label_brightness, 5, row.y, label_text, nil)
         for track = 1, 2 do
             local param = track == 1 and row.param1 or row.param2
@@ -1133,7 +1133,7 @@ local cached = {
     if bottom_row_mode == "lpf" or bottom_row_mode == "hpf" then bottom_label = current_filter_mode == "lpf" and "lpf:      " or "hpf:      " 
     else bottom_label = bottom_row_mode .. ":     " end
     if is_bottom_active then bottom_label = string.upper(bottom_label) end
-    local bottom_label_brightness = is_bottom_active and 15 or 8
+    local bottom_label_brightness = LEVELS.highlight 
     add_text(bottom_label_brightness, 5, BOTTOM_ROW_Y, bottom_label, nil)
     -- Bottom row values
     local current_time = util.time()
