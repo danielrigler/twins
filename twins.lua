@@ -724,72 +724,84 @@ local function randomize_pitch(track, other_track, symmetry)
 end
 
 local function randomize(n)
-		randomize_metro[n] = randomize_metro[n] or metro.init()
-		local m_rand = randomize_metro[n]
-		local active_controlled_params = {}
-		local symmetry = params:get("symmetry") == 1
-		local other_track = 3 - n
-		local locked_params = {}
-		local param_names = {"speed", "jitter", "size", "density", "spread", "pitch", "seek"}
-		for _, name in ipairs(param_names) do
-			locked_params[name] = params:get(n .. "lock_" .. name) == 1
-		end
-		if locked_params.pitch and not active_controlled_params[n .. "pitch"] then
-			randomize_pitch(n, other_track, symmetry)
-		end
-		local targets = {}
-		for _, key in ipairs(param_names) do
-			if key == "pitch" then goto continue end
-			local cfg_name = n .. key
-			if not locked_params[key] or active_controlled_params[cfg_name] then goto continue end
-			if key == "seek" then
-				local min_val = params:get(n .. "min_seek")
-				local max_val = params:get(n .. "max_seek")
-				local val = random_float(min_val, max_val)
-				local val_norm = val * 0.01
-				if symmetry then
-					for _, track in ipairs({n, other_track}) do
-						params:set(track .. "seek", val)
-						engine.seek(track, val_norm)
-						osc_positions[track] = val_norm
-					end
-				else
-					engine.seek(n, val_norm)
-					osc_positions[n] = val_norm
-				end
-			else
-				local min_val = params:get(n .. "min_" .. key)
-				local max_val = params:get(n .. "max_" .. key)
-				if min_val and max_val and min_val < max_val and not is_lfo_active_for_param(cfg_name) then
-					local val = random_float(min_val, max_val)
-					targets[cfg_name] = val
-					if symmetry then
-						local other_name = other_track .. key
-						targets[other_name] = (key == "pan") and -val or val
-					end
-				end
-			end
-			::continue::
-		end
-		if next(targets) then
-			m_rand.time = 1 / 30
-			m_rand.event = function(count)
-				local tolerance = 0.01
-				local factor = count / steps
-				local all_done = true
-				for param, target in pairs(targets) do
-					if not active_controlled_params[param] then
-						local current = params:get(param)
-						local new_val = current + (target - current) * factor
-						params:set(param, new_val)
-						all_done = all_done and (math.abs(new_val - target) < tolerance)
-					end
-				end
-				if all_done then stop_metro_safe(m_rand) end
-			end
-			m_rand:start()
-		end
-		if current_scene_mode == "on" and morph_amount > 0 and morph_amount < 100 then capture_to_temp_scene() end
+    randomize_metro[n] = randomize_metro[n] or metro.init()
+    local m_rand = randomize_metro[n]
+    local active_controlled_params = {}
+    local symmetry = params:get("symmetry") == 1
+    local other_track = 3 - n
+    local locked_params = {}
+    local param_names = {"speed", "jitter", "size", "density", "spread", "pitch", "seek"}
+    local pitch_size_density_linked = params:get("global_pitch_size_density_link") == 1
+    for _, name in ipairs(param_names) do locked_params[name] = params:get(n .. "lock_" .. name) == 1 end
+    if locked_params.pitch and not active_controlled_params[n .. "pitch"] then randomize_pitch(n, other_track, symmetry) end
+    local targets = {}
+    for _, key in ipairs(param_names) do
+        if key == "pitch" then goto continue end
+        local cfg_name = n .. key
+        if not locked_params[key] or active_controlled_params[cfg_name] then goto continue end
+        if key == "seek" then
+            local min_val = params:get(n .. "min_seek")
+            local max_val = params:get(n .. "max_seek")
+            local val = random_float(min_val, max_val)
+            local val_norm = val * 0.01
+            if symmetry then
+                for _, track in ipairs({n, other_track}) do
+                    params:set(track .. "seek", val)
+                    engine.seek(track, val_norm)
+                    osc_positions[track] = val_norm
+                end
+            else
+                engine.seek(n, val_norm)
+                osc_positions[n] = val_norm
+            end
+        else
+            local min_val = params:get(n .. "min_" .. key)
+            local max_val = params:get(n .. "max_" .. key)
+            if min_val and max_val and min_val < max_val and not is_lfo_active_for_param(cfg_name) then
+                local val = random_float(min_val, max_val)
+                targets[cfg_name] = val
+                if symmetry then
+                    local other_name = other_track .. key
+                    targets[other_name] = (key == "pan") and -val or val
+                end
+            end
+        end
+        ::continue::
+    end
+    if next(targets) then
+        m_rand.time = 1 / 30
+        m_rand.event = function(count)
+            local tolerance = 0.01
+            local factor = count / steps
+            local all_done = true
+            for param, target in pairs(targets) do
+                if not active_controlled_params[param] then
+                    local current = params:get(param)
+                    local new_val = current + (target - current) * factor
+                    params:set(param, new_val)
+                    all_done = all_done and (math.abs(new_val - target) < tolerance)
+                end
+            end
+            if pitch_size_density_linked and all_done then
+                for track = 1, 2 do
+                    if symmetry or track == n then
+                        local size_val = params:get(track.."size")
+                        local density_val = params:get(track.."density")
+                        local pitch_val = params:get(track.."pitch")
+                        if size_val > 0 and density_val > 0 then
+                            _G["base_pitch_"..track] = pitch_val
+                            _G["base_size_"..track] = size_val
+                            _G["base_density_"..track] = density_val
+                            _G["size_density_product_"..track] = size_val * density_val
+                        end
+                    end
+                end
+            end
+            if all_done then stop_metro_safe(m_rand) end
+        end
+        m_rand:start()
+    end
+    if current_scene_mode == "on" and morph_amount > 0 and morph_amount < 100 then capture_to_temp_scene() end
 end
 
 local function handle_volume_lfo(track, delta, crossfade_mode)
