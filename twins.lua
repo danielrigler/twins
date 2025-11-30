@@ -48,7 +48,6 @@ local Mirror = include("lib/mirror") Mirror.init(osc_positions, lfo)
 local macro = include("lib/macro") macro.set_lfo_reference(lfo)
 local drymode = include("lib/drymode") drymode.set_lfo_reference(lfo)
 local randomize_metro = { [1] = nil, [2] = nil }
-local ui_metro = nil
 local key_state = {} for n = 1, 3 do key_state[n] = false end
 local current_mode = "seek"
 local current_filter_mode = "lpf"
@@ -80,6 +79,7 @@ local patterns = {[0] = {}, [1] = {{6,0}}, [2] = {{6,0}, {8,0}}, [3] = {{6,0}, {
 local grain_positions = {[1] = {}, [2] = {}}
 local osc_positions = {[1] = 0, [2] = 0}
 local rec_positions = {[1] = 0, [2] = 0}
+local ui_metro = nil
 local param_modes = {
     speed = {param = "speed", delta = 0.5, engine = true, has_lock = true},
     seek = {param = "seek", delta = 1, engine = true, has_lock = true},
@@ -108,25 +108,28 @@ local function is_param_locked(track_num, param) return params:get(track_num .. 
 local function is_lfo_active_for_param(param_name) for i = 1, 16 do local target_index = params:get(i.. "lfo_target") if lfo.lfo_targets[target_index] == param_name and params:get(i.. "lfo") == 2 then return true, i end end    return false, nil end
 local function update_pan_positioning() local loaded1 = is_audio_loaded(1) local loaded2 = is_audio_loaded(2) if not is_param_locked(1, "pan") and not is_lfo_active_for_param("1pan") then params:set("1pan", loaded2 and -15 or 0) end if not is_param_locked(2, "pan") and not is_lfo_active_for_param("2pan") then params:set("2pan", loaded1 and 15 or 0) end end
 
+local function stop_and_clean_metro(m) if m then local ok, err = pcall(function() m:stop() end) m.event = nil end end
 local function setup_ui_metro()
-    current_animation_direction = animation_directions[math.random(4)]
-    ui_metro = metro.init()
-    ui_metro.time = 1/60
-    ui_metro.event = function()
-        update_evolution_animation()
-        if animation_complete then redraw() return end
-        animation_start_time = animation_start_time or util.time()
-        local elapsed = util.time() - animation_start_time
-        local progress = util.clamp(elapsed * animation_speed / 64, 0, 1)
-        local eased = 1 - (1 - progress) * (1 - progress) * (1 - progress)
-        if current_animation_direction == "top" then animation_y = -64 + (eased * 64) animation_x = 0
-        elseif current_animation_direction == "bottom" then animation_y = 64 - (eased * 64) animation_x = 0
-        elseif current_animation_direction == "left" then animation_x = -128 + (eased * 128) animation_y = 0
-        elseif current_animation_direction == "right" then animation_x = 128 - (eased * 128) animation_y = 0 end
-        if progress >= 1 then animation_complete = true animation_x = 0 animation_y = 0 end
-        redraw()
+  if ui_metro then stop_and_clean_metro(ui_metro) end
+  ui_metro = metro.init()
+  ui_metro.time = 1/60
+  current_animation_direction = animation_directions[math.random(#animation_directions)]
+  ui_metro.event = function()
+    update_evolution_animation()
+    if animation_complete then redraw() return end
+    animation_start_time = animation_start_time or util.time()
+    local elapsed = util.time() - animation_start_time
+    local progress = util.clamp(elapsed * animation_speed / 64, 0, 1)
+    local eased = 1 - (1 - progress) * (1 - progress) * (1 - progress)
+    if current_animation_direction == "top" then animation_y = -64 + (eased * 64) animation_x = 0
+    elseif current_animation_direction == "bottom" then animation_y = 64 - (eased * 64) animation_x = 0
+    elseif current_animation_direction == "left" then animation_x = -128 + (eased * 128) animation_y = 0
+    elseif current_animation_direction == "right" then animation_x = 128 - (eased * 128) animation_y = 0
     end
-    ui_metro:start()
+    if progress >= 1 then animation_complete = true animation_x = 0 animation_y = 0 end
+    redraw()
+  end
+  ui_metro:start()
 end
 
 local morph_voice_params = { "speed", "pitch", "jitter", "size", "density", "spread", "pan", "seek",
@@ -1014,13 +1017,11 @@ function enc(n, d)
             local p = track .. "volume"
             handle_lfo(p, sym)
             params:delta(p, 3 * d)
-            -- Capture to temp scene if we changed volume mid-morph
             if current_scene_mode == "on" and morph_amount > 0 and morph_amount < 100 then capture_to_temp_scene() end
         else
             local mode = (current_mode == "lpf" or current_mode == "hpf") and current_filter_mode or current_mode
             local config = param_modes[mode]
             handle_param_change(track, config, config.delta * d)
-            -- Capture to temp scene if we changed parameters mid-morph
             if current_scene_mode == "on" and morph_amount > 0 and morph_amount < 100 then capture_to_temp_scene() end
         end
         if should_auto_save then auto_save_to_scene() end
@@ -1106,215 +1107,217 @@ local function add_recording_head(draw_ops, x, y, position)
     draw_ops.rects[#draw_ops.rects + 1] = {15, x + math.floor(position * 30), y - 1, 1, 2}
 end
 
+local function batch_draw_by_level(draw_ops)
+  local levels_used = {}
+  for _, op in ipairs(draw_ops.rects) do levels_used[op[1]] = true end
+  for _, op in ipairs(draw_ops.pixels) do levels_used[op[1]] = true end
+  for _, op in ipairs(draw_ops.text) do levels_used[op[1]] = true end
+  local sorted_levels = {}
+  for lvl in pairs(levels_used) do sorted_levels[#sorted_levels + 1] = lvl end
+  table.sort(sorted_levels)
+  for _, lvl in ipairs(sorted_levels) do
+    screen.level(lvl)
+    local rect_count, pixel_count = 0, 0
+    -- Rects
+    for _, op in ipairs(draw_ops.rects) do
+      if op[1] == lvl then
+        screen.rect(op[2], op[3], op[4], op[5])
+        rect_count = rect_count + 1
+      end
+    end
+    if rect_count > 0 then screen.fill() end
+    -- Pixels
+    for _, op in ipairs(draw_ops.pixels) do
+      if op[1] == lvl then
+        screen.pixel(op[2], op[3])
+        pixel_count = pixel_count + 1
+      end
+    end
+    if pixel_count > 0 then screen.fill() end
+    -- Text
+    for _, op in ipairs(draw_ops.text) do
+      if op[1] == lvl then
+        screen.move(op[2], op[3])
+        local text_value = tostring(op[4])
+        if op[5] == "center" then
+          screen.text_center(text_value)
+        else
+          screen.text(text_value)
+        end
+      end
+    end
+  end
+end
+
 function redraw()
-    if not installer:ready() then installer:redraw() return end
-    if presets.draw_menu() then return end
-    screen.clear()
-    screen.save()
-    screen.translate(animation_x, animation_y)
-    local cached = {
-        volume = {params:get("1volume"), params:get("2volume")},
-        pan = {params:get("1pan"), params:get("2pan")},
-        seek = {params:get("1seek"), params:get("2seek")},
-        speed = {params:get("1speed"), params:get("2speed")},
-        cutoff = {params:get("1cutoff"), params:get("2cutoff")},
-        hpf = {params:get("1hpf"), params:get("2hpf")},
-        live_input = {params:get("1live_input"), params:get("2live_input")},
-        live_direct = {params:get("1live_direct"), params:get("2live_direct")},
-        global_pitch_size_density_link = params:get("global_pitch_size_density_link"),
-        size = {params:get("1size"), params:get("2size")},
-        dry_mode = params:get("dry_mode"),
-        symmetry = params:get("symmetry"),
-        evolution = params:get("evolution")}
-  
-    local draw_ops = {rects = {}, pixels = {}, text = {}}
-    local function add_rect(lvl, x, y, w, h) draw_ops.rects[#draw_ops.rects + 1] = {lvl, x, y, w, h} end
-    local function add_pixel(lvl, x, y) draw_ops.pixels[#draw_ops.pixels + 1] = {lvl, x, y} end
-    local function add_text(lvl, x, y, text, align) draw_ops.text[#draw_ops.text + 1] = {lvl, x, y, text, align} end
-    -- Process upper parameter rows
-    local is_upper_highlighted = UPPER_MODES[current_mode]
-    for _, row in ipairs(param_rows) do
-        local param_name = string.match(row.label, "%a+")
-        local is_highlighted = current_mode == row.mode
-        local label_text = is_highlighted and string.upper(row.label) or row.label
-        local label_brightness = LEVELS.highlight
-        add_text(label_brightness, 5, row.y, label_text, nil)
-        for track = 1, 2 do
-            local param = track == 1 and row.param1 or row.param2
-            local x = TRACK_X[track]
-            local param_name = string.match(row.label, "%a+")
-            -- Link
-            local global_link_enabled = cached.global_pitch_size_density_link == 1
-            if param_name == "size" and global_link_enabled then add_three_way_link_shape(draw_ops, x, row.y, "size") end
-            -- Locks
-            if is_param_locked(track, param_name) then add_l_shape(draw_ops, x, row.y) end
-            -- Text values
-            local value_level = is_highlighted and LEVELS.highlight or LEVELS.value
-            local lfo_mod = get_lfo_modulation(param)
-            local val = lfo_mod or params:get(param)
-            local format_key = row.hz and "hz" or (row.st and "st" or param_name)
-            local format_func = format_lookup[format_key]
-            local display_text = format_func and format_func(val, track) or params:string(param)
-            add_text(value_level, x, row.y, display_text, nil)
-            -- LFO modulation bars
-            if param_name ~= "pitch" and lfo_mod then
-                local min_val, max_val = lfo.get_parameter_range(param)
-                local bar_value = util.linlin(min_val, max_val, 0, 30, lfo_mod)
-                add_rect(LEVELS.dim, x, row.y + 1, bar_value, 1)
-            end
-        end
-    end
-    -- Bottom row setup
-    local is_upper_row_active = UPPER_MODES[current_mode]
-    local bottom_row_mode = is_upper_row_active and "seek" or current_mode
-    local is_bottom_active = not is_upper_row_active
-    -- Bottom row label
-    local bottom_label
-    if bottom_row_mode == "lpf" or bottom_row_mode == "hpf" then bottom_label = current_filter_mode == "lpf" and "lpf:      " or "hpf:      " 
-    else bottom_label = bottom_row_mode .. ":     " end
-    if is_bottom_active then bottom_label = string.upper(bottom_label) end
-    local bottom_label_brightness = LEVELS.highlight 
-    add_text(bottom_label_brightness, 5, BOTTOM_ROW_Y, bottom_label, nil)
-    -- Bottom row values
-    local current_time = util.time()
+  if not installer:ready() then installer:redraw() return end
+  if presets.draw_menu() then return end
+  screen.clear()
+  screen.save()
+  screen.translate(animation_x, animation_y)
+  local cached = {
+    volume = {params:get("1volume"), params:get("2volume")},
+    pan = {params:get("1pan"), params:get("2pan")},
+    seek = {params:get("1seek"), params:get("2seek")},
+    speed = {params:get("1speed"), params:get("2speed")},
+    cutoff = {params:get("1cutoff"), params:get("2cutoff")},
+    hpf = {params:get("1hpf"), params:get("2hpf")},
+    live_input = {params:get("1live_input"), params:get("2live_input")},
+    live_direct = {params:get("1live_direct"), params:get("2live_direct")},
+    global_pitch_size_density_link = params:get("global_pitch_size_density_link"),
+    size = {params:get("1size"), params:get("2size")},
+    dry_mode = params:get("dry_mode"),
+    symmetry = params:get("symmetry"),
+    evolution = params:get("evolution")}
+  local draw_ops = {rects = {}, pixels = {}, text = {}}
+  local function add_rect(lvl, x, y, w, h) draw_ops.rects[#draw_ops.rects + 1] = {lvl, x, y, w, h} end
+  local function add_pixel(lvl, x, y) draw_ops.pixels[#draw_ops.pixels + 1] = {lvl, x, y} end
+  local function add_text(lvl, x, y, text, align) draw_ops.text[#draw_ops.text + 1] = {lvl, x, y, text, align} end
+  -- Parameter rows
+  local is_upper_highlighted = UPPER_MODES[current_mode]
+  for _, row in ipairs(param_rows) do
+    local param_name = string.match(row.label, "%a+")
+    local is_highlighted = current_mode == row.mode
+    local label_text = is_highlighted and string.upper(row.label) or row.label
+    local label_brightness = LEVELS.highlight
+    add_text(label_brightness, 5, row.y, label_text, nil)
     for track = 1, 2 do
-        local x = TRACK_X[track]
-        local value_level = is_bottom_active and LEVELS.highlight or LEVELS.value
-        if bottom_row_mode == "seek" then
-            if is_param_locked(track, "seek") then add_l_shape(draw_ops, x, BOTTOM_ROW_Y) end
-            local is_loaded = audio_active[track] or cached.live_input[track] == 1 or cached.live_direct[track] == 1
-            local display_text
-            if cached.live_input[track] == 1 then display_text = "live"
-            elseif cached.live_direct[track] == 1 then display_text = "direct"
-            else display_text = string.format("%.0f%%", osc_positions[track] * 100) end
-            add_text(value_level, x, BOTTOM_ROW_Y, display_text, nil)
-            if is_loaded and cached.live_direct[track] ~= 1 then
-                local current_speed = cached.speed[track]
-                local symbol = math.abs(current_speed) < 0.01 and "⏸" or (current_speed > 0 and "▶" or "◀")
-                add_text(value_level, track == 1 and 75 or 116, BOTTOM_ROW_Y, symbol, nil)
-            end
-            if cached.live_direct[track] ~= 1 then 
-                local pos = osc_positions[track]
-                add_rect(1, x, SEEK_BAR_Y, 30, 1)
-                add_rect(LEVELS.dim, x, SEEK_BAR_Y, 30 * pos, 1)
-                if is_loaded then add_pixel(15, x + math.floor(pos * 30), SEEK_BAR_Y) end
-            end
-        elseif bottom_row_mode == "speed" then
-            if is_param_locked(track, "speed") then add_l_shape(draw_ops, x, BOTTOM_ROW_Y) end
-            add_text(LEVELS.highlight, x, BOTTOM_ROW_Y, format_speed(cached.speed[track]), nil)
-            local is_loaded = audio_active[track] or cached.live_input[track] == 1 or cached.live_direct[track] == 1
-            if is_loaded and cached.live_direct[track] ~= 1 then
-                local current_speed = cached.speed[track]
-                local symbol = math.abs(current_speed) < 0.01 and "⏸" or (current_speed > 0 and "▶" or "◀")
-                add_text(value_level, track == 1 and 75 or 116, BOTTOM_ROW_Y, symbol, nil)
-            end
-        elseif bottom_row_mode == "pan" then
-            if is_param_locked(track, "pan") then add_l_shape(draw_ops, x, BOTTOM_ROW_Y) end
-            local pan_val = cached.pan[track]
-            local pan_text = math.abs(pan_val) < 0.5 and "0%" or string.format("%.0f%%", pan_val)
-            add_text(LEVELS.highlight, x, BOTTOM_ROW_Y, pan_text, nil)
-        elseif bottom_row_mode == "lpf" or bottom_row_mode == "hpf" then
-            local filter_param = current_filter_mode == "lpf" and cached.cutoff[track] or cached.hpf[track]
-            if filter_lock_ratio then add_l_shape(draw_ops, x, BOTTOM_ROW_Y) end
-            local bar_width = util.linlin(math.log(20), math.log(20000), 0, 30, math.log(filter_param))
-            add_rect(1, x, SEEK_BAR_Y, bar_width, 1)
-            add_text(LEVELS.highlight, x, BOTTOM_ROW_Y, string.format("%.0f", filter_param), nil)
-        end
+      local param = track == 1 and row.param1 or row.param2
+      local x = TRACK_X[track]
+      -- Three-way link
+      local global_link_enabled = cached.global_pitch_size_density_link == 1
+      if param_name == "size" and global_link_enabled then add_three_way_link_shape(draw_ops, x, row.y, "size") end
+      -- Lock
+      if is_param_locked(track, param_name) then add_l_shape(draw_ops, x, row.y) end
+      -- Value text
+      local value_level = is_highlighted and LEVELS.highlight or LEVELS.value
+      local lfo_mod = get_lfo_modulation(param)
+      local val = lfo_mod or params:get(param)
+      local format_key = row.hz and "hz" or (row.st and "st" or param_name)
+      local format_func = format_lookup[format_key]
+      local display_text = format_func and format_func(val, track) or params:string(param)
+      add_text(value_level, x, row.y, display_text, nil)
+      -- LFO modulation bars
+      if param_name ~= "pitch" and lfo_mod then
+        local min_val, max_val = lfo.get_parameter_range(param)
+        local bar_value = util.linlin(min_val, max_val, 0, 30, lfo_mod)
+        add_rect(LEVELS.dim, x, row.y + 1, bar_value, 1)
+      end
     end
-    -- Volume meters and pan indicators
+  end
+  -- Bottom row
+  local is_upper_row_active = UPPER_MODES[current_mode]
+  local bottom_row_mode = is_upper_row_active and "seek" or current_mode
+  local is_bottom_active = not is_upper_row_active
+  local bottom_label = (bottom_row_mode == "lpf" or bottom_row_mode == "hpf") and
+    (current_filter_mode == "lpf" and "lpf:      " or "hpf:      ") or (bottom_row_mode .. ":     ")
+  if is_bottom_active then bottom_label = string.upper(bottom_label) end
+  local bottom_label_brightness = LEVELS.highlight
+  add_text(bottom_label_brightness, 5, BOTTOM_ROW_Y, bottom_label, nil)
+  -- Bottom row values
+  local current_time = util.time()
+  for track = 1, 2 do
+    local x = TRACK_X[track]
+    local value_level = is_bottom_active and LEVELS.highlight or LEVELS.value
+    if bottom_row_mode == "seek" then
+      if is_param_locked(track, "seek") then add_l_shape(draw_ops, x, BOTTOM_ROW_Y) end
+      local is_loaded = audio_active[track] or cached.live_input[track] == 1 or cached.live_direct[track] == 1
+      local display_text
+      if cached.live_input[track] == 1 then display_text = "live"
+      elseif cached.live_direct[track] == 1 then display_text = "direct"
+      else display_text = string.format("%.0f%%", osc_positions[track] * 100) end
+      add_text(value_level, x, BOTTOM_ROW_Y, display_text, nil)
+      if is_loaded and cached.live_direct[track] ~= 1 then
+        local current_speed = cached.speed[track]
+        local symbol = math.abs(current_speed) < 0.01 and "⏸" or (current_speed > 0 and "▶" or "◀")
+        add_text(value_level, track == 1 and 75 or 116, BOTTOM_ROW_Y, symbol, nil)
+      end
+      if cached.live_direct[track] ~= 1 then
+        local pos = osc_positions[track]
+        add_rect(1, x, SEEK_BAR_Y, 30, 1)
+        add_rect(LEVELS.dim, x, SEEK_BAR_Y, 30 * pos, 1)
+        if is_loaded then add_pixel(15, x + math.floor(pos * 30), SEEK_BAR_Y) end
+      end
+    elseif bottom_row_mode == "speed" then
+      if is_param_locked(track, "speed") then add_l_shape(draw_ops, x, BOTTOM_ROW_Y) end
+      add_text(LEVELS.highlight, x, BOTTOM_ROW_Y, format_speed(cached.speed[track]), nil)
+      local is_loaded = audio_active[track] or cached.live_input[track] == 1 or cached.live_direct[track] == 1
+      if is_loaded and cached.live_direct[track] ~= 1 then
+        local current_speed = cached.speed[track]
+        local symbol = math.abs(current_speed) < 0.01 and "⏸" or (current_speed > 0 and "▶" or "◀")
+        add_text(value_level, track == 1 and 75 or 116, BOTTOM_ROW_Y, symbol, nil)
+      end
+    elseif bottom_row_mode == "pan" then
+      if is_param_locked(track, "pan") then add_l_shape(draw_ops, x, BOTTOM_ROW_Y) end
+      local pan_val = cached.pan[track]
+      local pan_text = math.abs(pan_val) < 0.5 and "0%" or string.format("%.0f%%", pan_val)
+      add_text(LEVELS.highlight, x, BOTTOM_ROW_Y, pan_text, nil)
+    elseif bottom_row_mode == "lpf" or bottom_row_mode == "hpf" then
+      local filter_param = current_filter_mode == "lpf" and cached.cutoff[track] or cached.hpf[track]
+      if filter_lock_ratio then add_l_shape(draw_ops, x, BOTTOM_ROW_Y) end
+      local bar_width = util.linlin(math.log(20), math.log(20000), 0, 30, math.log(filter_param))
+      add_rect(1, x, SEEK_BAR_Y, bar_width, 1)
+      add_text(LEVELS.highlight, x, BOTTOM_ROW_Y, string.format("%.0f", filter_param), nil)
+    end
+  end
+  -- Volume meters and pan indicators
+  for track = 1, 2 do
+    local height = util.linlin(-70, 10, 0, 64, cached.volume[track])
+    add_rect(LEVELS.dim, VOLUME_METER_X[track], 64 - height, 1, height)
+    local pos = util.linlin(-100, 100, PAN_CENTER_START[track], PAN_CENTER_START[track] + 25, cached.pan[track])
+    add_rect(LEVELS.dim, pos - 1, 0, 4, 1)
+  end
+  -- Status indicators
+  if cached.dry_mode == 1 then add_pixel(LEVELS.highlight, 6, 0) add_pixel(LEVELS.highlight, 10, 0) add_pixel(LEVELS.highlight, 14, 0) add_pixel(LEVELS.highlight, 18, 0) end
+  if cached.symmetry == 1 then add_pixel(LEVELS.highlight, 18, 0) add_pixel(LEVELS.highlight, 20, 0) add_pixel(LEVELS.highlight, 22, 0) end
+  if cached.evolution == 1 then local pattern = patterns[evolution_animation_phase] or patterns[0] for _, pixel in ipairs(pattern) do add_pixel(LEVELS.highlight, pixel[1], pixel[2]) end end
+  -- Grains
+  if bottom_row_mode == "seek" then
     for track = 1, 2 do
-        local height = util.linlin(-70, 10, 0, 64, cached.volume[track])
-        add_rect(LEVELS.dim, VOLUME_METER_X[track], 64 - height, 1, height)
-        local pos = util.linlin(-100, 100, PAN_CENTER_START[track], PAN_CENTER_START[track] + 25, cached.pan[track])
-        add_rect(LEVELS.dim, pos - 1, 0, 4, 1)
+      local granular_gain = params:get(track.."granular_gain")
+      if granular_gain > 0 then
+        local base_x = TRACK_X[track]
+        local kept = {}
+        local size_ms = cached.size[track]
+        local lifetime = size_ms > 0 and (size_ms * 0.001) or 0.01
+        for _, g in ipairs(grain_positions[track]) do
+          local age = current_time - (g.t or 0)
+          if age <= lifetime then
+            local x = base_x + math.floor((g.pos or 0) * 30)
+            local bright = math.floor(lifetime > 0 and util.linlin(0, lifetime, LEVELS.highlight-2, LEVELS.dim, age) or LEVELS.highlight)
+            add_pixel(bright, x, SEEK_BAR_Y)
+            kept[#kept + 1] = g
+          end
+        end
+        grain_positions[track] = kept
+      else
+        grain_positions[track] = {}
+      end
     end
-    -- Status indicators
-    if cached.dry_mode == 1 then add_pixel(LEVELS.highlight, 6, 0) add_pixel(LEVELS.highlight, 10, 0) add_pixel(LEVELS.highlight, 14, 0) add_pixel(LEVELS.highlight, 18, 0) end
-    if cached.symmetry == 1 then add_pixel(LEVELS.highlight, 18, 0) add_pixel(LEVELS.highlight, 20, 0) add_pixel(LEVELS.highlight, 22, 0) end
-    if cached.evolution == 1 then local pattern = patterns[evolution_animation_phase] or patterns[0] for _, pixel in ipairs(pattern) do add_pixel(LEVELS.highlight, pixel[1], pixel[2]) end end 
-    -- Grains
-    if bottom_row_mode == "seek" then
-        for track = 1, 2 do
-            local granular_gain = params:get(track.."granular_gain")
-            if granular_gain > 0 then
-                local base_x = TRACK_X[track]
-                local kept = {}
-                local size_ms = cached.size[track]
-                local lifetime = size_ms > 0 and (size_ms * 0.001) or 0.01
-                for _, g in ipairs(grain_positions[track]) do
-                    local age = current_time - (g.t or 0)
-                    if age <= lifetime then
-                        local x = base_x + math.floor((g.pos or 0) * 30)
-                        local bright = math.floor(lifetime > 0 and util.linlin(0, lifetime, LEVELS.highlight-2, LEVELS.dim, age) or LEVELS.highlight)
-                        add_pixel(bright, x, SEEK_BAR_Y)
-                        kept[#kept + 1] = g
-                    end
-                end
-                grain_positions[track] = kept
-            else
-                grain_positions[track] = {}
-            end
-        end
+  end
+  -- Recording heads
+  if bottom_row_mode == "seek" then
+    for track = 1, 2 do
+      if cached.live_input[track] == 1 then
+        add_recording_head(draw_ops, TRACK_X[track], SEEK_BAR_Y, rec_positions[track])
+      end
     end
-    -- Draw recording head
-    if bottom_row_mode == "seek" then
-        for track = 1, 2 do
-            if cached.live_input[track] == 1 then
-                add_recording_head(draw_ops, TRACK_X[track], SEEK_BAR_Y, rec_positions[track])
-            end
-        end
-    end
-    -- Draw morph bar
-    if current_scene_mode == "on" then
-        local bar_width = 22
-        local morph_pos = util.linlin(0, 100, 0, bar_width, morph_amount)
-        add_rect(1, 6, 0, bar_width, 1)
-        add_rect(LEVELS.dim, 6, 0, morph_pos, 1)
-    end 
-    -- Draw save message
-    if showing_save_message then add_rect(15, 40, 25, 48, 10) add_text(0, 64, 32, "SAVING...", "center") end
-    local levels_used = {}
-    -- Collect all levels used
-    for _, op in ipairs(draw_ops.rects) do levels_used[op[1]] = true end
-    for _, op in ipairs(draw_ops.pixels) do levels_used[op[1]] = true end
-    for _, op in ipairs(draw_ops.text) do levels_used[op[1]] = true end
-    local sorted_levels = {}
-    for lvl in pairs(levels_used) do sorted_levels[#sorted_levels + 1] = lvl end
-    table.sort(sorted_levels)
-    -- Batch rendering by level
-    for _, lvl in ipairs(sorted_levels) do
-        screen.level(lvl)
-        -- Render rectangles
-        local rect_count = 0
-        for _, op in ipairs(draw_ops.rects) do
-            if op[1] == lvl then
-                screen.rect(op[2], op[3], op[4], op[5])
-                rect_count = rect_count + 1
-            end
-        end
-        if rect_count > 0 then screen.fill() end
-        -- Render pixels
-        local pixel_count = 0
-        for _, op in ipairs(draw_ops.pixels) do
-            if op[1] == lvl then
-                screen.pixel(op[2], op[3])
-                pixel_count = pixel_count + 1
-            end
-        end
-        if pixel_count > 0 then screen.fill() end
-        -- Render text
-        for _, op in ipairs(draw_ops.text) do
-            if op[1] == lvl then
-                screen.move(op[2], op[3])
-                local text_value = tostring(op[4])
-                if op[5] == "center" then 
-                    screen.text_center(text_value)
-                else screen.text(text_value) end
-            end
-        end
-    end
-    screen.restore()
-    screen.update()
+  end
+  -- Morph bar
+  if current_scene_mode == "on" then
+    local bar_width = 22
+    local morph_pos = util.linlin(0, 100, 0, bar_width, morph_amount)
+    add_rect(1, 6, 0, bar_width, 1)
+    add_rect(LEVELS.dim, 6, 0, morph_pos, 1)
+  end
+  -- Save message
+  if showing_save_message then
+    add_rect(15, 40, 25, 48, 10)
+    add_text(0, 64, 32, "SAVING...", "center")
+  end
+  batch_draw_by_level(draw_ops)
+  screen.restore()
+  screen.update()
 end
 
 local osc_handlers = {
@@ -1367,12 +1370,11 @@ function init()
 end
 
 function cleanup()
-    stop_metro_safe(ui_metro)
-    stop_metro_safe(m_rand)
-    stop_metro_safe(key1_monitor_metro)
-    for i = 1, 2 do stop_metro_safe(randomize_metro[i]) end
-    randpara.cleanup()
-    params:set('monitor_level', initial_monitor_level)
-    params:set('reverb', initial_reverb_onoff)
-    osc.event = nil
+  stop_and_clean_metro(ui_metro)
+  stop_and_clean_metro(key1_monitor_metro)
+  for i = 1, 2 do stop_and_clean_metro(randomize_metro[i]) end
+  randpara.cleanup()
+  params:set('monitor_level', initial_monitor_level)
+  params:set('reverb', initial_reverb_onoff)
+  osc.event = nil
 end
