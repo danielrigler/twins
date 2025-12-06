@@ -83,7 +83,7 @@ SynthDef(\synth1, {
     dry_sig = [PlayBuf.ar(1, buf_l, speed, startPos: pos * BufFrames.kr(buf_l), trigger: t_reset_pos, loop: 1), PlayBuf.ar(1, buf_r, speed, startPos: pos * BufFrames.kr(buf_r), trigger: t_reset_pos, loop: 1)];
     dry_sig = Balance2.ar(dry_sig[0], dry_sig[1], pan);
 
-    grain_pitch = Lag.kr(pitch_offset) * if(pitch_walk_rate > 0, {
+    grain_pitch = Lag.kr(Select.kr(pitch_mode, [speed * pitch_offset, pitch_offset]);) * if(pitch_walk_rate > 0, {
         var trig = Dust.kr(pitch_walk_rate);
         var step = TIRand.kr(0, pitch_walk_step, trig, Array.series(25, 25, -1).sqrt);
         var totalStep = step * TChoose.kr(trig, [1, -1]);
@@ -393,6 +393,8 @@ SynthDef(\synth1, {
         this.addCommand("pitch_random_prob", "if", { arg msg; var voice = msg[1] - 1; currentPitchRandomProb[voice] = msg[2]; voices[voice].set(\pitch_random_prob, msg[2].abs * 0.01); voices[voice].set(\pitch_random_direction, msg[2].sign); });
         this.addCommand("pitch_walk_rate", "if", { arg msg; var voice = msg[1] - 1; currentPitchWalkRate[voice] = msg[2]; voices[voice].set(\pitch_walk_rate, msg[2]); });
         this.addCommand("pitch_walk_step", "if", { arg msg; var voice = msg[1] - 1; currentPitchWalkStep[voice] = msg[2]; voices[voice].set(\pitch_walk_step, msg[2]); });
+        this.addCommand("ratcheting_prob", "if", { arg msg; var voice = msg[1] - 1; voices[voice].set(\ratcheting_prob, msg[2] * 0.01); });
+        this.addCommand("max_ratchets", "ii", { arg msg; var voice = msg[1] - 1; voices[voice].set(\max_ratchets, msg[2]); });
 
         this.addCommand("bitcrush_mix", "f", { arg msg; bitcrushEffect.set(\mix, msg[1]); bitcrushEffect.run(msg[1] > 0); });
         this.addCommand("bitcrush_rate", "f", { arg msg; bitcrushEffect.set(\rate, msg[1]); });
@@ -449,20 +451,6 @@ SynthDef(\synth1, {
         this.addCommand("unload_all", "", {this.unloadAll(); });
         this.addCommand("save_live_buffer", "is", { arg msg; var voice = msg[1] - 1; var filename = msg[2]; var bufL = liveInputBuffersL[voice]; var bufR = liveInputBuffersR[voice]; this.saveLiveBufferToTape(voice, filename); });
         this.addCommand("live_buffer_length", "f", { arg msg; var length = msg[1]; liveInputBuffersL.do({ arg buf; buf.free; }); liveInputBuffersR.do({ arg buf; buf.free; }); liveInputBuffersL = Array.fill(2, {Buffer.alloc(context.server, context.server.sampleRate * length);}); liveInputBuffersR = Array.fill(2, {Buffer.alloc(context.server, context.server.sampleRate * length);}); liveInputRecorders.do({ arg recorder, i; if (recorder.notNil, {recorder.free; liveInputRecorders[i] = Synth.new(\liveInputRecorder, [ \bufL, liveInputBuffersL[i], \bufR, liveInputBuffersR[i], \mix, liveBufferMix ], context.xg, 'addToHead'); voices[i].set( \buf_l, liveInputBuffersL[i], \buf_r, liveInputBuffersR[i], \t_reset_pos, 1); }); }); });
-        
-        // Add these commands to the existing command section
-this.addCommand("ratcheting_prob", "if", { arg msg; 
-    var voice = msg[1] - 1; 
-    var prob = msg[2]; 
-    voices[voice].set(\ratcheting_prob, prob * 0.01); 
-});
-
-this.addCommand("max_ratchets", "ii", { arg msg; 
-    var voice = msg[1] - 1; 
-    var maxR = msg[2]; 
-    voices[voice].set(\max_ratchets, maxR); 
-});
-        
         this.addCommand("set_output_buffer_length", "f", { arg msg; var newLength = msg[1]; outputBufferLength = newLength; if (outputRecorder.notNil) { outputRecorder.free; }; if (outputRecordBuffer.notNil) {outputRecordBuffer.free; }; outputRecordBuffer = Buffer.alloc(context.server, context.server.sampleRate * outputBufferLength, 2); outputRecorder = Synth.new(\outputRecorder, [\buf, outputRecordBuffer, \inBus, mixBus.index], context.xg, 'addToTail'); });
         this.addCommand("save_output_buffer", "s", { arg msg; var filename, path, interleaved, gainBoost = 2.8, crossfadeSamples, actualLength, splitPoint, finalLength, writePos; filename = msg[1]; path = "/home/we/dust/audio/tape/" ++ filename; crossfadeSamples = context.server.sampleRate.asInteger; actualLength = outputRecordBuffer.numFrames; writePos = (currentOutputWritePos ? 0.5) * actualLength; splitPoint = writePos.asInteger;  finalLength = actualLength - crossfadeSamples; interleaved = Buffer.alloc(context.server, finalLength, 2); outputRecordBuffer.loadToFloatArray(action: { |stereoData| var interleavedData = FloatArray.newClear(finalLength * 2), idx = 0, piInv = pi.reciprocal, crossfadeInv = crossfadeSamples.reciprocal; finalLength.do { |sampleIdx| var blendL, blendR; if (sampleIdx < crossfadeSamples) {var crossfadePos = sampleIdx * crossfadeInv, fadeInGain = (1 - cos(crossfadePos * pi)) * 0.5, fadeOutGain = (1 + cos(crossfadePos * pi)) * 0.5, splitIdx = (splitPoint + sampleIdx) % actualLength, beforeIdx = (splitPoint - crossfadeSamples + sampleIdx) % actualLength; blendL = (stereoData[splitIdx * 2] * fadeInGain) + (stereoData[beforeIdx * 2] * fadeOutGain); blendR = (stereoData[splitIdx * 2 + 1] * fadeInGain) + (stereoData[beforeIdx * 2 + 1] * fadeOutGain);} {var sourceIdx = (splitPoint + sampleIdx) % actualLength; blendL = stereoData[sourceIdx * 2]; blendR = stereoData[sourceIdx * 2 + 1];}; interleavedData[idx] = blendL * gainBoost; interleavedData[idx + 1] = blendR * gainBoost; idx = idx + 2; }; interleaved.loadCollection(interleavedData, action: { interleaved.write(path, "WAV", "float"); NetAddr("127.0.0.1", 10111).sendMsg("/twins/output_saved", path); NetAddr("127.0.0.1", 10111).sendMsg("/twins/save_complete"); interleaved.free; }); }); });
         this.addCommand("save_output_buffer_only", "s", { arg msg; var filename, path, interleaved, gainBoost = 2.8, crossfadeSamples, actualLength, splitPoint, finalLength, writePos; filename = msg[1]; path = "/home/we/dust/audio/tape/" ++ filename; crossfadeSamples = context.server.sampleRate.asInteger; actualLength = outputRecordBuffer.numFrames; writePos = (currentOutputWritePos ? 0.5) * actualLength; splitPoint = writePos.asInteger; finalLength = actualLength - crossfadeSamples; interleaved = Buffer.alloc(context.server, finalLength, 2); outputRecordBuffer.loadToFloatArray(action: { |stereoData| var interleavedData = FloatArray.newClear(finalLength * 2), idx = 0, crossfadeInv = crossfadeSamples.reciprocal; finalLength.do { |sampleIdx| var blendL, blendR; if (sampleIdx < crossfadeSamples) {var crossfadePos = sampleIdx * crossfadeInv, fadeInGain = (1 - cos(crossfadePos * pi)) * 0.5, fadeOutGain = (1 + cos(crossfadePos * pi)) * 0.5, splitIdx = (splitPoint + sampleIdx) % actualLength, beforeIdx = (splitPoint - crossfadeSamples + sampleIdx) % actualLength; blendL = (stereoData[splitIdx * 2] * fadeInGain) + (stereoData[beforeIdx * 2] * fadeOutGain); blendR = (stereoData[splitIdx * 2 + 1] * fadeInGain) + (stereoData[beforeIdx * 2 + 1] * fadeOutGain);} {var sourceIdx = (splitPoint + sampleIdx) % actualLength; blendL = stereoData[sourceIdx * 2]; blendR = stereoData[sourceIdx * 2 + 1]; }; interleavedData[idx] = blendL * gainBoost; interleavedData[idx + 1] = blendR * gainBoost; idx = idx + 2; }; interleaved.loadCollection(interleavedData, action: { interleaved.write(path, "WAV", "float"); NetAddr("127.0.0.1", 10111).sendMsg("/twins/save_complete"); interleaved.free; }); }); });

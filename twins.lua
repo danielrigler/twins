@@ -656,10 +656,10 @@ local function setup_params()
     params:add_binary("macro_less", "Less-", "trigger", 0) params:set_action("macro_less", function() macro.macro_less() end)
     
     params:add_group("Morphing", 5)
+    params:add_option("scene_mode", "Morph Mode", {"off", "on"}, 1) params:set_action("scene_mode", function(value) current_scene_mode = (value == 2) and "on" or "off" if current_scene_mode == "on" then local scenes_empty = true for track = 1, 2 do for scene = 1, 2 do if scene_data[track] and scene_data[track][scene] and next(scene_data[track][scene]) ~= nil then scenes_empty = false break end end if not scenes_empty then break end end if scenes_empty then initialize_scenes_with_current_params() end end end)
     params:add_control("morph_amount", "Morph", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("morph_amount", function(value) morph_amount = value apply_morph() end)
     params:add{type = "trigger", id = "save_to_scene1", name = "Morph Target A", action = function() store_scene(1, 1) store_scene(2, 1) end}
     params:add{type = "trigger", id = "save_to_scene2", name = "Morph Target B", action = function() store_scene(1, 2) store_scene(2, 2) end}
-    params:add_option("scene_mode", "Morph Mode", {"off", "on"}, 1) params:set_action("scene_mode", function(value) current_scene_mode = (value == 2) and "on" or "off" if current_scene_mode == "on" then local scenes_empty = true for track = 1, 2 do for scene = 1, 2 do if scene_data[track] and scene_data[track][scene] and next(scene_data[track][scene]) ~= nil then scenes_empty = false break end end if not scenes_empty then break end end if scenes_empty then initialize_scenes_with_current_params() end end end)
     params:add{type = "trigger", id = "delete_morph_data", name = "Delete Morph Data", action = function() scene_data = {[1] = {[1] = {}, [2] = {}}, [2] = {[1] = {}, [2] = {}}} morph_amount = 0 params:set("morph_amount", 0) params:set("scene_mode", 1) current_scene_mode = "off" end}
     
     params:add_group("Loop", 3)
@@ -1305,10 +1305,23 @@ function redraw()
   end
   -- Morph bar
   if current_scene_mode == "on" then
-    local bar_width = 22
-    local morph_pos = util.linlin(0, 100, 0, bar_width, morph_amount)
-    add_rect(1, 6, 0, bar_width, 1)
-    add_rect(LEVELS.dim, 6, 0, morph_pos, 1)
+      local bar_width = 22
+      local morph_pos = util.linlin(0, 100, 0, bar_width, morph_amount)
+      local pulse_brightness = LEVELS.highlight
+      local background_brightness = 1
+      if morph_amount == 0 or morph_amount == 100 then
+          local pulse_speed = 2
+          local pulse_phase = math.sin(util.time() * math.pi * 2 * pulse_speed)
+          pulse_brightness = math.floor(util.linlin(-1, 1, LEVELS.dim, LEVELS.highlight, pulse_phase))
+          background_brightness = math.floor(util.linlin(-1, 1, 1, 5, pulse_phase))
+      end
+      pulse_brightness = util.clamp(pulse_brightness, 0, 15)
+      background_brightness = util.clamp(background_brightness, 0, 15)
+      add_rect(background_brightness, 6, 0, bar_width, 1)
+      if morph_amount > 0 then add_rect(pulse_brightness, 6, 0, morph_pos, 1) end
+      if morph_amount == 0 then add_pixel(pulse_brightness, 6, 0)
+      elseif morph_amount == 100 then add_pixel(pulse_brightness, 6 + bar_width-1, 0)
+      end
   end
   -- Save message
   if showing_save_message then
