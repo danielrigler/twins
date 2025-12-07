@@ -5,6 +5,7 @@ var <buffersL, <buffersR, wobbleBuffer, mixBus, <voices, bufSine, pg, <liveInput
 var currentSpeed, currentJitter, currentSize, currentDensity, currentDensityModAmt, currentPitch, currentPan, currentSpread, currentVolume, currentGranularGain, currentCutoff, currentHpf, currentlpfgain, currentSubharmonics1, currentSubharmonics2, currentSubharmonics3, currentOvertones1, currentOvertones2, currentPitchMode, currentTrigMode, currentDirectionMod, currentSizeVariation, currentSmoothbass, currentLowGain, currentHighGain, currentProbability, liveBufferMix = 1.0, currentPitchWalkRate, currentPitchWalkStep, currentPitchRandomProb, currentPitchRandomScale, currentRatchetingProb;
 var <outputRecordBuffer, <outputRecorder;
 var outputBufferLength = 8, currentOutputWritePos;
+var grainEnvs;
 
 *new { arg context, doneCallback; ^super.new(context, doneCallback); }
 
@@ -29,7 +30,7 @@ alloc {
         wobbleBuffer = Buffer.alloc(context.server, 48000 * 5, 2);
         mixBus = Bus.audio(context.server, 2);
 
-        ~grainEnvs = [
+        grainEnvs = [
             Env.sine(1, 1),
             Env.new([0, 1, 1, 0], [0.15, 0.7, 0.15], [4, 0, -4]),
             Env.triangle(1, 1), 
@@ -103,7 +104,7 @@ SynthDef(\synth1, {
         Select.kr((rand_val * 5).floor, [2,4,6,8,10]) ]);
     grain_pitch = grain_pitch * (2 ** (((rand_val2 < pitch_random_prob) * random_interval * pitch_random_direction)/12));
     
-    grainBufFunc = { |buf, pitch, size, vol, dir, pos, jitter| var envBuf = Select.kr(env_select, ~grainEnvs); 
+    grainBufFunc = { |buf, pitch, size, vol, dir, pos, jitter| var envBuf = Select.kr(env_select, grainEnvs); 
         GrainBuf.ar(1, grain_trig, size, buf, pitch * dir, pos + jitter, 2, envbufnum: envBuf, mul: vol)};            
     processGrains = { |buf_l, buf_r, pitch, size, vol, dir, pos, jitter| [buf_l, buf_r].collect { |buf| grainBufFunc.(buf, pitch, size, vol, dir, pos, jitter) }};
     #sig_l, sig_r = processGrains.(buf_l, buf_r, grain_pitch, grain_size, invDenom, grain_direction, pos_sig, jitter_sig);
@@ -461,17 +462,38 @@ SynthDef(\synth1, {
         o_output = OSCFunc({ |msg| var pos; pos = msg[3]; currentOutputWritePos = pos;}, '/output_write_pos', context.server.addr);
     }
 
-    free {
-        voices.do({ arg voice; voice.free; });
-        buffersL.do({ arg b; b.free; });
-        buffersR.do({ arg b; b.free; });
-        liveInputBuffersL.do({ arg b; b.free; });
-        liveInputBuffersR.do({ arg b; b.free; });
+free {
+        voices.do({ arg voice; if (voice.notNil) { voice.free; }; });
+        buffersL.do({ arg b; if (b.notNil) { b.free; }; });
+        buffersR.do({ arg b; if (b.notNil) { b.free; }; });
+        liveInputBuffersL.do({ arg b; if (b.notNil) { b.free; }; });
+        liveInputBuffersR.do({ arg b; if (b.notNil) { b.free; }; });
         liveInputRecorders.do({ arg s; if (s.notNil) { s.free; }; });
-        ~grainEnvs.do({ arg buf; buf.free; });
-        if (outputRecorder.notNil) { outputRecorder.free; };
-        if (outputRecordBuffer.notNil) { outputRecordBuffer.free; };
-        o.free; o_rec.free; o_grain.free; o_output.free;
-        wobbleBuffer.free; mixBus.free; bufSine.free; jpverbEffect.free; shimmerEffect.free; saturationEffect.free; tapeEffect.free; chewEffect.free; widthEffect.free; monobassEffect.free; lossdegradeEffect.free; sineEffect.free; wobbleEffect.free; outputSynth.free; delayEffect.free; bitcrushEffect.free; rotateEffect.free; haasEffect.free; dimensionEffect.free;
+        if (grainEnvs.notNil) { grainEnvs.do({ arg buf; if (buf.notNil) { buf.free; }; }); };
+        if (outputRecorder.notNil) { outputRecorder.free; outputRecorder = nil; };
+        if (outputRecordBuffer.notNil) { outputRecordBuffer.free; outputRecordBuffer = nil; };
+        if (o.notNil) { o.free; o = nil; };
+        if (o_rec.notNil) { o_rec.free; o_rec = nil; };
+        if (o_grain.notNil) { o_grain.free; o_grain = nil; };
+        if (o_output.notNil) { o_output.free; o_output = nil; };
+        if (wobbleBuffer.notNil) { wobbleBuffer.free; wobbleBuffer = nil; };
+        if (mixBus.notNil) { mixBus.free; mixBus = nil; };
+        if (bufSine.notNil) { bufSine.free; bufSine = nil; };
+        if (jpverbEffect.notNil) { jpverbEffect.free; jpverbEffect = nil; };
+        if (shimmerEffect.notNil) { shimmerEffect.free; shimmerEffect = nil; };
+        if (saturationEffect.notNil) { saturationEffect.free; saturationEffect = nil; };
+        if (tapeEffect.notNil) { tapeEffect.free; tapeEffect = nil; };
+        if (chewEffect.notNil) { chewEffect.free; chewEffect = nil; };
+        if (widthEffect.notNil) { widthEffect.free; widthEffect = nil; };
+        if (monobassEffect.notNil) { monobassEffect.free; monobassEffect = nil; };
+        if (lossdegradeEffect.notNil) { lossdegradeEffect.free; lossdegradeEffect = nil; };
+        if (sineEffect.notNil) { sineEffect.free; sineEffect = nil; };
+        if (wobbleEffect.notNil) { wobbleEffect.free; wobbleEffect = nil; };
+        if (outputSynth.notNil) { outputSynth.free; outputSynth = nil; };
+        if (delayEffect.notNil) { delayEffect.free; delayEffect = nil; };
+        if (bitcrushEffect.notNil) { bitcrushEffect.free; bitcrushEffect = nil; };
+        if (rotateEffect.notNil) { rotateEffect.free; rotateEffect = nil; };
+        if (haasEffect.notNil) { haasEffect.free; haasEffect = nil; };
+        if (dimensionEffect.notNil) { dimensionEffect.free; dimensionEffect = nil; };
     }
 }

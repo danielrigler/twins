@@ -272,24 +272,23 @@ end
 
 function presets.menu_key(n, z, scene_data_ref, update_pan_positioning_fn, audio_active_ref)
     if not presets.menu_open or z ~= 1 then return false end
-    
     if presets.delete_confirmation then
         if n == 3 then
             local preset_name = presets.delete_confirmation.preset_name
+            local preset_index = presets.delete_confirmation.preset_index or 1  -- Store the index BEFORE deleting
             presets.delete_preset(preset_name)
             presets.preset_list = presets.list_presets()
             presets.delete_confirmation = nil
             if #presets.preset_list == 0 then
                 presets.menu_open = false
             else
-                presets.selected_index = util.clamp(presets.delete_confirmation.preset_index or 1, 1, #presets.preset_list)
+                presets.selected_index = util.clamp(preset_index, 1, #presets.preset_list)
             end
         else
             presets.delete_confirmation = nil
         end
         return true
     end
-    
     if n == 3 then
         local preset_name = presets.preset_list[presets.selected_index]
         local success = presets.load_complete_preset(preset_name, scene_data_ref, update_pan_positioning_fn, audio_active_ref)
@@ -308,7 +307,6 @@ function presets.menu_key(n, z, scene_data_ref, update_pan_positioning_fn, audio
         presets.menu_open = false
         return true
     end
-    
     return false
 end
 

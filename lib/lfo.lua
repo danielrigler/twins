@@ -14,6 +14,7 @@ local PHASE_INCREMENT = 1/30
 local TWO_PI = math_pi * 2
 local LOCKABLE_PARAMS = { "jitter", "size", "density", "spread", "pitch", "pan", "seek", "speed" }
 local LOCKABLE_LOOKUP = {}
+local RANGE_CACHE = {}
 for _, param in ipairs(LOCKABLE_PARAMS) do LOCKABLE_LOOKUP[param] = true end
 local function pget(k) return params:get(k) end
 local function pset(k, v) params:set(k, v) end
@@ -126,14 +127,19 @@ local param_ranges = {
 }
 
 function lfo.get_parameter_range(param_name)
+  if RANGE_CACHE[param_name] then return RANGE_CACHE[param_name][1], RANGE_CACHE[param_name][2] end
   if param_name:match("jitter$") then
     local track = param_name:sub(1, 1)
     local max_jitter = pget(track .. "max_jitter") or 4999
     return 0, max_jitter
   end
   local range = param_ranges[param_name]
-  return range and range[1] or 0, range and range[2] or 100
+  if range then RANGE_CACHE[param_name] = range return range[1], range[2] end
+  RANGE_CACHE[param_name] = {0, 100}
+  return 0, 100
 end
+
+function lfo.clear_range_cache() RANGE_CACHE = {} end
 
 function lfo.assign_to_current_row(current_mode, current_filter_mode)
   local param_map = {
@@ -307,49 +313,50 @@ end
 function lfo.process()
   if lfo_paused then return end
   for i = 1, number_of_outputs do
-    if pget(i.."lfo") == 2 then
-      local obj = lfo[i]
-      obj.phase = (obj.phase + obj.freq * PHASE_INCREMENT) % 1.0
-      local slope
-      local wf = obj.waveform
-      if wf == "sine" then
-        slope = math_sin(obj.phase * TWO_PI)
-      elseif wf == "square" then
-        slope = obj.phase < 0.5 and 1 or -1
-      elseif wf == "random" then
-        local phase_inc = obj.freq * PHASE_INCREMENT
-        if (obj.phase - phase_inc) % 1.0 > obj.phase then
-          obj.prev = math_random() * (math_random(0,1) * 2 - 1)
-        end
-        slope = obj.prev
-      elseif wf == "walk" then
-        local step_size = obj.freq * 0.4
-        local random_acc = (math_random() - 0.5) * step_size
-        obj.walk_velocity = obj.walk_velocity * 0.92 + random_acc
-        obj.walk_value = obj.walk_value + obj.walk_velocity
-        local bsoft = 0.75
-        if obj.walk_value > bsoft then
-          obj.walk_velocity = obj.walk_velocity - (obj.walk_value - bsoft) * 0.1
-        elseif obj.walk_value < -bsoft then
-          obj.walk_velocity = obj.walk_velocity - (obj.walk_value + bsoft) * 0.1
-        end
-        obj.walk_value = util_clamp(obj.walk_value, -1.0, 1.0)
-        local filter_strength = 0.80
-        slope = obj.prev * filter_strength + obj.walk_value * (1 - filter_strength)
-        obj.prev = slope
-      else
-        slope = 0
+    local lfo_state = pget(i.."lfo")
+    if lfo_state ~= 2 then goto continue end
+    local obj = lfo[i]
+    obj.phase = (obj.phase + obj.freq * PHASE_INCREMENT) % 1.0
+    local slope
+    local wf = obj.waveform
+    if wf == "sine" then
+      slope = math_sin(obj.phase * TWO_PI)
+    elseif wf == "square" then
+      slope = obj.phase < 0.5 and 1 or -1
+    elseif wf == "random" then
+      local phase_inc = obj.freq * PHASE_INCREMENT
+      if (obj.phase - phase_inc) % 1.0 > obj.phase then
+        obj.prev = math_random() * (math_random(0,1) * 2 - 1)
       end
-      obj.slope = util_clamp(slope, -1.0, 1.0) * (obj.depth * 0.01) + obj.offset
-      local target_param = lfo.lfo_targets[pget(i.."lfo_target")]
-      if target_param and target_param ~= "none" and params.lookup[target_param] then
-        local min_val, max_val = lfo.get_parameter_range(target_param)
-        local modulated_value = util_clamp(lfo.scale(obj.slope, -1.0, 1.0, min_val, max_val), min_val, max_val)
-        pset(target_param, modulated_value)
-      else
-        pset(i.."lfo", 1)
+      slope = obj.prev
+    elseif wf == "walk" then
+      local step_size = obj.freq * 0.4
+      local random_acc = (math_random() - 0.5) * step_size
+      obj.walk_velocity = obj.walk_velocity * 0.92 + random_acc
+      obj.walk_value = obj.walk_value + obj.walk_velocity
+      local bsoft = 0.75
+      if obj.walk_value > bsoft then
+        obj.walk_velocity = obj.walk_velocity - (obj.walk_value - bsoft) * 0.1
+      elseif obj.walk_value < -bsoft then
+        obj.walk_velocity = obj.walk_velocity - (obj.walk_value + bsoft) * 0.1
       end
+      obj.walk_value = util_clamp(obj.walk_value, -1.0, 1.0)
+      local filter_strength = 0.80
+      slope = obj.prev * filter_strength + obj.walk_value * (1 - filter_strength)
+      obj.prev = slope
+    else
+      slope = 0
     end
+    obj.slope = util_clamp(slope, -1.0, 1.0) * (obj.depth * 0.01) + obj.offset
+    local target_param = lfo.lfo_targets[pget(i.."lfo_target")]
+    if target_param and target_param ~= "none" and params.lookup[target_param] then
+      local min_val, max_val = lfo.get_parameter_range(target_param)
+      local modulated_value = util_clamp(lfo.scale(obj.slope, -1.0, 1.0, min_val, max_val), min_val, max_val)
+      pset(target_param, modulated_value)
+    else
+      pset(i.."lfo", 1)
+    end
+    ::continue::
   end
 end
 
