@@ -111,7 +111,7 @@ local function random_float(l, h) return l + math.random() * (h - l) end
 local function stop_metro_safe(m) if m then local ok, err = pcall(function() m:stop() end) if m then m.event = nil end end end
 local function update_evolution_animation() if params:get("evolution") == 1 then evolution_animation_time = evolution_animation_time + (1/60) local cycle_duration = 0.3 evolution_animation_phase = math.floor((evolution_animation_time / cycle_duration) % 6) else evolution_animation_time = 0 evolution_animation_phase = 0 end end
 local function is_param_locked(track_num, param) return params:get(track_num .. "lock_" .. param) == 2 end
-local function is_lfo_active_for_param(param_name) for i = 1, 16 do local target_index = params:get(i.. "lfo_target") if lfo.lfo_targets[target_index] == param_name and params:get(i.. "lfo") == 2 then return true, i end end    return false, nil end
+local function is_lfo_active_for_param(param_name) for i = 1, 16 do local target_index = params:get(i.. "lfo_target") if lfo.lfo_targets[target_index] == param_name and params:get(i.. "lfo") == 2 then return true, i end end return false, nil end
 local function update_pan_positioning() local loaded1 = is_audio_loaded(1) local loaded2 = is_audio_loaded(2) local pan1_locked = is_param_locked(1, "pan") local pan1_has_lfo = is_lfo_active_for_param("1pan") local pan2_locked = is_param_locked(2, "pan") local pan2_has_lfo = is_lfo_active_for_param("2pan") if not pan1_locked and not pan1_has_lfo then params:set("1pan", loaded2 and -15 or 0) end if not pan2_locked and not pan2_has_lfo then params:set("2pan", loaded1 and 15 or 0) end end
 local function stop_and_clean_metro(m) if m then local ok, err = pcall(function() m:stop() end) m.event = nil end end
 
@@ -508,7 +508,7 @@ local function setup_params()
     params:add{type = "trigger", id = "save_live_buffer1", name = "Buffer1 to Tape", action = function() local timestamp = os.date("%Y%m%d_%H%M%S") local filename = "live1_"..timestamp..".wav" engine.save_live_buffer(1, filename) end}
     params:add{type = "trigger", id = "save_live_buffer2", name = "Buffer2 to Tape", action = function() local timestamp = os.date("%Y%m%d_%H%M%S") local filename = "live2_"..timestamp..".wav" engine.save_live_buffer(2, filename) end}
     for i = 1, 2 do
-      params:add_binary(i.."live_direct", "Direct "..i.." ►", "toggle", 0) params:set_action(i.."live_direct", function(value) if value == 1 then local was_live = params:get(i.."live_input") _G["prev_live_state_"..i] = was_live if was_live == 1 then params:set(i.."live_input", 0) end engine.live_direct(i, 1) audio_active[i] = true update_pan_positioning() else engine.live_direct(i, 0) if not audio_active[i] and params:get(i.."live_input") == 0 then osc_positions[i] = 0 else update_pan_positioning() end end end)
+      params:add_binary(i.."live_direct", "Direct "..i.." ►", "toggle", 0) params:set_action(i.."live_direct", function(value) if value == 1 then local was_live = params:get(i.."live_input") if was_live == 1 then params:set(i.."live_input", 0) end engine.live_direct(i, 1) audio_active[i] = true update_pan_positioning() else engine.live_direct(i, 0) if not audio_active[i] and params:get(i.."live_input") == 0 then osc_positions[i] = 0 else update_pan_positioning() end end end)
     end
     params:add_option("isMono", "Input Mode", {"stereo", "mono"}, 1) params:set_action("isMono", function(value) local monoValue = value - 1 for i = 1, 2 do if params:get(i.."live_direct") == 1 then engine.isMono(i, monoValue) end if params:get(i.."live_input") == 1 then engine.live_mono(i, monoValue) end end end)
     params:add_binary("dry_mode2", "Dry Mode", "toggle", 0) params:set_action("dry_mode2", function(x) drymode.toggle_dry_mode2() end)
@@ -1212,6 +1212,10 @@ function redraw()
   screen.clear()
   screen.save()
   screen.translate(animation_x, animation_y)
+  local draw_ops = {rects = {}, pixels = {}, text = {}}
+  local function add_rect(lvl, x, y, w, h) draw_ops.rects[#draw_ops.rects + 1] = {lvl, x, y, w, h} end
+  local function add_pixel(lvl, x, y) draw_ops.pixels[#draw_ops.pixels + 1] = {lvl, x, y} end
+  local function add_text(lvl, x, y, text, align) draw_ops.text[#draw_ops.text + 1] = {lvl, x, y, text, align} end
   local cached = {
     volume = {params:get("1volume"), params:get("2volume")},
     pan = {params:get("1pan"), params:get("2pan")},
@@ -1226,10 +1230,6 @@ function redraw()
     dry_mode = params:get("dry_mode"),
     symmetry = params:get("symmetry"),
     evolution = params:get("evolution")}
-  local draw_ops = {rects = {}, pixels = {}, text = {}}
-  local function add_rect(lvl, x, y, w, h) draw_ops.rects[#draw_ops.rects + 1] = {lvl, x, y, w, h} end
-  local function add_pixel(lvl, x, y) draw_ops.pixels[#draw_ops.pixels + 1] = {lvl, x, y} end
-  local function add_text(lvl, x, y, text, align) draw_ops.text[#draw_ops.text + 1] = {lvl, x, y, text, align} end
   -- Parameter rows
   local is_upper_highlighted = UPPER_MODES[current_mode]
   for _, row in ipairs(param_rows) do
@@ -1378,8 +1378,8 @@ function redraw()
   end
   -- Save message
   if showing_save_message then
-    add_rect(15, 40, 25, 48, 10)
-    add_text(0, 64, 32, "SAVING...", "center")
+    add_rect(1, 40, 25, 48, 10)
+    add_text(15, 64, 33, "SAVING...", "center")
   end
   batch_draw_by_level(draw_ops)
   screen.restore()
@@ -1413,7 +1413,6 @@ local osc_handlers = {
     end, 
     ["/twins/save_complete"] = function(args)
         showing_save_message = false
-        output_save_start_time = nil
     end}
 
 local function osc_event(path, args) if osc_handlers[path] then osc_handlers[path](args) end end

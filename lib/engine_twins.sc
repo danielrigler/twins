@@ -273,8 +273,8 @@ SynthDef(\synth1, {
             arg bus, drive=0.0;
             var dry, wet, shaped;
             dry = In.ar(bus, 2);
-            wet = dry * (30 * drive + 1);
-            shaped = wet.tanh * 0.1;
+            wet = dry * (50 * drive + 1);
+            shaped = wet.tanh * 0.08;
             ReplaceOut.ar(bus, XFade2.ar(dry, shaped, drive * 2 - 1));
         }).add;
 
