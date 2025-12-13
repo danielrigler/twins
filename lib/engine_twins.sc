@@ -37,9 +37,7 @@ alloc {
             Env.step([0, 1], [1, 1]),
             Env.perc(0.01, 1, 1, -4),
             Env.perc(0.99, 0.01, 1, 4),
-            Env.adsr(0.25, 0.15, 0.65, 1, 1, -4, 0),
-            Env.new([0, 1], [1]),
-            Env.new([1, 0], [1])
+            Env.adsr(0.25, 0.15, 0.65, 1, 1, -4, 0)
         ].collect { |env| Buffer.sendCollection(context.server, env.discretize) };
         
         currentSpeed = [0.1, 0.1]; currentJitter = [0.25, 0.25]; currentSize = [0.1, 0.1]; currentDensity = [10, 10]; currentPitch = [1, 1]; currentPan = [0, 0]; currentSpread = [0, 0]; currentVolume = [1, 1]; currentGranularGain = [1, 1]; currentCutoff = [20000, 20000]; currentlpfgain = [0.1, 0.1]; currentHpf = [20, 20]; currentSubharmonics1 = [0, 0]; currentSubharmonics2 = [0, 0]; currentSubharmonics3 = [0, 0]; currentOvertones1 = [0, 0]; currentOvertones2 = [0, 0]; currentPitchMode = [0, 0]; currentTrigMode = [0, 0]; currentDirectionMod = [0, 0]; currentSizeVariation = [0, 0]; currentSmoothbass = [1, 1]; currentDensityModAmt = [0, 0]; currentLowGain = [0, 0]; currentHighGain = [0, 0]; currentProbability = [100, 100]; liveBufferMix = 1.0; currentPitchWalkRate = [2, 2]; currentPitchWalkStep = [2, 2]; currentPitchRandomProb = [0, 0]; currentPitchRandomScale = [[0], [0]]; currentRatchetingProb = [0, 0];
@@ -104,8 +102,14 @@ SynthDef(\synth1, {
         Select.kr((rand_val * 5).floor, [2,4,6,8,10]) ]);
     grain_pitch = grain_pitch * (2 ** (((rand_val2 < pitch_random_prob) * random_interval * pitch_random_direction)/12));
     
-    grainBufFunc = { |buf, pitch, size, vol, dir, pos, jitter| var envBuf = Select.kr(env_select, grainEnvs); 
-        GrainBuf.ar(1, grain_trig, size, buf, pitch * dir, pos + jitter, 2, envbufnum: envBuf, mul: vol)};            
+    grainBufFunc = { |buf, pitch, size, vol, dir, pos, jitter|
+        var changeTrig, heldEnv, envBuf;
+        changeTrig = grain_trig * (TRand.kr(0, 1, grain_trig) < 0.5);
+        heldEnv = Latch.kr(TIRand.kr(0, 6, changeTrig), changeTrig);
+        envBuf = Select.kr(Select.kr(env_select, [0, 1, 2, 3, 4, 5, 6, heldEnv]), grainEnvs);
+        GrainBuf.ar(1, grain_trig, size, buf, pitch * dir, pos + jitter, 2, envbufnum: envBuf, mul: vol)
+    };
+
     processGrains = { |buf_l, buf_r, pitch, size, vol, dir, pos, jitter| [buf_l, buf_r].collect { |buf| grainBufFunc.(buf, pitch, size, vol, dir, pos, jitter) }};
     #sig_l, sig_r = processGrains.(buf_l, buf_r, grain_pitch, grain_size, invDenom, grain_direction, pos_sig, jitter_sig);
     ([1/2, 1/4, 1/8] ++ [2, 4]).do { |harmonic, i| var vol = [subharmonic_1_vol, subharmonic_2_vol, subharmonic_3_vol, overtone_1_vol, overtone_2_vol][i]; 
