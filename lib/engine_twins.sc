@@ -34,7 +34,7 @@ alloc {
             Env.sine(1, 1),
             Env.new([0, 1, 1, 0], [0.15, 0.7, 0.15], [4, 0, -4]),
             Env.triangle(1, 1), 
-            Env.step([0, 1], [1, 1]),
+            Env.step([1, 0], [1, 1]),
             Env.perc(0.01, 1, 1, -4),
             Env.perc(0.99, 0.01, 1, 4),
             Env.adsr(0.25, 0.15, 0.65, 1, 1, -4, 0)
@@ -127,7 +127,7 @@ SynthDef(\synth1, {
     sig_mix = HPF.ar(sig_mix, Lag.kr(hpf, 0.5));
     sig_mix = MoogFF.ar(sig_mix, Lag.kr(cutoff, 0.5), lpfgain);
     
-    SendReply.kr(Impulse.kr(15), '/buf_pos', [voice, buf_pos]);
+    SendReply.kr(Impulse.kr(30), '/buf_pos', [voice, buf_pos]);
     SendReply.kr(grain_trig, '/grain_pos', [voice, Wrap.kr(pos_sig + jitter_sig)]);
 
     Out.ar(out, sig_mix * gain * 1.4);
@@ -172,7 +172,7 @@ SynthDef(\synth1, {
             mixedR = XFade2.ar(oldR, in[1], mix * 2 - 1);
             BufWr.ar(mixedL, bufL, phasor);
             BufWr.ar(mixedR, bufR, phasor);
-            SendReply.kr(Impulse.kr(15), '/rec_pos', [voice, phasor / BufFrames.kr(bufL)]);
+            SendReply.kr(Impulse.kr(30), '/rec_pos', [voice, phasor / BufFrames.kr(bufL)]);
         }).add;
         
         SynthDef(\outputRecorder, {

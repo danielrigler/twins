@@ -429,7 +429,12 @@ local function disable_lfos_for_param(param_name, only_self)
 end
 
 local function get_audio_duration(filepath)
-    if not filepath or filepath == "" or filepath == "none" or filepath == "-" then return nil end
+    if not filepath or filepath == "" or filepath == "none" or filepath == "-" then 
+        for i = 1, 2 do
+            if params:get(i.."live_input") == 1 then return params:get("live_buffer_length") end
+        end
+        return nil 
+    end
     if not util.file_exists(filepath) then return nil end
     local ch, samples, rate = audio.file_info(filepath)
     if samples and rate and rate > 0 then return samples / rate end
@@ -495,7 +500,7 @@ end
 local function setup_params()
     params:add_separator("Input")
     for i = 1, 2 do
-      params:add_file(i.."sample","Sample "..i)params:set_action(i.."sample",function(file)if file~=nil and file~=""and file~="none"and file~="-"then lfo.clearLFOs(tostring(i),"jitter")engine.read(i,file)audio_active[i]=true update_pan_positioning()local d=get_audio_duration(file)if d then local ms=d*1000 local max_jit=math.min(ms,99999)params:set(i.."max_jitter",max_jit)params:set(i.."min_jitter",0)if not is_param_locked(i,"jitter")then local jp=i.."jitter"handle_lfo(jp,true)params:set(jp,util.clamp(d*math.random()*1000,0,99999))end if math.random()<0.3 and not lfo.is_param_locked(tostring(i),"jitter")then clock.run(function()clock.sleep(0.1)for s=1,16 do if params.lookup[s.."lfo"]and params:get(s.."lfo")==1 then randomize_lfo(s,i.."jitter")break end end end)end end else lfo.clearLFOs(tostring(i),"jitter")audio_active[i]=false osc_positions[i]=0 update_pan_positioning()end end)
+      params:add_file(i.."sample","Sample "..i) params:set_action(i.."sample",function(f)if f~=nil and f~=""and f~="none"and f~="-"then lfo.clearLFOs(tostring(i),"jitter")engine.read(i,f)audio_active[i]=true update_pan_positioning()local is_live=params:get(i.."live_input")==1 local dur=is_live and params:get("live_buffer_length")or get_audio_duration(f)if dur then local ms=dur*1000 local max_jit=math.min(ms,99999)params:set(i.."max_jitter",max_jit)params:set(i.."min_jitter",0)if not is_param_locked(i,"jitter")then local jp=i.."jitter"handle_lfo(jp,true)params:set(jp,util.clamp(dur*math.random()*1000,0,99999))end if not is_live and math.random()<0.3 and not lfo.is_param_locked(tostring(i),"jitter")then clock.run(function()clock.sleep(0.1)for s=1,16 do if params.lookup[s.."lfo"]and params:get(s.."lfo")==1 then randomize_lfo(s,i.."jitter")break end end end)end else lfo.clearLFOs(tostring(i),"jitter")audio_active[i]=false osc_positions[i]=0 update_pan_positioning()end end end)
     end
     params:add_binary("randomtapes", "Random Tapes", "trigger", 0) params:set_action("randomtapes", function() load_random_tape_file() end)
     
@@ -532,8 +537,7 @@ local function setup_params()
       params:add_control(i.."pitch_random_prob", i.." Pitch Randomize", controlspec.new(-100, 100, "lin", 1, 0, "%")) params:set_action(i.."pitch_random_prob", function(value) engine.pitch_random_prob(i, value) end)
       params:add_option(i.."pitch_random_scale_type", i.." Pitch Quantize", {"5th+oct", "5th+oct 2", "1 oct", "2 oct", "chrom", "maj", "min", "penta", "whole"}, 1) params:set_action(i.."pitch_random_scale_type", function(value) engine.pitch_random_scale_type(i, value - 1) end)
       params:add_control(i.."ratcheting_prob", i.." Ratcheting", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.."ratcheting_prob", function(value) engine.ratcheting_prob(i, value) end)
-params:add_option(i.."env_select", i.." Grain Envelope", {"Sine", "Tukey", "Triangle", "Square", "Perc.", "Rev. Perc.", "ADSR", "Random"}, 1)
-params:set_action(i.."env_select", function(value) engine.env_select(i, value - 1) end)
+      params:add_option(i.."env_select", i.." Grain Envelope", {"Sine", "Tukey", "Triangle", "Square", "Perc.", "Rev. Perc.", "ADSR", "Random"}, 1) params:set_action(i.."env_select", function(value) engine.env_select(i, value - 1) end)
       params:add_control(i.. "size_variation", i.. " Size Variation", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.. "size_variation", function(value) engine.size_variation(i, value * 0.01) end)
       params:add_control(i.. "direction_mod", i.. " Reverse", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.. "direction_mod", function(value) engine.direction_mod(i, value * 0.01) end)
       params:add_control(i.. "density_mod_amt", i.. " Density Mod", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.. "density_mod_amt", function(value) engine.density_mod_amt(i, value * 0.01) end)      
@@ -1274,49 +1278,44 @@ function redraw()
   -- Bottom row values
   local current_time = util.time()
   for track = 1, 2 do
-    local x = TRACK_X[track]
-    local value_level = is_bottom_active and LEVELS.highlight or LEVELS.value
-    if bottom_row_mode == "seek" then
-      if is_param_locked(track, "seek") then add_l_shape(draw_ops, x, BOTTOM_ROW_Y) end
-      local is_loaded = audio_active[track] or cached.live_input[track] == 1 or cached.live_direct[track] == 1
-      local display_text
-      if cached.live_input[track] == 1 then display_text = "live"
-      elseif cached.live_direct[track] == 1 then display_text = "direct"
-      else display_text = string.format("%.0f%%", osc_positions[track] * 100) end
-      add_text(value_level, x, BOTTOM_ROW_Y, display_text, nil)
-      if is_loaded and cached.live_direct[track] ~= 1 then
-        local current_speed = cached.speed[track]
-        local symbol = math.abs(current_speed) < 0.01 and "⏸" or (current_speed > 0 and "▶" or "◀")
-        add_text(value_level, track == 1 and 75 or 116, BOTTOM_ROW_Y, symbol, nil)
+      local x = TRACK_X[track]
+      local value_level = is_bottom_active and LEVELS.highlight or LEVELS.value
+      if bottom_row_mode == "seek" or bottom_row_mode == "speed" then
+          local is_loaded = audio_active[track] or cached.live_input[track] == 1 or cached.live_direct[track] == 1
+          if bottom_row_mode == "seek" then
+              if is_param_locked(track, "seek") then add_l_shape(draw_ops, x, BOTTOM_ROW_Y) end
+              local display_text
+              if cached.live_input[track] == 1 then display_text = "live"
+              elseif cached.live_direct[track] == 1 then display_text = "direct"
+              else display_text = string.format("%.0f%%", osc_positions[track] * 100) end
+              add_text(value_level, x, BOTTOM_ROW_Y, display_text, nil)
+          elseif bottom_row_mode == "speed" then
+              if is_param_locked(track, "speed") then add_l_shape(draw_ops, x, BOTTOM_ROW_Y) end
+              add_text(LEVELS.highlight, x, BOTTOM_ROW_Y, format_speed(cached.speed[track]), nil)
+          end
+          if is_loaded and cached.live_direct[track] ~= 1 then
+              local current_speed = cached.speed[track]
+              local symbol = math.abs(current_speed) < 0.01 and "⏸" or (current_speed > 0 and "▶" or "◀")
+              add_text(value_level, track == 1 and 78 or 119, BOTTOM_ROW_Y, symbol, nil)
+          end
+          if cached.live_direct[track] ~= 1 then
+              local pos = osc_positions[track]
+              add_rect(1, x, SEEK_BAR_Y, 30, 1)
+              if is_loaded then local pos_x = x + math.floor(pos * 30) add_rect(15, pos_x, SEEK_BAR_Y-1, 1, 2) end
+          end
+      elseif bottom_row_mode == "pan" then
+        if is_param_locked(track, "pan") then add_l_shape(draw_ops, x, BOTTOM_ROW_Y) end
+        local pan_val = cached.pan[track]
+        local pan_text = math.abs(pan_val) < 0.5 and "0%" or string.format("%.0f%%", pan_val)
+        add_text(LEVELS.highlight, x, BOTTOM_ROW_Y, pan_text, nil)
+      elseif bottom_row_mode == "lpf" or bottom_row_mode == "hpf" then
+        local filter_param = current_filter_mode == "lpf" and cached.cutoff[track] or cached.hpf[track]
+        if filter_lock_ratio then add_l_shape(draw_ops, x, BOTTOM_ROW_Y) end
+        local bar_width = util.linlin(math.log(20), math.log(20000), 0, 30, math.log(filter_param))
+        add_rect(1, x, SEEK_BAR_Y, bar_width, 1)
+        add_text(LEVELS.highlight, x, BOTTOM_ROW_Y, string.format("%.0f", filter_param), nil)
       end
-      if cached.live_direct[track] ~= 1 then
-        local pos = osc_positions[track]
-        add_rect(1, x, SEEK_BAR_Y, 30, 1)
-        add_rect(LEVELS.dim, x, SEEK_BAR_Y, 30 * pos, 1)
-        if is_loaded then add_pixel(15, x + math.floor(pos * 30), SEEK_BAR_Y) end
-      end
-    elseif bottom_row_mode == "speed" then
-      if is_param_locked(track, "speed") then add_l_shape(draw_ops, x, BOTTOM_ROW_Y) end
-      add_text(LEVELS.highlight, x, BOTTOM_ROW_Y, format_speed(cached.speed[track]), nil)
-      local is_loaded = audio_active[track] or cached.live_input[track] == 1 or cached.live_direct[track] == 1
-      if is_loaded and cached.live_direct[track] ~= 1 then
-        local current_speed = cached.speed[track]
-        local symbol = math.abs(current_speed) < 0.01 and "⏸" or (current_speed > 0 and "▶" or "◀")
-        add_text(value_level, track == 1 and 75 or 116, BOTTOM_ROW_Y, symbol, nil)
-      end
-    elseif bottom_row_mode == "pan" then
-      if is_param_locked(track, "pan") then add_l_shape(draw_ops, x, BOTTOM_ROW_Y) end
-      local pan_val = cached.pan[track]
-      local pan_text = math.abs(pan_val) < 0.5 and "0%" or string.format("%.0f%%", pan_val)
-      add_text(LEVELS.highlight, x, BOTTOM_ROW_Y, pan_text, nil)
-    elseif bottom_row_mode == "lpf" or bottom_row_mode == "hpf" then
-      local filter_param = current_filter_mode == "lpf" and cached.cutoff[track] or cached.hpf[track]
-      if filter_lock_ratio then add_l_shape(draw_ops, x, BOTTOM_ROW_Y) end
-      local bar_width = util.linlin(math.log(20), math.log(20000), 0, 30, math.log(filter_param))
-      add_rect(1, x, SEEK_BAR_Y, bar_width, 1)
-      add_text(LEVELS.highlight, x, BOTTOM_ROW_Y, string.format("%.0f", filter_param), nil)
     end
-  end
   -- Volume meters and pan indicators
   for track = 1, 2 do
     local height = util.linlin(-70, 10, 0, 64, cached.volume[track])
@@ -1331,27 +1330,53 @@ function redraw()
   -- Evolution indicator
   if cached.evolution == 1 then local pattern = patterns[evolution_animation_phase] or patterns[0] for _, pixel in ipairs(pattern) do add_pixel(LEVELS.highlight, pixel[1], pixel[2]) end end
   -- Grains
-  if bottom_row_mode == "seek" then
-    for track = 1, 2 do
-      local granular_gain = params:get(track.."granular_gain")
-      if granular_gain > 0 then
-        local base_x = TRACK_X[track]
-        local kept = {}
-        local size_ms = cached.size[track]
-        local lifetime = size_ms > 0 and (size_ms * 0.001) or 0.01
-        local max_grains = 50
-        for _, g in ipairs(grain_positions[track]) do
-          local age = current_time - (g.t or 0)
-          if age <= lifetime and #kept < max_grains then
-            local x = base_x + math.floor((g.pos or 0) * 30)
-            local bright = math.floor(lifetime > 0 and util.linlin(0, lifetime, LEVELS.highlight-2, LEVELS.dim, age) or LEVELS.highlight)
-            add_pixel(bright, x, SEEK_BAR_Y)
-            kept[#kept + 1] = g
+  if bottom_row_mode == "seek" or bottom_row_mode == "speed" then
+    local BAR_W = 30
+    for t = 1, 2 do
+      if params:get(t .. "granular_gain") > 0 then
+        local now = current_time
+        local bar_l = TRACK_X[t]
+        local bar_r = bar_l + BAR_W - 1
+        local grains = grain_positions[t] or {}
+        local size_ms = cached.size[t] or 0
+        local lifetime = math.max(0.01, size_ms * 0.001)
+        local dur = (params:get(t .. "live_input") == 1) and (params:get("live_buffer_length") or 1) or (get_audio_duration(params:get(t .. "sample")) or 1)
+        local grain_w = (size_ms <= 0) and 1 or math.max(1, math.floor((size_ms * 0.001 / dur) * BAR_W))
+        local play_speed = cached.speed[t] or 0
+        local keep, drawn = 0, 0
+        for i = 1, #grains do
+          local g = grains[i]
+          local age = now - g.t
+          if age <= lifetime then
+            keep = keep + 1
+            grains[keep] = g
+            if drawn < 50 then
+              local pos = bar_l + math.floor((g.pos or 0) * BAR_W)
+              local left, right
+              if play_speed >= -0.01 then
+                left  = pos + 1
+                right = left + grain_w - 1
+              else
+                right = pos - 1
+                left  = right - grain_w + 1
+              end
+              if not (right < bar_l or left > bar_r) then
+                local dl = math.max(left, bar_l)
+                local dr = math.min(right, bar_r)
+                local w = dr - dl + 1
+                if w > 0 then
+                  local brightness = 1 + (LEVELS.highlight - 1) * (1 - age / lifetime)
+                  add_rect(math.max(1, math.ceil(brightness)), dl, SEEK_BAR_Y, w, 1)
+                  drawn = drawn + 1
+                end
+              end
+            end
           end
         end
-        grain_positions[track] = kept
+        for i = keep + 1, #grains do grains[i] = nil end
+        grain_positions[t] = grains
       else
-        grain_positions[track] = {}
+        grain_positions[t] = {}
       end
     end
   end
@@ -1359,23 +1384,9 @@ function redraw()
   if bottom_row_mode == "seek" then for track = 1, 2 do if cached.live_input[track] == 1 then add_recording_head(draw_ops, TRACK_X[track], SEEK_BAR_Y, rec_positions[track]) end end end
   -- Morph bar
   if current_scene_mode == "on" then
-      local bar_width = 22
-      local morph_pos = util.linlin(0, 100, 0, bar_width, morph_amount)
-      local pulse_brightness = LEVELS.highlight
-      local background_brightness = 1
-      if morph_amount == 0 or morph_amount == 100 then
-          local pulse_speed = 2
-          local pulse_phase = math.sin(util.time() * math.pi * 2 * pulse_speed)
-          pulse_brightness = math.floor(util.linlin(-1, 1, LEVELS.dim, LEVELS.highlight, pulse_phase))
-          background_brightness = math.floor(util.linlin(-1, 1, 1, 5, pulse_phase))
-      end
-      pulse_brightness = util.clamp(pulse_brightness, 0, 15)
-      background_brightness = util.clamp(background_brightness, 0, 15)
-      add_rect(background_brightness, 6, 0, bar_width, 1)
-      if morph_amount > 0 then add_rect(pulse_brightness, 6, 0, morph_pos, 1) end
-      if morph_amount == 0 then add_pixel(pulse_brightness, 6, 0)
-      elseif morph_amount == 100 then add_pixel(pulse_brightness, 6 + bar_width-1, 0)
-      end
+    add_rect(1, 6, 0, 22, 1)
+    if morph_amount > 0 then add_rect(LEVELS.highlight, 6, 0, util.linlin(0, 100, 0, 22, morph_amount), 1) end
+    if morph_amount == 100 then add_pixel(LEVELS.highlight, 6 + 22 - 1, 0) end
   end
   -- Save message
   if showing_save_message then
