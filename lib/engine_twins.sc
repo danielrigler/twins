@@ -34,8 +34,7 @@ alloc {
             Env.sine(1, 1),
             Env.new([0, 1, 1, 0], [0.15, 0.7, 0.15], [4, 0, -4]),
             Env.triangle(1, 1), 
-            Env.step([1, 0], [1, 1]),
-            Env.perc(0.01, 1, 1, -4),
+            Env.perc(0.01, 0.99, 1, -4),
             Env.perc(0.99, 0.01, 1, 4),
             Env.adsr(0.25, 0.15, 0.65, 1, 1, -4, 0)
         ].collect { |env| Buffer.sendCollection(context.server, env.discretize) };
@@ -105,8 +104,8 @@ SynthDef(\synth1, {
     grainBufFunc = { |buf, pitch, size, vol, dir, pos, jitter|
         var changeTrig, heldEnv, envBuf;
         changeTrig = grain_trig * (TRand.kr(0, 1, grain_trig) < 0.5);
-        heldEnv = Latch.kr(TIRand.kr(0, 6, changeTrig), changeTrig);
-        envBuf = Select.kr(Select.kr(env_select, [0, 1, 2, 3, 4, 5, 6, heldEnv]), grainEnvs);
+        heldEnv = Latch.kr(TIRand.kr(0, 5, changeTrig), changeTrig);
+        envBuf = Select.kr(Select.kr(env_select, [0, 1, 2, 3, 4, 5, heldEnv]), grainEnvs);
         GrainBuf.ar(1, grain_trig, size, buf, pitch * dir, pos + jitter, 2, envbufnum: envBuf, mul: vol)
     };
 
@@ -128,7 +127,7 @@ SynthDef(\synth1, {
     sig_mix = MoogFF.ar(sig_mix, Lag.kr(cutoff, 0.5), lpfgain);
     
     SendReply.kr(Impulse.kr(30), '/buf_pos', [voice, buf_pos]);
-    SendReply.kr(grain_trig, '/grain_pos', [voice, Wrap.kr(pos_sig + jitter_sig)]);
+    SendReply.kr(grain_trig, '/grain_pos', [voice, Wrap.kr(pos_sig + jitter_sig), grain_size]);
 
     Out.ar(out, sig_mix * gain * 1.4);
 }).add;
@@ -462,7 +461,7 @@ SynthDef(\synth1, {
 
         o = OSCFunc({ |msg| var voice, pos; voice = msg[3].asInteger; pos = msg[4]; NetAddr("127.0.0.1", 10111).sendMsg("/twins/buf_pos", voice, pos); }, '/buf_pos', context.server.addr);
         o_rec = OSCFunc({ |msg| var voice, pos; voice = msg[3].asInteger; pos = msg[4]; NetAddr("127.0.0.1", 10111).sendMsg("/twins/rec_pos", voice, pos); }, '/rec_pos', context.server.addr);
-        o_grain = OSCFunc({ |msg| var voice, pos; voice = msg[3].asInteger; pos = msg[4]; NetAddr("127.0.0.1", 10111).sendMsg("/twins/grain_pos", voice, pos); }, '/grain_pos', context.server.addr);   
+        o_grain = OSCFunc({ |msg| var voice, pos, size; voice = msg[3].asInteger; pos = msg[4]; size = msg[5]; NetAddr("127.0.0.1", 10111).sendMsg("/twins/grain_pos", voice, pos, size);}, '/grain_pos', context.server.addr);
         o_output = OSCFunc({ |msg| var pos; pos = msg[3]; currentOutputWritePos = pos;}, '/output_write_pos', context.server.addr);
     }
 

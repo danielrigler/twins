@@ -537,7 +537,7 @@ local function setup_params()
       params:add_control(i.."pitch_random_prob", i.." Pitch Randomize", controlspec.new(-100, 100, "lin", 1, 0, "%")) params:set_action(i.."pitch_random_prob", function(value) engine.pitch_random_prob(i, value) end)
       params:add_option(i.."pitch_random_scale_type", i.." Pitch Quantize", {"5th+oct", "5th+oct 2", "1 oct", "2 oct", "chrom", "maj", "min", "penta", "whole"}, 1) params:set_action(i.."pitch_random_scale_type", function(value) engine.pitch_random_scale_type(i, value - 1) end)
       params:add_control(i.."ratcheting_prob", i.." Ratcheting", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.."ratcheting_prob", function(value) engine.ratcheting_prob(i, value) end)
-      params:add_option(i.."env_select", i.." Grain Envelope", {"Sine", "Tukey", "Triangle", "Square", "Perc.", "Rev. Perc.", "ADSR", "Random"}, 1) params:set_action(i.."env_select", function(value) engine.env_select(i, value - 1) end)
+      params:add_option(i.."env_select", i.." Grain Envelope", {"Sine", "Tukey", "Triangle", "Perc.", "Rev. Perc.", "ADSR", "Random"}, 1) params:set_action(i.."env_select", function(value) engine.env_select(i, value - 1) end)
       params:add_control(i.. "size_variation", i.. " Size Variation", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.. "size_variation", function(value) engine.size_variation(i, value * 0.01) end)
       params:add_control(i.. "direction_mod", i.. " Reverse", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.. "direction_mod", function(value) engine.direction_mod(i, value * 0.01) end)
       params:add_control(i.. "density_mod_amt", i.. " Density Mod", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.. "density_mod_amt", function(value) engine.density_mod_amt(i, value * 0.01) end)      
@@ -683,7 +683,7 @@ local function setup_params()
         params:add_taper(i.."min_density", i.." density (min)", 0.1, 50, 0.5, 5, "Hz")
         params:add_taper(i.."max_density", i.." density (max)", 0.1, 50, 30, 5, "Hz")
         params:add_taper(i.."min_spread", i.." spread (min)", 0, 100, 0, 0, "%")
-        params:add_taper(i.."max_spread", i.." spread (max)", 0, 100, 90, 0, "%")
+        params:add_taper(i.."max_spread", i.." spread (max)", 0, 100, 70, 0, "%")
         params:add_control(i.."min_pitch", i.." pitch (min)", controlspec.new(-48, 48, "lin", 1, -31, "st"))
         params:add_control(i.."max_pitch", i.." pitch (max)", controlspec.new(-48, 48, "lin", 1, 31, "st"))
         params:add_taper(i.."min_speed", i.." speed (min)", -2, 2, -0.15, 0, "x")
@@ -1114,7 +1114,7 @@ function key(n, z)
 end
 
 local function format_density(value) return string.format("%.1f Hz", value) end
-local function format_pitch(value, track) if track then local pitch_walk_rate = params:get(track.."pitch_walk_rate") or 0 local pitch_walk_enabled = pitch_walk_rate > 0 if value > 0 then return string.format("+%.0f%s", value, pitch_walk_enabled and ".." or "") else return string.format("%.0f%s", value, pitch_walk_enabled and ".." or "") end else if value > 0 then return string.format("+%.0f", value) else return string.format("%.0f", value) end end end
+local function format_pitch(value, track) if not track then return value > 0 and string.format("+%.0f", value) or string.format("%.0f", value) end local pitch_walk_enabled = (params:get(track.."pitch_walk_rate") or 0) > 0 local pitch_random_enabled = (params:get(track.."pitch_random_prob") or 0) ~= 0 local show_dots = pitch_walk_enabled or pitch_random_enabled local suffix = show_dots and ".." or "" return value > 0 and string.format("+%.0f%s", value, suffix) or string.format("%.0f%s", value, suffix) end
 local function format_seek(value) return string.format("%.0f%%", value) end
 local function format_speed(speed) if math.abs(speed) < 0.01 then return ".00x" elseif math.abs(speed) < 1 then if speed < -0.01 then return string.format("-.%02dx", math.floor(math.abs(speed) * 100)) else return string.format(".%02dx", math.floor(math.abs(speed) * 100)) end else return string.format("%.2fx", speed) end end
 local function format_jitter(value) if value > 999 then return string.format("%.1f s", value / 1000) else return string.format("%.0f ms", value) end end
@@ -1339,19 +1339,19 @@ function redraw()
         local bar_r = bar_l + BAR_W - 1
         local grains = grain_positions[t] or {}
         local size_ms = cached.size[t] or 0
-        local lifetime = math.max(0.01, size_ms * 0.001)
         local dur = (params:get(t .. "live_input") == 1) and (params:get("live_buffer_length") or 1) or (get_audio_duration(params:get(t .. "sample")) or 1)
-        local grain_w = (size_ms <= 0) and 1 or math.max(1, math.floor((size_ms * 0.001 / dur) * BAR_W))
         local play_speed = cached.speed[t] or 0
         local keep, drawn = 0, 0
         for i = 1, #grains do
           local g = grains[i]
           local age = now - g.t
-          if age <= lifetime then
+          if age <= (g.size or 0.1) then
             keep = keep + 1
             grains[keep] = g
             if drawn < 50 then
               local pos = bar_l + math.floor((g.pos or 0) * BAR_W)
+              local grain_w = 1
+              if g.size and dur > 0 then grain_w = math.max(1, math.floor((g.size / dur) * BAR_W)) end
               local left, right
               if play_speed >= -0.01 then
                 left  = pos + 1
@@ -1365,7 +1365,7 @@ function redraw()
                 local dr = math.min(right, bar_r)
                 local w = dr - dl + 1
                 if w > 0 then
-                  local brightness = 1 + (LEVELS.highlight - 1) * (1 - age / lifetime)
+                  local brightness = 1 + (LEVELS.highlight - 1) * (1 - age / (g.size or 0.1))
                   add_rect(math.max(1, math.ceil(brightness)), dl, SEEK_BAR_Y, w, 1)
                   drawn = drawn + 1
                 end
@@ -1411,8 +1411,8 @@ local osc_handlers = {
         if params:get(vid.."live_input") == 1 then rec_positions[vid] = pos end
     end,
     ["/twins/grain_pos"] = function(args)
-        local vid, pos = args[1] + 1, args[2]
-        if audio_active[vid] then table.insert(grain_positions[vid], {pos = pos, t = util.time()}) end
+        local vid, pos, size = args[1] + 1, args[2], args[3]
+        if audio_active[vid] then table.insert(grain_positions[vid], {pos = pos, size = size, t = util.time()}) end
     end,
     ["/twins/output_saved"] = function(args)
         local filepath = args[1]

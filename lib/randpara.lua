@@ -309,6 +309,10 @@ local track_param_configs = {
     {name=track.."subharmonics_3", prob=0.5, default=0, random=function() return random_float(0, 0.4) end},
     {name=track.."overtones_1", prob=0.5, default=0, random=function() return random_float(0, 0.4) end},
     {name=track.."overtones_2", prob=0.5, default=0, random=function() return random_float(0, 0.4) end},
+    {name=track.."env_select", prob=0.3, default=1, random=function() return math.random(1, 6) end},
+    {name=track.."ratcheting_prob", prob=0.2, default=0, random=function() return math.random(0, 30) end},
+    {name=track.."pitch_random_prob", prob=0.2, default=0, random=function() return math.random(-50, 50) end},
+    {name=track.."pitch_random_scale_type", prob=0.2, default=1, random=function() return math.random(1, 4) end},
   }} end,
   eq = function(track) return { lock_param = "lock_eq", params = {
     {name=track.."eq_low_gain", prob=0.4, default=0, random=function() return random_float(-0.2, 0.1) end},
