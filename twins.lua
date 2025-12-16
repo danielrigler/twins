@@ -1326,7 +1326,7 @@ function redraw()
   -- Status indicators
   if cached.dry_mode == 1 then add_pixel(LEVELS.highlight, 6, 0) add_pixel(LEVELS.highlight, 10, 0) add_pixel(LEVELS.highlight, 14, 0) add_pixel(LEVELS.highlight, 18, 0) end
   -- Symmetry connection indicators
-  if cached.symmetry == 1 then for _, row in ipairs(param_rows) do local param_name = string.match(row.label, "%a+") local y = row.y - 3 add_pixel(1, 84, y) add_pixel(1, 85, y) add_pixel(1, 86, y) end add_pixel(1, 84, BOTTOM_ROW_Y - 3) add_pixel(1, 85, BOTTOM_ROW_Y - 3) add_pixel(1, 86, BOTTOM_ROW_Y - 3) end
+  if cached.symmetry == 1 then for _, row in ipairs(param_rows) do local param_name = string.match(row.label, "%a+") local y = row.y - 3  add_pixel(1, 85, y) end add_pixel(1, 85, BOTTOM_ROW_Y - 3) end
   -- Evolution indicator
   if cached.evolution == 1 then local pattern = patterns[evolution_animation_phase] or patterns[0] for _, pixel in ipairs(pattern) do add_pixel(LEVELS.highlight, pixel[1], pixel[2]) end end
   -- Grains
