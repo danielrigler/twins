@@ -509,7 +509,7 @@ local function setup_params()
       params:add_binary(i.."live_input", "Live Buffer "..i.." ● ►", "toggle", 0) params:set_action(i.."live_input", function(value) if value == 1 then if params:get(i.."live_direct") == 1 then params:set(i.."live_direct", 0) end engine.set_live_input(i, 1) engine.live_mono(i, params:get("isMono") - 1) audio_active[i] = true update_pan_positioning() else engine.set_live_input(i, 0) if not audio_active[i] and params:get(i.."live_direct") == 0 then osc_positions[i] = 0 else update_pan_positioning() end end end)
     end
     params:add_control("live_buffer_mix", "Overdub", controlspec.new(0, 100, "lin", 1, 100, "%")) params:set_action("live_buffer_mix", function(value) engine.live_buffer_mix(value * 0.01) end)
-    params:add_control("live_buffer_length", "Buffer Length", controlspec.new(0.1, 60, "lin", 0.1, 2, "s")) params:set_action("live_buffer_length", function(value) engine.live_buffer_length(value) end)
+    params:add_taper("live_buffer_length", "Buffer Length", 0.05, 10, 2, 3, "s") params:set_action("live_buffer_length", function(value) engine.live_buffer_length(value) end)
     params:add{type = "trigger", id = "save_live_buffer1", name = "Buffer1 to Tape", action = function() local timestamp = os.date("%Y%m%d_%H%M%S") local filename = "live1_"..timestamp..".wav" engine.save_live_buffer(1, filename) end}
     params:add{type = "trigger", id = "save_live_buffer2", name = "Buffer2 to Tape", action = function() local timestamp = os.date("%Y%m%d_%H%M%S") local filename = "live2_"..timestamp..".wav" engine.save_live_buffer(2, filename) end}
     for i = 1, 2 do
@@ -1166,10 +1166,6 @@ local function add_three_way_link_shape(draw_ops, x, y, param_type)
     end
 end
 
-local function add_recording_head(draw_ops, x, y, position)
-    draw_ops.rects[#draw_ops.rects + 1] = {15, x + math.floor(position * 30), y - 1, 1, 2}
-end
-
 local function batch_draw_by_level(draw_ops)
   local by_level = {}
   for _, op in ipairs(draw_ops.rects) do
@@ -1381,7 +1377,9 @@ function redraw()
     end
   end
   -- Recording heads
-  if bottom_row_mode == "seek" then for track = 1, 2 do if cached.live_input[track] == 1 then add_recording_head(draw_ops, TRACK_X[track], SEEK_BAR_Y, rec_positions[track]) end end end
+  if bottom_row_mode == "seek" or bottom_row_mode == "speed" then 
+    for track = 1, 2 do if cached.live_input[track] == 1 then add_rect(15, TRACK_X[track] + math.floor(rec_positions[track] * 30), SEEK_BAR_Y - 1, 2, 2) end end 
+  end
   -- Morph bar
   if current_scene_mode == "on" then
     add_rect(1, 6, 0, 22, 1)
