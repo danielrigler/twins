@@ -81,7 +81,7 @@ SynthDef(\synth1, {
     dry_sig = [PlayBuf.ar(1, buf_l, speed, startPos: pos * BufFrames.kr(buf_l), trigger: t_reset_pos, loop: 1), PlayBuf.ar(1, buf_r, speed, startPos: pos * BufFrames.kr(buf_r), trigger: t_reset_pos, loop: 1)];
     dry_sig = Balance2.ar(dry_sig[0], dry_sig[1], pan);
 
-    grain_pitch = Lag.kr(Select.kr(pitch_mode, [speed * pitch_offset, pitch_offset]);) * if(pitch_walk_rate > 0, {
+    grain_pitch = Lag.kr(Select.kr(pitch_mode, [speed * pitch_offset, pitch_offset]);, 2.5) * if(pitch_walk_rate > 0, {
         var trig = Dust.kr(pitch_walk_rate);
         var step = TIRand.kr(0, pitch_walk_step, trig, Array.series(25, 25, -1).sqrt);
         var totalStep = step * TChoose.kr(trig, [1, -1]);
