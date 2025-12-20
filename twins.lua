@@ -6,16 +6,20 @@
 --            by: @dddstudio                       
 -- 
 --                          
---                           v0.46
+--                           v0.47
 -- E1: Master Volume
--- K1+E2/E3: Volume 1/2
--- Hold K1: Mode Select
+-- K1+E2/E3: Volume
+-- Hold K1: Morphing
+-- Hold K2: Linked Mode
+-- Hold K3: Symmetry
 -- K1+E1: Crossfade/Morph
 -- K2/K3: Navigate
 -- E2/E3: Adjust Parameters
 -- K2+K3: Lock Parameters
 -- K2+K3: HP/LP Filter 
--- K1+K2/K3: Randomize 1/2
+-- K1+K2/K3: Randomize
+-- K2+E2/E3: LFO depth
+-- K3+E2/E3: LFO offset
 --
 --
 --
