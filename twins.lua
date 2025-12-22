@@ -1335,7 +1335,7 @@ function redraw()
       local fmt = FORMAT[row.hz and "hz" or row.st and "st" or name]
       local txt = fmt and fmt(val, t) or params:string(param)
       T(hi and LEVEL.hi or LEVEL.val, x, row.y, txt)
-      if mod and name ~= "pitch" then
+      if mod then
         local a, b = lfo. get_parameter_range(param)
         R(LEVEL.dim, x, row.y + 1, util.linlin(a, b, 0, BAR_W, mod), 1)
       end
