@@ -9,7 +9,6 @@ local math_random = math.random
 local math_pi = math.pi
 local math_sin = math.sin
 local math_floor = math.floor
--- Constants
 local PHASE_INCREMENT = 1/30
 local TWO_PI = math_pi * 2
 local LOCKABLE_PARAMS = { "jitter", "size", "density", "spread", "pitch", "pan", "seek", "speed" }
@@ -28,7 +27,6 @@ function lfo.set_pause(paused)
   lfo_paused = paused
 end
 
--- Initialize LFO table
 for i = 1, number_of_outputs do
   lfo[i] = {
     freq = 0.05,
@@ -76,7 +74,6 @@ function lfo.clearLFOs(track, param_type)
     end
   end
 
-  -- Reset panning when clearing all
   if not track and not param_type then
     if is_audio_loaded("1") and is_audio_loaded("2") then
       pset("1pan", -15); pset("2pan", 15)
@@ -92,7 +89,6 @@ lfo.lfo_targets = {
   "1pitch", "2pitch", "1cutoff", "2cutoff", "1hpf", "2hpf", "1speed", "2speed"
 }
 
--- Target ranges are kept as before; unchanged behavior
 lfo.target_ranges = {
   ["1pan"] = { depth = { 25, 90 }, offset = { 0, 0 }, frequency = { 0.05, 0.6 }, waveform = { "sine" }, chance = 0.8 },
   ["2pan"] = { depth = { 25, 90 }, offset = { 0, 0 }, frequency = { 0.05, 0.6 }, waveform = { "sine" }, chance = 0.8 },
@@ -121,7 +117,7 @@ local param_ranges = {
   ["1size"] = { 50, 599 }, ["2size"] = { 50, 599 },
   ["1density"] = { 0, 50 }, ["2density"] = { 0, 50 },
   ["1volume"] = { -70, 10 }, ["2volume"] = { -70, 10 },
-  ["1pitch"] = { -12, 12 }, ["2pitch"] = { -12, 12 },
+  ["1pitch"] = { -48, 48 }, ["2pitch"] = { -48, 48 },
   ["1cutoff"] = { 20, 20000 }, ["2cutoff"] = { 20, 20000 },
   ["1hpf"] = { 20, 20000 }, ["2hpf"] = { 20, 20000 }
 }

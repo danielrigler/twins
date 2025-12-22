@@ -65,20 +65,17 @@ local audio_active = {[1] = false, [2] = false}
 local morph_amount = 0
 local valid_audio_exts = {[".wav"]=true,[".aif"]=true,[".aiff"]=true,[".flac"]=true}
 local mode_list = {"spread","pitch","density","size","jitter","lpf","pan","speed","seek"}
-local mode_indices = {}; for i,v in ipairs(mode_list) do mode_indices[v]=i end
-local mode_list2 = {"seek","speed","pan","lpf","jitter","size","density","pitch","spread"}
-local mode_indices2 = {}; for i,v in ipairs(mode_list2) do mode_indices2[v]=i end
-local key1_press_time = nil
-local key1_long_press_triggered = false
-local key1_has_other_interaction = false
-local key2_press_time = nil
-local key2_long_press_triggered = false
-local key2_has_other_interaction = false
-local key3_press_time = nil
-local key3_long_press_triggered = false
-local key3_has_other_interaction = false
-local key_monitors = {}
-local KEY_LONG_PRESS_THRESHOLD = 1 
+local mode_indices = {} for i,v in ipairs(mode_list) do mode_indices[v] = i end
+local key_trackers = {
+    [1] = {press_time = nil, had_interaction = false, long_triggered = false},
+    [2] = {press_time = nil, had_interaction = false, long_triggered = false},
+    [3] = {press_time = nil, had_interaction = false, long_triggered = false}}
+local KEY_LONG_PRESS_THRESHOLD = 1
+local key_longpress_actions = {
+    [1] = {param = "scene_mode", a = 1, b = 2},
+    [2] = {param = "global_pitch_size_density_link", a = 1, b = 0},
+    [3] = {param = "symmetry", a = 1, b = 0}}
+local longpress_metro = nil
 local current_scene_mode = "off"
 local scene_data = {[1] = {[1] = {}, [2] = {}}, [2] = {[1] = {}, [2] = {}}}
 local morph_temp_scene = {}
@@ -91,10 +88,6 @@ local osc_positions = {[1] = 0, [2] = 0}
 local rec_positions = {[1] = 0, [2] = 0}
 local ui_metro = nil
 local lfos_turned_off = {}
-local VALID_PARAMS = {
-    speed = true, jitter = true, size = true, density = true,
-    spread = true, pitch = true, seek = true, pan = true,
-    cutoff = true, hpf = true, volume = true}
 local LFO_COUNT = 16
 local OFFSET_DELTA = 0.02
 local param_modes = {
@@ -103,19 +96,15 @@ local param_modes = {
     pan = {param = "pan", delta = 5, engine = true, has_lock = true, invert = true},
     lpf = {param = "cutoff", delta = 1, engine = true, has_lock = false},
     hpf = {param = "hpf", delta = 1, engine = true, has_lock = false},
-    jitter = {param = "jitter", delta = 2, engine = true, has_lock = true},
-    size = {param = "size", delta = 2, engine = true, has_lock = true},
-    density = {param = "density", delta = 2, engine = true, has_lock = true},
-    spread = {param = "spread", delta = 2, engine = true, has_lock = true},
-    pitch = {param = "pitch", delta = 1, engine = true, has_lock = true}}
-local param_rows = {
-    {y = 11, label = "jitter:    ", mode = "jitter", param1 = "1jitter", param2 = "2jitter"},
-    {y = 21, label = "size:     ", mode = "size", param1 = "1size", param2 = "2size"},
-    {y = 31, label = "density:  ", mode = "density", param1 = "1density", param2 = "2density", hz = true},
-    {y = 41, label = "pitch:   ", mode = "pitch", param1 = "1pitch", param2 = "2pitch", st = true},
-    {y = 51, label = "spread:    ", mode = "spread", param1 = "1spread", param2 = "2spread"}}
-local animation_x = 0 animation_y = -64 animation_speed = 100 animation_complete = false animation_start_time = nil animation_directions = {"top", "bottom", "left", "right"} current_animation_direction = "top"
+    jitter = {param = "jitter", delta = 2, engine = true, has_lock = true, y = 11, label = "jitter:    "},
+    size = {param = "size", delta = 2, engine = true, has_lock = true, y = 21, label = "size:     "},
+    density = {param = "density", delta = 2, engine = true, has_lock = true, y = 31, label = "density:  ", hz = true},
+    pitch = {param = "pitch", delta = 1, engine = true, has_lock = true, y = 41, label = "pitch:   ", st = true},
+    spread = {param = "spread", delta = 2, engine = true, has_lock = true, y = 51, label = "spread:    "},
+    volume = {param = "volume", engine = true}}
+local param_rows = {} for mode, config in pairs(param_modes) do if config.y then table.insert(param_rows, {y = config.y, label = config.label, mode = mode, param1 = "1" .. config.param, param2 = "2" .. config.param, hz = config.hz, st = config.st }) end end table.sort(param_rows, function(a, b) return a.y < b.y end)
 
+local animation_x = 0 animation_y = -64 animation_speed = 100 animation_complete = false animation_start_time = nil animation_directions = {"top", "bottom", "left", "right"} current_animation_direction = "top"
 local function table_find(tbl, value) for i = 1, #tbl do if tbl[i] == value then return i end end return nil end
 local function is_audio_loaded(track_num) local file_path = params:get(track_num .. "sample") return (file_path and file_path ~= "-") or audio_active[track_num] end
 local function random_float(l, h) return l + math.random() * (h - l) end
@@ -124,59 +113,9 @@ local function update_evolution_animation() if params:get("evolution") == 1 then
 local function is_param_locked(track_num, param) return params:get(track_num .. "lock_" .. param) == 2 end
 local function is_lfo_active_for_param(param_name) for i = 1, 16 do local target_index = params:get(i.. "lfo_target") if lfo.lfo_targets[target_index] == param_name and params:get(i.. "lfo") == 2 then return true, i end end return false, nil end
 local function update_pan_positioning() local loaded1 = is_audio_loaded(1) local loaded2 = is_audio_loaded(2) local pan1_locked = is_param_locked(1, "pan") local pan1_has_lfo = is_lfo_active_for_param("1pan") local pan2_locked = is_param_locked(2, "pan") local pan2_has_lfo = is_lfo_active_for_param("2pan") if not pan1_locked and not pan1_has_lfo then params:set("1pan", loaded2 and -15 or 0) end if not pan2_locked and not pan2_has_lfo then params:set("2pan", loaded1 and 15 or 0) end end
-local function stop_and_clean_metro(m) if m then local ok, err = pcall(function() m:stop() end) m.event = nil end end
-
-local function debug_parameter_range(param_name)
-    local min_val, max_val = lfo.get_parameter_range(param_name)
-    local current_val = params:get(param_name)
-    print(string.format("%s: current=%f, min=%f, max=%f, range_valid=%s", 
-          param_name, current_val or 0, min_val or 0, max_val or 0, 
-          tostring(min_val and max_val and max_val > min_val)))
-    return min_val, max_val, current_val
-end
-
-local function get_safe_parameter_range(param_name)
-    local min_val, max_val = lfo.get_parameter_range(param_name)
-    local current_val = params:get(param_name)
-    
-    -- Default ranges for common parameter types
-    if not min_val or not max_val or min_val >= max_val then
-        if param_name:match("pan$") then
-            min_val, max_val = -100, 100
-        elseif param_name:match("volume$") then
-            min_val, max_val = -70, 10
-        elseif param_name:match("cutoff$") or param_name:match("hpf$") then
-            min_val, max_val = 20, 20000
-        elseif param_name:match("pitch$") then
-            min_val, max_val = -48, 48
-        elseif param_name:match("seek$") or param_name:match("spread$") then
-            min_val, max_val = 0, 100
-        elseif param_name:match("jitter$") then
-            min_val, max_val = 0, 999900
-        elseif param_name:match("size$") then
-            min_val, max_val = 20, 5999
-        elseif param_name:match("density$") then
-            min_val, max_val = 0.1, 300
-        elseif param_name:match("speed$") then
-            min_val, max_val = -2, 2
-        else
-            -- Generic fallback
-            min_val, max_val = 0, 100
-        end
-    end
-    
-    -- Ensure current value is within bounds
-    if current_val then
-        current_val = util.clamp(current_val, min_val, max_val)
-    else
-        current_val = (min_val + max_val) / 2
-    end
-    
-    return min_val, max_val, current_val
-end
 
 local function setup_ui_metro()
-  if ui_metro then stop_and_clean_metro(ui_metro) end
+  if ui_metro then stop_metro_safe(ui_metro) end
   ui_metro = metro.init()
   ui_metro.time = 1/60
   current_animation_direction = animation_directions[math.random(#animation_directions)]
@@ -195,6 +134,32 @@ local function setup_ui_metro()
     redraw()
   end
   ui_metro:start()
+end
+
+local function init_longpress_checker()
+    if longpress_metro then stop_metro_safe(longpress_metro) end
+    longpress_metro = metro.init()
+    longpress_metro.time = 0.2
+    longpress_metro.event = function()
+        local now = util.time()
+        for n = 1, 3 do
+            local tracker = key_trackers[n]
+            local action = key_longpress_actions[n]
+            if tracker.press_time and 
+               not tracker.had_interaction and 
+               not tracker.long_triggered and
+               action then
+                local duration = now - tracker.press_time
+                if duration >= KEY_LONG_PRESS_THRESHOLD then
+                    tracker.long_triggered = true
+                    tracker.had_interaction = true
+                    local curr = params:get(action.param)
+                    params:set(action.param, (curr == action.a) and action.b or action.a)
+                end
+            end
+        end
+    end
+    longpress_metro:start()
 end
 
 local morph_voice_params = { "speed", "pitch", "jitter", "size", "density", "spread", "pan", "seek",
@@ -286,9 +251,7 @@ local function apply_morph()
         local lfo_B_track1 = scene2_track1.lfo_data and scene2_track1.lfo_data[i]
         local lfo_A_track2 = scene1_track2.lfo_data and scene1_track2.lfo_data[i]
         local lfo_B_track2 = scene2_track2.lfo_data and scene2_track2.lfo_data[i]
-        if not (lfo_A_track1 or lfo_B_track1 or lfo_A_track2 or lfo_B_track2) then if params:get(i.."lfo") == 2 then params:set(i.."lfo", 1) end
-            goto continue_lfo
-        end
+        if not (lfo_A_track1 or lfo_B_track1 or lfo_A_track2 or lfo_B_track2) then if params:get(i.."lfo") == 2 then params:set(i.."lfo", 1) end goto continue_lfo end
         local lfo_data_A = lfo_A_track1 or lfo_A_track2
         local lfo_data_B = lfo_B_track1 or lfo_B_track2
         local target_param = lfo_data_A and lfo.lfo_targets[lfo_data_A.target] or lfo_data_B and lfo.lfo_targets[lfo_data_B.target]
@@ -424,57 +387,6 @@ local function initialize_scenes_with_current_params()
     for track = 1, 2 do for scene = 1, 2 do store_scene(track, scene) end end
 end
 
-local function setup_key_monitors()
-    for _, m in pairs(key_monitors) do if m then stop_and_clean_metro(m) end end
-    key_monitors = {}
-    local defs = {
-        {
-            press_time = function() return key1_press_time end,
-            long = function(v) key1_long_press_triggered = v end,
-            inter = function(v) key1_has_other_interaction = v end,
-            is_long = function() return key1_long_press_triggered end,
-            has_inter = function() return key1_has_other_interaction end,
-            p = "scene_mode", a = 1, b = 2,
-        },
-        {
-            press_time = function() return key2_press_time end,
-            long = function(v) key2_long_press_triggered = v end,
-            inter = function(v) key2_has_other_interaction = v end,
-            is_long = function() return key2_long_press_triggered end,
-            has_inter = function() return key2_has_other_interaction end,
-            p = "global_pitch_size_density_link", a = 1, b = 0,
-        },
-        {
-            press_time = function() return key3_press_time end,
-            long = function(v) key3_long_press_triggered = v end,
-            inter = function(v) key3_has_other_interaction = v end,
-            is_long = function() return key3_long_press_triggered end,
-            has_inter = function() return key3_has_other_interaction end,
-            p = "symmetry", a = 1, b = 0,
-        }
-    }
-    for i, d in ipairs(defs) do
-        local m = metro.init()
-        m.time = 0.2
-        m.event = function()
-            local t = d.press_time()
-            if t and not d.is_long() and not d.has_inter() then
-                if util.time() - t >= KEY_LONG_PRESS_THRESHOLD then
-                    d.long(true)
-                    d.inter(true)
-                    local curr = params:get(d.p)
-                    params:set(d.p, (curr == d.a) and d.b or d.a)
-                end
-            end
-        end
-        m:start()
-        key_monitors[i] = m
-    end
-end
-
-
-
-
 local function disable_lfos_for_param(param_name, only_self)
     local base_param = param_name:sub(2)
     if only_self then
@@ -491,9 +403,7 @@ end
 
 local function get_audio_duration(filepath)
     if not filepath or filepath == "" or filepath == "none" or filepath == "-" then 
-        for i = 1, 2 do
-            if params:get(i.."live_input") == 1 then return params:get("live_buffer_length") end
-        end
+        for i = 1, 2 do if params:get(i.."live_input") == 1 then return params:get("live_buffer_length") end end
         return nil 
     end
     if not util.file_exists(filepath) then return nil end
@@ -769,12 +679,13 @@ local function setup_params()
     params:add{type = "trigger", id = "save_output_buffer", name = "Bounce", action = function() local filename = "twins_output.wav" if engine.save_output_buffer then showing_save_message = true engine.save_output_buffer(filename) end end}
     params:add_control("output_buffer_length", "Loop Length", controlspec.new(1, 60, "lin", 1, 8, "s")) params:set_action("output_buffer_length", function(value) engine.set_output_buffer_length(value + 1) end)    
     
-    params:add_group("Other", 7)
+    params:add_group("Other", 8)
     params:add_binary("dry_mode", "Dry Mode", "toggle", 0) params:set_action("dry_mode", function(x) drymode.toggle_dry_mode() end)
     params:add_binary("randomtape1", "Random Tape 1", "trigger", 0) params:set_action("randomtape1", function() load_random_tape_file(1) end)
     params:add_binary("randomtape2", "Random Tape 2", "trigger", 0) params:set_action("randomtape2", function() load_random_tape_file(2) end)
     params:add_binary("unload_all", "Unload All Audio", "trigger", 0) params:set_action("unload_all", function() for i=1, 2 do params:set(i.."seek", 0) params:set(i.."sample", "-") params:set(i.."live_input", 0) params:set(i.."live_direct", 0) audio_active[i] = false osc_positions[i] = 0 end engine.unload_all() update_pan_positioning() end)
     params:add_binary("global_pitch_size_density_link", "Linked Mode", "toggle", 0) params:set_action("global_pitch_size_density_link", function(value) if value == 1 then for i = 1, 2 do local pitch = params:get(i.."pitch") local size = params:get(i.."size") local density = params:get(i.."density") if size > 0 and density > 0 then _G["base_pitch_"..i] = pitch _G["base_size_"..i] = size _G["base_density_"..i] = density _G["size_density_product_"..i] = size * density end end end end)
+    params:add_option("pitch_lag", "Pitch Lag", {"off", "very small", "small", "medium", "high", "very high"}, 1) params:set_action("pitch_lag", function(value) local lag_times = {0, 1, 2, 4, 8, 16} local lag_time = lag_times[value] for i = 1, 2 do engine.pitch_lag(i, lag_time) end end)
     params:add_option("steps", "Transition Time", {"short", "medium", "long"}, 1) params:set_action("steps", function(value) steps = ({20, 300, 800})[value] end)
     
     for i = 1, 2 do
@@ -794,7 +705,7 @@ end
 local function randomize_pitch(track, other_track, symmetry)
     local function set_pitch(track, other_track, new_pitch, symmetry)
 		  if params:get(track.."pitch") ~= new_pitch then
-			  params:set(track.."pitch", new_pitch)
+		    params:set(track.."pitch", new_pitch)
 			  if symmetry then params:set(other_track.."pitch", new_pitch) end
 		  end
     end
@@ -912,126 +823,98 @@ end
 local function handle_volume_lfo(track, delta, crossfade_mode)
     if key_state[2] or key_state[3] then return end
     local p = track .. "volume"
-    local other_track = 3 - track
-    local op = other_track .. "volume"
+    local op = (3 - track) .. "volume"
     local a1, i1 = is_lfo_active_for_param(p)
     local a2, i2 = is_lfo_active_for_param(op)
     local lfo_delta = delta * 1.5
     local vol_delta = delta * 3
+    local other_delta = crossfade_mode and -delta or delta
     if a1 then
         params:delta(i1.."offset", lfo_delta)
-        if a2 then params:delta(i2.."offset", crossfade_mode and -lfo_delta or lfo_delta)
-        else params:delta(op, crossfade_mode and -vol_delta or vol_delta)
+        if a2 then params:delta(i2.."offset", other_delta * 1.5)
+        else params:delta(op, other_delta * 3)
         end
     elseif a2 then
-        params:delta(i2.."offset", crossfade_mode and -lfo_delta or lfo_delta)
+        params:delta(i2.."offset", other_delta * 1.5)
         params:delta(p, vol_delta)
     else
         params:delta(p, vol_delta)
-        params:delta(op, crossfade_mode and -vol_delta or vol_delta)
+        params:delta(op, other_delta * 3)
     end
 end
 
 local function handle_pitch_size_density_link(track, config, delta)
-    if params:get("global_pitch_size_density_link") ~= 1 then return false end
     local param = config.param
-    if param ~= "pitch" and param ~= "size" and param ~= "density" then return false end
+    if params:get("global_pitch_size_density_link") ~= 1 or not (param == "pitch" or param == "size" or param == "density") then return false end
     local symmetry = params:get("symmetry") == 1
     local other_track = 3 - track
-    local function disable_for_track(t)
-        disable_lfos_for_param(t.."pitch")
-        disable_lfos_for_param(t.."size")
-        disable_lfos_for_param(t.."density")
-    end
-    disable_for_track(track)
-    if symmetry then disable_for_track(other_track) end
+    local function disable_linked_lfos(t) for _, p in ipairs({"pitch", "size", "density"}) do disable_lfos_for_param(t .. p) end end
+    disable_linked_lfos(track)
+    if symmetry then disable_linked_lfos(other_track) end
     handle_lfo(track .. param, symmetry)
-    local MIN_SIZE, MAX_SIZE     = 20, 4999
-    local MIN_DEN,  MAX_DEN      = 0.1, 50
-    local MIN_PITCH, MAX_PITCH   = -48, 48
-    local function update(tr, delta_mult)
+    local LIMITS = {
+        size    = {min = 20,   max = 4999},
+        density = {min = 0.1,  max = 50},
+        pitch   = {min = -48,  max = 48}}
+    local SPEED = {pitch = 1, size = 5, density = 0.5}
+    local function update_linked_params(tr, delta_mult)
         local base_pitch   = _G["base_pitch_"..tr]
         local base_size    = _G["base_size_"..tr]
         local base_density = _G["base_density_"..tr]
         local size_den_prod = _G["size_density_product_"..tr]
         if not (base_pitch and base_size and base_density and size_den_prod) then return end
+        local new_pitch, new_size, new_den
         if param == "pitch" then
             local old_pitch = params:get(tr.."pitch")
-            local new_pitch = util.clamp(old_pitch + delta * delta_mult, MIN_PITCH, MAX_PITCH)
-            local pr = (new_pitch - base_pitch) / 12
-            local new_size = util.clamp(base_size    * (2 ^ (-pr * 0.5)), MIN_SIZE, MAX_SIZE)
-            local new_den  = util.clamp(base_density * (2 ^ ( pr * 0.5)), MIN_DEN, MAX_DEN)
-            params:set(tr.."pitch",   new_pitch)
-            params:set(tr.."size",    new_size)
-            params:set(tr.."density", new_den)
-            base_pitch   = new_pitch
-            base_size    = new_size
-            base_density = new_den
-            size_den_prod = new_size * new_den
+            new_pitch = util.clamp(old_pitch + delta * delta_mult, LIMITS.pitch.min, LIMITS.pitch.max)
+            local pitch_ratio = (new_pitch - base_pitch) / 12
+            new_size = util.clamp(base_size * (2 ^ (-pitch_ratio * 0.5)), LIMITS.size.min, LIMITS.size.max)
+            new_den = util.clamp(base_density * (2 ^ (pitch_ratio * 0.5)), LIMITS.density.min, LIMITS.density.max)
+            params:set(tr.."pitch", new_pitch)
         elseif param == "size" then
             local old_size = params:get(tr.."size")
-            local new_size = util.clamp(old_size + delta * delta_mult, MIN_SIZE, MAX_SIZE)
-            local new_den  = util.clamp(size_den_prod / new_size, MIN_DEN, MAX_DEN)
-            if new_den == MIN_DEN or new_den == MAX_DEN then new_size = util.clamp(size_den_prod / new_den, MIN_SIZE, MAX_SIZE) end
-            params:set(tr.."size",    new_size)
-            params:set(tr.."density", new_den)
-            base_size    = new_size
-            base_density = new_den
-            size_den_prod = new_size * new_den
+            new_size = util.clamp(old_size + delta * delta_mult, LIMITS.size.min, LIMITS.size.max)
+            new_den = util.clamp(size_den_prod / new_size, LIMITS.density.min, LIMITS.density.max)
+            if new_den == LIMITS.density.min or new_den == LIMITS.density.max then new_size = util.clamp(size_den_prod / new_den, LIMITS.size.min, LIMITS.size.max) end
+            new_pitch = base_pitch
         else
             local old_den = params:get(tr.."density")
-            local new_den = util.clamp(old_den + delta * delta_mult * 0.5, MIN_DEN, MAX_DEN)
-            local new_size = util.clamp(size_den_prod / new_den, MIN_SIZE, MAX_SIZE)
-            if new_size == MIN_SIZE or new_size == MAX_SIZE then new_den = util.clamp(size_den_prod / new_size, MIN_DEN, MAX_DEN) end
-            params:set(tr.."size",    new_size)
-            params:set(tr.."density", new_den)
-            base_size    = new_size
-            base_density = new_den
-            size_den_prod = new_size * new_den
+            new_den = util.clamp(old_den + delta * delta_mult * 0.5, LIMITS.density.min, LIMITS.density.max)
+            new_size = util.clamp(size_den_prod / new_den, LIMITS.size.min, LIMITS.size.max)
+            if new_size == LIMITS.size.min or new_size == LIMITS.size.max then new_den = util.clamp(size_den_prod / new_size, LIMITS.density.min, LIMITS.density.max) end
+            new_pitch = base_pitch
         end
-        _G["base_pitch_"..tr]             = base_pitch
-        _G["base_size_"..tr]              = base_size
-        _G["base_density_"..tr]           = base_density
-        _G["size_density_product_"..tr]   = size_den_prod
+        params:set(tr.."size", new_size)
+        params:set(tr.."density", new_den)
+        _G["base_pitch_"..tr] = new_pitch
+        _G["base_size_"..tr] = new_size
+        _G["base_density_"..tr] = new_den
+        _G["size_density_product_"..tr] = new_size * new_den
     end
-    local SPEED = {pitch   = 1, size    = 5, density = 0.5}
-    local delta_mult = SPEED[param]
-    update(track, delta_mult)
-    if symmetry then update(other_track, delta_mult) end
+    update_linked_params(track, SPEED[param])
+    if symmetry then update_linked_params(other_track, SPEED[param]) end
     return true
 end
 
 local function handle_seek_param(track, config, delta)
     if config.param ~= "seek" then return false end
     local sym = params:get("symmetry") == 1
-    local p = track .. config.param
-    handle_lfo(p, not sym)
-    local step_size = 1
+    handle_lfo(track .. "seek", not sym)
     local current_pos1 = math.floor(osc_positions[1] * 100 + 0.5)
     local current_pos2 = math.floor(osc_positions[2] * 100 + 0.5)
-    local intended_delta = delta * step_size
-    local function wrapped_add(val, d)
-        local new_pos = (val + d) % 100
+    local function update_seek(tr, current_pos)
+        local new_pos = (current_pos + delta) % 100
         if new_pos < 0 then new_pos = new_pos + 100 end
-        return new_pos
+        local norm_pos = new_pos * 0.01
+        osc_positions[tr] = norm_pos
+        params:set(tr.."seek", new_pos)
+        engine.seek(tr, norm_pos)
     end
     if sym then
-        local new_pos1 = wrapped_add(current_pos1, intended_delta)
-        local new_pos2 = wrapped_add(current_pos2, intended_delta)
-        local norm_pos1 = new_pos1 * 0.01
-        local norm_pos2 = new_pos2 * 0.01
-        osc_positions[1] = norm_pos1
-        osc_positions[2] = norm_pos2
-        params:set("1seek", new_pos1)
-        params:set("2seek", new_pos2)
-        engine.seek(1, norm_pos1)
-        engine.seek(2, norm_pos2)
+        update_seek(1, current_pos1)
+        update_seek(2, current_pos2)
     else
-        local new_pos = wrapped_add((track == 1 and current_pos1 or current_pos2), intended_delta)
-        local norm_pos = new_pos * 0.01
-        osc_positions[track] = norm_pos
-        params:set(track.."seek", new_pos)
-        engine.seek(track, norm_pos)
+        update_seek(track, track == 1 and current_pos1 or current_pos2)
     end
     return true
 end
@@ -1039,16 +922,9 @@ end
 local function handle_standard_param(track, config, delta)
     local sym = params:get("symmetry") == 1
     local p = track .. config.param
-    local other_track = 3 - track
-    local op = other_track .. config.param
-    if sym then
-        handle_lfo(p, true)
-        params:delta(p, delta)
-        params:delta(op, delta)
-    else
-        handle_lfo(p, false)
-        params:delta(p, delta)
-    end
+    handle_lfo(p, sym)
+    params:delta(p, delta)
+    if sym then params:delta((3 - track) .. config.param, delta) end
 end
 
 local function handle_param_change(track, config, delta)
@@ -1060,7 +936,7 @@ end
 
 local function handle_randomize_track(n)
     if not key_state[1] then return false end
-    local track = (n == 3) and 2 or 1
+    local track = n == 3 and 2 or 1
     stop_metro_safe(randomize_metro[track])
     lfo.clearLFOs(tostring(track))
     lfo.randomize_lfos(tostring(track), params:get("allow_volume_lfos") == 2)
@@ -1072,308 +948,260 @@ end
 
 local function handle_mode_navigation(n)
     if key_state[1] then return end
-    if n == 2 then
-        local idx = mode_indices[current_mode] or 1
-        current_mode = mode_list[(idx % #mode_list) + 1]
-    elseif n == 3 then
-        local idx = mode_indices2[current_mode] or 1
-        current_mode = mode_list2[(idx % #mode_list2) + 1]
-    end
+    local idx = mode_indices[current_mode] or 1
+    local offset = n == 2 and 0 or -2
+    current_mode = mode_list[((idx + offset) % #mode_list) + 1]
 end
 
 local function handle_parameter_lock()
-    local lockable_params = {"jitter", "size", "density", "spread", "pitch", "pan", "seek", "speed"}
     if current_mode == "lpf" or current_mode == "hpf" then
         current_filter_mode = current_filter_mode == "lpf" and "hpf" or "lpf"
         return
     end
+    local lockable = {"jitter", "size", "density", "spread", "pitch", "pan", "seek", "speed"}
     local param_name = string.match(current_mode, "%a+")
-    if param_name and table_find(lockable_params, param_name) then
+    if param_name and table_find(lockable, param_name) then
         local is_locked1 = params:get("1lock_" .. param_name) == 2
         local is_locked2 = params:get("2lock_" .. param_name) == 2
-        if is_locked1 ~= is_locked2 then
-            params:set("1lock_" .. param_name, 1)
-            params:set("2lock_" .. param_name, 1)
-        else
-            local new_state = is_locked1 and 1 or 2
-            params:set("1lock_" .. param_name, new_state)
-            params:set("2lock_" .. param_name, new_state)
-        end
+        local new_state = (is_locked1 == is_locked2) and (is_locked1 and 1 or 2) or 1
+        params:set("1lock_" .. param_name, new_state)
+        params:set("2lock_" .. param_name, new_state)
     end
-end
-
-local param_strings = {}
-for i = 1, LFO_COUNT do
-    param_strings[i] = {
-        lfo = i.."lfo",
-        target = i.."lfo_target",
-        depth = i.."lfo_depth",
-        offset = i.."offset",
-        shape = i.."lfo_shape",
-        freq = i.."lfo_freq" }
 end
 
 local function find_or_create_lfo_for_param(track, param_name, only_existing, create_with_depth)
     local full_param = track .. param_name
     if not only_existing then lfos_turned_off[full_param] = nil end
     for i = 1, LFO_COUNT do
-        local p = param_strings[i]
-        local lfo_state = params:get(p.lfo)
+        local lfo_state = params:get(i .. "lfo")
         if lfo_state == 2 or (only_existing and lfo_state == 1) then
-            local target_idx = params:get(p.target)
+            local target_idx = params:get(i .. "lfo_target")
             if lfo.lfo_targets[target_idx] == full_param then return i end
         end
     end
     if only_existing then return nil end
     local new_target_idx = nil
-    for idx, target in ipairs(lfo.lfo_targets) do
-        if target == full_param then
-            new_target_idx = idx
-            break
-        end
-    end
+    local lfo_targets = lfo.lfo_targets
+    for idx, target in ipairs(lfo_targets) do if target == full_param then new_target_idx = idx break end end
     if not new_target_idx or new_target_idx <= 1 then return nil end
-    local min_val, max_val, current_val = get_safe_parameter_range(full_param)
-    if max_val <= min_val then return nil end
+    local min_val, max_val = lfo.get_parameter_range(full_param)
+    if not min_val or not max_val or max_val <= min_val then return nil end
+    local current_val = params:get(full_param)
     local normalized = (current_val - min_val) / (max_val - min_val)
     local offset = normalized * 2 - 1
     for i = 1, LFO_COUNT do
-        local p = param_strings[i]
-        local lfo_state = params:get(p.lfo)
+        local lfo_state = params:get(i .. "lfo")
         if lfo_state == 1 then
-            local target_idx = params:get(p.target)
-            local target_name = lfo.lfo_targets[target_idx]
-            local is_suitable = false
-            if target_name == "none" or target_idx == 1 then
-                is_suitable = true
-            elseif target_name == full_param then
-                is_suitable = true
-            else
-                local other_param_has_active_lfo = false
+            local target_idx = params:get(i .. "lfo_target")
+            local target_name = lfo_targets[target_idx]
+            local is_suitable = (target_name == "none" or target_idx == 1 or target_name == full_param)
+            if not is_suitable then
+                local has_conflict = false
                 for j = 1, LFO_COUNT do
                     if j ~= i then
-                        local other_state = params:get(param_strings[j].lfo)
-                        local other_target = params:get(param_strings[j].target)
-                        if other_state == 2 and lfo.lfo_targets[other_target] == target_name then
-                            other_param_has_active_lfo = true
-                            break
+                        local j_lfo_state = params:get(j .. "lfo")
+                        if j_lfo_state == 2 then
+                            local j_target_idx = params:get(j .. "lfo_target")
+                            if lfo_targets[j_target_idx] == target_name then
+                                has_conflict = true
+                                break
+                            end
                         end
                     end
                 end
-                is_suitable = not other_param_has_active_lfo
+                is_suitable = not has_conflict
             end
             if is_suitable then
-                params:set(p.target, new_target_idx)
-                params:set(p.shape, 1)
-                params:set(p.freq, random_float(0.05, 0.5))
-                local initial_depth = create_with_depth and 0.01 or 0
-                params:set(p.depth, initial_depth)
-                params:set(p.offset, offset)
-                params:set(p.lfo, create_with_depth and 2 or 1)
+                params:set(i .. "lfo_target", new_target_idx)
+                params:set(i .. "lfo_shape", 1)
+                params:set(i .. "lfo_freq", random_float(0.1, 0.7))
+                params:set(i .. "lfo_depth", create_with_depth and 0.01 or 0)
+                params:set(i .. "offset", offset)
+                params:set(i .. "lfo", create_with_depth and 2 or 1)
                 return i
             end
         end
     end
     return nil
 end
-
 local function adjust_lfo_offset(lfo_idx, delta)
-    local p = param_strings[lfo_idx]
-    local current_offset = params:get(p.offset)
-    local current_depth = params:get(p.depth)
+    local lfo_prefix = lfo_idx .. "offset"
+    local depth_prefix = lfo_idx .. "lfo_depth"
+    local current_offset = params:get(lfo_prefix)
+    local current_depth = params:get(depth_prefix)
     local offset_delta = delta * OFFSET_DELTA
     local proposed_offset = current_offset + offset_delta
     local depth_factor = current_depth * 0.01
     local max_offset = 1 - depth_factor
     proposed_offset = util.clamp(proposed_offset, -max_offset, max_offset)
-    params:set(p.offset, proposed_offset)
+    params:set(lfo_prefix, proposed_offset)
     lfo[lfo_idx].offset = proposed_offset
 end
-
 local function adjust_lfo_depth(lfo_idx, delta)
-    local p = param_strings[lfo_idx]
-    local current_depth = params:get(p.depth)
-    local current_offset = params:get(p.offset)
-    local target_idx = params:get(p.target)
-    local target_param = lfo.lfo_targets[target_idx]
+    local current_depth = params:get(lfo_idx .. "lfo_depth")
+    local current_offset = params:get(lfo_idx .. "offset")
     if current_depth == 0 and delta > 0 then
-        local min_val, max_val, current_val = get_safe_parameter_range(target_param)
-        if max_val > min_val then
+        local target_param = lfo.lfo_targets[params:get(lfo_idx .. "lfo_target")]
+        local min_val, max_val = lfo.get_parameter_range(target_param)
+        if min_val and max_val and max_val > min_val then
+            local current_val = params:get(target_param)
             local normalized = (current_val - min_val) / (max_val - min_val)
-            local new_offset = normalized * 2 - 1
             local initial_depth = 0.01
-            local max_offset = 1 - (initial_depth * 0.01)
-            new_offset = util.clamp(new_offset, -max_offset, max_offset)
             lfo[lfo_idx].depth = initial_depth
-            lfo[lfo_idx].offset = new_offset
-            params:set(p.offset, new_offset)
-            params:set(p.depth, initial_depth)
-            params:set(p.lfo, 2)
+            lfo[lfo_idx].offset = util.clamp(normalized * 2 - 1, -0.9999, 0.9999)
+            params:set(lfo_idx .. "offset", lfo[lfo_idx].offset)
+            params:set(lfo_idx .. "lfo_depth", initial_depth)
+            params:set(lfo_idx .. "lfo", 2)
             lfos_turned_off[target_param] = nil
-            return
         end
-    end
-    local proposed_depth = current_depth + delta
-    if proposed_depth <= 0 and current_depth > 0 then
-        params:set(p.lfo, 1)
         return
     end
-    local depth_factor = proposed_depth * 0.01
-    local max_offset = 1 - depth_factor
+    local proposed_depth = current_depth + delta
+    if proposed_depth <= 0 then if current_depth > 0 then params:set(lfo_idx .. "lfo", 1) end return end
+    local max_offset = 1 - (proposed_depth * 0.01)
     local new_offset = util.clamp(current_offset, -max_offset, max_offset)
-    if proposed_depth > 0 then
-        lfo[lfo_idx].depth = proposed_depth
-        if new_offset ~= current_offset then
-            lfo[lfo_idx].offset = new_offset
-        end
-        params:set(p.depth, proposed_depth)
-        if new_offset ~= current_offset then
-            params:set(p.offset, new_offset)
-        end
+    lfo[lfo_idx].depth = proposed_depth
+    params:set(lfo_idx .. "lfo_depth", proposed_depth)
+    if new_offset ~= current_offset then
+        lfo[lfo_idx].offset = new_offset
+        params:set(lfo_idx .. "offset", new_offset)
     end
 end
-
 function enc(n, d)
     if not installer:ready() then return end
     if presets.is_menu_open() then presets.menu_enc(n, d) return end
     local k1, k2, k3 = key_state[1], key_state[2], key_state[3]
     local should_auto_save = current_scene_mode == "on" and (morph_amount == 0 or morph_amount == 100)
     local is_morphing = current_scene_mode == "on" and morph_amount > 0 and morph_amount < 100
-    local is_combined_key = k1 and (k2 or k3 or n ~= 1)
-    if is_combined_key then
-        key1_has_other_interaction = true
-        key1_long_press_triggered = true
+    local function mark_key_interaction()
+        if k1 then 
+            key_trackers[1].had_interaction = true
+            key_trackers[1].long_triggered = true
+        end
+        if k2 then 
+            key_trackers[2].had_interaction = true
+            key_trackers[2].long_triggered = true
+        end
+        if k3 then 
+            key_trackers[3].had_interaction = true
+            key_trackers[3].long_triggered = true
+        end
     end
-    if (k2 or k3) and n >= 2 and n <= 3 then
+    local function finalize_change()
+        if is_morphing then capture_to_temp_scene() end
+        if should_auto_save then auto_save_to_scene() end
+    end
+    local function adjust_lfo_with_symmetry(track, param_name, lfo_idx, adjustment_fn, delta_modifier)
+        adjustment_fn(lfo_idx, d)
+        if params:get("symmetry") == 1 then
+            local other_track = 3 - track
+            local other_lfo = find_or_create_lfo_for_param(other_track, param_name, k3, k2)
+            if other_lfo then
+                local adjusted_d = delta_modifier and delta_modifier(d) or d
+                adjustment_fn(other_lfo, adjusted_d)
+            end
+        end
+    end
+    if (k2 or k3) and (n == 2 or n == 3) then
         local track = n - 1
         local param_name = current_mode
         if current_mode == "lpf" or current_mode == "hpf" then param_name = current_filter_mode == "lpf" and "cutoff" or "hpf" end
-        param_name = k1 and "volume" or param_name
-        if VALID_PARAMS[param_name] then
-            local only_existing = k3
-            local create_if_missing = k2
-            local lfo_idx = find_or_create_lfo_for_param(track, param_name, only_existing, create_if_missing)
+        if k1 then param_name = "volume" end
+        if param_modes[param_name] then
+            local lfo_idx = find_or_create_lfo_for_param(track, param_name, k3, k2)
             if lfo_idx then
-                if k2 then key2_has_other_interaction = true end
-                if k3 then key3_has_other_interaction = true end
+                mark_key_interaction()
                 if k3 then
-                    adjust_lfo_offset(lfo_idx, d)
-                    if params:get("symmetry") == 1 then
-                        local other_track = 3 - track
-                        local other_lfo_idx = find_or_create_lfo_for_param(other_track, param_name, true, false)
-                        if other_lfo_idx then
-                            local offset_delta = param_name == "pan" and -d or d
-                            adjust_lfo_offset(other_lfo_idx, offset_delta)
-                        end
-                    end
+                    local pan_inverter = param_name == "pan" and function(v) return -v end or nil
+                    adjust_lfo_with_symmetry(track, param_name, lfo_idx, adjust_lfo_offset, pan_inverter)
                 elseif k2 then
-                    adjust_lfo_depth(lfo_idx, d)
-                    if params:get("symmetry") == 1 then
-                        local other_track = 3 - track
-                        local other_lfo_idx = find_or_create_lfo_for_param(other_track, param_name, false, true)
-                        if other_lfo_idx then adjust_lfo_depth(other_lfo_idx, d) end
-                    end
+                    adjust_lfo_with_symmetry(track, param_name, lfo_idx, adjust_lfo_depth)
                 end
-                if is_morphing then capture_to_temp_scene() end
-                if should_auto_save then auto_save_to_scene() end
+                finalize_change()
                 return
             end
         end
     end
     if n == 1 then
-        key1_has_other_interaction = true
-        key1_long_press_triggered = true
+        mark_key_interaction()
         if should_auto_save then auto_save_to_scene() end
-        if k1 and current_scene_mode == "on" then params:set("morph_amount", util.clamp(morph_amount + (d * 3), 0, 100))
+        if k1 and current_scene_mode == "on" then 
+            params:set("morph_amount", util.clamp(morph_amount + (d * 3), 0, 100))
         else
             handle_volume_lfo(1, d, k1)
             if is_morphing then capture_to_temp_scene() end
         end
         return
     end
-if n == 2 or n == 3 then
-    local track = n - 1
-    if n == 2 then key2_has_other_interaction = true end
-    if n == 3 then key3_has_other_interaction = true end
-    if k1 then
-        key1_has_other_interaction = true
-        key1_long_press_triggered = true
-    end
-    stop_metro_safe(randomize_metro[track])
-    if k1 then
-        local p = track .. "volume"
-        disable_lfos_for_param(p, true)
-        if params:get("symmetry") == 1 then handle_lfo(p, true) end
-        params:delta(p, 3 * d)
+    if n == 2 or n == 3 then
+        local track = n - 1
+        mark_key_interaction()
+        stop_metro_safe(randomize_metro[track])
+        if k1 then
+            local p = track .. "volume"
+            disable_lfos_for_param(p, true)
+            if params:get("symmetry") == 1 then handle_lfo(p, true) end
+            params:delta(p, 3 * d)
         else
             local mode = (current_mode == "lpf" or current_mode == "hpf") and current_filter_mode or current_mode
             local config = param_modes[mode]
             if config then handle_param_change(track, config, config.delta * d) end
         end
-        if is_morphing then capture_to_temp_scene() end
-        if should_auto_save then auto_save_to_scene() end
+        finalize_change()
     end
+end
+
+local function reset_key_tracking(n)
+    key_trackers[n].press_time = nil
+    key_trackers[n].had_interaction = false
+    key_trackers[n].long_triggered = false
+end
+
+local function init_key_tracking(n)
+    key_trackers[n].press_time = util.time()
+    key_trackers[n].had_interaction = false
+    key_trackers[n].long_triggered = false
 end
 
 function key(n, z)
     if not installer:ready() then installer:key(n, z) return end
     if presets.is_menu_open() then
-        if n == 1 and z == 1 then
-            presets.close_menu()
-            return
-        end
+        if n == 1 and z == 1 then presets.close_menu() return end
         if presets.menu_key(n, z, scene_data, update_pan_positioning, audio_active) then return end
     end
     local is_press = z == 1
     key_state[n] = is_press
     local both_keys_pressed = key_state[2] and key_state[3]
-    if is_press then handle_key_press(n)
-    else handle_key_release(n, both_keys_pressed)
-    end
+    if is_press then handle_key_press(n) else handle_key_release(n, both_keys_pressed) end
 end
 
 function handle_key_press(n)
     if n <= 3 then init_key_tracking(n) end
     if (key_state[1] and (n == 2 or n == 3)) or (n == 1 and (key_state[2] or key_state[3])) then
-        key1_has_other_interaction = true
-        key1_long_press_triggered = true
+        key_trackers[1].had_interaction = true
+        key_trackers[1].long_triggered = true
     end
     if key_state[2] and key_state[3] then
         handle_parameter_lock()
-        key2_has_other_interaction = true
-        key3_has_other_interaction = true
+        key_trackers[2].had_interaction = true
+        key_trackers[3].had_interaction = true
+        key_trackers[2].long_triggered = true
+        key_trackers[3].long_triggered = true
     end
     if n ~= 1 and key_state[1] then handle_randomize_track(n) end
 end
 
 function handle_key_release(n, both_keys_pressed)
-    local press_data = get_key_press_data(n)
-    local press_time, had_interaction = press_data.time, press_data.had_interaction
-    local duration = press_time and (util.time() - press_time) or 0
-    if duration < KEY_LONG_PRESS_THRESHOLD and not both_keys_pressed and not had_interaction then handle_mode_navigation(n) end
+    local tracker = key_trackers[n]
+    if tracker.press_time and 
+       not tracker.long_triggered and 
+       not tracker.had_interaction and 
+       not both_keys_pressed then
+        local duration = util.time() - tracker.press_time
+        if duration < KEY_LONG_PRESS_THRESHOLD then handle_mode_navigation(n) end
+    end
     reset_key_tracking(n)
     lfos_turned_off = {}
-end
-
-function init_key_tracking(n)
-    local time = util.time()
-    if n == 1 then key1_press_time, key1_long_press_triggered, key1_has_other_interaction = time, false, false
-    elseif n == 2 then key2_press_time, key2_long_press_triggered, key2_has_other_interaction = time, false, false
-    else key3_press_time, key3_long_press_triggered, key3_has_other_interaction = time, false, false
-    end
-end
-
-function get_key_press_data(n)
-    local times = {key1_press_time, key2_press_time, key3_press_time}
-    local interactions = {key1_has_other_interaction, key2_has_other_interaction, key3_has_other_interaction}
-    return {time = times[n], had_interaction = interactions[n]}
-end
-
-function reset_key_tracking(n)
-    if n == 1 then key1_press_time, key1_long_press_triggered, key1_has_other_interaction = nil, false, false
-    elseif n == 2 then key2_press_time, key2_long_press_triggered, key2_has_other_interaction = nil, false, false
-    else key3_press_time, key3_long_press_triggered, key3_has_other_interaction = nil, false, false
-    end
 end
 
 local function format_density(value) return string.format("%.1f Hz", value) end
@@ -1469,6 +1297,7 @@ local function flush()
     end
   end
 end
+
 function redraw()
   if not installer: ready() then installer:redraw() return end
   if presets. draw_menu() then return end
@@ -1667,13 +1496,13 @@ function init()
     setup_ui_metro()
     setup_params()
     setup_osc()
-    setup_key_monitors()
+    init_longpress_checker()
 end
 
 function cleanup()
-    stop_and_clean_metro(ui_metro)
-    for _, monitor in pairs(key_monitors) do stop_and_clean_metro(monitor) end
-    for i = 1, 2 do stop_and_clean_metro(randomize_metro[i]) end
+    stop_metro_safe(ui_metro)
+    stop_metro_safe(longpress_metro)
+    for i = 1, 2 do stop_metro_safe(randomize_metro[i]) end
     randpara.cleanup()
     params:set('monitor_level', initial_monitor_level)
     params:set('reverb', initial_reverb_onoff)

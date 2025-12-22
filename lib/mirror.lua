@@ -25,7 +25,6 @@ function Mirror.init(osc_positions_ref, lfo_ref)
 end
 
 function Mirror.copy_voice_params(from_track, to_track, mirror_pan)
-    -- Clear destination LFOs first
     local function clear_destination_lfos(to_track_num)
         local pattern = get_track_pattern(to_track_num)
         for lfo_num = 1, 16 do
@@ -78,11 +77,9 @@ function Mirror.copy_voice_params(from_track, to_track, mirror_pan)
         end
     end
 
-    -- Build a lookup for target names -> index
     local target_lookup = {}
     for idx, t in ipairs(lfo_targets) do target_lookup[t] = idx end
 
-    -- Find free LFO slots once, gather them
     local available_lfos = {}
     for i = 1, 16 do if safe_get(i .. "lfo") ~= 2 then available_lfos[#available_lfos + 1] = i end end
     local next_available = 1
@@ -90,7 +87,6 @@ function Mirror.copy_voice_params(from_track, to_track, mirror_pan)
     local from_len = #from_track
     local global_freq_scale = params:get("global_lfo_freq_scale") or 1
 
-    -- Copy LFOs from source to destination for params that match (1xxx -> 2xxx)
     for src_lfo = 1, 16 do
         if safe_get(src_lfo .. "lfo") == 2 then
             local src_target_index = safe_get(src_lfo .. "lfo_target")
@@ -103,7 +99,6 @@ function Mirror.copy_voice_params(from_track, to_track, mirror_pan)
                     if dest_target_index and next_available <= #available_lfos then
                         local dest_lfo = available_lfos[next_available]; next_available = next_available + 1
 
-                        -- Read source LFO parameters
                         local src_shape = safe_get(src_lfo .. "lfo_shape")
                         local src_freq = safe_get(src_lfo .. "lfo_freq")
                         local src_depth = safe_get(src_lfo .. "lfo_depth")
@@ -120,7 +115,6 @@ function Mirror.copy_voice_params(from_track, to_track, mirror_pan)
                             src_offset = current_vol - vol_offset
                         end
 
-                        -- Batch set destination LFO params
                         safe_set(dest_lfo .. "lfo_target", dest_target_index)
                         safe_set(dest_lfo .. "lfo_shape", src_shape)
                         safe_set(dest_lfo .. "lfo_freq", src_freq)
@@ -128,7 +122,6 @@ function Mirror.copy_voice_params(from_track, to_track, mirror_pan)
                         safe_set(dest_lfo .. "offset", src_offset)
                         safe_set(dest_lfo .. "lfo", 2)
 
-                        -- Update mirror's LFO object if present
                         local d_obj = Mirror.lfo[dest_lfo]
                         if d_obj then
                             d_obj.target = dest_target_index
