@@ -11,7 +11,6 @@ local evolvable_params_cache = {}
 local cache_dirty = true
 local evolution_symmetry_state = false
 
--- Utilities
 local function random_float(l, h) return l + math.random() * (h - l) end
 
 local function interpolate(current, target, threshold, factor)
@@ -359,7 +358,6 @@ local function randomize_params(steps, track_num)
   start_interpolation(steps, symmetry)
 end
 
--- Convenience Wrappers
 local function create_randomizer(group) return function(steps)
   if randomize_metro.running then randomize_metro:stop() end
   randomize_param_group(param_configs[group])

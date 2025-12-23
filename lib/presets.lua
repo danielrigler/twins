@@ -5,7 +5,6 @@ function presets.set_lfo_reference(lfo_module)
     lfo = lfo_module
 end
 
--- Optimized table serialization
 local function table_to_string(tbl, indent)
     indent = indent or ""
     local result = {"{"}
@@ -63,7 +62,6 @@ function presets.save_complete_preset(preset_name, scene_data_ref, update_pan_po
         preset_name = "twins_" .. preset_name
     end
     
-    -- Collect LFO states
     local lfo_states = {}
     for i = 1, 16 do
         if params:get(i.."lfo") == 2 then
@@ -79,7 +77,6 @@ function presets.save_complete_preset(preset_name, scene_data_ref, update_pan_po
         end
     end
     
-    -- Build preset data
     local preset_data = {
         name = preset_name,
         timestamp = os.time(),
@@ -140,7 +137,6 @@ function presets.load_complete_preset(preset_name, scene_data_ref, update_pan_po
         params:set(i.."lfo", 1)
     end
 
-    -- Restore scene data for future morphing
     if preset_data.scene_data then
         for track = 1, 2 do
             for scene = 1, 2 do
@@ -200,7 +196,6 @@ function presets.load_complete_preset(preset_name, scene_data_ref, update_pan_po
     return true
 end
 
--- Optimized preset listing with better sorting
 function presets.list_presets()
     local presets_list = {}
     local dir = _path.data .. "twins"
@@ -243,14 +238,14 @@ function presets.delete_preset(preset_name)
     return false
 end
 
--- Menu functions
 function presets.open_menu()
     presets.preset_list = presets.list_presets()
     if #presets.preset_list == 0 then
         print("No presets found")
         return false
     end
-    presets.selected_index = 1
+    presets.selected_index = presets.selected_index or 1
+    presets.selected_index = util.clamp(presets.selected_index, 1, #presets.preset_list)
     presets.menu_open = true
     return true
 end
@@ -333,10 +328,10 @@ function presets.draw_menu()
     
     screen.clear()
     screen.level(15)
-    screen.move(64, 10)
-    screen.text_center("SELECT PRESET")
+    screen.move(64, 6)
+    screen.text_center("SELECT A PRESET")
     
-    local visible_count = math.min(4, #presets.preset_list)
+    local visible_count = math.min(5, #presets.preset_list)
     local start_index = math.max(1, math.min(presets.selected_index - 2, #presets.preset_list - visible_count + 1))
     
     for i = 1, visible_count do
@@ -344,7 +339,7 @@ function presets.draw_menu()
         if idx <= #presets.preset_list then
             local level = idx == presets.selected_index and 15 or 4
             screen.level(level)
-            screen.move(2, 15 + (i * 8))
+            screen.move(2, 11 + (i * 8))
             screen.text((idx == presets.selected_index and "> " or "  ") .. presets.preset_list[idx])
         end
     end
@@ -353,21 +348,21 @@ function presets.draw_menu()
     if #presets.preset_list > 4 then
         screen.level(2)
         if start_index > 1 then
-            screen.move(122, 23)
+            screen.move(122, 18)
             screen.text("↑")
         end
         if start_index + visible_count - 1 < #presets.preset_list then
-            screen.move(122, 47)
+            screen.move(122, 50)
             screen.text("↓")
         end
     end
     
     screen.level(1)
-    screen.move(2, 58)
+    screen.move(2, 64)
     screen.text("K1: Back")
-    screen.move(50, 58)
+    screen.move(50, 64)
     screen.text("K2: Del")
-    screen.move(91, 58)
+    screen.move(91, 64)
     screen.text("K3: Load")
     screen.update()
     

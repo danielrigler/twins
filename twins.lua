@@ -86,10 +86,9 @@ local patterns = {[0] = {}, [1] = {{6,0}}, [2] = {{6,0}, {8,0}}, [3] = {{6,0}, {
 local grain_positions = {[1] = {}, [2] = {}}
 local osc_positions = {[1] = 0, [2] = 0}
 local rec_positions = {[1] = 0, [2] = 0}
+local voice_peak_amplitudes = {[1] = {l = 0, r = 0}, [2] = {l = 0, r = 0}}
 local ui_metro = nil
 local lfos_turned_off = {}
-local LFO_COUNT = 16
-local OFFSET_DELTA = 0.02
 local param_modes = {
     speed = {param = "speed", delta = 0.5, engine = true, has_lock = true},
     seek = {param = "seek", delta = 1, engine = true, has_lock = true},
@@ -686,7 +685,7 @@ local function setup_params()
     params:add_binary("unload_all", "Unload All Audio", "trigger", 0) params:set_action("unload_all", function() for i=1, 2 do params:set(i.."seek", 0) params:set(i.."sample", "-") params:set(i.."live_input", 0) params:set(i.."live_direct", 0) audio_active[i] = false osc_positions[i] = 0 end engine.unload_all() update_pan_positioning() end)
     params:add_binary("global_pitch_size_density_link", "Linked Mode", "toggle", 0) params:set_action("global_pitch_size_density_link", function(value) if value == 1 then for i = 1, 2 do local pitch = params:get(i.."pitch") local size = params:get(i.."size") local density = params:get(i.."density") if size > 0 and density > 0 then _G["base_pitch_"..i] = pitch _G["base_size_"..i] = size _G["base_density_"..i] = density _G["size_density_product_"..i] = size * density end end end end)
     params:add_option("pitch_lag", "Pitch Lag", {"off", "very small", "small", "medium", "high", "very high"}, 1) params:set_action("pitch_lag", function(value) local lag_times = {0, 1, 2, 4, 8, 16} local lag_time = lag_times[value] for i = 1, 2 do engine.pitch_lag(i, lag_time) end end)
-    params:add_option("steps", "Transition Time", {"short", "medium", "long"}, 1) params:set_action("steps", function(value) steps = ({20, 300, 800})[value] end)
+    params:add_option("steps", "Transition Time", {"short", "medium", "long"}, 2) params:set_action("steps", function(value) steps = ({20, 300, 800})[value] end)
     
     for i = 1, 2 do
       params:add_taper(i.. "volume", i.. " volume", -70, 10, -15, 0, "dB") params:set_action(i.. "volume", function(value) if value == -70 then engine.volume(i, 0) else engine.volume(i, math.pow(10, value / 20)) end end) params:hide(i.. "volume")
@@ -972,7 +971,7 @@ end
 local function find_or_create_lfo_for_param(track, param_name, only_existing, create_with_depth)
     local full_param = track .. param_name
     if not only_existing then lfos_turned_off[full_param] = nil end
-    for i = 1, LFO_COUNT do
+    for i = 1, 16 do
         local lfo_state = params:get(i .. "lfo")
         if lfo_state == 2 or (only_existing and lfo_state == 1) then
             local target_idx = params:get(i .. "lfo_target")
@@ -989,7 +988,7 @@ local function find_or_create_lfo_for_param(track, param_name, only_existing, cr
     local current_val = params:get(full_param)
     local normalized = (current_val - min_val) / (max_val - min_val)
     local offset = normalized * 2 - 1
-    for i = 1, LFO_COUNT do
+    for i = 1, 16 do
         local lfo_state = params:get(i .. "lfo")
         if lfo_state == 1 then
             local target_idx = params:get(i .. "lfo_target")
@@ -997,7 +996,7 @@ local function find_or_create_lfo_for_param(track, param_name, only_existing, cr
             local is_suitable = (target_name == "none" or target_idx == 1 or target_name == full_param)
             if not is_suitable then
                 local has_conflict = false
-                for j = 1, LFO_COUNT do
+                for j = 1, 16 do
                     if j ~= i then
                         local j_lfo_state = params:get(j .. "lfo")
                         if j_lfo_state == 2 then
@@ -1029,7 +1028,7 @@ local function adjust_lfo_offset(lfo_idx, delta)
     local depth_prefix = lfo_idx .. "lfo_depth"
     local current_offset = params:get(lfo_prefix)
     local current_depth = params:get(depth_prefix)
-    local offset_delta = delta * OFFSET_DELTA
+    local offset_delta = delta * 0.02
     local proposed_offset = current_offset + offset_delta
     local depth_factor = current_depth * 0.01
     local max_offset = 1 - depth_factor
@@ -1104,10 +1103,14 @@ function enc(n, d)
     end
     if (k2 or k3) and (n == 2 or n == 3) then
         local track = n - 1
+        local mode_name = current_mode
         local param_name = current_mode
-        if current_mode == "lpf" or current_mode == "hpf" then param_name = current_filter_mode == "lpf" and "cutoff" or "hpf" end
-        if k1 then param_name = "volume" end
-        if param_modes[param_name] then
+        if current_mode == "lpf" or current_mode == "hpf" then 
+            mode_name = current_filter_mode
+            param_name = current_filter_mode == "lpf" and "cutoff" or "hpf"
+        end
+        if k1 then mode_name = "volume" param_name = "volume" end
+        if param_modes[mode_name] then
             local lfo_idx = find_or_create_lfo_for_param(track, param_name, k3, k2)
             if lfo_idx then
                 mark_key_interaction()
@@ -1223,7 +1226,7 @@ local function get_lfo_modulation(param_name)
 end
 
 local LEVEL = {hi=15, dim=9, val=2}
-local TRACK_X, VOL_X, PAN_X = {51, 92}, {0,127}, {52,93}
+local TRACK_X, VOL_X, PAN_X = {51, 92}, {0,126}, {52,93}
 local BAR_W, Y = 30, {bottom=61, seek=63}
 local UPPER = {jitter=true, size=true, density=true, spread=true, pitch=true}
 local FORMAT = {
@@ -1324,7 +1327,7 @@ function redraw()
   for _,row in ipairs(param_rows) do
     local name = row. label: match("%a+")
     local hi = current_mode == row.mode
-    T(LEVEL.hi, 5, row.y, hi and row.label: upper() or row.label)
+    T(LEVEL.hi, 6, row.y, hi and row.label: upper() or row.label)
     for t=1,2 do
       local x = TRACK_X[t]
       local param = t == 1 and row.param1 or row.param2
@@ -1345,7 +1348,7 @@ function redraw()
   local mode = upper and "seek" or current_mode
   local active = not upper
   local label = (mode == "lpf" or mode == "hpf") and (current_filter_mode ..  ":       ") or (mode ..  ":      ")
-  T(LEVEL.hi, 5, Y.bottom, active and label: upper() or label)
+  T(LEVEL.hi, 6, Y.bottom, active and label: upper() or label)
   for t=1,2 do
     local x = TRACK_X[t]
     local vL = active and LEVEL.hi or LEVEL.val
@@ -1386,7 +1389,14 @@ function redraw()
   end
   for t=1,2 do
     local h = util.linlin(-70, 10, 0, 64, C.vol[t])
-    R(LEVEL.dim, VOL_X[t], 64 - h, 1, h)
+    R(LEVEL.dim-3, VOL_X[t], 64 - h, 2, h)
+    local peak_amp = math.max(voice_peak_amplitudes[t].l, voice_peak_amplitudes[t].r)
+    local peak_db = -70
+    if peak_amp > 0.00001 then peak_db = 20 * math.log(peak_amp, 10) end
+    peak_db = util.clamp(peak_db, -70, 10)
+    local peak_h = util.linlin(-70, 10, 0, 64, peak_db)
+    peak_h = util.clamp(peak_h, 0, h)
+    if peak_h > 0 then R(LEVEL.hi-1, VOL_X[t], 64 - peak_h, 2, peak_h) end
     local pan_pos = util.linlin(-100, 100, PAN_X[t], PAN_X[t] + 25, C.pan[t])
     R(LEVEL.dim, pan_pos - 1, 0, 4, 1)
   end
@@ -1470,6 +1480,11 @@ local osc_handlers = {
     ["/twins/grain_pos"] = function(args)
         local vid, pos, size = args[1] + 1, args[2], args[3]
         if audio_active[vid] then table.insert(grain_positions[vid], {pos = pos, size = size, t = util.time()}) end
+    end,
+    ["/twins/voice_peak"] = function(args)
+        local voice, peakL, peakR = args[1] + 1, args[2], args[3]
+        voice_peak_amplitudes[voice].l = math.abs(peakL)
+        voice_peak_amplitudes[voice].r = math.abs(peakR)
     end,
     ["/twins/output_saved"] = function(args)
         local filepath = args[1]
