@@ -44,7 +44,8 @@ for i = 1, number_of_outputs do
     offset = 0,
     prev = 0,
     walk_value = 0,
-    walk_velocity = 0
+    walk_velocity = 0,
+    sync_to = nil
   }
 end
 
@@ -76,6 +77,7 @@ function lfo.clearLFOs(track, param_type)
         if not lfo.is_param_locked(track_num, param_name) then
           pset(i.."lfo", 1)
           pset(i.."lfo_target", 1)
+          lfo[i].sync_to = nil
         end
       end
     end
@@ -97,22 +99,22 @@ lfo.lfo_targets = {
 }
 
 lfo.target_ranges = {
-  ["1pan"] = { depth = { 25, 90 }, offset = { 0, 0 }, frequency = { 0.1, 0.6 }, waveform = { "sine" }, chance = 0.8 },
-  ["2pan"] = { depth = { 25, 90 }, offset = { 0, 0 }, frequency = { 0.1, 0.6 }, waveform = { "sine" }, chance = 0.8 },
-  ["1jitter"] = { depth = { 20, 70 }, offset = { -1, 1 }, frequency = { 0.1, 0.4 }, waveform = { "sine" }, chance = 0.6 },
-  ["2jitter"] = { depth = { 20, 70 }, offset = { -1, 1 }, frequency = { 0.1, 0.4 }, waveform = { "sine" }, chance = 0.6 },
-  ["1spread"] = { depth = { 10, 30 }, offset = { 0, 0.3 }, frequency = { 0.1, 0.4 }, waveform = { "sine" }, chance = 0.6 },
-  ["2spread"] = { depth = { 10, 30 }, offset = { 0, 0.3 }, frequency = { 0.1, 0.4 }, waveform = { "sine" }, chance = 0.6},
-  ["1size"] = { depth = { 5, 30 }, offset = { 0.1, 1 }, frequency = { 0.1, 0.4 }, waveform = { "sine" }, chance = 0.6 },
-  ["2size"] = { depth = { 5, 30 }, offset = { 0.1, 1 }, frequency = { 0.1, 0.4 }, waveform = { "sine" }, chance = 0.6 },
-  ["1density"] = { depth = { 5, 40 }, offset = { 0, 1 }, frequency = { 0.1, 0.4 }, waveform = { "sine" }, chance = 0.6 },
-  ["2density"] = { depth = { 5, 40 }, offset = { 0, 1 }, frequency = { 0.1, 0.4 }, waveform = { "sine" }, chance = 0.6 },
-  ["1volume"] = { depth = { 2, 3 }, offset = { 0, 1 }, frequency = { 0.1, 0.5 }, waveform = { "sine" }, chance = 1.0 },
-  ["2volume"] = { depth = { 2, 3 }, offset = { 0, 1 }, frequency = { 0.1, 0.5 }, waveform = { "sine" }, chance = 1.0 },
-  ["1seek"] = { depth = { 0, 100 }, offset = { 0, 1 }, frequency = { 0.02, 0.3 }, waveform = { "sine" }, chance = 0.3 },
-  ["2seek"] = { depth = { 0, 100 }, offset = { 0, 1 }, frequency = { 0.02, 0.3 }, waveform = { "sine" }, chance = 0.3 },
-  ["1speed"] = { depth = { 10, 50 }, offset = { -1, 1 }, frequency = { 0.02, 0.3 }, waveform = { "sine" }, chance = 0.2 },
-  ["2speed"] = { depth = { 10, 50 }, offset = { -1, 1 }, frequency = { 0.02, 0.3 }, waveform = { "sine" }, chance = 0.2 }
+  ["1pan"] = { depth = { 25, 90 }, offset = { 0, 0 }, frequency = { 0.1, 0.6 }, waveform = { "sine", "sine", "sine", "sine", "sine", "walk" }, chance = 0.8 },
+  ["2pan"] = { depth = { 25, 90 }, offset = { 0, 0 }, frequency = { 0.1, 0.6 }, waveform = { "sine", "sine", "sine", "sine", "sine", "walk" }, chance = 0.8 },
+  ["1jitter"] = { depth = { 20, 70 }, offset = { -1, 1 }, frequency = { 0.1, 0.4 }, waveform = { "sine", "sine", "sine", "sine", "sine", "walk" }, chance = 0.6 },
+  ["2jitter"] = { depth = { 20, 70 }, offset = { -1, 1 }, frequency = { 0.1, 0.4 }, waveform = { "sine", "sine", "sine", "sine", "sine", "walk" }, chance = 0.6 },
+  ["1spread"] = { depth = { 10, 30 }, offset = { 0, 0.3 }, frequency = { 0.1, 0.4 }, waveform = { "sine", "sine", "sine", "sine", "sine", "walk" }, chance = 0.6 },
+  ["2spread"] = { depth = { 10, 30 }, offset = { 0, 0.3 }, frequency = { 0.1, 0.4 }, waveform = { "sine", "sine", "sine", "sine", "sine", "walk" }, chance = 0.6},
+  ["1size"] = { depth = { 5, 30 }, offset = { 0.1, 1 }, frequency = { 0.1, 0.4 }, waveform = { "sine", "sine", "sine", "sine", "sine", "walk" }, chance = 0.6 },
+  ["2size"] = { depth = { 5, 30 }, offset = { 0.1, 1 }, frequency = { 0.1, 0.4 }, waveform = { "sine", "sine", "sine", "sine", "sine", "walk" }, chance = 0.6 },
+  ["1density"] = { depth = { 5, 40 }, offset = { 0, 1 }, frequency = { 0.1, 0.4 }, waveform = { "sine", "sine", "sine", "sine", "sine", "walk" }, chance = 0.6 },
+  ["2density"] = { depth = { 5, 40 }, offset = { 0, 1 }, frequency = { 0.1, 0.4 }, waveform = { "sine", "sine", "sine", "sine", "sine", "walk" }, chance = 0.6 },
+  ["1volume"] = { depth = { 2, 3 }, offset = { 0, 1 }, frequency = { 0.1, 0.5 }, waveform = { "sine", "sine", "sine", "sine", "sine", "walk" }, chance = 1.0 },
+  ["2volume"] = { depth = { 2, 3 }, offset = { 0, 1 }, frequency = { 0.1, 0.5 }, waveform = { "sine", "sine", "sine", "sine", "sine", "walk" }, chance = 1.0 },
+  ["1seek"] = { depth = { 0, 100 }, offset = { 0, 1 }, frequency = { 0.02, 0.3 }, waveform = { "sine", "sine", "sine", "sine", "sine", "walk" }, chance = 0.3 },
+  ["2seek"] = { depth = { 0, 100 }, offset = { 0, 1 }, frequency = { 0.02, 0.3 }, waveform = { "sine", "sine", "sine", "sine", "sine", "walk" }, chance = 0.3 },
+  ["1speed"] = { depth = { 10, 50 }, offset = { -1, 1 }, frequency = { 0.02, 0.3 }, waveform = { "sine", "sine", "sine", "sine", "sine", "walk" }, chance = 0.2 },
+  ["2speed"] = { depth = { 10, 50 }, offset = { -1, 1 }, frequency = { 0.02, 0.3 }, waveform = { "sine", "sine", "sine", "sine", "sine", "walk" }, chance = 0.2 }
 }
 
 local param_ranges = {
@@ -170,6 +172,9 @@ function lfo.assign_to_current_row(current_mode, current_filter_mode)
     lfo[slot2].freq = lfo[slot1].freq
     lfo[slot2].waveform = lfo[slot1].waveform
     lfo[slot2].depth = lfo[slot1].depth
+    lfo[slot2].walk_value = lfo[slot1].walk_value
+    lfo[slot2].walk_velocity = lfo[slot1].walk_velocity
+    lfo[slot2].sync_to = slot1
     if param_name == "pan" then
       lfo[slot2].phase = (lfo[slot1].phase + 0.5) % 1.0
       lfo[slot2].offset = -lfo[slot1].offset
@@ -248,8 +253,17 @@ function randomize_lfo(i, target)
   end
   if ranges.waveform then
     local wf_index = math_random(#ranges.waveform)
-    lfo[i].waveform = ranges.waveform[wf_index]
-    pset(i.."lfo_shape", wf_index)
+    local selected_waveform = ranges.waveform[wf_index]
+    lfo[i].waveform = selected_waveform
+    -- Find the index of this waveform in options.lfotypes
+    local shape_index = 1
+    for idx, wf in ipairs(options.lfotypes) do
+      if wf == selected_waveform then
+        shape_index = idx
+        break
+      end
+    end
+    pset(i.."lfo_shape", shape_index)
   end
   pset(i.."lfo", 2)
   assigned_params[target] = true
@@ -316,6 +330,9 @@ function lfo.randomize_lfos(track, allow_volume_lfos)
           lfo[slot2].freq = lfo[slot].freq
           lfo[slot2].waveform = lfo[slot].waveform
           lfo[slot2].depth = lfo[slot].depth
+          lfo[slot2].walk_value = lfo[slot].walk_value
+          lfo[slot2].walk_velocity = lfo[slot].walk_velocity
+          lfo[slot2].sync_to = slot
           if target:match("pan$") then
             lfo[slot2].phase = (lfo[slot].phase + 0.5) % 1.0
             lfo[slot2].offset = -lfo[slot].offset
@@ -356,20 +373,29 @@ function lfo.process()
       end
       slope = obj.prev
     elseif wf == "walk" then
-      local step_size = obj.freq * 0.4
-      local random_acc = (math_random() - 0.5) * step_size
-      obj.walk_velocity = obj.walk_velocity * 0.92 + random_acc
-      obj.walk_value = obj.walk_value + obj.walk_velocity
-      local bsoft = 0.75
-      if obj.walk_value > bsoft then
-        obj.walk_velocity = obj.walk_velocity - (obj.walk_value - bsoft) * 0.1
-      elseif obj.walk_value < -bsoft then
-        obj.walk_velocity = obj.walk_velocity - (obj.walk_value + bsoft) * 0.1
+      if obj.sync_to and lfo[obj.sync_to] then
+        -- Use the synced LFO's walk state
+        obj.walk_value = lfo[obj.sync_to].walk_value
+        obj.walk_velocity = lfo[obj.sync_to].walk_velocity
+        obj.prev = lfo[obj.sync_to].prev
+        slope = obj.prev
+      else
+        -- Generate own random walk
+        local step_size = obj.freq * 0.4
+        local random_acc = (math_random() - 0.5) * step_size
+        obj.walk_velocity = obj.walk_velocity * 0.92 + random_acc
+        obj.walk_value = obj.walk_value + obj.walk_velocity
+        local bsoft = 0.75
+        if obj.walk_value > bsoft then
+          obj.walk_velocity = obj.walk_velocity - (obj.walk_value - bsoft) * 0.1
+        elseif obj.walk_value < -bsoft then
+          obj.walk_velocity = obj.walk_velocity - (obj.walk_value + bsoft) * 0.1
+        end
+        obj.walk_value = util_clamp(obj.walk_value, -1.0, 1.0)
+        local filter_strength = 0.80
+        slope = obj.prev * filter_strength + obj.walk_value * (1 - filter_strength)
+        obj.prev = slope
       end
-      obj.walk_value = util_clamp(obj.walk_value, -1.0, 1.0)
-      local filter_strength = 0.80
-      slope = obj.prev * filter_strength + obj.walk_value * (1 - filter_strength)
-      obj.prev = slope
     else
       slope = 0
     end

@@ -63,6 +63,8 @@ alloc {
             var ratchet_gate, extra_trig;
             var scaled_signal;
             var trigger1 = Impulse.kr(60);
+            var trig, stepSize, stepWeights, stepIndex, actualStep, direction, totalStep;
+            var scaleArrays, scaleSelect, currentScale, scaleDegree, octaveShift, semitones;
 
             speed = Lag.kr(speed, 1);
             density_mod = density * (2**(LFNoise1.kr(density).range(0, 1) * density_mod_amt));
@@ -86,11 +88,32 @@ alloc {
             dry_sig = Balance2.ar(dry_sig[0], dry_sig[1], pan);
 
             grain_pitch = Lag.kr(Select.kr(pitch_mode, [speed * pitch_offset, pitch_offset]);, pitch_lag_time) * if(pitch_walk_rate > 0, {
-                var trig = Dust.kr(pitch_walk_rate);
-                var step = TIRand.kr(0, pitch_walk_step, trig, Array.series(25, 25, -1).sqrt);
-                var totalStep = step * TChoose.kr(trig, [1, -1]);
-                var scaleDegree = totalStep.mod(7);
-                2 ** ((Select.kr(scaleDegree, [0,1,2,3,5,7,9]) + ((totalStep - scaleDegree) / 7 * 12)) / 12);
+                trig = Impulse.kr(pitch_walk_rate);
+                stepSize = pitch_walk_step.clip(1, 12);
+                stepWeights = [0.35, 0.25, 0.15, 0.10, 0.08, 0.04, 0.02, 0.01];
+                stepIndex = TWChoose.kr(trig, Array.series(8, 0, 1), stepWeights.normalizeSum);
+                actualStep = stepIndex.min(stepSize);
+                direction = TIRand.kr(-1, 1, trig);
+                direction = Latch.kr(direction, trig * (TRand.kr(0, 1, trig) < 0.3));
+                totalStep = actualStep * direction;
+                scaleArrays = [
+                    [0, 2, 4, 5, 7, 9, 11],
+                    [0, 2, 3, 5, 7, 8, 10],
+                    [0, 2, 4, 7, 9],
+                    [0, 3, 5, 7, 10],
+                    [0, 2, 3, 5, 7, 9, 10],
+                    [0, 1, 3, 5, 7, 8, 10],
+                    [0, 2, 4, 6, 7, 9, 11],
+                    [0, 2, 4, 5, 7, 9, 10],
+                    [0, 2, 3, 6, 7, 8, 11],
+                    [0, 1, 4, 5, 7, 8, 11] ];
+                scaleSelect = (stepSize / 12 * 10).asInteger.clip(0, 9);
+                currentScale = Select.kr(scaleSelect, scaleArrays.collect { |arr| arr ++ (arr + 12) });
+                scaleDegree = (totalStep.abs).mod(currentScale.size);
+                octaveShift = (totalStep / currentScale.size).floor * 12;
+                semitones = Select.kr(scaleDegree, currentScale) + octaveShift;
+                semitones = semitones * totalStep.sign;
+                Lag.kr(2 ** (semitones / 12), 0.05);
             }, 1);
 
             random_interval = Select.kr(pitch_random_scale_type, [

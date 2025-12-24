@@ -508,7 +508,7 @@ local function setup_params()
       params:add_control(i.. "overtones_2", i.. " Overtones +2oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0)) params:set_action(i.. "overtones_2", function(value) engine.overtones_2(i, value) end)
       params:add_option(i.. "smoothbass", i.." Smooth Sub", {"off", "on"}, 1) params:set_action(i.. "smoothbass", function(x) local engine_value = (x == 2) and 2.5 or 1 engine.smoothbass(i, engine_value) end)
       params:add_taper(i.."pitch_walk_rate", i.." Pitch Walk", 0, 30, 0, 3, "Hz") params:set_action(i.."pitch_walk_rate", function(value) engine.pitch_walk_rate(i, value) end)
-      params:add_control(i.."pitch_walk_step", i.." Walk Range", controlspec.new(1, 24, "lin", 1, 2, "steps")) params:set_action(i.."pitch_walk_step", function(value) engine.pitch_walk_step(i, value) end)
+      params:add_control(i.."pitch_walk_step", i.." Walk Range", controlspec.new(1, 12, "lin", 1, 2, "steps")) params:set_action(i.."pitch_walk_step", function(value) engine.pitch_walk_step(i, value) end)
       params:add_control(i.."pitch_random_prob", i.." Pitch Randomize", controlspec.new(-100, 100, "lin", 1, 0, "%")) params:set_action(i.."pitch_random_prob", function(value) engine.pitch_random_prob(i, value) end)
       params:add_option(i.."pitch_random_scale_type", i.." Pitch Quantize", {"5th+oct", "5th+oct 2", "1 oct", "2 oct", "chrom", "maj", "min", "penta", "whole"}, 1) params:set_action(i.."pitch_random_scale_type", function(value) engine.pitch_random_scale_type(i, value - 1) end)
       params:add_control(i.."ratcheting_prob", i.." Ratcheting", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.."ratcheting_prob", function(value) engine.ratcheting_prob(i, value) end)
@@ -852,7 +852,7 @@ local function handle_pitch_size_density_link(track, config, delta)
     if params:get("global_pitch_size_density_link") ~= 1 or not (param == "pitch" or param == "size" or param == "density") then return false end
     local symmetry = params:get("symmetry") == 1
     local other_track = 3 - track
-    local function disable_linked_lfos(t) for _, p in ipairs({"pitch", "size", "density"}) do disable_lfos_for_param(t .. p) end end
+    local function disable_linked_lfos(t) for _, p in ipairs({"pitch", "size", "density"}) do disable_lfos_for_param(t .. p, true) end end
     disable_linked_lfos(track)
     if symmetry then disable_linked_lfos(other_track) end
     handle_lfo(track .. param, symmetry)
