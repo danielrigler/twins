@@ -36,7 +36,7 @@ Hold **K1**: Mode Select
 ### Discussion
 **[FORUM](https://llllllll.co/t/twins/71052)**
 ### Download
-**v0.45**
+**v0.48**
 install from Maiden Project Manager, or from Maiden REPL:
 ```
 ;install https://github.com/danielrigler/twins
