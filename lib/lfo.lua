@@ -4,6 +4,7 @@ local options = {lfotypes = { "sine", "random", "square", "walk" }}
 local lfo = {}
 local assigned_params = {}
 local lfo_paused = false
+local lfo_cleaning_up = false
 local util_clamp = util.clamp
 local math_random = math.random
 local math_pi = math.pi
@@ -15,8 +16,14 @@ local LOCKABLE_PARAMS = { "jitter", "size", "density", "spread", "pitch", "pan",
 local LOCKABLE_LOOKUP = {}
 local RANGE_CACHE = {}
 for _, param in ipairs(LOCKABLE_PARAMS) do LOCKABLE_LOOKUP[param] = true end
-local function pget(k) return params:get(k) end
-local function pset(k, v) params:set(k, v) end
+local function pget(k) 
+  if not params or not params.lookup or not params.lookup[k] then return nil end
+  return params:get(k) 
+end
+local function pset(k, v) 
+  if not params or not params.lookup or not params.lookup[k] then return end
+  params:set(k, v) 
+end
 
 function lfo.is_param_locked(track, param_name)
   local lock_param_name = track .. "lock_" .. param_name
@@ -90,22 +97,22 @@ lfo.lfo_targets = {
 }
 
 lfo.target_ranges = {
-  ["1pan"] = { depth = { 25, 90 }, offset = { 0, 0 }, frequency = { 0.05, 0.6 }, waveform = { "sine" }, chance = 0.8 },
-  ["2pan"] = { depth = { 25, 90 }, offset = { 0, 0 }, frequency = { 0.05, 0.6 }, waveform = { "sine" }, chance = 0.8 },
-  ["1jitter"] = { depth = { 20, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
-  ["2jitter"] = { depth = { 20, 100 }, offset = { -1, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
-  ["1spread"] = { depth = { 20, 100 }, offset = { 0, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
-  ["2spread"] = { depth = { 20, 100 }, offset = { 0, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5},
-  ["1size"] = { depth = { 20, 100 }, offset = { 0, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
-  ["2size"] = { depth = { 20, 100 }, offset = { 0, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
-  ["1density"] = { depth = { 20, 100 }, offset = { 0, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
-  ["2density"] = { depth = { 20, 100 }, offset = { 0, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.5 },
+  ["1pan"] = { depth = { 25, 90 }, offset = { 0, 0 }, frequency = { 0.1, 0.6 }, waveform = { "sine" }, chance = 0.8 },
+  ["2pan"] = { depth = { 25, 90 }, offset = { 0, 0 }, frequency = { 0.1, 0.6 }, waveform = { "sine" }, chance = 0.8 },
+  ["1jitter"] = { depth = { 20, 70 }, offset = { -1, 1 }, frequency = { 0.1, 0.4 }, waveform = { "sine" }, chance = 0.6 },
+  ["2jitter"] = { depth = { 20, 70 }, offset = { -1, 1 }, frequency = { 0.1, 0.4 }, waveform = { "sine" }, chance = 0.6 },
+  ["1spread"] = { depth = { 10, 30 }, offset = { 0, 0.3 }, frequency = { 0.1, 0.4 }, waveform = { "sine" }, chance = 0.6 },
+  ["2spread"] = { depth = { 10, 30 }, offset = { 0, 0.3 }, frequency = { 0.1, 0.4 }, waveform = { "sine" }, chance = 0.6},
+  ["1size"] = { depth = { 5, 30 }, offset = { 0.1, 1 }, frequency = { 0.1, 0.4 }, waveform = { "sine" }, chance = 0.6 },
+  ["2size"] = { depth = { 5, 30 }, offset = { 0.1, 1 }, frequency = { 0.1, 0.4 }, waveform = { "sine" }, chance = 0.6 },
+  ["1density"] = { depth = { 5, 40 }, offset = { 0, 1 }, frequency = { 0.1, 0.4 }, waveform = { "sine" }, chance = 0.6 },
+  ["2density"] = { depth = { 5, 40 }, offset = { 0, 1 }, frequency = { 0.1, 0.4 }, waveform = { "sine" }, chance = 0.6 },
   ["1volume"] = { depth = { 2, 3 }, offset = { 0, 1 }, frequency = { 0.1, 0.5 }, waveform = { "sine" }, chance = 1.0 },
   ["2volume"] = { depth = { 2, 3 }, offset = { 0, 1 }, frequency = { 0.1, 0.5 }, waveform = { "sine" }, chance = 1.0 },
-  ["1seek"] = { depth = { 50, 100 }, offset = { 0, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.3 },
-  ["2seek"] = { depth = { 50, 100 }, offset = { 0, 1 }, frequency = { 0.05, 0.3 }, waveform = { "sine" }, chance = 0.3 },
-  ["1speed"] = { depth = { 50, 100 }, offset = { -1, 1 }, frequency = { 0.02, 0.5 }, waveform = { "sine" }, chance = 0.2 },
-  ["2speed"] = { depth = { 50, 100 }, offset = { -1, 1 }, frequency = { 0.02, 0.5 }, waveform = { "sine" }, chance = 0.2 }
+  ["1seek"] = { depth = { 0, 100 }, offset = { 0, 1 }, frequency = { 0.02, 0.3 }, waveform = { "sine" }, chance = 0.3 },
+  ["2seek"] = { depth = { 0, 100 }, offset = { 0, 1 }, frequency = { 0.02, 0.3 }, waveform = { "sine" }, chance = 0.3 },
+  ["1speed"] = { depth = { 10, 50 }, offset = { -1, 1 }, frequency = { 0.02, 0.3 }, waveform = { "sine" }, chance = 0.2 },
+  ["2speed"] = { depth = { 10, 50 }, offset = { -1, 1 }, frequency = { 0.02, 0.3 }, waveform = { "sine" }, chance = 0.2 }
 }
 
 local param_ranges = {
@@ -114,8 +121,8 @@ local param_ranges = {
   ["1speed"] = { -0.15, 0.5 }, ["2speed"] = { -0.15, 0.5 },
   ["1jitter"] = { 0, 99999 }, ["2jitter"] = { 0, 99999 },
   ["1spread"] = { 0, 100 }, ["2spread"] = { 0, 100 },
-  ["1size"] = { 50, 599 }, ["2size"] = { 50, 599 },
-  ["1density"] = { 0, 50 }, ["2density"] = { 0, 50 },
+  ["1size"] = { 20, 599 }, ["2size"] = { 20, 599 },
+  ["1density"] = { 1, 50 }, ["2density"] = { 1, 50 },
   ["1volume"] = { -70, 10 }, ["2volume"] = { -70, 10 },
   ["1pitch"] = { -48, 48 }, ["2pitch"] = { -48, 48 },
   ["1cutoff"] = { 20, 20000 }, ["2cutoff"] = { 20, 20000 },
@@ -196,19 +203,42 @@ function randomize_lfo(i, target)
   local current_val = pget(target)
   local is_pan = target:match("pan$")
   local is_seek = target:match("seek$")
+  
+  local initial_offset
   if is_pan then
-    lfo[i].offset = 0
+    initial_offset = 0
   elseif is_seek then
-    lfo[i].offset = (math_random() - 0.5)
+    initial_offset = (math_random() - 0.5)
   else
-    lfo[i].offset = lfo.scale(current_val, min_val, max_val, -1, 1)
+    initial_offset = lfo.scale(current_val, min_val, max_val, -1, 1)
   end
-  pset(i.."offset", lfo[i].offset)
+  
   local ranges = lfo.target_ranges[target]
-  local max_allowed = math.min(max_val - current_val, current_val - min_val)
-  local scaled_max = lfo.scale(max_allowed, 0, max_val - min_val, 0, 100)
-  lfo[i].depth = math.max(1, math.min(math_random(ranges.depth[1], ranges.depth[2]), math_floor(scaled_max)))
+  local desired_depth = math_random(ranges.depth[1], ranges.depth[2])
+  local depth_range = (desired_depth / 100) * (max_val - min_val)
+  local center_point = lfo.scale(initial_offset, -1, 1, min_val, max_val)
+  local available_above = max_val - center_point
+  local available_below = center_point - min_val
+  local max_half_depth = math.min(available_above, available_below)
+  if depth_range / 2 <= max_half_depth then
+    lfo[i].depth = desired_depth
+    lfo[i].offset = initial_offset
+  else
+    lfo[i].depth = desired_depth
+    
+    local half_depth_range = depth_range / 2
+    if available_above > available_below then
+      center_point = math.min(max_val - half_depth_range, center_point + (half_depth_range - available_below))
+    else
+      center_point = math.max(min_val + half_depth_range, center_point - (half_depth_range - available_above))
+    end
+    center_point = util_clamp(center_point, min_val + half_depth_range, max_val - half_depth_range)
+    lfo[i].offset = lfo.scale(center_point, min_val, max_val, -1, 1)
+  end
+  
+  pset(i.."offset", lfo[i].offset)
   pset(i.."lfo_depth", lfo[i].depth)
+  
   if ranges.frequency then
     local min_f, max_f = ranges.frequency[1] * 100, ranges.frequency[2] * 100
     if min_f <= max_f then
@@ -307,10 +337,10 @@ function lfo.randomize_lfos(track, allow_volume_lfos)
 end
 
 function lfo.process()
-  if lfo_paused then return end
+  if lfo_paused or lfo_cleaning_up then return end
   for i = 1, number_of_outputs do
     local lfo_state = pget(i.."lfo")
-    if lfo_state ~= 2 then goto continue end
+    if not lfo_state or lfo_state ~= 2 then goto continue end
     local obj = lfo[i]
     obj.phase = (obj.phase + obj.freq * PHASE_INCREMENT) % 1.0
     local slope
@@ -360,6 +390,8 @@ function lfo.scale(old_value, old_min, old_max, new_min, new_max)
   return (old_value - old_min) * (new_max - new_min) / (old_max - old_min) + new_min
 end
 
+local lfo_metro = nil
+
 function lfo.init()
   for i = 1, number_of_outputs do
     params:add_separator("LFO " .. i)
@@ -375,11 +407,22 @@ function lfo.init()
     params:add_option(i .. "lfo", i .. " LFO", { "off", "on" }, 1)
   end
 
-  local lfo_metro = metro.init()
+  lfo_metro = metro.init()
   lfo_metro.time = PHASE_INCREMENT
   lfo_metro.count = -1
   lfo_metro.event = lfo.process
   lfo_metro:start()
+end
+
+function lfo.cleanup()
+  lfo_cleaning_up = true
+  if lfo_metro then
+    pcall(function()
+      lfo_metro:stop()
+    end)
+    lfo_metro.event = nil
+    lfo_metro = nil
+  end
 end
 
 return lfo

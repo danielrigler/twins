@@ -60,7 +60,7 @@ alloc {
             var overtone_2_vol = overtones_2 * invDenom * 2;
             var grain_direction, base_trig, base_grain_trig;
             var rand_val, rand_val2, scale_type, random_interval;
-            var ratchet_active;
+            var ratchet_gate, extra_trig;
             var scaled_signal;
             var trigger1 = Impulse.kr(60);
 
@@ -68,8 +68,9 @@ alloc {
             density_mod = density * (2**(LFNoise1.kr(density).range(0, 1) * density_mod_amt));
             base_trig = Select.kr(trig_mode, [Impulse.kr(density_mod), Dust.kr(density_mod)]);
     
-            ratchet_active = Trig1.kr(base_trig * (TRand.kr(trig: base_trig, lo: 0, hi: 1) < ratcheting_prob), TChoose.kr(base_trig, [1, 2]) * density_mod.reciprocal * 0.5);
-            base_grain_trig = Select.kr(trig_mode,[Impulse.kr(density_mod * (1 + ratchet_active)), Dust.kr(density_mod * (1 + ratchet_active))]);
+            ratchet_gate = base_trig * (TRand.kr(trig: base_trig, lo: 0, hi: 1) < ratcheting_prob);
+            extra_trig = TDelay.kr(ratchet_gate, density_mod.reciprocal * 0.5);
+            base_grain_trig = base_trig + extra_trig;
             grain_trig = CoinGate.kr(probability, base_grain_trig);
 
             rand_val = TRand.kr(trig: grain_trig, lo: 0, hi: 1);

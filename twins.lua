@@ -6,7 +6,7 @@
 --            by: @dddstudio                       
 -- 
 --                          
---                           v0.47
+--                           v0.48
 -- E1: Master Volume
 -- K1+E2/E3: Volume
 -- Hold K1: Morphing
@@ -52,6 +52,7 @@ local Mirror = include("lib/mirror") Mirror.init(osc_positions, lfo)
 local macro = include("lib/macro") macro.set_lfo_reference(lfo)
 local drymode = include("lib/drymode") drymode.set_lfo_reference(lfo)
 local randomize_metro = { [1] = nil, [2] = nil }
+local active_clocks = {}
 local key_state = {} for n = 1, 3 do key_state[n] = false end
 local current_mode = "seek"
 local current_filter_mode = "lpf"
@@ -104,10 +105,13 @@ local param_modes = {
 local param_rows = {} for mode, config in pairs(param_modes) do if config.y then table.insert(param_rows, {y = config.y, label = config.label, mode = mode, param1 = "1" .. config.param, param2 = "2" .. config.param, hz = config.hz, st = config.st }) end end table.sort(param_rows, function(a, b) return a.y < b.y end)
 
 local animation_x = 0 animation_y = -64 animation_speed = 100 animation_complete = false animation_start_time = nil animation_directions = {"top", "bottom", "left", "right"} current_animation_direction = "top"
+local sym_offset = 0
 local function table_find(tbl, value) for i = 1, #tbl do if tbl[i] == value then return i end end return nil end
 local function is_audio_loaded(track_num) local file_path = params:get(track_num .. "sample") return (file_path and file_path ~= "-") or audio_active[track_num] end
 local function random_float(l, h) return l + math.random() * (h - l) end
-local function stop_metro_safe(m) if m then local ok, err = pcall(function() m:stop() end) if m then m.event = nil end end end
+local function stop_metro_safe(m) if m then pcall(function() m:stop() end) if m then m.event = nil end end end
+local function tracked_clock_run(func) local co = clock.run(func) table.insert(active_clocks, co) return co end
+local function cancel_all_clocks() for i = #active_clocks, 1, -1 do local co = active_clocks[i] if co then pcall(function() clock.cancel(co) end) end active_clocks[i] = nil end end
 local function update_evolution_animation() if params:get("evolution") == 1 then evolution_animation_time = evolution_animation_time + (1/60) local cycle_duration = 0.3 evolution_animation_phase = math.floor((evolution_animation_time / cycle_duration) % 6) else evolution_animation_time = 0 evolution_animation_phase = 0 end end
 local function is_param_locked(track_num, param) return params:get(track_num .. "lock_" .. param) == 2 end
 local function is_lfo_active_for_param(param_name) for i = 1, 16 do local target_index = params:get(i.. "lfo_target") if lfo.lfo_targets[target_index] == param_name and params:get(i.. "lfo") == 2 then return true, i end end return false, nil end
@@ -120,6 +124,7 @@ local function setup_ui_metro()
   current_animation_direction = animation_directions[math.random(#animation_directions)]
   ui_metro.event = function()
     update_evolution_animation()
+    sym_offset = (sym_offset + 0.5) % 64
     animation_start_time = animation_start_time or util.time()
     local elapsed = util.time() - animation_start_time
     local progress = util.clamp(elapsed * animation_speed / 64, 0, 1)
@@ -470,7 +475,7 @@ end
 local function setup_params()
     params:add_separator("Input")
     for i = 1, 2 do
-      params:add_file(i.."sample","Sample "..i) params:set_action(i.."sample",function(f)if f~=nil and f~=""and f~="none"and f~="-"then lfo.clearLFOs(tostring(i),"jitter")engine.read(i,f)audio_active[i]=true update_pan_positioning()local is_live=params:get(i.."live_input")==1 local dur=is_live and params:get("live_buffer_length")or get_audio_duration(f)if dur then local ms=dur*1000 local max_jit=math.min(ms,99999)params:set(i.."max_jitter",max_jit)params:set(i.."min_jitter",0)if not is_param_locked(i,"jitter")then local jp=i.."jitter"handle_lfo(jp,true)params:set(jp,util.clamp(dur*math.random()*1000,0,99999))end if not is_live and math.random()<0.3 and not lfo.is_param_locked(tostring(i),"jitter")then clock.run(function()clock.sleep(0.1)for s=1,16 do if params.lookup[s.."lfo"]and params:get(s.."lfo")==1 then randomize_lfo(s,i.."jitter")break end end end)end else lfo.clearLFOs(tostring(i),"jitter")audio_active[i]=false osc_positions[i]=0 update_pan_positioning()end end end)
+      params:add_file(i.."sample","Sample "..i); params:set_action(i.."sample",function(f) if f~=nil and f~="" and f~="none" and f~="-" then lfo.clearLFOs(tostring(i),"jitter"); engine.read(i,f); audio_active[i]=true; update_pan_positioning(); local is_live=params:get(i.."live_input")==1; local dur=is_live and params:get("live_buffer_length") or get_audio_duration(f); if dur then local ms=dur*1000; local max_jit=math.min(ms,99999); params:set(i.."max_jitter",max_jit); params:set(i.."min_jitter",0); if not preset_loading and not is_param_locked(i,"jitter") then local jp=i.."jitter"; handle_lfo(jp,true); params:set(jp,util.clamp(dur*math.random()*1000,0,99999)); end; if not preset_loading and not is_live and math.random()<0.3 and not lfo.is_param_locked(tostring(i),"jitter") then tracked_clock_run(function() clock.sleep(0.1); for s=1,16 do if params.lookup[s.."lfo"] and params:get(s.."lfo")==1 then randomize_lfo(s,i.."jitter"); break end end end); end else lfo.clearLFOs(tostring(i),"jitter"); audio_active[i]=false; osc_positions[i]=0; update_pan_positioning(); end end end)
     end
     params:add_binary("randomtapes", "Random Tapes", "trigger", 0) params:set_action("randomtapes", function() load_random_tape_file() end)
     
@@ -653,7 +658,7 @@ local function setup_params()
         params:add_taper(i.."min_density", i.." density (min)", 0.1, 50, 0.5, 5, "Hz")
         params:add_taper(i.."max_density", i.." density (max)", 0.1, 50, 30, 5, "Hz")
         params:add_taper(i.."min_spread", i.." spread (min)", 0, 100, 0, 0, "%")
-        params:add_taper(i.."max_spread", i.." spread (max)", 0, 100, 70, 0, "%")
+        params:add_taper(i.."max_spread", i.." spread (max)", 0, 100, 50, 0, "%")
         params:add_control(i.."min_pitch", i.." pitch (min)", controlspec.new(-48, 48, "lin", 1, -31, "st"))
         params:add_control(i.."max_pitch", i.." pitch (max)", controlspec.new(-48, 48, "lin", 1, 31, "st"))
         params:add_taper(i.."min_speed", i.." speed (min)", -2, 2, -0.15, 0, "x")
@@ -685,7 +690,7 @@ local function setup_params()
     params:add_binary("unload_all", "Unload All Audio", "trigger", 0) params:set_action("unload_all", function() for i=1, 2 do params:set(i.."seek", 0) params:set(i.."sample", "-") params:set(i.."live_input", 0) params:set(i.."live_direct", 0) audio_active[i] = false osc_positions[i] = 0 end engine.unload_all() update_pan_positioning() end)
     params:add_binary("global_pitch_size_density_link", "Linked Mode", "toggle", 0) params:set_action("global_pitch_size_density_link", function(value) if value == 1 then for i = 1, 2 do local pitch = params:get(i.."pitch") local size = params:get(i.."size") local density = params:get(i.."density") if size > 0 and density > 0 then _G["base_pitch_"..i] = pitch _G["base_size_"..i] = size _G["base_density_"..i] = density _G["size_density_product_"..i] = size * density end end end end)
     params:add_option("pitch_lag", "Pitch Lag", {"off", "very small", "small", "medium", "high", "very high"}, 1) params:set_action("pitch_lag", function(value) local lag_times = {0, 1, 2, 4, 8, 16} local lag_time = lag_times[value] for i = 1, 2 do engine.pitch_lag(i, lag_time) end end)
-    params:add_option("steps", "Transition Time", {"short", "medium", "long"}, 2) params:set_action("steps", function(value) steps = ({20, 300, 800})[value] end)
+    params:add_option("steps", "Transition Time", {"short", "medium", "long"}, 1) params:set_action("steps", function(value) steps = ({20, 300, 800})[value] end)
     
     for i = 1, 2 do
       params:add_taper(i.. "volume", i.. " volume", -70, 10, -15, 0, "dB") params:set_action(i.. "volume", function(value) if value == -70 then engine.volume(i, 0) else engine.volume(i, math.pow(10, value / 20)) end end) params:hide(i.. "volume")
@@ -1225,6 +1230,21 @@ local function get_lfo_modulation(param_name)
     return nil
 end
 
+local function get_lfo_range(param_name)
+    for i = 1, 16 do
+        local target_index = params:get(i.. "lfo_target")
+        if lfo.lfo_targets[target_index] == param_name and params:get(i.. "lfo") == 2 then
+            local min_val, max_val = lfo.get_parameter_range(param_name)
+            local depth = params:get(i .. "lfo_depth") * 0.01  -- Convert from 0-100 to 0-1
+            local offset = lfo[i].offset or 0
+            local center = min_val + (offset + 1) * 0.5 * (max_val - min_val)
+            local half_range = depth * 0.5 * (max_val - min_val)
+            return center - half_range, center + half_range
+        end
+    end
+    return nil, nil
+end
+
 local LEVEL = {hi=15, dim=9, val=2}
 local TRACK_X, VOL_X, PAN_X = {51, 92}, {0,126}, {52,93}
 local BAR_W, Y = 30, {bottom=61, seek=63}
@@ -1248,7 +1268,7 @@ local function draw_lock(x,y)
   local offsets = {{-3,-1},{-4,-1},{-4,-2},{-4,-3}}
   for _,o in ipairs(offsets) do P(LEVEL.dim, x+o[1], y+o[2]) end
 end
-local function draw_size_link(x,y) for _,offset in ipairs{1,3,5,11,13,15} do P(LEVEL.dim, x-4, y+offset) end end
+local function draw_size_link(x,y) for _,offset in ipairs{1,3,5,11,13,15} do P(LEVEL.val, x-4, y+offset) end end
 local function get_or_create_bucket(l)
   if not level_buckets[l] then level_buckets[l] = {r={}, p={}, t={}, r_count=0, p_count=0, t_count=0} end
   return level_buckets[l]
@@ -1340,7 +1360,13 @@ function redraw()
       T(hi and LEVEL.hi or LEVEL.val, x, row.y, txt)
       if mod then
         local a, b = lfo. get_parameter_range(param)
-        R(LEVEL.dim, x, row.y + 1, util.linlin(a, b, 0, BAR_W, mod), 1)
+        local lfo_min, lfo_max = get_lfo_range(param)
+        if lfo_min and lfo_max then
+          local bg_start = util.linlin(a, b, 0, BAR_W, lfo_min)
+          local bg_end = util.linlin(a, b, 0, BAR_W, lfo_max)
+          R(1, x + bg_start, row.y + 1, bg_end - bg_start, 1)
+          R(LEVEL.dim+2, x, row.y + 1, util.linlin(a, b, 0, BAR_W, mod), 1)
+        end
       end
     end
   end
@@ -1401,7 +1427,14 @@ function redraw()
     R(LEVEL.dim, pan_pos - 1, 0, 4, 1)
   end
   if C.dry then for x=6,18,4 do P(LEVEL.hi, x, 0) end end
-  if C.sym then for _,r in ipairs(param_rows) do P(1, 85, r.y - 3) end P(1, 85, Y.bottom - 3) end
+  if C.sym then 
+    for i = 0, 7 do
+      local y = (i * 8 + sym_offset) % 64
+      local center_dist = math.abs(y - 32)
+      local brightness = math.floor(15 * (1 - center_dist / 32))
+      P(brightness, 85, y)
+    end
+  end
   if C. evo then local pattern = patterns[evolution_animation_phase] or {} for _,p in ipairs(pattern) do P(LEVEL.hi, p[1], p[2]) end end
   if mode == "seek" or mode == "speed" then
     for t=1,2 do
@@ -1489,7 +1522,7 @@ local osc_handlers = {
     ["/twins/output_saved"] = function(args)
         local filepath = args[1]
         params:set("unload_all", 1)
-        clock.run(function()
+        tracked_clock_run(function()
             clock.sleep(0.1)
             params:set("1granular_gain", 0) disable_lfos_for_param("1speed") disable_lfos_for_param("1pan") params:set("1speed", 1) params:set("1sample", filepath) params:set("1pan", 0) params:set("2pan", 0) params:set("reverb_mix", 0) params:set("delay_mix", 0) params:set("shimmer_mix", 0) params:set("tape_mix", 1) params:set("dimension_mix", 0) params:set("sine_drive", 0) params:set("drive", 0) params:set("wobble_mix", 0) params:set("chew_depth", 0) params:set("lossdegrade_mix", 0) params:set("Width", 100)  params:set("rspeed", 0) params:set("haas", 1) params:set("monobass_mix", 1) params:set("bitcrush_mix", 0) params:set("1lock_speed", 2)
             for i = 1, 2 do params:set(i.."eq_low_gain", 0) params:set(i.."eq_mid_gain", 0) params:set(i.."eq_high_gain", 0) params:set(i.."cutoff", 20000) params:set(i.."hpf", 20) end
@@ -1507,7 +1540,7 @@ function init()
     params:set('reverb', 1)
     initial_monitor_level = params:get('monitor_level')
     params:set('monitor_level', -math.huge)
-    if not installer:ready() then clock.run(function() while true do redraw() clock.sleep(1 / 10) end end) do return end end
+    if not installer:ready() then tracked_clock_run(function() while true do redraw() clock.sleep(1 / 10) end end) do return end end
     setup_ui_metro()
     setup_params()
     setup_osc()
@@ -1515,11 +1548,13 @@ function init()
 end
 
 function cleanup()
+    cancel_all_clocks()
     stop_metro_safe(ui_metro)
     stop_metro_safe(longpress_metro)
     for i = 1, 2 do stop_metro_safe(randomize_metro[i]) end
+    lfo.cleanup()
     randpara.cleanup()
-    params:set('monitor_level', initial_monitor_level)
-    params:set('reverb', initial_reverb_onoff)
+    if initial_monitor_level then params:set('monitor_level', initial_monitor_level) end
+    if initial_reverb_onoff then params:set('reverb', initial_reverb_onoff) end
     osc.event = nil
 end

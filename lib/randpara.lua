@@ -3,6 +3,13 @@ local evolution_metro = metro.init()
 local targets, active_interpolations = {}, {}
 local interpolation_speed = 1 / 30
 
+local function stop_metro_safe(m)
+  if m then
+    pcall(function() m:stop() end)
+    if m then m.event = nil end
+  end
+end
+
 local evolution_active = false
 local evolution_range = 0.15
 local evolution_states = {}
@@ -29,15 +36,15 @@ local PARAM_SPECS = {
   ["1subharmonics_2"] = {1, {0, 1}, "granular"}, ["2subharmonics_2"] = {1, {0, 1}, "granular"},
   ["1subharmonics_3"] = {1, {0, 1}, "granular"}, ["2subharmonics_3"] = {1, {0, 1}, "granular"},
   ["1overtones_1"] = {1, {0, 1}, "granular"}, ["2overtones_1"] = {1, {0, 1}, "granular"},
-  ["1overtones_2"] = {1, {0, 1}, "granular"}, ["2overtones_2"] = {1, {0, 1}, "granular"}, ["1pitch_walk_rate"] = {20, {0.1, 20}, "granular"},
-  ["2pitch_walk_rate"] = {20, {0.1, 20}, "granular"}, ["1pitch_walk_step"] = {12, {1, 12}, "granular"},
-  ["2pitch_walk_step"] = {12, {1, 12}, "granular"}, ["delay_feedback"] = {100, {0, 100}, "delay"},
+  ["1overtones_2"] = {1, {0, 1}, "granular"}, ["2overtones_2"] = {1, {0, 1}, "granular"}, 
+  ["1pitch_walk_step"] = {3, {1, 12}, "granular"}, ["2pitch_walk_step"] = {3, {1, 12}, "granular"}, 
+  ["delay_feedback"] = {100, {0, 100}, "delay"},
   ["1pitch_random_scale_type"] = {7, {1, 7}, "granular"}, ["2pitch_random_scale_type"] = {7, {1, 7}, "granular"},
-  ["1pitch_random_prob"] = {200, {-100, 100}, "granular"}, ["2pitch_random_prob"] = {200, {-100, 100}, "granular"},
-  ["1ratcheting_prob"] = {100, {0, 100}, "granular"}, ["2ratcheting_prob"] = {100, {0, 100}, "granular"},
-  ["delay_time"] = {2, {0, 2}, "delay"}, ["stereo"] = {100, {0, 100}, "delay"},
-  ["wiggle_depth"] = {75, {0, 100}, "delay"}, ["wiggle_rate"] = {6, {0, 6}, "delay"},
-  ["delay_lowpass"] = {20000, {500, 20000}, "delay"}, ["delay_hipass"] = {1500, {20, 1500}, "delay"},
+  ["1pitch_random_prob"] = {40, {-100, 100}, "granular"}, ["2pitch_random_prob"] = {40, {-100, 100}, "granular"},
+  ["1ratcheting_prob"] = {50, {0, 100}, "granular"}, ["2ratcheting_prob"] = {50, {0, 100}, "granular"},
+  ["delay_time"] = {2, {0, 2}, "delay"}, ["stereo"] = {50, {0, 100}, "delay"},
+  ["wiggle_depth"] = {40, {0, 100}, "delay"}, ["wiggle_rate"] = {6, {0, 6}, "delay"},
+  ["delay_lowpass"] = {10000, {500, 20000}, "delay"}, ["delay_hipass"] = {300, {20, 20000}, "delay"},
   ["t60"] = {8, {0.1, 8}, "reverb"}, ["damp"] = {100, {0, 100}, "reverb"},
   ["earlyDiff"] = {100, {0, 100}, "reverb"}, ["modDepth"] = {100, {0, 100}, "reverb"},
   ["modFreq"] = {5, {0, 5}, "reverb"}, ["low"] = {1, {0, 1}, "reverb"}, ["mid"] = {1, {0, 1}, "reverb"},
@@ -49,7 +56,9 @@ local PARAM_SPECS = {
   ["hipass"] = {4000, {20, 4000}, "shimmer"}, ["fb"] = {80, {0, 80}, "shimmer"},
   ["fbDelay"] = {1, {0.02, 1}, "shimmer"}, ["bitcrush_rate"] = {5500, {3500, 5500}, "bitcrush"},
   ["bitcrush_bits"] = {2, {12, 16}, "bitcrush"}, ["chew_freq"] = {60, {1, 60}, "chew"},
-  ["chew_variance"] = {70, {0, 70}, "chew"}
+  ["chew_variance"] = {70, {0, 70}, "chew"},
+  ["1eq_low_gain"] = {0.2, {0, 1}, "eq"},["1eq_mid_gain"] = {0.2, {0, 1}, "eq"}, ["1eq_high_gain"] = {0.2, {0, 1}, "eq"},
+  ["2eq_low_gain"] = {0.2, {0, 1}, "eq"},["2eq_mid_gain"] = {0.2, {0, 1}, "eq"}, ["2eq_high_gain"] = {0.2, {0, 1}, "eq"}
 }
 
 local LOCK_PARAMS = {
@@ -152,7 +161,6 @@ local function start_evolution()
   evolution_symmetry_state = params:get("symmetry") == 1
   cache_dirty = true
   clear_table(evolution_states)
-  
   evolution_metro.time = evolution_update_rate
   evolution_metro.event = evolution_update
   evolution_metro:start()
@@ -161,7 +169,7 @@ end
 local function stop_evolution()
   if not evolution_active then return end
   evolution_active = false
-  if evolution_metro and evolution_metro.running then evolution_metro:stop() end
+  stop_metro_safe(evolution_metro)
 end
 
 local function reset_evolution_centers()
@@ -223,7 +231,7 @@ local function start_interpolation(steps, symmetry)
     end
 
     if all_done then
-      randomize_metro:stop()
+      stop_metro_safe(randomize_metro)
       clear_table(targets)
       clear_table(active_interpolations)
     end
@@ -328,7 +336,7 @@ end
 
 local function randomize_params(steps, track_num)
   track_num = track_num or 1
-  if randomize_metro.running then randomize_metro:stop() end
+  stop_metro_safe(randomize_metro)
   clear_table(targets)
   clear_table(active_interpolations)
 
@@ -359,20 +367,20 @@ local function randomize_params(steps, track_num)
 end
 
 local function create_randomizer(group) return function(steps)
-  if randomize_metro.running then randomize_metro:stop() end
+  stop_metro_safe(randomize_metro)
   randomize_param_group(param_configs[group])
   start_interpolation(steps, params:get("symmetry") == 1)
 end end
 
 local function create_track_randomizer(fn) return function(track, steps)
-  if randomize_metro.running then randomize_metro:stop() end
+  stop_metro_safe(randomize_metro)
   randomize_param_group(fn(track))
   start_interpolation(steps, params:get("symmetry") == 1)
 end end
 
 local function cleanup()
   stop_evolution()
-  if randomize_metro then randomize_metro:stop() end
+  stop_metro_safe(randomize_metro)
   clear_table(targets)
   clear_table(active_interpolations)
   clear_table(evolution_states)
