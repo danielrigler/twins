@@ -81,9 +81,6 @@ local current_scene_mode = "off"
 local scene_data = {[1] = {[1] = {}, [2] = {}}, [2] = {[1] = {}, [2] = {}}}
 local morph_temp_scene = {}
 local last_morph_amount = 0 
-local evolution_animation_phase = 0
-local evolution_animation_time = 0
-local patterns = {[0] = {}, [1] = {{6,0}}, [2] = {{6,0}, {8,0}}, [3] = {{6,0}, {8,0}, {10,0}}, [4] = {{6,0}, {8,0}}, [5] = {{6,0}}}
 local grain_positions = {[1] = {}, [2] = {}}
 local osc_positions = {[1] = 0, [2] = 0}
 local rec_positions = {[1] = 0, [2] = 0}
@@ -104,15 +101,13 @@ local param_modes = {
     volume = {param = "volume", engine = true}}
 local param_rows = {} for mode, config in pairs(param_modes) do if config.y then table.insert(param_rows, {y = config.y, label = config.label, mode = mode, param1 = "1" .. config.param, param2 = "2" .. config.param, hz = config.hz, st = config.st }) end end table.sort(param_rows, function(a, b) return a.y < b.y end)
 
-local animation_x = 0 animation_y = -64 animation_speed = 100 animation_complete = false animation_start_time = nil animation_directions = {"top", "bottom", "left", "right"} current_animation_direction = "top"
-local sym_offset = 0
+local animation_y = -64 animation_complete = false animation_start_time = nil
 local function table_find(tbl, value) for i = 1, #tbl do if tbl[i] == value then return i end end return nil end
 local function is_audio_loaded(track_num) local file_path = params:get(track_num .. "sample") return (file_path and file_path ~= "-") or audio_active[track_num] end
 local function random_float(l, h) return l + math.random() * (h - l) end
 local function stop_metro_safe(m) if m then pcall(function() m:stop() end) if m then m.event = nil end end end
 local function tracked_clock_run(func) local co = clock.run(func) table.insert(active_clocks, co) return co end
 local function cancel_all_clocks() for i = #active_clocks, 1, -1 do local co = active_clocks[i] if co then pcall(function() clock.cancel(co) end) end active_clocks[i] = nil end end
-local function update_evolution_animation() if params:get("evolution") == 1 then evolution_animation_time = evolution_animation_time + (1/60) local cycle_duration = 0.3 evolution_animation_phase = math.floor((evolution_animation_time / cycle_duration) % 6) else evolution_animation_time = 0 evolution_animation_phase = 0 end end
 local function is_param_locked(track_num, param) return params:get(track_num .. "lock_" .. param) == 2 end
 local function is_lfo_active_for_param(param_name) for i = 1, 16 do local target_index = params:get(i.. "lfo_target") if lfo.lfo_targets[target_index] == param_name and params:get(i.. "lfo") == 2 then return true, i end end return false, nil end
 local function update_pan_positioning() local loaded1 = is_audio_loaded(1) local loaded2 = is_audio_loaded(2) local pan1_locked = is_param_locked(1, "pan") local pan1_has_lfo = is_lfo_active_for_param("1pan") local pan2_locked = is_param_locked(2, "pan") local pan2_has_lfo = is_lfo_active_for_param("2pan") if not pan1_locked and not pan1_has_lfo then params:set("1pan", loaded2 and -15 or 0) end if not pan2_locked and not pan2_has_lfo then params:set("2pan", loaded1 and 15 or 0) end end
@@ -121,20 +116,16 @@ local function setup_ui_metro()
   if ui_metro then stop_metro_safe(ui_metro) end
   ui_metro = metro.init()
   ui_metro.time = 1/60
-  current_animation_direction = animation_directions[math.random(#animation_directions)]
   ui_metro.event = function()
-    update_evolution_animation()
-    sym_offset = (sym_offset + 0.5) % 64
     animation_start_time = animation_start_time or util.time()
     local elapsed = util.time() - animation_start_time
-    local progress = util.clamp(elapsed * animation_speed / 64, 0, 1)
+    local progress = util.clamp(elapsed * 1.5, 0, 1)
     local eased = 1 - (1 - progress) * (1 - progress) * (1 - progress)
-    if current_animation_direction == "top" then animation_y = -64 + (eased * 64) animation_x = 0
-    elseif current_animation_direction == "bottom" then animation_y = 64 - (eased * 64) animation_x = 0
-    elseif current_animation_direction == "left" then animation_x = -128 + (eased * 128) animation_y = 0
-    elseif current_animation_direction == "right" then animation_x = 128 - (eased * 128) animation_y = 0
+    animation_y = -64 + (eased * 64)
+    if progress >= 1 then 
+      animation_complete = true 
+      animation_y = 0 
     end
-    if progress >= 1 then animation_complete = true animation_x = 0 animation_y = 0 end
     redraw()
   end
   ui_metro:start()
@@ -475,7 +466,7 @@ end
 local function setup_params()
     params:add_separator("Input")
     for i = 1, 2 do
-      params:add_file(i.."sample","Sample "..i); params:set_action(i.."sample",function(f) if f~=nil and f~="" and f~="none" and f~="-" then lfo.clearLFOs(tostring(i),"jitter"); engine.read(i,f); audio_active[i]=true; update_pan_positioning(); local is_live=params:get(i.."live_input")==1; local dur=is_live and params:get("live_buffer_length") or get_audio_duration(f); if dur then local ms=dur*1000; local max_jit=math.min(ms,99999); params:set(i.."max_jitter",max_jit); params:set(i.."min_jitter",0); if not preset_loading and not is_param_locked(i,"jitter") then local jp=i.."jitter"; handle_lfo(jp,true); params:set(jp,util.clamp(dur*math.random()*1000,0,99999)); end; if not preset_loading and not is_live and math.random()<0.3 and not lfo.is_param_locked(tostring(i),"jitter") then tracked_clock_run(function() clock.sleep(0.1); for s=1,16 do if params.lookup[s.."lfo"] and params:get(s.."lfo")==1 then randomize_lfo(s,i.."jitter"); break end end end); end else lfo.clearLFOs(tostring(i),"jitter"); audio_active[i]=false; osc_positions[i]=0; update_pan_positioning(); end end end)
+      params:add_file(i.."sample","Sample "..i); params:set_action(i.."sample",function(f) if f~=nil and f~="" and f~="none" and f~="-" then lfo.clearLFOs(tostring(i),"jitter"); engine.read(i,f); audio_active[i]=true; update_pan_positioning(); local is_live=params:get(i.."live_input")==1; local dur=is_live and params:get("live_buffer_length") or get_audio_duration(f); if dur then local ms=dur*1000; local max_jit=math.min(ms,99999); params:set(i.."max_jitter",max_jit); params:set(i.."min_jitter",0); if not preset_loading and not is_param_locked(i,"jitter") then local jp=i.."jitter"; handle_lfo(jp,true); params:set(jp,util.clamp(dur*math.random()*1000,0,99999)); end else lfo.clearLFOs(tostring(i),"jitter"); audio_active[i]=false; osc_positions[i]=0; update_pan_positioning(); end end end)
     end
     params:add_binary("randomtapes", "Random Tapes", "trigger", 0) params:set_action("randomtapes", function() load_random_tape_file() end)
     
@@ -696,10 +687,10 @@ local function setup_params()
       params:add_taper(i.. "volume", i.. " volume", -70, 10, -15, 0, "dB") params:set_action(i.. "volume", function(value) if value == -70 then engine.volume(i, 0) else engine.volume(i, math.pow(10, value / 20)) end end) params:hide(i.. "volume")
       params:add_taper(i.. "pan", i.. " pan", -100, 100, 0, 0, "%") params:set_action(i.. "pan", function(value) engine.pan(i, value * 0.01)  end) params:hide(i.. "pan")
       params:add_taper(i.. "speed", i.. " speed", -2, 2, 0.10, 0) params:set_action(i.. "speed", function(value) if math.abs(value) < 0.01 then engine.speed(i, 0) else engine.speed(i, value) end end) params:hide(i.. "speed")
-      params:add_taper(i.. "density", i.. " density", 0.1, 300, 10, 5) params:set_action(i.. "density", function(value) engine.density(i, value) end) params:hide(i.. "density")
+      params:add_taper(i.. "density", i.. " density", 0.1, 300, 7, 5) params:set_action(i.. "density", function(value) engine.density(i, value) end) params:hide(i.. "density")
       params:add_control(i.. "pitch", i.. " pitch", controlspec.new(-48, 48, "lin", 1, 0, "st")) params:set_action(i.. "pitch", function(value) engine.pitch_offset(i, math.pow(0.5, -value / 12)) end) params:hide(i.. "pitch")
       params:add_taper(i.. "jitter", i.. " jitter", 0, 999900, 2500, 10, "ms") params:set_action(i.. "jitter", function(value) engine.jitter(i, value * 0.001) end) params:hide(i.. "jitter")
-      params:add_taper(i.. "size", i.. " size", 20, 5999, 200, 1, "ms") params:set_action(i.. "size", function(value) engine.size(i, value * 0.001) end) params:hide(i.. "size")
+      params:add_taper(i.. "size", i.. " size", 20, 5999, 250, 1, "ms") params:set_action(i.. "size", function(value) engine.size(i, value * 0.001) end) params:hide(i.. "size")
       params:add_taper(i.. "spread", i.. " spread", 0, 100, 30, 0, "%") params:set_action(i.. "spread", function(value) engine.spread(i, value * 0.01) end) params:hide(i.. "spread")
       params:add_control(i.. "seek", i.. " seek", controlspec.new(0, 100, "lin", 0.01, 0, "%")) params:set_action(i.. "seek", function(value) engine.seek(i, value * 0.01) end) params:hide(i.. "seek")
     end
@@ -1235,7 +1226,7 @@ local function get_lfo_range(param_name)
         local target_index = params:get(i.. "lfo_target")
         if lfo.lfo_targets[target_index] == param_name and params:get(i.. "lfo") == 2 then
             local min_val, max_val = lfo.get_parameter_range(param_name)
-            local depth = params:get(i .. "lfo_depth") * 0.01  -- Convert from 0-100 to 0-1
+            local depth = params:get(i .. "lfo_depth") * 0.01
             local offset = lfo[i].offset or 0
             local center = min_val + (offset + 1) * 0.5 * (max_val - min_val)
             local half_range = depth * 0.5 * (max_val - min_val)
@@ -1326,7 +1317,7 @@ function redraw()
   if presets. draw_menu() then return end
   screen.clear()
   screen.save()
-  screen.translate(animation_x, animation_y)
+  screen.translate(0, animation_y)
   clear_ops()
   local C = {
     vol  = {params: get("1volume"), params:get("2volume")},
@@ -1426,16 +1417,22 @@ function redraw()
     local pan_pos = util.linlin(-100, 100, PAN_X[t], PAN_X[t] + 25, C.pan[t])
     R(LEVEL.dim, pan_pos - 1, 0, 4, 1)
   end
-  if C.dry then for x=6,18,4 do P(LEVEL.hi, x, 0) end end
+  if C.dry then for x=7,15,4 do P(LEVEL.hi, x, 0) end end
   if C.sym then 
+    local offset = (util.time() * 30) % 64
     for i = 0, 7 do
-      local y = (i * 8 + sym_offset) % 64
-      local center_dist = math.abs(y - 32)
-      local brightness = math.floor(15 * (1 - center_dist / 32))
+      local y = (i * 8 + offset) % 64
+      local brightness = math.floor(15 * (1 - math.abs(y - 32) / 32))
       P(brightness, 85, y)
     end
   end
-  if C. evo then local pattern = patterns[evolution_animation_phase] or {} for _,p in ipairs(pattern) do P(LEVEL.hi, p[1], p[2]) end end
+  if C.evo then 
+    local t = util.time() * 4
+    for i = 0, 2 do
+      local brightness = math.floor(8 + 7 * math.sin(t - i * 0.8))
+      P(brightness, 7 + i * 2, 0)
+    end
+  end
   if mode == "seek" or mode == "speed" then
     for t=1,2 do
       if params: get(t ..  "granular_gain") > 0 then

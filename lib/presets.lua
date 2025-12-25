@@ -306,7 +306,7 @@ function presets.menu_enc(n, d)
     
     if n == 2 then
         presets.selected_index = util.clamp(presets.selected_index + d, 1, #presets.preset_list)
-    elseif n == 3 then
+    elseif n == 1 or 3 then
         presets.menu_mode = d > 0 and "overwrite" or "load"
     end
 end
@@ -412,7 +412,7 @@ function presets.draw_menu()
     screen.clear()
     screen.level(15)
     screen.move(64, 6)
-    screen.text_center("SELECT A PRESET")
+    screen.text_center("PRESET BROWSER")
     
     -- Calculate visible range
     local visible_count = math.min(5, #presets.preset_list)

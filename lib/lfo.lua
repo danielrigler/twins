@@ -16,6 +16,7 @@ local LOCKABLE_PARAMS = { "jitter", "size", "density", "spread", "pitch", "pan",
 local LOCKABLE_LOOKUP = {}
 local RANGE_CACHE = {}
 for _, param in ipairs(LOCKABLE_PARAMS) do LOCKABLE_LOOKUP[param] = true end
+
 local function pget(k) 
   if not params or not params.lookup or not params.lookup[k] then return nil end
   return params:get(k) 
@@ -24,12 +25,10 @@ local function pset(k, v)
   if not params or not params.lookup or not params.lookup[k] then return end
   params:set(k, v) 
 end
-
 function lfo.is_param_locked(track, param_name)
   local lock_param_name = track .. "lock_" .. param_name
   return params.lookup[lock_param_name] and pget(lock_param_name) == 2
 end
-
 function lfo.set_pause(paused)
   lfo_paused = paused
 end

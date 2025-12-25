@@ -1,7 +1,5 @@
 local macro = {}
 
-local INTERPOLATION_SPEED = 1 / 30
-local EPSILON = 0.01
 local TARGET_DEPTH_PERCENT = 15
 
 local param_ranges = {
@@ -12,7 +10,6 @@ local param_ranges = {
 }
 
 local TARGET_DEPTH_FACTOR = TARGET_DEPTH_PERCENT * 0.01
-local INTERPOLATION_CONSTANT = 6
 local PARAMS_TO_ADJUST = {"speed", "size", "jitter", "density"}
 local NUM_TRACKS = 2
 
@@ -26,22 +23,11 @@ end
 
 local lfo_ref = nil
 local randomize_metro = metro.init()
-
-local targets = {}
-local active_interpolations = {}
 local lfo_cache = {}
 
 function macro.set_lfo_reference(lfo_module)
     lfo_ref = lfo_module
     lfo_cache = {}
-end
-
-local function interpolate(start_val, end_val, factor)
-    local diff = end_val - start_val
-    if math.abs(diff) < EPSILON then
-        return end_val
-    end
-    return start_val + diff * (1 - math.exp(-INTERPOLATION_CONSTANT * factor))
 end
 
 local function get_lfo_for_param(param_name)
@@ -78,7 +64,7 @@ end
 
 local function process_lfo_param(param, target, factor, lfo_index)
     local current_value = params:get(param)
-    local new_value = interpolate(current_value, target, factor)
+    local new_value = current_value + (target - current_value) * factor
     
     local min_val, max_val = lfo_ref.get_parameter_range(param)
     local range = max_val - min_val
@@ -93,56 +79,14 @@ local function process_lfo_param(param, target, factor, lfo_index)
     local offset_param = lfo_index .. "offset"
     local depth_param = lfo_index .. "lfo_depth"
     
-    params:set(offset_param, interpolate(params:get(offset_param), new_offset, factor))
-    params:set(depth_param, interpolate(params:get(depth_param), new_depth, factor))
+    local current_offset = params:get(offset_param)
+    local current_depth = params:get(depth_param)
+    
+    params:set(offset_param, current_offset + (new_offset - current_offset) * factor)
+    params:set(depth_param, current_depth + (new_depth - current_depth) * factor)
     params:set(param, new_value)
     
-    return math.abs(new_value - target) > EPSILON
-end
-
-local function process_normal_param(param, target, factor)
-    local current_value = params:get(param)
-    local new_value = interpolate(current_value, target, factor)
-    params:set(param, new_value)
-    return math.abs(new_value - target) > EPSILON
-end
-
-local function start_interpolation(steps)
-    if not next(targets) then return end
-    
-    randomize_metro.time = INTERPOLATION_SPEED
-    randomize_metro.count = -1
-    randomize_metro.event = function(count)
-        local factor = count / steps
-        local params_still_active = false
-        
-        for param, target in pairs(targets) do
-            if active_interpolations[param] then
-                local has_lfo, lfo_index = get_lfo_for_param(param)
-                local still_active
-                
-                if has_lfo then
-                    still_active = process_lfo_param(param, target, factor, lfo_index)
-                else
-                    still_active = process_normal_param(param, target, factor)
-                end
-                
-                if not still_active then
-                    active_interpolations[param] = nil
-                    targets[param] = nil
-                else
-                    params_still_active = true
-                end
-            end
-        end
-        
-        if not params_still_active then
-            randomize_metro:stop()
-            targets = {}
-            lfo_cache = {}
-        end
-    end
-    randomize_metro:start()
+    return math.abs(new_value - target) < 0.01
 end
 
 local function is_param_locked(track_num, param_suffix)
@@ -153,18 +97,26 @@ local function get_param_range(param_suffix)
     return param_ranges[param_suffix] or {min = 0, max = 100}
 end
 
+local function stop_metro_safe(m)
+    if m then
+        pcall(function() m:stop() end)
+        if m then m.event = nil end
+    end
+end
+
 local function adjust_params(multiplier)
     if randomize_metro.running then
-        randomize_metro:stop()
+        stop_metro_safe(randomize_metro)
     end
     
-    targets = {}
-    active_interpolations = {}
     lfo_cache = {}
     
     local upper_multiplier = 0.95
     local lower_multiplier = 1.05
     
+    local targets = {}
+    
+    -- Calculate targets for all unlocked parameters
     for i = 1, NUM_TRACKS do
         for _, param_suffix in ipairs(PARAMS_TO_ADJUST) do
             if not is_param_locked(i, param_suffix) then
@@ -180,12 +132,39 @@ local function adjust_params(multiplier)
                 end
                 
                 targets[param] = target_value
-                active_interpolations[param] = true
             end
         end
     end
     
-    start_interpolation(params:get("steps"))
+    if next(targets) then
+        local steps_option = params:get("steps")
+        local step_counts = {20, 300, 800}
+        local steps = step_counts[steps_option] or 20
+        randomize_metro.time = 1 / 30
+        randomize_metro.event = function(count)
+            local tolerance = 0.01
+            local factor = count / steps
+            local all_done = true
+            
+            for param, target in pairs(targets) do
+                local has_lfo, lfo_index = get_lfo_for_param(param)
+                
+                if has_lfo then
+                    all_done = process_lfo_param(param, target, factor, lfo_index) and all_done
+                else
+                    local current = params:get(param)
+                    local new_val = current + (target - current) * factor
+                    params:set(param, new_val)
+                    all_done = all_done and (math.abs(new_val - target) < tolerance)
+                end
+            end
+            
+            if all_done then
+                stop_metro_safe(randomize_metro)
+            end
+        end
+        randomize_metro:start()
+    end
 end
 
 function macro.macro_more()
