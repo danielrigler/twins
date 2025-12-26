@@ -44,7 +44,6 @@ local function string_to_table(str)
     return chunk()
 end
 
--- Cached params state collection
 local function get_all_params_state()
     local state = {}
     for _, param in pairs(params.params) do
@@ -55,7 +54,6 @@ local function get_all_params_state()
     return state
 end
 
--- Collect LFO states
 local function get_lfo_states()
     local lfo_states = {}
     for i = 1, 16 do
@@ -74,7 +72,6 @@ local function get_lfo_states()
     return lfo_states
 end
 
--- Generate preset name
 local function generate_preset_name(preset_name)
     if not preset_name or preset_name == "" then
         local time_prefix = os.date("%Y%m%d_%H%M")
@@ -110,7 +107,6 @@ function presets.save_complete_preset(preset_name, scene_data_ref, update_pan_po
         morph_amount = params:get("morph_amount") or 0
     }
     
-    -- Save to file
     util.make_dir(_path.data .. "twins")
     local file_path = _path.data .. "twins/" .. preset_name .. ".lua"
     local file = io.open(file_path, "w")
@@ -131,7 +127,6 @@ function presets.save_complete_preset(preset_name, scene_data_ref, update_pan_po
     return true
 end
 
--- Apply LFO states
 local function apply_lfo_states(lfo_states)
     if not lfo_states then return end
     
@@ -145,7 +140,6 @@ local function apply_lfo_states(lfo_states)
     end
 end
 
--- Apply scene data efficiently
 local function apply_scene_data(preset_data, scene_data_ref)
     local source = preset_data.morph or preset_data.scene_data
     if not source then return end
@@ -168,6 +162,7 @@ local function load_audio_samples(audio_active_ref)
 end
 
 function presets.load_complete_preset(preset_name, scene_data_ref, update_pan_positioning_fn, audio_active_ref)
+    params:set("unload_all", 1)
     local file_path = _path.data .. "twins/" .. preset_name .. ".lua"
     
     if not util.file_exists(file_path) then
