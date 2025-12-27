@@ -529,7 +529,7 @@ local function setup_params()
     params:add_binary("randomize_delay_params", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_delay_params", function() randpara.randomize_delay_params(steps) end)
     params:add_option("lock_delay", "Lock Parameters", {"off", "on"}, 1)
 
-    params:add_group("REVER3", 15)
+    params:add_group("REVERb", 15)
     params:add_taper("reverb_mix", "Mix", 0, 100, 0.0, 0, "%") params:set_action("reverb_mix", function(value) engine.reverb_mix(value * 0.01) end)
     params:add_taper("t60", "Decay", 0.1, 60, 4, 5, "s") params:set_action("t60", function(value) engine.t60(value) end)
     params:add_taper("damp", "Damping", 0, 100, 0, 0, "%") params:set_action("damp", function(value) engine.damp(value * 0.01) end)
