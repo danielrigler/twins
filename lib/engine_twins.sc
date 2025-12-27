@@ -87,34 +87,18 @@ alloc {
             dry_sig = [PlayBuf.ar(1, buf_l, speed, startPos: pos * BufFrames.kr(buf_l), trigger: t_reset_pos, loop: 1), PlayBuf.ar(1, buf_r, speed, startPos: pos * BufFrames.kr(buf_r), trigger: t_reset_pos, loop: 1)];
             dry_sig = Balance2.ar(dry_sig[0], dry_sig[1], pan);
 
-            grain_pitch = Lag.kr(Select.kr(pitch_mode, [speed * pitch_offset, pitch_offset]);, pitch_lag_time) * if(pitch_walk_rate > 0, {
-                trig = Impulse.kr(pitch_walk_rate);
-                stepSize = pitch_walk_step.clip(1, 12);
-                stepWeights = [0.35, 0.25, 0.15, 0.10, 0.08, 0.04, 0.02, 0.01];
-                stepIndex = TWChoose.kr(trig, Array.series(8, 0, 1), stepWeights.normalizeSum);
-                actualStep = stepIndex.min(stepSize);
-                direction = TIRand.kr(-1, 1, trig);
-                direction = Latch.kr(direction, trig * (TRand.kr(0, 1, trig) < 0.3));
-                totalStep = actualStep * direction;
-                scaleArrays = [
-                    [0, 2, 4, 5, 7, 9, 11],
-                    [0, 2, 3, 5, 7, 8, 10],
-                    [0, 2, 4, 7, 9],
-                    [0, 3, 5, 7, 10],
-                    [0, 2, 3, 5, 7, 9, 10],
-                    [0, 1, 3, 5, 7, 8, 10],
-                    [0, 2, 4, 6, 7, 9, 11],
-                    [0, 2, 4, 5, 7, 9, 10],
-                    [0, 2, 3, 6, 7, 8, 11],
-                    [0, 1, 4, 5, 7, 8, 11] ];
-                scaleSelect = (stepSize / 12 * 10).asInteger.clip(0, 9);
-                currentScale = Select.kr(scaleSelect, scaleArrays.collect { |arr| arr ++ (arr + 12) });
-                scaleDegree = (totalStep.abs).mod(currentScale.size);
-                octaveShift = (totalStep / currentScale.size).floor * 12;
-                semitones = Select.kr(scaleDegree, currentScale) + octaveShift;
-                semitones = semitones * totalStep.sign;
-                Lag.kr(2 ** (semitones / 12), 0.05);
-            }, 1);
+            grain_pitch = Lag.kr(Select.kr(pitch_mode, [speed * pitch_offset, pitch_offset]);, pitch_lag_time) * if(pitch_walk_rate > 0, 
+            {var walkTrig, stepIndex, actualStep, direction, totalStep, scaleDegree, octaveShift, semitones;
+             walkTrig = Impulse.kr(pitch_walk_rate.max(0.1));
+             stepIndex = TWChoose.kr(walkTrig, (1..7), [0.45, 0.25, 0.15, 0.08, 0.04, 0.02, 0.01]);
+             actualStep = stepIndex.min(pitch_walk_step.clip(1, 7));
+             direction = TIRand.kr(0, 1, walkTrig) * 2 - 1;
+             direction = Latch.kr(direction, walkTrig * (TRand.kr(0, 1, walkTrig) < 0.2));
+             totalStep = Integrator.kr(actualStep * direction, walkTrig) * 0.98;
+             scaleDegree = totalStep.mod(5);
+             octaveShift = (totalStep * 0.2).floor.clip(-2, 2) * 12;
+             semitones = Select.kr(scaleDegree, [0, 2, 4, 7, 9]) + octaveShift;
+             Lag.kr(2 ** (semitones / 12), 0.05);}, 1);
 
             random_interval = Select.kr(pitch_random_scale_type, [
                 Select.kr((rand_val * 2).floor, [7,12]),
@@ -306,7 +290,7 @@ alloc {
             var dry, wet, shaped;
             dry = In.ar(bus, 2);
             wet = dry * (50 * drive + 1);
-            shaped = wet.tanh * 0.07;
+            shaped = wet.distort * 0.07;
             ReplaceOut.ar(bus, XFade2.ar(dry, shaped, drive * 2 - 1));
         }).add;
 
