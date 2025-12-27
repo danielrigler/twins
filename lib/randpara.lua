@@ -280,7 +280,6 @@ local param_configs = {
     {name="highcut", prob=0.6, default=2000, random=function() return math.random(1500, 3500) end},
   }},
   shimmer = { lock_param = "lock_shimmer", params = {
-    {name="o2", prob=0.1, default=1, random=function() return 2 end, direct_set=true},
     {name="pitchv", prob=0.5, default=0.0, random=function() return math.random(0, 2) end},
     {name="lowpass", prob=0.5, default=13000, random=function() return math.random(6000, 15000) end},
     {name="hipass", prob=0.5, default=1300, random=function() return math.random(400, 1500) end},
@@ -288,14 +287,14 @@ local param_configs = {
     {name="fbDelay", prob=0.3, default=0.2, random=function() return random_float(0.15, 0.35) end},
   }},
   delay = { lock_param = "lock_delay", params = {
-    {name="delay_mix", prob=0.5, default=0, random=function() return math.random(0, 80) end},
-    {name="delay_time", prob=0.3, default=0.5, random=function() return random_float(0.15, 1) end, direct_set=true},
+    {name="delay_mix", prob=0.5, default=0, random=function() return math.random(0, 50) end},
+    {name="delay_time", prob=0.3, default=0.5, random=function() return random_float(0.1, 1) end, direct_set=true},
     {name="delay_feedback", prob=1, default=nil, random=function() return math.random(20, 80) end},
-    {name="stereo", prob=0.5, default=25, random=function() return math.random(0, 70) end},
+    {name="stereo", prob=0.5, default=25, random=function() return math.random(0, 80) end},
     {name="delay_lowpass", prob=0, default=nil, random=function() return math.random(600, 20000) end},
     {name="delay_highpass", prob=0, default=nil, random=function() return math.random(20, 250) end},
     {name="wiggle_depth", prob=0.5, default=1, random=function() return math.random(0, 10) end},
-    {name="wiggle_rate", prob=0.5, default=2, random=function() return random_float(0.5, 4) end},
+    {name="wiggle_rate", prob=0.5, default=2, random=function() return random_float(0.4, 4) end},
   }},
   tape = { lock_param = "lock_tape", params = {
     {name="wobble_amp", prob=0.4, default=10, random=function() return math.random(1, 15) end},
