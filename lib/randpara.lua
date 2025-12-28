@@ -287,10 +287,10 @@ local param_configs = {
     {name="fbDelay", prob=0.3, default=0.2, random=function() return random_float(0.15, 0.35) end},
   }},
   delay = { lock_param = "lock_delay", params = {
-    {name="delay_mix", prob=0.5, default=0, random=function() return math.random(0, 50) end},
+    {name="delay_mix", prob=0.5, default=0, random=function() return math.random(0, 100) end},
     {name="delay_time", prob=0.3, default=0.5, random=function() return random_float(0.1, 1) end, direct_set=true},
-    {name="delay_feedback", prob=1, default=nil, random=function() return math.random(20, 80) end},
-    {name="stereo", prob=0.5, default=25, random=function() return math.random(0, 80) end},
+    {name="delay_feedback", prob=1, default=nil, random=function() return math.random(10, 80) end},
+    {name="stereo", prob=0.5, default=25, random=function() return math.random(0, 100) end},
     {name="delay_lowpass", prob=0, default=nil, random=function() return math.random(600, 20000) end},
     {name="delay_highpass", prob=0, default=nil, random=function() return math.random(20, 250) end},
     {name="wiggle_depth", prob=0.5, default=1, random=function() return math.random(0, 10) end},

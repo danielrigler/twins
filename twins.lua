@@ -58,8 +58,7 @@ local current_mode = "seek"
 local current_filter_mode = "lpf"
 local tap_times = {}
 local TAP_TIMEOUT = 2
-local initial_monitor_level
-local initial_reverb_onoff
+local initial_monitor_level, initial_reverb_onoff;
 local filter_lock_ratio = false
 local filter_differences = {[1] = 0, [2] = 0}
 local audio_active = {[1] = false, [2] = false}
@@ -1337,7 +1336,12 @@ function redraw()
   for _,row in ipairs(param_rows) do
     local name = row. label: match("%a+")
     local hi = current_mode == row.mode
-    T(LEVEL.hi, 6, row.y, hi and row.label: upper() or row.label)
+    if hi then 
+      T(1, 7, row.y + 1, row.label: upper())
+      T(LEVEL.hi, 6, row.y, row.label: upper())
+    else
+      T(LEVEL.hi, 6, row.y, row.label)
+    end
     for t=1,2 do
       local x = TRACK_X[t]
       local param = t == 1 and row.param1 or row.param2
@@ -1364,6 +1368,7 @@ function redraw()
   local mode = upper and "seek" or current_mode
   local active = not upper
   local label = (mode == "lpf" or mode == "hpf") and (current_filter_mode ..  ":       ") or (mode ..  ":      ")
+  if active then T(1, 7, Y.bottom + 1, label: upper()) end
   T(LEVEL.hi, 6, Y.bottom, active and label: upper() or label)
   for t=1,2 do
     local x = TRACK_X[t]
@@ -1385,6 +1390,9 @@ function redraw()
       if loaded and C.live.dir_[t] ~= 1 then
         local s = C.spd[t]
         local icon = math.abs(s) < 0.01 and "⏸" or (s > 0 and "▶" or "◀")
+        -- Drop shadow for icon (only when row is highlighted/active)
+        if active then T(1, (t == 1 and 78 or 119) + 1, Y.bottom + 1, icon) end
+        -- Main icon
         T(vL, t == 1 and 78 or 119, Y.bottom, icon)
       end
       if C.live.dir_[t] ~= 1 then
