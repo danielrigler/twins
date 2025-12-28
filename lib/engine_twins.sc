@@ -1,7 +1,7 @@
 Engine_twins : CroneEngine {
 
-var dimensionEffect, haasEffect, bitcrushEffect, saturationEffect, delayEffect, reverbEffect, shimmerEffect, tapeEffect, chewEffect, widthEffect, monobassEffect, sineEffect, wobbleEffect, lossdegradeEffect, rotateEffect, dryPassEffect;
-var <buffersL, <buffersR, wobbleBuffer, mixBus, postFxBus, <voices, bufSine, pg, <liveInputBuffersL, <liveInputBuffersR, <liveInputRecorders, o, o_output, o_rec, o_grain, o_voice_peak;
+var dimensionEffect, haasEffect, bitcrushEffect, saturationEffect, delayEffect, reverbEffect, shimmerEffect, tapeEffect, chewEffect, widthEffect, monobassEffect, sineEffect, wobbleEffect, lossdegradeEffect, rotateEffect;
+var <buffersL, <buffersR, wobbleBuffer, mixBus, postFxBus, shimmerBus, <voices, bufSine, pg, <liveInputBuffersL, <liveInputBuffersR, <liveInputRecorders, o, o_output, o_rec, o_grain, o_voice_peak;
 var currentSpeed, currentJitter, currentSize, currentDensity, currentDensityModAmt, currentPitch, currentPan, currentSpread, currentVolume, currentGranularGain, currentCutoff, currentHpf, currentlpfgain, currentSubharmonics1, currentSubharmonics2, currentSubharmonics3, currentOvertones1, currentOvertones2, currentPitchMode, currentTrigMode, currentDirectionMod, currentSizeVariation, currentSmoothbass, currentLowGain, currentMidGain, currentHighGain, currentProbability, liveBufferMix = 1.0, currentPitchWalkRate, currentPitchWalkStep, currentPitchRandomProb, currentPitchRandomScale, currentRatchetingProb, currentPitchLag;
 var <outputRecordBuffer, <outputRecorder;
 var outputBufferLength = 8, currentOutputWritePos;
@@ -30,6 +30,7 @@ alloc {
         wobbleBuffer = Buffer.alloc(context.server, 48000 * 5, 2);
         mixBus = Bus.audio(context.server, 2);
         postFxBus = Bus.audio(context.server, 2);
+        shimmerBus = Bus.audio(context.server, 2);
 
         grainEnvs = [
             Env.sine(1, 1),
@@ -66,6 +67,7 @@ alloc {
             var trigger1 = Impulse.kr(60);
             var trig, stepSize, stepWeights, stepIndex, actualStep, direction, totalStep;
             var scaleArrays, scaleSelect, currentScale, scaleDegree, octaveShift, semitones;
+            var syncHeldEnv;
 
             speed = Lag.kr(speed, 1);
             density_mod = density * (2**(LFNoise1.kr(density).range(0, 1) * density_mod_amt));
@@ -112,12 +114,13 @@ alloc {
                 Select.kr((rand_val * 4).floor, [2,4,7,9]),
                 Select.kr((rand_val * 5).floor, [2,4,6,8,10]) ]);
             grain_pitch = grain_pitch * (2 ** (((rand_val2 < pitch_random_prob) * random_interval * pitch_random_direction)/12));
-    
+  
+            syncHeldEnv = TIRand.kr(0, 5, grain_trig);
+
             grainBufFunc = { |buf, pitch, size, vol, dir, pos, jitter|
-                var changeTrig, heldEnv, envBuf;
-                changeTrig = grain_trig * (TRand.kr(0, 1, grain_trig) < 0.5);
-                heldEnv = Latch.kr(TIRand.kr(0, 5, changeTrig), changeTrig);
-                envBuf = Select.kr(Select.kr(env_select, [0, 1, 2, 3, 4, 5, heldEnv]), grainEnvs);
+                var envBuf, independentEnv;
+                independentEnv = TIRand.kr(0, 5, grain_trig);
+                envBuf = Select.kr(Select.kr(env_select, [0, 1, 2, 3, 4, 5, syncHeldEnv, independentEnv]), grainEnvs);
                 GrainBuf.ar(1, grain_trig, size, buf, pitch * dir, pos + jitter, 2, envbufnum: envBuf, mul: vol)
             };
 
@@ -140,10 +143,10 @@ alloc {
 
             SendReply.kr(Impulse.kr(30), '/buf_pos', [voice, buf_pos]);
             SendReply.kr(grain_trig, '/grain_pos', [voice, Wrap.kr(pos_sig + jitter_sig), grain_size]);
-            scaled_signal = sig_mix * gain * 1.4;
+            scaled_signal = sig_mix * gain * 2.5;
             SendReply.kr(trigger1, '/voice_peak', [voice, Peak.kr(scaled_signal[0], trigger1), Peak.kr(scaled_signal[1], trigger1)]);
 
-            Out.ar(out, sig_mix * gain * 1.4);
+            Out.ar(out, sig_mix * gain);
         }).add;
         
         context.server.sync;
@@ -200,7 +203,7 @@ alloc {
 
         SynthDef(\delay, {
             arg inBus, outBus, mix=0.0, delay=0.5, fb_amt=0.3, dhpf=20, lpf=20000, w_rate=0.0, w_depth=0.0, stereo=0.27;
-            var input, local, fb, delayed, out, modRate, modDepth, fbGain;
+            var input, local, fb, delayed, wet, modRate, modDepth, fbGain;
             input = In.ar(inBus, 2);
             local = LocalIn.ar(2);
             fb = LPF.ar(HPF.ar(local, dhpf), lpf);
@@ -209,22 +212,16 @@ alloc {
             modRate = w_rate * (1 + LFNoise1.kr(0.25, 0.05));
             modDepth = LFPar.kr(modRate, mul: w_depth);
             delayed = DelayC.ar(input + fb, 2, Lag.kr(delay, 0.7) + modDepth);
-            out = Balance2.ar(delayed[0], delayed[1], LFPar.kr(1/(delay.max(0.1)*2)).range(-1, 1) * stereo);
-            LocalOut.ar(out);
-            Out.ar(outBus, out * mix);
+            wet = Balance2.ar(delayed[0], delayed[1], LFPar.kr(1/(delay.max(0.1)*2)).range(-1, 1) * stereo);
+            LocalOut.ar(wet);
+            Out.ar(outBus, XFade2.ar(DC.ar(0!2), wet, mix * 2 - 1) * 1.414);
         }).add;
         
         SynthDef(\reverb, {
             arg inBus, outBus, mix=0.0, t60, damp, rsize, earlyDiff, modDepth, modFreq, low, mid, high, lowcut, highcut;
             var input = In.ar(inBus, 2);
             var wet = JPverb.ar(input, t60, damp, rsize, earlyDiff, modDepth, modFreq, low, mid, high, lowcut, highcut);
-            Out.ar(outBus, wet * mix);
-        }).add;
-        
-        SynthDef(\dryPass, {
-            arg inBus, outBus, delayMix=0.0, reverbMix=0.0;
-            var sig = In.ar(inBus, 2);
-            Out.ar(outBus, XFade2.ar(sig, DC.ar(0!2), (delayMix + reverbMix) * 2 - 1));
+            Out.ar(outBus, XFade2.ar(DC.ar(0!2), wet, mix * 2 - 1) * 1.414);
         }).add;
 
         SynthDef(\monobass, {
@@ -243,15 +240,16 @@ alloc {
         }).add;  
 
         SynthDef(\shimmer, {
-            arg bus, mix=0.0, lowpass=13000, hipass=1400, pitchv=0.02, fb=0.0, fbDelay=0.15;
-            var orig = In.ar(bus, 2);
-            var hpf = HPF.ar(orig, hipass);
+            arg inBus, outBus, reverbBus, mix=0.0, lowpass=13000, hipass=1400, pitchv=0.02, fb=0.0, fbDelay=0.15;
+            var input = In.ar(inBus, 2);
+            var hpf = HPF.ar(input, hipass);
             var pit = PitchShift.ar(hpf, 0.5, 2, pitchv, 1, mul:4);
             var fbSig = LocalIn.ar(2);
             var fbProcessed = fbSig * fb;
             pit = LPF.ar((pit + fbProcessed), lowpass);
             LocalOut.ar(DelayN.ar(pit, 0.5, fbDelay));
-            ReplaceOut.ar(bus, XFade2.ar(orig, pit, mix * 2 - 1));
+            Out.ar(reverbBus, pit * mix);
+            Out.ar(outBus, pit * mix);
         }).add;
         
         SynthDef(\sine, {
@@ -355,7 +353,6 @@ alloc {
         context.server.sync;
         
         bitcrushEffect = Synth.new(\bitcrush, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
-        shimmerEffect = Synth.new(\shimmer, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
         sineEffect = Synth.new(\sine, [\bus, mixBus.index, \sine_drive, 0.0], context.xg, 'addToTail');
         tapeEffect = Synth.new(\tape, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');  
         wobbleEffect = Synth.new(\wobble, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
@@ -365,15 +362,17 @@ alloc {
         dimensionEffect = Synth.new(\dimension, [\bus, mixBus.index], context.xg, 'addToTail');
         haasEffect = Synth.new(\haas, [\bus, mixBus.index, \haas, 0.0], context.xg, 'addToTail');
         monobassEffect = Synth.new(\monobass, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
-        dryPassEffect = Synth.new(\dryPass, [\inBus, mixBus.index, \outBus, postFxBus.index], context.xg, 'addToTail');
+        Synth.new(\output, [\in, mixBus.index, \out, postFxBus.index], context.xg, 'addToTail');
+        Synth.new(\output, [\in, mixBus.index, \out, shimmerBus.index], context.xg, 'addToTail');
+        shimmerEffect = Synth.new(\shimmer, [\inBus, mixBus.index, \outBus, postFxBus.index, \reverbBus, shimmerBus.index, \mix, 0.0], context.xg, 'addToTail');
+        reverbEffect = Synth.new(\reverb, [\inBus, shimmerBus.index, \outBus, postFxBus.index, \mix, 0.0], context.xg, 'addToTail');
         delayEffect = Synth.new(\delay, [\inBus, mixBus.index, \outBus, postFxBus.index, \mix, 0.0], context.xg, 'addToTail');
-        reverbEffect = Synth.new(\reverb, [\inBus, mixBus.index, \outBus, postFxBus.index, \mix, 0.0], context.xg, 'addToTail');
         widthEffect = Synth.new(\width, [\bus, postFxBus.index, \width, 1.0], context.xg, 'addToTail');
         rotateEffect = Synth.new(\rotate, [\bus, postFxBus.index], context.xg, 'addToTail');
         outputRecorder = Synth.new(\outputRecorder, [\buf, outputRecordBuffer, \inBus, postFxBus.index], context.xg, 'addToTail');
         Synth.new(\output, [\in, postFxBus.index, \out, context.out_b.index], context.xg, 'addToTail');
 
-        this.addCommand(\mix, "f", { arg msg; delayEffect.set(\mix, msg[1]); delayEffect.run(msg[1] > 0); dryPassEffect.set(\delayMix, msg[1]); });
+        this.addCommand(\mix, "f", { arg msg; delayEffect.set(\mix, msg[1]); delayEffect.run(msg[1] > 0); });
         this.addCommand(\delay, "f", { arg msg; delayEffect.set(\delay, msg[1]); });
         this.addCommand(\fb_amt, "f", { arg msg; delayEffect.set(\fb_amt, msg[1]); });
         this.addCommand(\dhpf, "f", { arg msg; delayEffect.set(\dhpf, msg[1]); });
@@ -382,7 +381,7 @@ alloc {
         this.addCommand(\w_depth, "f", { arg msg; delayEffect.set(\w_depth, msg[1]/100); });
         this.addCommand("stereo", "f", { arg msg; delayEffect.set(\stereo, msg[1]); });
         
-        this.addCommand("reverb_mix", "f", { arg msg; reverbEffect.set(\mix, msg[1]); reverbEffect.run(msg[1] > 0); dryPassEffect.set(\reverbMix, msg[1]); });
+        this.addCommand("reverb_mix", "f", { arg msg; reverbEffect.set(\mix, msg[1]); reverbEffect.run(msg[1] > 0); });
         this.addCommand("t60", "f", { arg msg; reverbEffect.set(\t60, msg[1]); });
         this.addCommand("damp", "f", { arg msg; reverbEffect.set(\damp, msg[1]); });
         this.addCommand("rsize", "f", { arg msg; reverbEffect.set(\rsize, msg[1]); });
@@ -505,6 +504,7 @@ free {
         if (wobbleBuffer.notNil) { wobbleBuffer.free; wobbleBuffer = nil; };
         if (mixBus.notNil) { mixBus.free; mixBus = nil; };
         if (postFxBus.notNil) { postFxBus.free; postFxBus = nil; };
+        if (shimmerBus.notNil) { shimmerBus.free; shimmerBus = nil; };
         if (bufSine.notNil) { bufSine.free; bufSine = nil; };
         if (shimmerEffect.notNil) { shimmerEffect.free; shimmerEffect = nil; };
         if (saturationEffect.notNil) { saturationEffect.free; saturationEffect = nil; };
@@ -517,10 +517,8 @@ free {
         if (wobbleEffect.notNil) { wobbleEffect.free; wobbleEffect = nil; };
         if (delayEffect.notNil) { delayEffect.free; delayEffect = nil; };
         if (reverbEffect.notNil) { reverbEffect.free; reverbEffect = nil; };
-        if (bitcrushEffect.notNil) { bitcrushEffect.free; bitcrushEffect = nil; };
         if (rotateEffect.notNil) { rotateEffect.free; rotateEffect = nil; };
         if (haasEffect.notNil) { haasEffect.free; haasEffect = nil; };
         if (dimensionEffect.notNil) { dimensionEffect.free; dimensionEffect = nil; };
-        if (dryPassEffect.notNil) { dryPassEffect.free; dryPassEffect = nil; };
     }
 }
