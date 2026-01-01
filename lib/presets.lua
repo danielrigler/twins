@@ -7,7 +7,7 @@ presets.selected_index = 1
 presets.preset_list = {}
 presets.delete_confirmation = nil
 presets.overwrite_confirmation = nil
-preset_loading = false
+_G.preset_loading = false
 
 function presets.set_lfo_reference(lfo_module)
     lfo = lfo_module
@@ -220,12 +220,11 @@ function presets.load_complete_preset(preset_name, scene_data_ref, update_pan_po
     
     clock.run(function()
         clock.sleep(0.1)
-        -- Clear the flag after loading is complete
         preset_loading = false
+        redraw()
         print("Preset loaded: " .. preset_name)
     end)
-    
-    redraw()
+
     return true
 end
 

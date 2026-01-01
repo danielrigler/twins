@@ -63,8 +63,7 @@ local PARAM_SPECS = {
 
 local LOCK_PARAMS = {
   filter = "lock_filter", eq = "lock_eq", granular = "lock_granular",
-  delay = "lock_delay", reverb = "lock_reverb", tape = "lock_tape", shimmer = "lock_shimmer"
-}
+  delay = "lock_delay", reverb = "lock_reverb", tape = "lock_tape", shimmer = "lock_shimmer", pitch = "lock_pitch" }
 
 local function get_param_range(param_name) return PARAM_SPECS[param_name] and PARAM_SPECS[param_name][1] or 1 end
 local function get_param_bounds(param_name) return PARAM_SPECS[param_name] and PARAM_SPECS[param_name][2] or {0, 1} end
@@ -264,9 +263,10 @@ local function randomize_param_group(config)
   end
 end
 
--- Parameter Configurations
 local param_configs = {
   jpverb = { lock_param = "lock_reverb", params = {
+    {name="shimmer_preset", prob=0.15, default=3, random=function() return math.random(3, 4) end, direct_set=true},
+    {name="shimmer_mix", prob=0.3, default=0, random=function() return math.random(0, 40) end},
     {name="t60", prob=0.5, default=4, random=function() return random_float(0.8, 6) end},
     {name="damp", prob=0.4, default=0, random=function() return random_float(0, 25) end},
     {name="rsize", prob=0.3, default=1.25, random=function() return random_float(1, 4) end, direct_set=true},
@@ -280,20 +280,21 @@ local param_configs = {
     {name="highcut", prob=0.6, default=2000, random=function() return math.random(1500, 3500) end},
   }},
   shimmer = { lock_param = "lock_shimmer", params = {
-    {name="pitchv", prob=0.5, default=0.0, random=function() return math.random(0, 2) end},
-    {name="lowpass", prob=0.5, default=13000, random=function() return math.random(6000, 15000) end},
-    {name="hipass", prob=0.5, default=1300, random=function() return math.random(400, 1500) end},
-    {name="fb", prob=0.3, default=15, random=function() return math.random(10, 35) end},
-    {name="fbDelay", prob=0.3, default=0.2, random=function() return random_float(0.15, 0.35) end},
+    {name="shimmer_oct1", prob=0.15, default=3, random=function() return math.random(3, 4) end, direct_set=true},
+    {name="pitchv1", prob=0.5, default=0, random=function() return math.random(0, 3) end, direct_set=true},
+    {name="lowpass1", prob=0.5, default=13000, random=function() return math.random(6000, 15000) end},
+    {name="hipass1", prob=0.5, default=1300, random=function() return math.random(400, 1500) end},
+    {name="fb1", prob=0.3, default=15, random=function() return math.random(10, 35) end},
+    {name="fbDelay1", prob=0.3, default=0.2, random=function() return random_float(0.15, 0.35) end},
   }},
   delay = { lock_param = "lock_delay", params = {
     {name="delay_mix", prob=0.5, default=0, random=function() return math.random(0, 100) end},
     {name="delay_time", prob=0.3, default=0.5, random=function() return random_float(0.1, 1) end, direct_set=true},
-    {name="delay_feedback", prob=1, default=nil, random=function() return math.random(10, 80) end},
+    {name="delay_feedback", prob=1, default=30, random=function() return math.random(10, 80) end},
     {name="stereo", prob=0.5, default=25, random=function() return math.random(0, 100) end},
-    {name="delay_lowpass", prob=0, default=nil, random=function() return math.random(600, 20000) end},
-    {name="delay_highpass", prob=0, default=nil, random=function() return math.random(20, 250) end},
-    {name="wiggle_depth", prob=0.5, default=1, random=function() return math.random(0, 10) end},
+    {name="delay_lowpass", prob=0.5, default=12000, random=function() return math.random(600, 20000) end},
+    {name="delay_highpass", prob=0.5, default=100, random=function() return math.random(20, 200) end},
+    {name="wiggle_depth", prob=0.5, default=1, random=function() return math.random(0, 10) end, direct_set=true},
     {name="wiggle_rate", prob=0.5, default=2, random=function() return random_float(0.4, 4) end},
   }},
   tape = { lock_param = "lock_tape", params = {
@@ -302,6 +303,9 @@ local param_configs = {
     {name="flutter_amp", prob=0.4, default=15, random=function() return math.random(1, 30) end},
     {name="flutter_freq", prob=0.4, default=6, random=function() return math.random(2, 10) end},
     {name="flutter_var", prob=0.4, default=2, random=function() return math.random(1, 5) end},
+  }},
+  pitch = { lock_param = "lock_pitch", params = {
+    {name="pitch_quantize_scale", prob=0.3, default=2, random=function() return math.random(2, 12) end, direct_set=true},
   }}
 }
 
@@ -327,7 +331,7 @@ local track_param_configs = {
   }} end
 }
 
--- Main Randomizer
+
 local function randomize_track(track, steps, group_fns)
   for _, fn in ipairs(group_fns) do randomize_param_group(fn(track)) end
   start_interpolation(steps, params:get("symmetry") == 1)
@@ -341,7 +345,7 @@ local function randomize_params(steps, track_num)
 
   local symmetry = (params:get("symmetry") == 1)
 
-  for _, group in ipairs({param_configs.tape, param_configs.delay, param_configs.jpverb, param_configs.shimmer}) do
+  for _, group in ipairs({param_configs.tape, param_configs.delay, param_configs.jpverb, param_configs.shimmer, param_configs.pitch}) do
     randomize_param_group(group)
   end
 

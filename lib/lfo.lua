@@ -98,22 +98,22 @@ lfo.lfo_targets = {
 }
 
 lfo.target_ranges = {
-  ["1pan"] = { depth = { 25, 90 }, offset = { 0, 0 }, frequency = { 0.1, 0.6 }, waveform = { "sine", "sine", "sine", "sine", "sine", "walk" }, chance = 0.8 },
-  ["2pan"] = { depth = { 25, 90 }, offset = { 0, 0 }, frequency = { 0.1, 0.6 }, waveform = { "sine", "sine", "sine", "sine", "sine", "walk" }, chance = 0.8 },
-  ["1jitter"] = { depth = { 20, 70 }, offset = { -1, 1 }, frequency = { 0.1, 0.4 }, waveform = { "sine", "sine", "sine", "sine", "sine", "walk" }, chance = 0.6 },
-  ["2jitter"] = { depth = { 20, 70 }, offset = { -1, 1 }, frequency = { 0.1, 0.4 }, waveform = { "sine", "sine", "sine", "sine", "sine", "walk" }, chance = 0.6 },
-  ["1spread"] = { depth = { 10, 30 }, offset = { 0, 0.3 }, frequency = { 0.1, 0.4 }, waveform = { "sine", "sine", "sine", "sine", "sine", "walk" }, chance = 0.6 },
-  ["2spread"] = { depth = { 10, 30 }, offset = { 0, 0.3 }, frequency = { 0.1, 0.4 }, waveform = { "sine", "sine", "sine", "sine", "sine", "walk" }, chance = 0.6},
-  ["1size"] = { depth = { 5, 30 }, offset = { 0.1, 1 }, frequency = { 0.1, 0.4 }, waveform = { "sine", "sine", "sine", "sine", "sine", "walk" }, chance = 0.6 },
-  ["2size"] = { depth = { 5, 30 }, offset = { 0.1, 1 }, frequency = { 0.1, 0.4 }, waveform = { "sine", "sine", "sine", "sine", "sine", "walk" }, chance = 0.6 },
-  ["1density"] = { depth = { 5, 40 }, offset = { 0, 1 }, frequency = { 0.1, 0.4 }, waveform = { "sine", "sine", "sine", "sine", "sine", "walk" }, chance = 0.6 },
-  ["2density"] = { depth = { 5, 40 }, offset = { 0, 1 }, frequency = { 0.1, 0.4 }, waveform = { "sine", "sine", "sine", "sine", "sine", "walk" }, chance = 0.6 },
-  ["1volume"] = { depth = { 2, 3 }, offset = { 0, 1 }, frequency = { 0.1, 0.5 }, waveform = { "sine", "sine", "sine", "sine", "sine", "walk" }, chance = 1.0 },
-  ["2volume"] = { depth = { 2, 3 }, offset = { 0, 1 }, frequency = { 0.1, 0.5 }, waveform = { "sine", "sine", "sine", "sine", "sine", "walk" }, chance = 1.0 },
-  ["1seek"] = { depth = { 0, 100 }, offset = { 0, 1 }, frequency = { 0.02, 0.3 }, waveform = { "sine", "sine", "sine", "sine", "sine", "walk" }, chance = 0.3 },
-  ["2seek"] = { depth = { 0, 100 }, offset = { 0, 1 }, frequency = { 0.02, 0.3 }, waveform = { "sine", "sine", "sine", "sine", "sine", "walk" }, chance = 0.3 },
-  ["1speed"] = { depth = { 10, 50 }, offset = { -1, 1 }, frequency = { 0.02, 0.3 }, waveform = { "sine", "sine", "sine", "sine", "sine", "walk" }, chance = 0.2 },
-  ["2speed"] = { depth = { 10, 50 }, offset = { -1, 1 }, frequency = { 0.02, 0.3 }, waveform = { "sine", "sine", "sine", "sine", "sine", "walk" }, chance = 0.2 }
+  ["1pan"] = { depth = { 25, 90 }, offset = { 0, 0 }, frequency = { 0.1, 0.6 }, waveform = { "sine" }, chance = 0.8 },
+  ["2pan"] = { depth = { 25, 90 }, offset = { 0, 0 }, frequency = { 0.1, 0.6 }, waveform = { "sine" }, chance = 0.8 },
+  ["1jitter"] = { depth = { 20, 70 }, offset = { -1, 1 }, frequency = { 0.1, 0.4 }, waveform = { "sine" }, chance = 0.6 },
+  ["2jitter"] = { depth = { 20, 70 }, offset = { -1, 1 }, frequency = { 0.1, 0.4 }, waveform = { "sine" }, chance = 0.6 },
+  ["1spread"] = { depth = { 10, 30 }, offset = { 0, 0.3 }, frequency = { 0.1, 0.4 }, waveform = { "sine" }, chance = 0.6 },
+  ["2spread"] = { depth = { 10, 30 }, offset = { 0, 0.3 }, frequency = { 0.1, 0.4 }, waveform = { "sine" }, chance = 0.6},
+  ["1size"] = { depth = { 5, 30 }, offset = { 0.1, 1 }, frequency = { 0.1, 0.4 }, waveform = { "sine" }, chance = 0.6 },
+  ["2size"] = { depth = { 5, 30 }, offset = { 0.1, 1 }, frequency = { 0.1, 0.4 }, waveform = { "sine" }, chance = 0.6 },
+  ["1density"] = { depth = { 5, 40 }, offset = { 0, 1 }, frequency = { 0.1, 0.4 }, waveform = { "sine" }, chance = 0.6 },
+  ["2density"] = { depth = { 5, 40 }, offset = { 0, 1 }, frequency = { 0.1, 0.4 }, waveform = { "sine" }, chance = 0.6 },
+  ["1volume"] = { depth = { 2, 3 }, offset = { 0, 1 }, frequency = { 0.1, 0.5 }, waveform = { "sine" }, chance = 1.0 },
+  ["2volume"] = { depth = { 2, 3 }, offset = { 0, 1 }, frequency = { 0.1, 0.5 }, waveform = { "sine" }, chance = 1.0 },
+  ["1seek"] = { depth = { 0, 100 }, offset = { 0, 1 }, frequency = { 0.02, 0.3 }, waveform = { "sine" }, chance = 0.3 },
+  ["2seek"] = { depth = { 0, 100 }, offset = { 0, 1 }, frequency = { 0.02, 0.3 }, waveform = { "sine" }, chance = 0.3 },
+  ["1speed"] = { depth = { 10, 50 }, offset = { -1, 1 }, frequency = { 0.02, 0.3 }, waveform = { "sine" }, chance = 0.2 },
+  ["2speed"] = { depth = { 10, 50 }, offset = { -1, 1 }, frequency = { 0.02, 0.3 }, waveform = { "sine" }, chance = 0.2 }
 }
 
 local param_ranges = {
@@ -448,6 +448,35 @@ function lfo.cleanup()
     lfo_metro.event = nil
     lfo_metro = nil
   end
+end
+
+-- Public functions to manage parameter assignments
+function lfo.clear_param_assignment(param_name)
+  if param_name then
+    assigned_params[param_name] = nil
+  end
+end
+
+function lfo.is_param_assigned(param_name)
+  return assigned_params[param_name] == true
+end
+
+function lfo.mark_param_assigned(param_name)
+  if param_name then
+    assigned_params[param_name] = true
+  end
+end
+
+function lfo.get_lfo_for_param(param_name)
+  for i = 1, number_of_outputs do
+    if params.lookup[i.."lfo"] and pget(i.."lfo") == 2 then
+      local target_index = pget(i.."lfo_target")
+      if lfo.lfo_targets[target_index] == param_name then
+        return i
+      end
+    end
+  end
+  return nil
 end
 
 return lfo
