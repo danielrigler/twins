@@ -128,9 +128,9 @@ alloc {
             ([1/2, 1/4, 1/8] ++ [2, 4]).do { |harmonic, i| var vol = [subharmonic_1_vol, subharmonic_2_vol, subharmonic_3_vol, overtone_1_vol, overtone_2_vol][i]; 
                 var size_mult = if(i < 3) { smoothbass } { 1 }; var grains = processGrains.(buf_l, buf_r, grain_pitch * harmonic, grain_size * size_mult, vol, grain_direction, buf_pos, jitter_sig);
                 #sig_l, sig_r = [sig_l + grains[0], sig_r + grains[1]];};
-    
-            pan_sig = Lag.kr(TRand.kr(trig: grain_trig,	lo: spread.neg,	hi: spread), 0.05);
-            granular_sig = Balance2.ar(sig_l, sig_r, pan + pan_sig);
+
+            pan_sig = TGaussRand.kr(trig: grain_trig, lo: spread.neg, hi: spread);
+            granular_sig = Balance2.ar(sig_l, sig_r, Lag.kr(pan + pan_sig, 0.1));
             sig_mix = ((dry_sig * (1 - granular_gain)) + (granular_sig * granular_gain));
      
             sig_mix = BLowShelf.ar(sig_mix, 75, 6, low_gain);
