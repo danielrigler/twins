@@ -5,8 +5,7 @@ presets.menu_open = false
 presets.menu_mode = "load"
 presets.selected_index = 1
 presets.preset_list = {}
-presets.delete_confirmation = nil
-presets.overwrite_confirmation = nil
+presets.confirmation = nil
 _G.preset_loading = false
 
 function presets.set_lfo_reference(lfo_module)
@@ -35,15 +34,6 @@ local function table_to_string(tbl, indent)
     return string.format("{\n%s\n%s}", table.concat(items, ",\n"), indent)
 end
 
-local function string_to_table(str)
-    local chunk, err = load("return " .. str)
-    if not chunk then
-        print("Parse error: " .. (err or "unknown"))
-        return nil
-    end
-    return chunk()
-end
-
 local function get_all_params_state()
     local state = {}
     for _, param in pairs(params.params) do
@@ -57,16 +47,27 @@ end
 local function get_lfo_states()
     local lfo_states = {}
     for i = 1, 16 do
-        if params:get(i.."lfo") == 2 then
-            lfo_states[i] = {
-                slot = i,
-                enabled = true,
-                target = params:get(i.."lfo_target"),
-                shape = params:get(i.."lfo_shape"),
-                freq = params:get(i.."lfo_freq"),
-                depth = params:get(i.."lfo_depth"),
-                offset = params:get(i.."offset")
-            }
+        local lfo_param = i.."lfo"
+        if params.lookup[lfo_param] and params:get(lfo_param) == 2 then
+            local target_param = i.."lfo_target"
+            local shape_param = i.."lfo_shape"
+            local freq_param = i.."lfo_freq"
+            local depth_param = i.."lfo_depth"
+            local offset_param = i.."offset"
+
+            if params.lookup[target_param] and params.lookup[shape_param] and 
+               params.lookup[freq_param] and params.lookup[depth_param] and 
+               params.lookup[offset_param] then
+                lfo_states[i] = {
+                    slot = i,
+                    enabled = true,
+                    target = params:get(target_param),
+                    shape = params:get(shape_param),
+                    freq = params:get(freq_param),
+                    depth = params:get(depth_param),
+                    offset = params:get(offset_param)
+                }
+            end
         end
     end
     return lfo_states
@@ -92,51 +93,69 @@ local function generate_preset_name(preset_name)
 end
 
 function presets.save_complete_preset(preset_name, scene_data_ref, update_pan_positioning_fn, audio_active_ref)
-    preset_name = generate_preset_name(preset_name)
+    local success, err = pcall(function()
+        preset_name = generate_preset_name(preset_name)
+        
+        local preset_data = {
+            name = preset_name,
+            timestamp = os.time(),
+            version = 1,
+            params = get_all_params_state(),
+            lfo_states = get_lfo_states(),
+            morph = {
+                [1] = { scene_data_ref[1][1] or {}, scene_data_ref[1][2] or {} },
+                [2] = { scene_data_ref[2][1] or {}, scene_data_ref[2][2] or {} }
+            },
+            morph_amount = params:get("morph_amount") or 0
+        }
+        
+        util.make_dir(_path.data .. "twins")
+        local file_path = _path.data .. "twins/" .. preset_name .. ".lua"
+        local file = io.open(file_path, "w")
+        
+        if not file then
+            error("Could not open file for writing")
+        end
+        
+        local header = string.format(
+            "-- Twins Complete Preset\n-- Name: %s\n-- Saved: %s\n-- Version: 1\n\nreturn ",
+            preset_name, os.date("%Y-%m-%d %H:%M:%S")
+        )
+        
+        file:write(header .. table_to_string(preset_data))
+        file:close()
+        print("Preset saved: " .. preset_name)
+    end)
     
-    local preset_data = {
-        name = preset_name,
-        timestamp = os.time(),
-        version = 1,
-        params = get_all_params_state(),
-        lfo_states = get_lfo_states(),
-        morph = {
-            [1] = { scene_data_ref[1][1] or {}, scene_data_ref[1][2] or {} },
-            [2] = { scene_data_ref[2][1] or {}, scene_data_ref[2][2] or {} }
-        },
-        morph_amount = params:get("morph_amount") or 0
-    }
-    
-    util.make_dir(_path.data .. "twins")
-    local file_path = _path.data .. "twins/" .. preset_name .. ".lua"
-    local file = io.open(file_path, "w")
-    
-    if not file then
-        print("Error: Could not save preset")
+    if success then
+        return true
+    else
+        print("Error saving preset: " .. (err or "unknown"))
         return false
     end
-    
-    local header = string.format(
-        "-- Twins Complete Preset\n-- Name: %s\n-- Saved: %s\n-- Version: 1\n\nreturn ",
-        preset_name, os.date("%Y-%m-%d %H:%M:%S")
-    )
-    
-    file:write(header .. table_to_string(preset_data))
-    file:close()
-    print("Preset saved: " .. preset_name)
-    return true
 end
 
 local function apply_lfo_states(lfo_states)
     if not lfo_states then return end
     
     for slot, lfo_state in pairs(lfo_states) do
-        params:set(slot.."lfo_target", lfo_state.target)
-        params:set(slot.."lfo_shape", lfo_state.shape)
-        params:set(slot.."lfo_freq", lfo_state.freq)
-        params:set(slot.."lfo_depth", lfo_state.depth)
-        params:set(slot.."offset", lfo_state.offset)
-        params:set(slot.."lfo", 2)
+        local target_param = slot.."lfo_target"
+        local shape_param = slot.."lfo_shape"
+        local freq_param = slot.."lfo_freq"
+        local depth_param = slot.."lfo_depth"
+        local offset_param = slot.."offset"
+        local lfo_param = slot.."lfo"
+        
+        if params.lookup[target_param] and params.lookup[shape_param] and 
+           params.lookup[freq_param] and params.lookup[depth_param] and 
+           params.lookup[offset_param] and params.lookup[lfo_param] then
+            params:set(target_param, lfo_state.target)
+            params:set(shape_param, lfo_state.shape)
+            params:set(freq_param, lfo_state.freq)
+            params:set(depth_param, lfo_state.depth)
+            params:set(offset_param, lfo_state.offset)
+            params:set(lfo_param, 2)
+        end
     end
 end
 
@@ -153,16 +172,18 @@ end
 
 local function load_audio_samples(audio_active_ref)
     for i = 1, 2 do
-        local sample_path = params:get(i .. "sample")
-        if sample_path and sample_path ~= "-" and sample_path ~= "" and sample_path ~= "none" then
-            engine.read(i, sample_path)
-            audio_active_ref[i] = true
+        local sample_param = i .. "sample"
+        if params.lookup[sample_param] then
+            local sample_path = params:get(sample_param)
+            if sample_path and sample_path ~= "-" and sample_path ~= "" and sample_path ~= "none" then
+                engine.read(i, sample_path)
+                audio_active_ref[i] = true
+            end
         end
     end
 end
 
 function presets.load_complete_preset(preset_name, scene_data_ref, update_pan_positioning_fn, audio_active_ref)
-    params:set("unload_all", 1)
     local file_path = _path.data .. "twins/" .. preset_name .. ".lua"
     
     if not util.file_exists(file_path) then
@@ -170,40 +191,42 @@ function presets.load_complete_preset(preset_name, scene_data_ref, update_pan_po
         return false
     end
     
-    local file = io.open(file_path, "r")
-    if not file then
-        print("Error: Could not read preset file")
+    local chunk, err = loadfile(file_path)
+    if not chunk then
+        print("Error loading preset: " .. (err or "unknown"))
         return false
     end
     
-    local content = file:read("*a")
-    file:close()
-    
-    local return_start = content:find("return%s*{")
-    if not return_start then
-        print("Error: Invalid preset format")
+    local success, preset_data = pcall(chunk)
+    if not success or not preset_data then
+        print("Error parsing preset: " .. (preset_data or "unknown"))
         return false
     end
     
-    local preset_data = string_to_table(content:sub(return_start + 6))
-    if not preset_data then
-        print("Error: Could not parse preset")
-        return false
+    if preset_data.version and preset_data.version > 1 then
+        print("Warning: Preset saved with newer version")
     end
     
-    preset_loading = true
+    _G.preset_loading = true
     
-    -- Disable all LFOs first
+    if params.lookup["unload_all"] then
+        params:set("unload_all", 1)
+    end
+    
     for i = 1, 16 do
-        params:set(i.."lfo", 1)
+        local lfo_param = i.."lfo"
+        if params.lookup[lfo_param] then
+            params:set(lfo_param, 1)
+        end
     end
     
-    -- Apply preset data
     apply_scene_data(preset_data, scene_data_ref)
     
     if preset_data.morph_amount then
         morph_amount = preset_data.morph_amount
-        params:set("morph_amount", preset_data.morph_amount)
+        if params.lookup["morph_amount"] then
+            params:set("morph_amount", preset_data.morph_amount)
+        end
     end
     
     if preset_data.params then
@@ -220,7 +243,7 @@ function presets.load_complete_preset(preset_name, scene_data_ref, update_pan_po
     
     clock.run(function()
         clock.sleep(0.1)
-        preset_loading = false
+        _G.preset_loading = false
         redraw()
         print("Preset loaded: " .. preset_name)
     end)
@@ -244,7 +267,6 @@ function presets.list_presets()
         end
     end
     
-    -- Sort by timestamp (newest first)
     table.sort(presets_list, function(a, b)
         local a_date, a_time, a_num = a:match("^twins_(%d+)_(%d+)_(%d+)$")
         local b_date, b_time, b_num = b:match("^twins_(%d+)_(%d+)_(%d+)$")
@@ -269,20 +291,26 @@ function presets.delete_preset(preset_name)
         return false
     end
     
-    os.remove(file_path)
-    print("Preset deleted: " .. preset_name)
-    return true
+    local success, err = pcall(os.remove, file_path)
+    if success then
+        print("Preset deleted: " .. preset_name)
+        return true
+    else
+        print("Error deleting preset: " .. (err or "unknown"))
+        return false
+    end
 end
 
 function presets.open_menu()
-    presets.preset_list = presets.list_presets()
+    local list = presets.list_presets()
     
-    if #presets.preset_list == 0 then
+    if #list == 0 then
         print("No presets found")
         return false
     end
     
-    presets.selected_index = util.clamp(presets.selected_index, 1, #presets.preset_list)
+    presets.preset_list = list
+    presets.selected_index = util.clamp(presets.selected_index, 1, #list)
     presets.menu_open = true
     presets.menu_mode = "load"
     return true
@@ -290,9 +318,9 @@ end
 
 function presets.close_menu()
     presets.menu_open = false
-    presets.delete_confirmation = nil
-    presets.overwrite_confirmation = nil
+    presets.confirmation = nil
     presets.menu_mode = "load"
+    presets.preset_list = {}
 end
 
 function presets.menu_enc(n, d)
@@ -300,7 +328,7 @@ function presets.menu_enc(n, d)
     
     if n == 2 then
         presets.selected_index = util.clamp(presets.selected_index + d, 1, #presets.preset_list)
-    elseif n == 1 or 3 then
+    elseif n == 1 or n == 3 then
         presets.menu_mode = d > 0 and "overwrite" or "load"
     end
 end
@@ -308,35 +336,28 @@ end
 function presets.menu_key(n, z, scene_data_ref, update_pan_positioning_fn, audio_active_ref)
     if not presets.menu_open or z ~= 1 then return false end
     
-    -- Handle delete confirmation
-    if presets.delete_confirmation then
+    if presets.confirmation then
         if n == 3 then
-            local preset_name = presets.delete_confirmation.preset_name
-            local preset_index = presets.delete_confirmation.preset_index
-            presets.delete_preset(preset_name)
-            presets.preset_list = presets.list_presets()
-            presets.delete_confirmation = nil
-            
-            if #presets.preset_list == 0 then
+            if presets.confirmation.type == "delete" then
+                local preset_name = presets.confirmation.preset_name
+                local preset_index = presets.confirmation.preset_index
+                presets.delete_preset(preset_name)
+                presets.preset_list = presets.list_presets()
+                presets.confirmation = nil
+                
+                if #presets.preset_list == 0 then
+                    presets.menu_open = false
+                else
+                    presets.selected_index = util.clamp(preset_index, 1, #presets.preset_list)
+                end
+            elseif presets.confirmation.type == "overwrite" then
+                local preset_name = presets.confirmation.preset_name
+                presets.save_complete_preset(preset_name, scene_data_ref, update_pan_positioning_fn, audio_active_ref)
+                presets.confirmation = nil
                 presets.menu_open = false
-            else
-                presets.selected_index = util.clamp(preset_index, 1, #presets.preset_list)
             end
         else
-            presets.delete_confirmation = nil
-        end
-        return true
-    end
-    
-    -- Handle overwrite confirmation
-    if presets.overwrite_confirmation then
-        if n == 3 then
-            local preset_name = presets.overwrite_confirmation.preset_name
-            presets.save_complete_preset(preset_name, scene_data_ref, update_pan_positioning_fn, audio_active_ref)
-            presets.overwrite_confirmation = nil
-            presets.menu_open = false
-        else
-            presets.overwrite_confirmation = nil
+            presets.confirmation = nil
         end
         return true
     end
@@ -349,15 +370,15 @@ function presets.menu_key(n, z, scene_data_ref, update_pan_positioning_fn, audio
             presets.menu_open = false
             return success
         else
-            presets.overwrite_confirmation = {
-                active = true,
+            presets.confirmation = {
+                type = "overwrite",
                 preset_name = preset_name
             }
             return true
         end
     elseif n == 2 then
-        presets.delete_confirmation = {
-            active = true,
+        presets.confirmation = {
+            type = "delete",
             preset_name = preset_name,
             preset_index = presets.selected_index
         }
@@ -370,7 +391,6 @@ function presets.menu_key(n, z, scene_data_ref, update_pan_positioning_fn, audio
     return false
 end
 
--- Draw confirmation dialog
 local function draw_confirmation(title, preset_name)
     screen.clear()
     screen.level(15)
@@ -391,15 +411,9 @@ end
 function presets.draw_menu()
     if not presets.menu_open then return false end
     
-    -- Show delete confirmation
-    if presets.delete_confirmation then
-        draw_confirmation("DELETE PRESET?", presets.delete_confirmation.preset_name)
-        return true
-    end
-    
-    -- Show overwrite confirmation
-    if presets.overwrite_confirmation then
-        draw_confirmation("OVERWRITE PRESET?", presets.overwrite_confirmation.preset_name)
+    if presets.confirmation then
+        local title = presets.confirmation.type == "delete" and "DELETE PRESET?" or "OVERWRITE PRESET?"
+        draw_confirmation(title, presets.confirmation.preset_name)
         return true
     end
     
@@ -408,11 +422,9 @@ function presets.draw_menu()
     screen.move(64, 6)
     screen.text_center("PRESET BROWSER")
     
-    -- Calculate visible range
     local visible_count = math.min(5, #presets.preset_list)
     local start_index = math.max(1, math.min(presets.selected_index - 2, #presets.preset_list - visible_count + 1))
     
-    -- Draw preset list
     for i = 1, visible_count do
         local idx = start_index + i - 1
         if idx <= #presets.preset_list then
@@ -422,8 +434,7 @@ function presets.draw_menu()
             screen.text((is_selected and "> " or "  ") .. presets.preset_list[idx])
         end
     end
-    
-    -- Scroll indicators
+
     if #presets.preset_list > visible_count then
         screen.level(2)
         if start_index > 1 then
@@ -436,14 +447,12 @@ function presets.draw_menu()
         end
     end
     
-    -- Bottom controls
     screen.level(1)
     screen.move(2, 64)
     screen.text("K1: Back")
     screen.move(50, 64)
     screen.text("K2: Del")
     
-    -- Mode-dependent K3 label
     if presets.menu_mode == "overwrite" then
         screen.level(15)
         screen.move(91, 64)

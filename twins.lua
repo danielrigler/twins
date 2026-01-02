@@ -91,7 +91,7 @@ local ui_metro = nil
 local lfos_turned_off = {}
 local shimmer_presets = {{oct = 0.25, lowpass = 4000, hipass = 20, fb = 0.48}, {oct = 0.5, lowpass = 6000, hipass = 20, fb = 0.48}, {oct = 2, lowpass = 9000, hipass = 300, fb = 0.36}, {oct = 4, lowpass = 12000, hipass = 700, fb = 0.36}}
 local param_modes = {
-    speed = {param = "speed", delta = 0.5, engine = true, has_lock = true},
+    speed = {param = "speed", delta = 1, engine = true, has_lock = true},
     seek = {param = "seek", delta = 1, engine = true, has_lock = true},
     pan = {param = "pan", delta = 5, engine = true, has_lock = true, invert = true},
     lpf = {param = "cutoff", delta = 1, engine = true, has_lock = false},
@@ -153,7 +153,7 @@ local function tracked_clock_run(func) local co = clock.run(func) table.insert(a
 local function cancel_all_clocks() for i = #active_clocks, 1, -1 do local co = active_clocks[i] if co then pcall(function() clock.cancel(co) end) end active_clocks[i] = nil end end
 local function is_param_locked(track_num, param) return params:get(track_num .. "lock_" .. param) == 2 end
 local function is_lfo_active_for_param(param_name) for i = 1, 16 do local target_index = params:get(i.. "lfo_target") if lfo.lfo_targets[target_index] == param_name and params:get(i.. "lfo") == 2 then return true, i end end return false, nil end
-local function update_pan_positioning() if preset_loading then return end local loaded1 = is_audio_loaded(1) local loaded2 = is_audio_loaded(2) local pan1_locked = is_param_locked(1, "pan") local pan1_has_lfo = is_lfo_active_for_param("1pan") local pan2_locked = is_param_locked(2, "pan") local pan2_has_lfo = is_lfo_active_for_param("2pan") if not pan1_locked and not pan1_has_lfo then params:set("1pan", loaded2 and -15 or 0) end if not pan2_locked and not pan2_has_lfo then params:set("2pan", loaded1 and 15 or 0) end end
+local function update_pan_positioning() if _G.preset_loading then return end local loaded1 = is_audio_loaded(1) local loaded2 = is_audio_loaded(2) local pan1_locked = is_param_locked(1, "pan") local pan1_has_lfo = is_lfo_active_for_param("1pan") local pan2_locked = is_param_locked(2, "pan") local pan2_has_lfo = is_lfo_active_for_param("2pan") if not pan1_locked and not pan1_has_lfo then params:set("1pan", loaded2 and -15 or 0) end if not pan2_locked and not pan2_has_lfo then params:set("2pan", loaded1 and 15 or 0) end end
 
 local function setup_ui_metro()
     if ui_metro then stop_metro_safe(ui_metro) end
@@ -178,7 +178,7 @@ local function setup_ui_metro()
                 animation_fade = 1
             end
             animation_complete = progress >= 1 and fade_progress >= 1
-            if progress >= 0.5 and not pan_slide_start_time then pan_slide_start_time = now end
+            if progress >= 0.4 and not pan_slide_start_time then pan_slide_start_time = now end
         end
         if pan_slide_start_time and not (pan_indicators_visible and volume_bars_visible and seek_bars_visible) then
             local slide_progress = math.min((now - pan_slide_start_time) * 2.5, 1)
@@ -224,7 +224,7 @@ local function setup_ui_metro()
         end
         redraw()
     end)
-    ui_metro.time = 1/60
+    ui_metro.time = 1/30
     ui_metro:start()
 end
 
@@ -496,7 +496,8 @@ local function apply_morph()
                 return
             end
             local abs_dir = morph_direction > 0 and morph_direction or -morph_direction
-            new_val = temp + (tgt - temp) * (abs_dir < dist and (abs_dir / dist) or 1)
+            local progress = math.min(abs_dir / dist, 1.0)
+            new_val = temp + (tgt - temp) * progress
         end
         if pname == "pitch" and track then new_val = quantize_pitch_to_scale(new_val, pitch_scale) end
         params_set(params, fparam, new_val)
@@ -644,7 +645,7 @@ end
 local function setup_params()
     params:add_separator("Input")
     for i = 1, 2 do
-      params:add_file(i.."sample","Sample "..i); params:set_action(i.."sample",function(f) if f~=nil and f~="" and f~="none" and f~="-" then lfo.clearLFOs(tostring(i),"jitter"); engine.read(i,f); audio_active[i]=true; update_pan_positioning(); local is_live=params:get(i.."live_input")==1; local dur=is_live and params:get("live_buffer_length") or get_audio_duration(f); if dur then cached_buffer_durations[i]=dur; local ms=dur*1000; local max_jit=math.min(ms,99999); params:set(i.."max_jitter",max_jit); params:set(i.."min_jitter",0); if not preset_loading and not is_param_locked(i,"jitter") then local jp=i.."jitter"; handle_lfo(jp,true); params:set(jp,util.clamp(dur*math.random()*1000,0,99999)); end else lfo.clearLFOs(tostring(i),"jitter"); audio_active[i]=false; osc_positions[i]=0; update_pan_positioning(); end end end)
+      params:add_file(i.."sample","Sample "..i); params:set_action(i.."sample",function(f) if f~=nil and f~="" and f~="none" and f~="-" then lfo.clearLFOs(tostring(i),"jitter"); engine.read(i,f); audio_active[i]=true; update_pan_positioning(); local is_live=params:get(i.."live_input")==1; local dur=is_live and params:get("live_buffer_length") or get_audio_duration(f); if dur then cached_buffer_durations[i]=dur; local ms=dur*1000; local max_jit=math.min(ms,99999); params:set(i.."max_jitter",max_jit); params:set(i.."min_jitter",0); if not _G.preset_loading and not is_param_locked(i,"jitter") then local jp=i.."jitter"; handle_lfo(jp,true); params:set(jp,util.clamp(dur*math.random()*1000,0,99999)); end else lfo.clearLFOs(tostring(i),"jitter"); audio_active[i]=false; osc_positions[i]=0; update_pan_positioning(); end end end)
     end
     params:add_binary("randomtapes", "Random Tapes", "trigger", 0) params:set_action("randomtapes", function() load_random_tape_file() end)
     
@@ -1536,7 +1537,7 @@ end
 function redraw()
   if not installer:ready() then installer:redraw() return end
   if presets.draw_menu() then return end
-  if preset_loading then screen.clear() screen.level(15) screen.move(64, 32) screen.text_center("Loading...") screen.update() return end
+  if _G.preset_loading then screen.clear() screen.level(15) screen.move(64, 32) screen.text_center("Loading...") screen.update() return end
   screen.clear()
   screen.save()
   screen.translate(0, animation_y)
@@ -1587,46 +1588,56 @@ function redraw()
   end
   local function draw_seek_bar_viz(t, x)
     local loaded = audio_active[t] or C.live.in_[t] == 1 or C.live.dir_[t] == 1
-    if not loaded or C.live.dir_[t] == 1 then return end
-    local animated_bar_w = math.floor(BAR_W * seek_bar_width)
-    R(1, x, Y.seek, animated_bar_w, 1)
-    if params:get(t .. "granular_gain") > 0 then
-      local grains = grain_positions[t]
-      if grains then
-        local dur, keep, drawn = cached_buffer_durations[t], 0, 0
-        for i=1,#grains do
-          local g = grains[i]
-          local age = now - g.t
-          if age <= (g.size or 0.1) then
-            keep = keep + 1
-            grains[keep] = g
-            if drawn < 31 then
-              local grain_size_norm = (g.size or 0.1) / dur
-              local grain_end = (g.pos or 0) + grain_size_norm
-              local spd_fwd = C.spd[t] >= -0.01
-              local segments = grain_end > 1 and {{g.pos or 0, 1.0}, {0, grain_end - 1.0}} or {{g.pos or 0, grain_end}}
-              for _,seg in ipairs(segments) do
-                local pos = x + math.floor(seg[1] * BAR_W)
-                local w = math.max(1, math.floor((seg[2] - seg[1]) * BAR_W))
-                local l = spd_fwd and pos or (pos - w)
-                local r = spd_fwd and (pos + w - 1) or (pos - 1)
-                if r >= x and l <= x + BAR_W - 1 then
-                  local dl, dr = math.max(l, x), math.min(r, x + BAR_W - 1)
-                  local bw = dr - dl + 1
-                  if bw > 0 then
-                    R(math.ceil(1 + (LEVEL.hi - 1) * (1 - age / (g.size or 0.1))), dl, Y.seek, bw, 1)
-                    drawn = drawn + 1
+    local mode = UPPER[cur_mode] and "seek" or cur_mode
+    if mode == "speed" then
+      R(1, x, Y.seek, BAR_W, 1)
+      local speed = C.spd[t]
+      local normalized_speed = util.clamp(speed / 2, -1, 1)
+      local center_x = x + math.floor(BAR_W / 2)
+      local position_offset = math.floor(normalized_speed * (BAR_W / 2))
+      local position_x = center_x + position_offset
+      if loaded then R(LEVEL.hi, position_x, Y.seek - 1, 1, 2) end
+    else
+      local animated_bar_w = math.floor(BAR_W * seek_bar_width)
+      R(1, x, Y.seek, animated_bar_w, 1)
+      if params:get(t .. "granular_gain") > 0 then
+        local grains = grain_positions[t]
+        if grains then
+          local dur, keep, drawn = cached_buffer_durations[t], 0, 0
+          for i=1,#grains do
+            local g = grains[i]
+            local age = now - g.t
+            if age <= (g.size or 0.1) then
+              keep = keep + 1
+              grains[keep] = g
+              if drawn < 25 then
+                local grain_size_norm = (g.size or 0.1) / dur
+                local grain_end = (g.pos or 0) + grain_size_norm
+                local spd_fwd = C.spd[t] >= -0.01
+                local segments = grain_end > 1 and {{g.pos or 0, 1.0}, {0, grain_end - 1.0}} or {{g.pos or 0, grain_end}}
+                for _,seg in ipairs(segments) do
+                  local pos = x + math.floor(seg[1] * BAR_W)
+                  local w = math.max(1, math.floor((seg[2] - seg[1]) * BAR_W))
+                  local l = spd_fwd and pos or (pos - w)
+                  local r = spd_fwd and (pos + w - 1) or (pos - 1)
+                  if r >= x and l <= x + BAR_W - 1 then
+                    local dl, dr = math.max(l, x), math.min(r, x + BAR_W - 1)
+                    local bw = dr - dl + 1
+                    if bw > 0 then
+                      R(math.ceil(1 + (LEVEL.hi - 1) * (1 - age / (g.size or 0.1))), dl, Y.seek, bw, 1)
+                      drawn = drawn + 1
+                    end
                   end
                 end
               end
             end
           end
+          for i=keep+1,#grains do grains[i] = nil end
         end
-        for i=keep+1,#grains do grains[i] = nil end
-      end
-    else grain_positions[t] = {} end
-    R(LEVEL.hi, x + math.floor(osc_positions[t] * animated_bar_w), Y.seek - 1, 1, 2)
-    if C.live.in_[t] == 1 then R(LEVEL.hi, x + math.floor(rec_positions[t] * BAR_W), Y.seek - 1, 2, 2) end
+      else grain_positions[t] = {} end
+      if loaded then R(LEVEL.hi, x + math.floor(osc_positions[t] * animated_bar_w), Y.seek - 1, 1, 2) end
+      if C.live.in_[t] == 1 then R(LEVEL.hi, x + math.floor(rec_positions[t] * BAR_W), Y.seek - 1, 2, 2) end
+    end
   end
   local upper = UPPER[cur_mode]
   local mode = upper and "seek" or cur_mode
@@ -1638,7 +1649,6 @@ function redraw()
   for t=1,2 do
     local x = TRACK_X[t]
     local vL = active and LEVEL.hi or LEVEL.val
-    local loaded = audio_active[t] or C.live.in_[t] == 1 or C.live.dir_[t] == 1
     if mode == "seek" then
       if is_param_locked(t, "seek") then draw_lock(x, y_bot) end
       local txt = C.live.in_[t] == 1 and "live" or C.live.dir_[t] == 1 and "direct" or string.format("%.0f%%", osc_positions[t] * 100)
@@ -1660,19 +1670,36 @@ function redraw()
       local icon = math.abs(s) < 0.01 and "⏸" or (s > 0 and "▶" or "◀")
       T(vL, t == 1 and 77 or 118, y_bot+1, icon)
     end
-    draw_seek_bar_viz(t, x)
+    if mode == "seek" or mode == "speed" then draw_seek_bar_viz(t, x) end
   end
   for t=1,2 do
     local h = util.linlin(-70, 10, 0, 64, C.vol[t])
     R(LEVEL.dim-3, VOL_X[t], 64 - h + volume_bar_y[t], 2, h)
     local peak_amp = math.max(voice_peak_amplitudes[t].l, voice_peak_amplitudes[t].r)
-    if peak_amp > 0.00001 then
-      local peak_db = util.clamp(20 * math.log(peak_amp, 10), -70, 10)
-      local peak_h = util.clamp(util.linlin(-70, 10, 0, 64, peak_db), 0, h)
-      if peak_h > 0 then R(LEVEL.hi-1, VOL_X[t], 64 - peak_h + volume_bar_y[t], 2, peak_h) end
-    end
+    local peak_db = util.clamp(20 * math.log(peak_amp, 10), -70, 10)
+    local peak_h = util.clamp(util.linlin(-70, 10, 0, 64, peak_db), 0, h)
+    if peak_h > 0 then R(LEVEL.hi-1, VOL_X[t], 64 - peak_h + volume_bar_y[t], 2, peak_h) end
     local pan_pos = util.linlin(-100, 100, PAN_X[t], PAN_X[t] + 25, C.pan[t])
     R(LEVEL.dim, pan_pos - 1 + pan_indicator_x[t], 1, 4, 1)
+  end
+  if cur_mode == "lpf" or mode == "hpf" then
+    for t=1,2 do
+      local x = TRACK_X[t]
+      R(1, x, Y.seek, BAR_W, 1)
+      if cur_filter == "lpf" then
+        local cutoff = C.cut[t]
+        local log_normalized = math.log(cutoff / 20) / math.log(20000 / 20)
+        log_normalized = util.clamp(log_normalized, 0, 1)
+        local bar_width = math.max(1, math.floor(log_normalized * BAR_W))
+        R(LEVEL.hi, x, Y.seek, bar_width, 1)
+      else
+        local hpf = C.hpf[t]
+        local log_normalized = math.log(hpf / 20) / math.log(20000 / 20)
+        log_normalized = util.clamp(log_normalized, 0, 1)
+        local bar_width = math.max(1, math.floor(log_normalized * BAR_W))
+        R(LEVEL.hi, x, Y.seek, bar_width, 1)
+      end
+    end
   end
   if C.dry then for x=7,15,4 do P(LEVEL.hi, x, 0) end end
   if C.sym then 

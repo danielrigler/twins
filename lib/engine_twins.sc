@@ -65,7 +65,7 @@ alloc {
             var rand_val, rand_val2, scale_type, random_interval;
             var ratchet_gate, extra_trig;
             var scaled_signal;
-            var trigger1 = Impulse.kr(60);
+            var trigger1 = Impulse.kr(30);
             var trig, stepSize, stepWeights, stepIndex, actualStep, direction, totalStep;
             var scaleArrays, scaleSelect, currentScale, scaleDegree, octaveShift, semitones;
             var syncHeldEnv;
@@ -140,7 +140,7 @@ alloc {
             sig_mix = HPF.ar(sig_mix, Lag.kr(hpf, 0.6));
             sig_mix = MoogFF.ar(sig_mix, Lag.kr(cutoff, 0.6), lpfgain);
             
-            SendReply.kr(Impulse.kr(30), '/buf_pos', [voice, buf_pos]);
+            SendReply.kr(trigger1, '/buf_pos', [voice, buf_pos]);
             SendReply.kr(grain_trig, '/grain_pos', [voice, Wrap.kr(buf_pos + jitter_sig), grain_size]);
             scaled_signal = sig_mix * gain * 2.2;
             SendReply.kr(trigger1, '/voice_peak', [voice, Peak.kr(scaled_signal[0], trigger1), Peak.kr(scaled_signal[1], trigger1)]);
