@@ -27,7 +27,7 @@ end
 
 local function clear_table(t) for k in pairs(t) do t[k] = nil end end
 
--- Parameter Specifications
+-- Parameter Specifications 
 local PARAM_SPECS = {
   ["1direction_mod"] = {100, {0, 100}, "granular"}, ["2direction_mod"] = {100, {0, 100}, "granular"},
   ["1size_variation"] = {100, {0, 100}, "granular"}, ["2size_variation"] = {100, {0, 100}, "granular"},

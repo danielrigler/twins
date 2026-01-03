@@ -24,7 +24,7 @@ end
 local function pset(k, v) 
   if not params or not params.lookup or not params.lookup[k] then return end
   params:set(k, v) 
-end
+end 
 function lfo.is_param_locked(track, param_name)
   local lock_param_name = track .. "lock_" .. param_name
   return params.lookup[lock_param_name] and pget(lock_param_name) == 2
@@ -123,7 +123,7 @@ local param_ranges = {
   ["1jitter"] = { 0, 99999 }, ["2jitter"] = { 0, 99999 },
   ["1spread"] = { 0, 100 }, ["2spread"] = { 0, 100 },
   ["1size"] = { 20, 599 }, ["2size"] = { 20, 599 },
-  ["1density"] = { 1, 50 }, ["2density"] = { 1, 50 },
+  ["1density"] = { 1, 30 }, ["2density"] = { 1, 30 },
   ["1volume"] = { -70, 10 }, ["2volume"] = { -70, 10 },
   ["1pitch"] = { -48, 48 }, ["2pitch"] = { -48, 48 },
   ["1cutoff"] = { 20, 20000 }, ["2cutoff"] = { 20, 20000 },
@@ -254,7 +254,6 @@ function randomize_lfo(i, target)
     local wf_index = math_random(#ranges.waveform)
     local selected_waveform = ranges.waveform[wf_index]
     lfo[i].waveform = selected_waveform
-    -- Find the index of this waveform in options.lfotypes
     local shape_index = 1
     for idx, wf in ipairs(options.lfotypes) do
       if wf == selected_waveform then
@@ -373,13 +372,11 @@ function lfo.process()
       slope = obj.prev
     elseif wf == "walk" then
       if obj.sync_to and lfo[obj.sync_to] then
-        -- Use the synced LFO's walk state
         obj.walk_value = lfo[obj.sync_to].walk_value
         obj.walk_velocity = lfo[obj.sync_to].walk_velocity
         obj.prev = lfo[obj.sync_to].prev
         slope = obj.prev
       else
-        -- Generate own random walk
         local step_size = obj.freq * 0.4
         local random_acc = (math_random() - 0.5) * step_size
         obj.walk_velocity = obj.walk_velocity * 0.92 + random_acc
@@ -450,7 +447,6 @@ function lfo.cleanup()
   end
 end
 
--- Public functions to manage parameter assignments
 function lfo.clear_param_assignment(param_name)
   if param_name then
     assigned_params[param_name] = nil

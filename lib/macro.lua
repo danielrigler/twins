@@ -24,7 +24,7 @@ end
 local lfo_ref = nil
 local randomize_metro = metro.init()
 local lfo_cache = {}
-
+ 
 function macro.set_lfo_reference(lfo_module)
     lfo_ref = lfo_module
     lfo_cache = {}

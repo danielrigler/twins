@@ -23,7 +23,7 @@ function Mirror.init(osc_positions_ref, lfo_ref)
     params_lookup = params.lookup
     lfo_targets = lfo_ref and lfo_ref.lfo_targets
 end
-
+ 
 function Mirror.copy_voice_params(from_track, to_track, mirror_pan)
     local function clear_destination_lfos(to_track_num)
         local pattern = get_track_pattern(to_track_num)

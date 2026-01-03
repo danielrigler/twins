@@ -264,7 +264,7 @@ local morph_voice_params = { "speed", "pitch", "jitter", "size", "density", "spr
 local morph_global_params = { "delay_mix", "delay_time", "delay_feedback", "delay_lowpass", "delay_highpass", "wiggle_depth", "wiggle_rate", "stereo", 
                               "reverb_mix", "t60", "damp", "rsize", "earlyDiff", "modDepth", "modFreq", "low", "mid", "high", "lowcut", "highcut", 
                               "shimmer_mix", "shimmer_preset", "lock_shimmer",
-                              "tape_mix", "sine_drive", "drive", "wobble_mix", "wobble_amp", "wobble_rpm", "flutter_amp", "flutter_freq", "flutter_var", "chew_depth", "chew_freq", "chew_variance", "lossdegrade_mix", "Width", "dimension_mix", "haas", "rspeed", "monobass_mix", "bitcrush_mix", "bitcrush_rate", "bitcrush_bits",
+                              "tape_mix", "sine_drive_wet", "drive", "wobble_mix", "wobble_amp", "wobble_rpm", "flutter_amp", "flutter_freq", "flutter_var", "chew_depth", "chew_freq", "chew_variance", "lossdegrade_mix", "Width", "dimension_mix", "haas", "rspeed", "monobass_mix", "bitcrush_mix", "bitcrush_rate", "bitcrush_bits",
                               "evolution", "evolution_range", "evolution_rate", "lock_eq", "lock_tape", "lock_reverb", "lock_delay", "global_lfo_freq_scale", "pitch_quantize_scale", "pitch_lag",
                               "shimmer_mix1", "shimmer_oct1", "pitchv1", "lowpass1", "hipass1", "fbDelay1", "fb1"}
 
@@ -682,7 +682,7 @@ local function setup_params()
       params:add_control(i.."pitch_random_prob", i.." Pitch Randomize", controlspec.new(-100, 100, "lin", 1, 0, "%")) params:set_action(i.."pitch_random_prob", function(value) engine.pitch_random_prob(i, value) end)
       params:add_option(i.."pitch_random_scale_type", i.." Pitch Quantize", {"5th+oct", "5th+oct 2", "1 oct", "2 oct", "chrom", "maj", "min", "penta", "whole"}, 1) params:set_action(i.."pitch_random_scale_type", function(value) engine.pitch_random_scale_type(i, value - 1) end)
       params:add_control(i.."ratcheting_prob", i.." Ratcheting", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.."ratcheting_prob", function(value) engine.ratcheting_prob(i, value) end)
-      params:add_option(i.."env_select", i.." Grain Envelope", {"Sine", "Tukey", "Triangle", "Perc.", "Rev. Perc.", "ADSR", "RandomM", "RandomS"}, 1) params:set_action(i.."env_select", function(value) engine.env_select(i, value - 1) end)
+      params:add_option(i.."env_select", i.." Grain Envelope", {"Hann", "Triangle", "Tukey", "Perc.", "Rev. Perc.", "ADSR", "Random"}, 1) params:set_action(i.."env_select", function(value) engine.env_select(i, value - 1) end)
       params:add_control(i.. "size_variation", i.. " Size Variation", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.. "size_variation", function(value) engine.size_variation(i, value * 0.01) end)
       params:add_control(i.. "direction_mod", i.. " Reverse", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.. "direction_mod", function(value) engine.direction_mod(i, value * 0.01) end)
       params:add_control(i.. "density_mod_amt", i.. " Density Mod", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.. "density_mod_amt", function(value) engine.density_mod_amt(i, value * 0.01) end)      
@@ -738,9 +738,9 @@ local function setup_params()
     params:add_separator("        ")
     params:add_option("lock_shimmer", "Lock Parameters", {"off", "on"}, 1)
     
-    params:add_group("TAPE", 16)
+    params:add_group("TAPE", 16) 
     params:add_option("tape_mix", "Analog Tape", {"off", "on"}, 1) params:set_action("tape_mix", function(x) engine.tape_mix(x-1) font.update_fx_cache("tape_mix", x) end)
-    params:add_control("sine_drive", "Shaper Drive", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("sine_drive", function(value) engine.sine_drive((10+value)/20) font.update_fx_cache("sine_drive", value) end)
+    params:add_control("sine_drive_wet", "Shaper Drive", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("sine_drive_wet", function(value) engine.sine_drive_wet(value * 0.01) font.update_fx_cache("sine_drive_wet", value) end)
     params:add_control("drive", "Saturation", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("drive", function(x) engine.drive(x * 0.01) font.update_fx_cache("drive", x) end)
     params:add{type = "control", id = "wobble_mix", name = "Wobble", controlspec = controlspec.new(0, 100, "lin", 1, 0, "%"), action = function(value) engine.wobble_mix(value * 0.01) font.update_fx_cache("wobble_mix", value) end}
     params:add{type = "control", id = "wobble_amp", name = "Wow Depth", controlspec = controlspec.new(0, 100, "lin", 1, 20, "%"), action = function(value) engine.wobble_amp(value * 0.01) end}
@@ -1746,7 +1746,7 @@ local osc_handlers = {
         params:set("unload_all", 1)
         tracked_clock_run(function()
             clock.sleep(0.1)
-            params:set("1granular_gain", 0) disable_lfos_for_param("1speed") disable_lfos_for_param("1pan") params:set("1speed", 1) params:set("1sample", filepath) params:set("1pan", 0) params:set("2pan", 0) params:set("reverb_mix", 0) params:set("delay_mix", 0) params:set("shimmer_mix", 0) params:set("tape_mix", 1) params:set("dimension_mix", 0) params:set("sine_drive", 0) params:set("drive", 0) params:set("wobble_mix", 0) params:set("chew_depth", 0) params:set("lossdegrade_mix", 0) params:set("Width", 100)  params:set("rspeed", 0) params:set("haas", 1) params:set("monobass_mix", 1) params:set("bitcrush_mix", 0) params:set("1lock_speed", 2)
+            params:set("1granular_gain", 0) disable_lfos_for_param("1speed") disable_lfos_for_param("1pan") params:set("1speed", 1) params:set("1sample", filepath) params:set("1pan", 0) params:set("2pan", 0) params:set("reverb_mix", 0) params:set("delay_mix", 0) params:set("shimmer_mix", 0) params:set("tape_mix", 1) params:set("dimension_mix", 0) params:set("sine_drive_wet", 0) params:set("drive", 0) params:set("wobble_mix", 0) params:set("chew_depth", 0) params:set("lossdegrade_mix", 0) params:set("Width", 100)  params:set("rspeed", 0) params:set("haas", 1) params:set("monobass_mix", 1) params:set("bitcrush_mix", 0) params:set("1lock_speed", 2)
             for i = 1, 2 do params:set(i.."eq_low_gain", 0) params:set(i.."eq_mid_gain", 0) params:set(i.."eq_high_gain", 0) params:set(i.."cutoff", 20000) params:set(i.."hpf", 20) end
         end)
     end, 

@@ -27,7 +27,7 @@ local function table_to_string(tbl, indent)
         else
             value_str = tostring(v)
         end
-        
+         
         items[#items + 1] = string.format("%s  [%s] = %s", indent, key_str, value_str)
     end
     

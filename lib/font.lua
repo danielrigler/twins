@@ -25,7 +25,7 @@ font.micro_font = {
     {1,1,1},
     {1,1,0},
     {1,1,1},
-  },
+  }, 
   I = {
     {1,0},
     {1,0},
@@ -78,7 +78,7 @@ local fx_cache = {
   reverb_mix = 0,
   shimmer_mix1 = 0,
   tape_mix = 1,
-  sine_drive = 0,
+  sine_drive_wet = 0,
   drive = 0,
   wobble_mix = 0,
   chew_depth = 0,
@@ -149,7 +149,7 @@ function font.draw_fx_status_bucketed(P_func)
     x = x + 7
   end
   
-  if ((fx_cache.tape_mix == 2) or (fx_cache.sine_drive > 0) or (fx_cache.drive > 0) or (fx_cache.wobble_mix > 0) or (fx_cache.chew_depth > 0) or (fx_cache.lossdegrade_mix > 0)) then
+  if ((fx_cache.tape_mix == 2) or (fx_cache.sine_drive_wet > 0) or (fx_cache.drive > 0) or (fx_cache.wobble_mix > 0) or (fx_cache.chew_depth > 0) or (fx_cache.lossdegrade_mix > 0)) then
     font.draw_micro_text_bucketed(P_func, x, y, "T", 1)
     x = x + 4
   end  
