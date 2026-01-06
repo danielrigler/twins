@@ -127,11 +127,11 @@ alloc {
             envBuf = Select.kr(env_select, [-1] ++ grainEnvs ++ [Select.kr(randomEnv, grainEnvs)]);
 
             grainBufFunc = { |buf, pitch, size, vol, dir, pos, jitter, panPos, env| 
-              GrainBuf.ar(numChannels: 1, trigger: grain_trig, dur: size, sndbuf: buf, rate: pitch * dir, pos: pos + jitter, interp: 2, pan: panPos, envbufnum: env, mul: vol) };
+              GrainBuf.ar(numChannels: 2, trigger: grain_trig, dur: size, sndbuf: buf, rate: pitch * dir, pos: pos + jitter, interp: 2, pan: panPos, envbufnum: env, mul: vol) };
             processGrains = { |buf_l, buf_r, pitch, size, vol, dir, pos, jitter, panPos, env|
               var grains_l = grainBufFunc.(buf_l, pitch, size, vol, dir, pos, jitter, panPos, env);
               var grains_r = grainBufFunc.(buf_r, pitch, size, vol, dir, pos, jitter, panPos, env);
-              [grains_l, grains_r] };
+              [grains_l[0] + grains_r[0], grains_l[1] + grains_r[1]] };
             #sig_l, sig_r = processGrains.(buf_l, buf_r, grain_pitch, grain_size, invDenom, grain_direction, buf_pos, jitter_sig, grain_pan, envBuf);
             harmonics = [1/2, 1/4, 1/8, 2, 4];
             volumes = [subharmonic_1_vol, subharmonic_2_vol, subharmonic_3_vol, overtone_1_vol, overtone_2_vol] * 2.7;
