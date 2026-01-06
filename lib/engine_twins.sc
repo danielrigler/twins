@@ -67,14 +67,13 @@ alloc {
             probability, pitch_walk_rate, pitch_walk_step, env_select = 0, pitch_random_prob=0, random_interval=12, pitch_random_direction=1,
             ratcheting_prob=0, pitch_lag_time;
 
-            var grainBufFunc, processGrains;
-            var grain_trig, jitter_sig, buf_dur, pan_sig, buf_pos, sig_l, sig_r, sig_mix, density_mod, dry_sig, granular_sig, base_pitch, grain_pitch, grain_size;
-            var invDenom = 1 / (1 + subharmonics_1 + subharmonics_2 + subharmonics_3 + overtones_1 + overtones_2);
-            var subharmonic_1_vol = subharmonics_1 * invDenom;
-            var subharmonic_2_vol = subharmonics_2 * invDenom;
-            var subharmonic_3_vol = subharmonics_3 * invDenom;
-            var overtone_1_vol = overtones_1 * invDenom;
-            var overtone_2_vol = overtones_2 * invDenom;
+            var grain_trig, jitter_sig, buf_dur, pan_sig, buf_pos, sig_mix, density_mod, dry_sig, granular_sig, base_pitch, grain_pitch, grain_size;
+            var main_vol = 1 / (1 + subharmonics_1 + subharmonics_2 + subharmonics_3 + overtones_1 + overtones_2);
+            var subharmonic_1_vol = subharmonics_1 * main_vol * 2;
+            var subharmonic_2_vol = subharmonics_2 * main_vol * 2;
+            var subharmonic_3_vol = subharmonics_3 * main_vol * 2;
+            var overtone_1_vol = overtones_1 * main_vol * 1.5;
+            var overtone_2_vol = overtones_2 * main_vol * 1.5;
             var grain_direction, base_trig, base_grain_trig;
             var rand_val, rand_val2;
             var ratchet_gate, extra_trig;
@@ -126,22 +125,41 @@ alloc {
             randomEnv = TIRand.kr(0, 5, grain_trig);
             envBuf = Select.kr(env_select, [-1] ++ grainEnvs ++ [Select.kr(randomEnv, grainEnvs)]);
 
-            grainBufFunc = { |buf, pitch, size, vol, dir, pos, jitter, panPos, env| 
-              GrainBuf.ar(numChannels: 2, trigger: grain_trig, dur: size, sndbuf: buf, rate: pitch * dir, pos: pos + jitter, interp: 2, pan: panPos, envbufnum: env, mul: vol) };
-            processGrains = { |buf_l, buf_r, pitch, size, vol, dir, pos, jitter, panPos, env|
-              var grains_l = grainBufFunc.(buf_l, pitch, size, vol, dir, pos, jitter, panPos, env);
-              var grains_r = grainBufFunc.(buf_r, pitch, size, vol, dir, pos, jitter, panPos, env);
-              [grains_l[0] + grains_r[0], grains_l[1] + grains_r[1]] };
-            #sig_l, sig_r = processGrains.(buf_l, buf_r, grain_pitch, grain_size, invDenom, grain_direction, buf_pos, jitter_sig, grain_pan, envBuf);
-            harmonics = [1/2, 1/4, 1/8, 2, 4];
-            volumes = [subharmonic_1_vol, subharmonic_2_vol, subharmonic_3_vol, overtone_1_vol, overtone_2_vol] * 2.7;
-            size_mults = [smoothbass, smoothbass, smoothbass, 1, 1];
-            harmonics.do { |harmonic, i|
-              var grains = processGrains.(buf_l, buf_r, grain_pitch * harmonic, grain_size * size_mults[i], volumes[i], grain_direction, buf_pos, jitter_sig, grain_pan, envBuf);
-              sig_l = sig_l + grains[0];
-              sig_r = sig_r + grains[1]; };
-
-            granular_sig = [sig_l, sig_r];
+            harmonics = [1, 1/2, 1/4, 1/8, 2, 4];
+            volumes = [main_vol, subharmonic_1_vol, subharmonic_2_vol, subharmonic_3_vol, overtone_1_vol, overtone_2_vol];
+            size_mults = [1, smoothbass, smoothbass, smoothbass, 1, 1];
+            
+            grains = harmonics.collect { |harmonic, i|
+                GrainBuf.ar(
+                    numChannels: 2,
+                    trigger: grain_trig, 
+                    dur: grain_size * size_mults[i], 
+                    sndbuf: buf_l, 
+                    rate: grain_pitch * harmonic * grain_direction, 
+                    pos: buf_pos + jitter_sig, 
+                    interp: 2, 
+                    pan: grain_pan - 0.5,
+                    envbufnum: envBuf, 
+                    mul: volumes[i]
+                );
+            };
+            
+            grains = grains ++ harmonics.collect { |harmonic, i|
+                GrainBuf.ar(
+                    numChannels: 2,
+                    trigger: grain_trig, 
+                    dur: grain_size * size_mults[i], 
+                    sndbuf: buf_r, 
+                    rate: grain_pitch * harmonic * grain_direction, 
+                    pos: buf_pos + jitter_sig, 
+                    interp: 2, 
+                    pan: grain_pan + 0.5,
+                    envbufnum: envBuf, 
+                    mul: volumes[i]
+                );
+            };
+            
+            granular_sig = Mix.ar(grains);
             sig_mix = dry_sig * (1 - granular_gain) + (granular_sig * granular_gain);
      
             sig_mix = BLowShelf.ar(sig_mix, 75, 6, low_gain);
