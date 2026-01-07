@@ -224,7 +224,7 @@ local function setup_ui_metro()
         end
         redraw()
     end)
-    ui_metro.time = 1/30
+    ui_metro.time = 1/60
     ui_metro:start()
 end
 
@@ -1754,8 +1754,7 @@ local osc_handlers = {
         showing_save_message = false
     end}
 
-local function osc_event(path, args) if osc_handlers[path] then osc_handlers[path](args) end end
-local function setup_osc() osc.event = osc_event end
+local function setup_osc() osc.event = function(path, args) local handler = osc_handlers[path] if handler then handler(args) end end end
 
 function init()
     initial_reverb_onoff = params:get('reverb')

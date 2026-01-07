@@ -79,6 +79,7 @@ alloc {
             var ratchet_gate, extra_trig;
             var signal;
             var trigger1 = Impulse.kr(30);
+            var trigger2 = Impulse.kr(60);
             var stepIndex, actualStep, direction, totalStep;
             var scaleDegree, octaveShift, semitones;
             var grain_pan, envBuf, randomEnv;
@@ -172,7 +173,7 @@ alloc {
             SendReply.kr(trigger1, '/buf_pos', [voice, buf_pos]);
             SendReply.kr(grain_trig, '/grain_pos', [voice, Wrap.kr(buf_pos + jitter_sig), grain_size]);
             signal = sig_mix * Lag.kr(gain) * 1.25;
-            SendReply.kr(trigger1, '/voice_peak', [voice, Peak.kr(signal[0], trigger1), Peak.kr(signal[1], trigger1)]);
+            SendReply.kr(trigger2, '/voice_peak', [voice, Peak.kr(signal[0], trigger2), Peak.kr(signal[1], trigger2)]);
 
             Out.ar(out, signal);
         }).add;

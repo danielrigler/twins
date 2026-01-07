@@ -207,43 +207,125 @@ function presets.load_complete_preset(preset_name, scene_data_ref, update_pan_po
         print("Warning: Preset saved with newer version")
     end
     
+    local saved_volumes = {}
+    for i = 1, 2 do
+        local vol_param = i.."volume"
+        if params.lookup[vol_param] then
+            saved_volumes[i] = params:get(vol_param)
+            params:set(vol_param, -70)
+        end
+    end
+    
     _G.preset_loading = true
     
-    if params.lookup["unload_all"] then
-        params:set("unload_all", 1)
-    end
-    
-    for i = 1, 16 do
-        local lfo_param = i.."lfo"
-        if params.lookup[lfo_param] then
-            params:set(lfo_param, 1)
+    clock.run(function()
+      
+        if params.lookup["unload_all"] then
+            params:set("unload_all", 1)
         end
-    end
-    
-    apply_scene_data(preset_data, scene_data_ref)
-    
-    if preset_data.morph_amount then
-        morph_amount = preset_data.morph_amount
-        if params.lookup["morph_amount"] then
-            params:set("morph_amount", preset_data.morph_amount)
-        end
-    end
-    
-    if preset_data.params then
-        for param_id, value in pairs(preset_data.params) do
-            if params.lookup[param_id] and param_id ~= "morph_amount" then
-                params:set(param_id, value)
+        clock.sleep(0.05)
+
+        for i = 1, 16 do
+            local lfo_param = i.."lfo"
+            if params.lookup[lfo_param] then
+                params:set(lfo_param, 1)
             end
         end
-    end
-    
-    apply_lfo_states(preset_data.lfo_states)
-    load_audio_samples(audio_active_ref)
-    update_pan_positioning_fn()
-    
-    clock.run(function()
+        
+        apply_scene_data(preset_data, scene_data_ref)
+        
+        if preset_data.morph_amount then
+            morph_amount = preset_data.morph_amount
+            if params.lookup["morph_amount"] then
+                params:set("morph_amount", preset_data.morph_amount)
+            end
+        end
+        
+        if preset_data.params then
+            for param_id, value in pairs(preset_data.params) do
+                if param_id:match("sample$") and params.lookup[param_id] then
+                    params:set(param_id, value)
+                end
+            end
+        end
         clock.sleep(0.1)
+        
         _G.preset_loading = false
+        
+        if preset_data.params then
+            local lock_params = {}
+            local audio_params = {}
+            local volume_params = {}
+            local other_params = {}
+            
+            for param_id, value in pairs(preset_data.params) do
+                if params.lookup[param_id] and 
+                   param_id ~= "morph_amount" and 
+                   not param_id:match("sample$") then
+                    
+                    if param_id:match("lock_") then
+                        table.insert(lock_params, {id = param_id, value = value})
+                    elseif param_id:match("volume$") or param_id:match("granular_gain$") then
+                        table.insert(volume_params, {id = param_id, value = value})
+                    elseif param_id:match("^[12]") and (
+                        param_id:match("cutoff$") or
+                        param_id:match("hpf$") or
+                        param_id:match("speed$") or
+                        param_id:match("pan$") or
+                        param_id:match("seek$")
+                    ) then
+                        table.insert(audio_params, {id = param_id, value = value})
+                    else
+                        table.insert(other_params, {id = param_id, value = value})
+                    end
+                end
+            end
+            
+            for _, p in ipairs(lock_params) do
+                params:set(p.id, p.value)
+            end
+            
+            for i, p in ipairs(audio_params) do
+                params:set(p.id, p.value)
+                if i % 15 == 0 then clock.sleep(0.002) end
+            end
+            
+            for i, p in ipairs(other_params) do
+                params:set(p.id, p.value)
+                if i % 30 == 0 then clock.sleep(0.002) end
+            end
+            
+            clock.sleep(0.05)
+            
+            for _, p in ipairs(volume_params) do
+                params:set(p.id, p.value)
+            end
+        end
+        
+        clock.sleep(0.05)
+
+        apply_lfo_states(preset_data.lfo_states)
+        clock.sleep(0.05)
+
+        load_audio_samples(audio_active_ref)
+        clock.sleep(0.05)
+        
+        update_pan_positioning_fn()
+        
+        for i = 1, 2 do
+            local vol_param = i.."volume"
+            if params.lookup[vol_param] then
+                local vol = params:get(vol_param)
+                params:set(vol_param, vol)
+            end
+            local gain_param = i.."granular_gain"
+            if params.lookup[gain_param] then
+                local gain = params:get(gain_param)
+                params:set(gain_param, gain)
+            end
+        end
+
+        clock.sleep(0.15)
         redraw()
         print("Preset loaded: " .. preset_name)
     end)
