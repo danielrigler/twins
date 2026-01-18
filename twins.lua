@@ -729,7 +729,7 @@ local function setup_params()
 
     params:add_group("SHIMMER", 9)
     params:add_control("shimmer_mix1", "Mix", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("shimmer_mix1", function(x) engine.shimmer_mix1(x * 0.01) font.update_fx_cache("shimmer_mix1", x) end)
-    params:add_option("shimmer_oct1", "Pitch Shift", {"-2 oct", "-1 oct", "+1 oct", "+2 oct"}, 3) params:set_action("shimmer_oct1", function(x) local octave_values = {0.25, 0.5, 2, 4} engine.shimmer_oct1(octave_values[x]) end)
+    params:add_option("shimmer_oct1", "Pitch Shift", {"-2 oct", "-1 oct", "0", "+1 oct", "+2 oct"}, 4) params:set_action("shimmer_oct1", function(x) local octave_values = {0.25, 0.5, 1, 2, 4} engine.shimmer_oct1(octave_values[x]) end)
     params:add_control("pitchv1", "Variance", controlspec.new(0, 100, "lin", 1, 2, "%")) params:set_action("pitchv1", function(x) engine.pitchv1(x * 0.01) end)
     params:add_control("lowpass1", "LPF", controlspec.new(20, 20000, "lin", 1, 13000, "Hz")) params:set_action("lowpass1", function(x) engine.lowpass1(x) end)
     params:add_control("hipass1", "HPF", controlspec.new(20, 20000, "exp", 1, 1400, "Hz")) params:set_action("hipass1", function(x) engine.hipass1(x) end)

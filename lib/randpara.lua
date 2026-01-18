@@ -280,7 +280,7 @@ local param_configs = {
     {name="highcut", prob=0.6, default=2000, random=function() return math.random(1500, 3500) end},
   }},
   shimmer = { lock_param = "lock_shimmer", params = {
-    {name="shimmer_oct1", prob=0.15, default=3, random=function() return math.random(3, 4) end, direct_set=true},
+    {name="shimmer_oct1", prob=0.15, default=4, random=function() return math.random(3, 5) end, direct_set=true},
     {name="pitchv1", prob=0.5, default=0, random=function() return math.random(0, 3) end, direct_set=true},
     {name="lowpass1", prob=0.5, default=13000, random=function() return math.random(6000, 15000) end},
     {name="hipass1", prob=0.5, default=1300, random=function() return math.random(400, 1500) end},
