@@ -37,24 +37,21 @@ local PARAM_SPECS = {
   ["1subharmonics_3"] = {1, {0, 1}, "granular"}, ["2subharmonics_3"] = {1, {0, 1}, "granular"},
   ["1overtones_1"] = {1, {0, 1}, "granular"}, ["2overtones_1"] = {1, {0, 1}, "granular"},
   ["1overtones_2"] = {1, {0, 1}, "granular"}, ["2overtones_2"] = {1, {0, 1}, "granular"}, 
-  ["1pitch_walk_step"] = {3, {1, 12}, "granular"}, ["2pitch_walk_step"] = {3, {1, 12}, "granular"}, 
   ["delay_feedback"] = {100, {0, 100}, "delay"},
-  ["1pitch_random_scale_type"] = {7, {1, 7}, "pitch_1"}, ["2pitch_random_scale_type"] = {7, {1, 7}, "pitch_2"},
-  ["1pitch_random_prob"] = {40, {-100, 100}, "pitch_1"}, ["2pitch_random_prob"] = {40, {-100, 100}, "pitch_2"},
-  ["1ratcheting_prob"] = {50, {0, 100}, "granular"}, ["2ratcheting_prob"] = {50, {0, 100}, "granular"},
+  ["1ratcheting_prob"] = {25, {0, 100}, "granular"}, ["2ratcheting_prob"] = {25, {0, 100}, "granular"},
   ["delay_time"] = {2, {0, 2}, "delay"}, ["stereo"] = {50, {0, 100}, "delay"},
   ["wiggle_depth"] = {40, {0, 100}, "delay"}, ["wiggle_rate"] = {6, {0, 6}, "delay"},
-  ["delay_lowpass"] = {10000, {500, 20000}, "delay"}, ["delay_hipass"] = {300, {20, 20000}, "delay"},
-  ["t60"] = {8, {0.1, 8}, "reverb"}, ["damp"] = {100, {0, 100}, "reverb"},
-  ["earlyDiff"] = {100, {0, 100}, "reverb"}, ["modDepth"] = {100, {0, 100}, "reverb"},
+  ["delay_lowpass"] = {10000, {500, 20000}, "delay"}, ["delay_highpass"] = {250, {20, 20000}, "delay"},
+  ["t60"] = {8, {0.1, 8}, "reverb"}, ["damp"] = {100, {0, 100}, "reverb"}, ["shimmer_mix"] = {25, {0, 100}, "reverb"}, ["shimmer_preset"] = {2, {1, 5}, "reverb"},
+  ["earlyDiff"] = {100, {0, 100}, "reverb"}, ["modDepth"] = {100, {0, 100}, "reverb"}, ["rsize"] = {0.4, {0.5, 5}, "reverb"},
   ["modFreq"] = {5, {0, 5}, "reverb"}, ["low"] = {1, {0, 1}, "reverb"}, ["mid"] = {1, {0, 1}, "reverb"},
   ["high"] = {1, {0, 1}, "reverb"}, ["lowcut"] = {4000, {100, 4000}, "reverb"},
   ["highcut"] = {4000, {1000, 4000}, "reverb"}, ["wobble_amp"] = {100, {0, 100}, "tape"},
   ["wobble_rpm"] = {90, {30, 90}, "tape"}, ["flutter_amp"] = {100, {0, 100}, "tape"},
   ["flutter_freq"] = {30, {3, 30}, "tape"}, ["flutter_var"] = {10, {0.1, 10}, "tape"},
-  ["pitchv"] = {4, {0, 4}, "shimmer"}, ["lowpass"] = {20000, {100, 20000}, "shimmer"},
-  ["hipass"] = {4000, {20, 4000}, "shimmer"}, ["fb"] = {80, {0, 80}, "shimmer"},
-  ["fbDelay"] = {1, {0.02, 1}, "shimmer"}, ["bitcrush_rate"] = {5500, {3500, 5500}, "bitcrush"},
+  ["pitchv1"] = {4, {0, 4}, "shimmer"}, ["lowpass1"] = {20000, {100, 20000}, "shimmer"}, ["shimmer_oct1"] = {2, {1, 5}, "shimmer"},
+  ["hipass1"] = {4000, {20, 4000}, "shimmer"}, ["fb1"] = {80, {0, 80}, "shimmer"},
+  ["fbDelay1"] = {1, {0.02, 1}, "shimmer"}, ["bitcrush_rate"] = {5500, {3500, 5500}, "bitcrush"},
   ["bitcrush_bits"] = {2, {12, 16}, "bitcrush"}, ["chew_freq"] = {60, {1, 60}, "chew"},
   ["chew_variance"] = {70, {0, 70}, "chew"},
   ["1eq_low_gain"] = {0.2, {0, 1}, "eq"},["1eq_mid_gain"] = {0.2, {0, 1}, "eq"}, ["1eq_high_gain"] = {0.2, {0, 1}, "eq"},
@@ -111,16 +108,34 @@ local function evolve_parameter(param_name, state)
   return new_value
 end
 
-local function build_evolvable_params_cache()
-  if not cache_dirty then return end
-  clear_table(evolvable_params_cache)
+local function build_evolvable_params_cache(force)
+  if not cache_dirty and not force then return end
+  
+  local new_cache = {}
+  local new_cache_set = {}
   
   for param_name, spec in pairs(PARAM_SPECS) do
-    local lock_param = LOCK_PARAMS[spec[3]]
-    if params.lookup[param_name] and (not lock_param or not params.lookup[lock_param] or params:get(lock_param) ~= 2) then
-      table.insert(evolvable_params_cache, param_name)
+    local group = spec[3]
+    local lock_param = LOCK_PARAMS[group]
+    local is_unlocked = not lock_param or not params.lookup[lock_param] or params:get(lock_param) ~= 2
+    
+    if params.lookup[param_name] and is_unlocked then
+      table.insert(new_cache, param_name)
+      new_cache_set[param_name] = true
     end
   end
+  
+  for param_name in pairs(evolution_states) do
+    if not new_cache_set[param_name] then
+      evolution_states[param_name] = nil
+    end
+  end
+  
+  clear_table(evolvable_params_cache)
+  for _, param_name in ipairs(new_cache) do
+    table.insert(evolvable_params_cache, param_name)
+  end
+  
   cache_dirty = false
 end
 
@@ -133,22 +148,29 @@ local function evolution_update()
   local updated_params = {}
   
   for _, param_name in ipairs(evolvable_params_cache) do
-    if params.lookup[param_name] and not updated_params[param_name] then
-      init_evolution_state(param_name)
-      local state = evolution_states[param_name]
-      local new_value = evolve_parameter(param_name, state)
-      params:set(param_name, new_value)
-      updated_params[param_name] = true
-      
-      if symmetry and param_name:match("^%d") then
-        local track_num = param_name:match("^(%d)")
-        local mirrored = param_name:gsub("^%d", tostring((tonumber(track_num) % 2) + 1))
-        if params.lookup[mirrored] and not updated_params[mirrored] then
-          init_evolution_state(mirrored)
-          evolution_states[mirrored].center_value = new_value
-          evolution_states[mirrored].current_drift = 0
-          params:set(mirrored, new_value)
-          updated_params[mirrored] = true
+    local spec = PARAM_SPECS[param_name]
+    if spec then
+      local group = spec[3]
+      local lock_param = LOCK_PARAMS[group]
+      local is_locked = lock_param and params.lookup[lock_param] and params:get(lock_param) == 2
+
+      if params.lookup[param_name] and not updated_params[param_name] and not is_locked then
+        init_evolution_state(param_name)
+        local state = evolution_states[param_name]
+        local new_value = evolve_parameter(param_name, state)
+        params:set(param_name, new_value)
+        updated_params[param_name] = true
+        
+        if symmetry and param_name:match("^%d") then
+          local track_num = param_name:match("^(%d)")
+          local mirrored = param_name:gsub("^%d", tostring((tonumber(track_num) % 2) + 1))
+          if params.lookup[mirrored] and not updated_params[mirrored] then
+            init_evolution_state(mirrored)
+            evolution_states[mirrored].center_value = new_value
+            evolution_states[mirrored].current_drift = 0
+            params:set(mirrored, new_value)
+            updated_params[mirrored] = true
+          end
         end
       end
     end
@@ -173,6 +195,7 @@ local function stop_evolution()
 end
 
 local function reset_evolution_centers()
+  cache_dirty = true
   for param_name, state in pairs(evolution_states) do
     state.center_value = params:get(param_name)
     state.current_drift = 0
@@ -185,6 +208,11 @@ local function set_evolution_range(range_pct)
   for param_name, state in pairs(evolution_states) do
     state.max_drift_range = get_param_range(param_name) * evolution_range
   end
+end
+
+local function on_lock_param_change()
+  cache_dirty = true
+  build_evolvable_params_cache(true)
 end
 
 -- Interpolation Engine
@@ -420,6 +448,7 @@ return {
   set_evolution_range = set_evolution_range,
   set_evolution_rate = set_evolution_rate,
   reset_evolution_centers = reset_evolution_centers,
+  on_lock_param_change = on_lock_param_change,  -- New function to call when locks change
   cleanup = cleanup,
   is_evolution_active = function() return evolution_active end,
 }

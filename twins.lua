@@ -717,7 +717,7 @@ local function setup_params()
     params:add_group("R3VERB", 17)
     params:add_taper("reverb_mix", "Mix", 0, 100, 0.0, 0, "%") params:set_action("reverb_mix", function(value) engine.reverb_mix(value * 0.01) font.update_fx_cache("reverb_mix", value) end)
     params:add_taper("shimmer_mix", "Shimmer", 0, 100, 0, 0, "%") params:set_action("shimmer_mix", function(value) engine.shimmer_mix(value * 0.01) end)
-    params:add_option("shimmer_preset", "Pitch Shift", {"-2 oct", "-1 oct", "+1 oct", "+2 oct"}, 3) params:set_action("shimmer_preset", function(idx) local preset = shimmer_presets[idx] engine.shimmer_oct(preset.oct) engine.shimmer_lowpass(preset.lowpass) engine.shimmer_hipass(preset.hipass) engine.shimmer_fb(preset.fb) end)
+    params:add_option("shimmer_preset", "Pitch Shift", {"-2 oct", "-1 oct", "0", "+1 oct", "+2 oct"}, 4) params:set_action("shimmer_preset", function(idx) local preset = shimmer_presets[idx] engine.shimmer_oct(preset.oct) engine.shimmer_lowpass(preset.lowpass) engine.shimmer_hipass(preset.hipass) engine.shimmer_fb(preset.fb) end)
     params:add_taper("t60", "Decay", 0.1, 60, 4, 5, "s") params:set_action("t60", function(value) engine.t60(value) end)
     params:add_taper("damp", "Damping", 0, 100, 0, 0, "%") params:set_action("damp", function(value) engine.damp(value * 0.01) end)
     params:add_taper("rsize", "Size", 0.5, 5, 1.25, 0, "") params:set_action("rsize", function(value) engine.rsize(value) end)
@@ -1717,7 +1717,7 @@ function redraw()
   end
   if C.evo then 
     local t = now * 4
-    for i=0,2 do P(math.floor(8 + 7 * math.sin(t - i * 0.8)), i * 2, 0) end
+    for i=0,2 do P(math.floor(8 + 7 * math.sin(t - i * 0.8)), (i * 2)+6, 63) end
   end
   if current_scene_mode == "on" then 
     R(1, 7, 1, 22, 1) 
@@ -1759,7 +1759,7 @@ local osc_handlers = {
         params:set("unload_all", 1)
         tracked_clock_run(function()
             clock.sleep(0.1)
-            params:set("1granular_gain", 0) disable_lfos_for_param("1speed") disable_lfos_for_param("1pan") params:set("1speed", 1) params:set("1sample", filepath) params:set("1pan", 0) params:set("2pan", 0) params:set("reverb_mix", 0) params:set("delay_mix", 0) params:set("shimmer_mix", 0) params:set("tape_mix", 1) params:set("dimension_mix", 0) params:set("sine_drive_wet", 0) params:set("drive", 0) params:set("wobble_mix", 0) params:set("chew_depth", 0) params:set("lossdegrade_mix", 0) params:set("Width", 100)  params:set("rspeed", 0) params:set("haas", 1) params:set("monobass_mix", 1) params:set("bitcrush_mix", 0) params:set("1lock_speed", 2)
+            params:set("1granular_gain", 0) disable_lfos_for_param("1speed") disable_lfos_for_param("1pan") params:set("1speed", 1) params:set("1sample", filepath) params:set("1pan", 0) params:set("2pan", 0) params:set("reverb_mix", 0) params:set("delay_mix", 0) params:set("shimmer_mix1", 0) params:set("tape_mix", 1) params:set("dimension_mix", 0) params:set("sine_drive_wet", 0) params:set("drive", 0) params:set("wobble_mix", 0) params:set("chew_depth", 0) params:set("lossdegrade_mix", 0) params:set("Width", 100)  params:set("rspeed", 0) params:set("haas", 1) params:set("monobass_mix", 1) params:set("bitcrush_mix", 0) params:set("1lock_speed", 2)
             for i = 1, 2 do params:set(i.."eq_low_gain", 0) params:set(i.."eq_mid_gain", 0) params:set(i.."eq_high_gain", 0) params:set(i.."cutoff", 20000) params:set(i.."hpf", 20) end
         end)
     end, 
