@@ -10,7 +10,7 @@ local DRY_VALUES = {
     reverb_mix = 0,
     delay_mix = 0,
     bitcrush_mix = 0,
-    shimmer_mix = 0,
+    shimmer_mix1 = 0,
     tape_mix = 1,
     drive = 0,
     Width = 100,
@@ -37,7 +37,7 @@ local DRY_VALUES_STEREO = {
 }
 
 local STEREO_PARAMS = {"granular_gain", "speed", "eq_low_gain", "eq_mid_gain", "eq_high_gain", "cutoff", "hpf", "lpfgain", "pan"}
-local MONO_PARAMS = {"filter_lock_ratio", "reverb_mix", "delay_mix", "bitcrush_mix", "shimmer_mix", "tape_mix", 
+local MONO_PARAMS = {"filter_lock_ratio", "reverb_mix", "delay_mix", "bitcrush_mix", "shimmer_mix1", "tape_mix", 
                      "drive", "Width", "monobass_mix", "sine_drive_wet", "wobble_mix", "chew_depth", "lossdegrade_mix", 
                      "rspeed", "haas", "dimension_mix"}
 

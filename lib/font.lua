@@ -130,27 +130,48 @@ function font.draw_micro_text_bucketed(P_func, x, y, text, level)
   end
 end
 
+local function is_locked(lock_param_name)
+  local success, param = pcall(function() return params:lookup_param(lock_param_name) end)
+  if success and param then
+    return params:get(lock_param_name) == 2
+  end
+  return false
+end
+
+local function get_blink_level()
+  local phase = (util.time() * 2) % 1
+  if phase < 0.5 then
+    return 4
+  else
+    return 1
+  end
+end
+
 function font.draw_fx_status_bucketed(P_func)
   local y = 0
   local x = 7
 
   if fx_cache.delay_mix > 0 then
-    font.draw_micro_text_bucketed(P_func, x, y, "D", 1)
+    local level = is_locked("lock_delay") and get_blink_level() or 1
+    font.draw_micro_text_bucketed(P_func, x, y, "D", level)
     x = x + 4
   end
 
   if fx_cache.reverb_mix > 0 then
-    font.draw_micro_text_bucketed(P_func, x, y, "R", 1)
+    local level = is_locked("lock_reverb") and get_blink_level() or 1
+    font.draw_micro_text_bucketed(P_func, x, y, "R", level)
     x = x + 4
   end
 
   if fx_cache.shimmer_mix1 > 0 then
-    font.draw_micro_text_bucketed(P_func, x, y, "X", 1)
+    local level = is_locked("lock_shimmer") and get_blink_level() or 1
+    font.draw_micro_text_bucketed(P_func, x, y, "X", level)
     x = x + 7
   end
   
   if ((fx_cache.tape_mix == 2) or (fx_cache.sine_drive_wet > 0) or (fx_cache.drive > 0) or (fx_cache.wobble_mix > 0) or (fx_cache.chew_depth > 0) or (fx_cache.lossdegrade_mix > 0)) then
-    font.draw_micro_text_bucketed(P_func, x, y, "T", 1)
+    local level = is_locked("lock_tape") and get_blink_level() or 1
+    font.draw_micro_text_bucketed(P_func, x, y, "T", level)
     x = x + 4
   end  
   
@@ -170,7 +191,8 @@ function font.draw_fx_status_bucketed(P_func)
     fx_cache["1hpf"] > 20.1 or
     fx_cache["2hpf"] > 20.1
   ) then
-    font.draw_micro_text_bucketed(P_func, x, y, "F", 1)
+    local level = is_locked("lock_filter") and get_blink_level() or 1
+    font.draw_micro_text_bucketed(P_func, x, y, "F", level)
     x = x + 5
   end
 end

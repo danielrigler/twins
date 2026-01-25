@@ -39,8 +39,8 @@ local PARAM_SPECS = {
   ["1overtones_2"] = {1, {0, 1}, "granular"}, ["2overtones_2"] = {1, {0, 1}, "granular"}, 
   ["1pitch_walk_step"] = {3, {1, 12}, "granular"}, ["2pitch_walk_step"] = {3, {1, 12}, "granular"}, 
   ["delay_feedback"] = {100, {0, 100}, "delay"},
-  ["1pitch_random_scale_type"] = {7, {1, 7}, "granular"}, ["2pitch_random_scale_type"] = {7, {1, 7}, "granular"},
-  ["1pitch_random_prob"] = {40, {-100, 100}, "granular"}, ["2pitch_random_prob"] = {40, {-100, 100}, "granular"},
+  ["1pitch_random_scale_type"] = {7, {1, 7}, "pitch_1"}, ["2pitch_random_scale_type"] = {7, {1, 7}, "pitch_2"},
+  ["1pitch_random_prob"] = {40, {-100, 100}, "pitch_1"}, ["2pitch_random_prob"] = {40, {-100, 100}, "pitch_2"},
   ["1ratcheting_prob"] = {50, {0, 100}, "granular"}, ["2ratcheting_prob"] = {50, {0, 100}, "granular"},
   ["delay_time"] = {2, {0, 2}, "delay"}, ["stereo"] = {50, {0, 100}, "delay"},
   ["wiggle_depth"] = {40, {0, 100}, "delay"}, ["wiggle_rate"] = {6, {0, 6}, "delay"},
@@ -63,7 +63,8 @@ local PARAM_SPECS = {
 
 local LOCK_PARAMS = {
   filter = "lock_filter", eq = "lock_eq", granular = "lock_granular",
-  delay = "lock_delay", reverb = "lock_reverb", tape = "lock_tape", shimmer = "lock_shimmer", pitch = "lock_pitch" }
+  delay = "lock_delay", reverb = "lock_reverb", tape = "lock_tape", shimmer = "lock_shimmer", pitch = "lock_pitch",
+  pitch_1 = "1lock_pitch", pitch_2 = "2lock_pitch" }
 
 local function get_param_range(param_name) return PARAM_SPECS[param_name] and PARAM_SPECS[param_name][1] or 1 end
 local function get_param_bounds(param_name) return PARAM_SPECS[param_name] and PARAM_SPECS[param_name][2] or {0, 1} end
@@ -294,8 +295,8 @@ local param_configs = {
     {name="stereo", prob=0.5, default=25, random=function() return math.random(0, 100) end},
     {name="delay_lowpass", prob=0.5, default=12000, random=function() return math.random(600, 20000) end},
     {name="delay_highpass", prob=0.5, default=100, random=function() return math.random(20, 200) end},
-    {name="wiggle_depth", prob=0.5, default=1, random=function() return math.random(0, 10) end, direct_set=true},
-    {name="wiggle_rate", prob=0.5, default=2, random=function() return random_float(0.4, 4) end},
+    {name="wiggle_depth", prob=0.4, default=5, random=function() return math.random(0, 50) end, direct_set=true},
+    {name="wiggle_rate", prob=0.5, default=2, random=function() return random_float(0.4, 5) end},
   }},
   tape = { lock_param = "lock_tape", params = {
     {name="wobble_amp", prob=0.4, default=10, random=function() return math.random(1, 15) end},
@@ -305,7 +306,13 @@ local param_configs = {
     {name="flutter_var", prob=0.4, default=2, random=function() return math.random(1, 5) end},
   }},
   pitch = { lock_param = "lock_pitch", params = {
-    {name="pitch_quantize_scale", prob=0.3, default=2, random=function() return math.random(2, 12) end, direct_set=true},
+    {name="pitch_quantize_scale", prob=0.3, default=2, random=function() return math.random(2, 12) end, direct_set=true,
+     condition=function()
+       if params.lookup["lock_pitch"] and params:get("lock_pitch") == 2 then return false end
+       if params.lookup["1lock_pitch"] and params:get("1lock_pitch") == 2 then return false end
+       if params.lookup["2lock_pitch"] and params:get("2lock_pitch") == 2 then return false end
+       return true
+     end},
   }}
 }
 
@@ -321,8 +328,16 @@ local track_param_configs = {
     {name=track.."overtones_2", prob=0.5, default=0, random=function() return random_float(0, 0.4) end},
     {name=track.."env_select", prob=0.3, default=1, random=function() return math.random(1, 6) end},
     {name=track.."ratcheting_prob", prob=0.2, default=0, random=function() return math.random(0, 30) end},
-    {name=track.."pitch_random_prob", prob=0.2, default=0, random=function() return math.random(-50, 50) end},
-    {name=track.."pitch_random_scale_type", prob=0.2, default=1, random=function() return math.random(1, 4) end},
+  }} end,
+  pitch = function(track) return { lock_param = track.."lock_pitch", params = {
+    {name=track.."pitch_random_prob", prob=0.25, default=0, random=function() return math.random(-60, 60) end},
+    {name=track.."pitch_random_scale_type", prob=0.5, default=1, random=function() return math.random(1, 4) end, 
+     condition=function() 
+       if params.lookup["lock_pitch"] and params:get("lock_pitch") == 2 then return false end
+       if params.lookup["1lock_pitch"] and params:get("1lock_pitch") == 2 then return false end
+       if params.lookup["2lock_pitch"] and params:get("2lock_pitch") == 2 then return false end
+       return true
+     end},
   }} end,
   eq = function(track) return { lock_param = "lock_eq", params = {
     {name=track.."eq_low_gain", prob=0.4, default=0, random=function() return random_float(-0.2, 0.1) end},
@@ -350,7 +365,7 @@ local function randomize_params(steps, track_num)
   end
 
   if symmetry then
-    randomize_track(1, steps, {track_param_configs.eq, track_param_configs.granular})
+    randomize_track(1, steps, {track_param_configs.eq, track_param_configs.granular, track_param_configs.pitch})
     for param, data in pairs(targets) do
       if param:sub(1,1) == tostring(track_num) then
         local mirrored = param:gsub("^(%d)(.*)", function(num, rest)
@@ -363,7 +378,7 @@ local function randomize_params(steps, track_num)
       end
     end
   else
-    randomize_track(track_num, steps, {track_param_configs.eq, track_param_configs.granular})
+    randomize_track(track_num, steps, {track_param_configs.eq, track_param_configs.granular, track_param_configs.pitch})
   end
 
   start_interpolation(steps, symmetry)

@@ -232,16 +232,26 @@ alloc {
 
         SynthDef(\delay, {
             arg inBus, outBus, mix=0.0, delay=0.5, fb_amt=0.3, dhpf=20, lpf=20000, w_rate=0.0, w_depth=0.0, stereo=0.27;
-            var input, local, fb, delayed, wet, modRate, modDepth, fbGain;
+            var input, local, fb, delayed, wet, fbGain;
+            var mod1, mod2, mod3, combinedMod;
+            var lfo1Rate, lfo2Rate, lfo3Rate;
+            var drift, microWobble, macroWobble;
             input = In.ar(inBus, 2);
             local = LocalIn.ar(2);
             fb = LPF.ar(HPF.ar(local, dhpf), lpf);
             fbGain = 1.35 * (1 - (stereo * 0.35));
             fb = (fbGain * [fb[1] * fb_amt, fb[0] * fb_amt]).softclip;
-            modRate = w_rate * (1 + LFNoise1.kr(0.25, 0.05));
-            modDepth = LFPar.kr(modRate, mul: w_depth);
-            delayed = DelayC.ar(input + fb, 2, Lag.kr(delay, 0.7) + modDepth);
-            wet = Balance2.ar(delayed[0], delayed[1], LFPar.kr(1/(delay.max(0.1)*2)).range(-1, 1) * stereo);
+            lfo1Rate = w_rate * 0.17;
+            drift = LFDNoise3.kr(lfo1Rate) * w_depth * 0.4;
+            lfo2Rate = w_rate * (1 + LFNoise1.kr(0.13, 0.18));
+            microWobble = (LFTri.kr(lfo2Rate) + (LFDNoise1.kr(lfo2Rate * 2.3) * 0.45)) * w_depth * 0.35;
+            lfo3Rate = w_rate * 0.71;
+            macroWobble = ((SinOsc.kr(lfo3Rate) * LFNoise2.kr(lfo3Rate * 0.3, 0.6, 0.7)) + (LFDNoise3.kr(lfo3Rate * 1.41) * 0.4)) * w_depth * 0.25;
+            combinedMod = drift + microWobble + macroWobble;
+            combinedMod = combinedMod + (Latch.kr(LFNoise0.kr(w_rate * 6.3), Dust.kr(w_rate * 4.7)) * w_depth * 0.08);
+            combinedMod = Lag.kr(combinedMod, 0.003);
+            delayed = DelayC.ar(input + fb, 2, Lag.kr(delay, 0.7) + combinedMod);
+            wet = Balance2.ar(delayed[0], delayed[1], (SinOsc.kr(1/(delay.max(0.1)*2)) + (LFNoise2.kr(0.4) * 0.3)).range(-1, 1) * stereo);
             LocalOut.ar(wet);
             Out.ar(outBus, wet * mix * 1.6);
         }).add;
