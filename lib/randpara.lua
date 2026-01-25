@@ -294,7 +294,7 @@ end
 
 local param_configs = {
   jpverb = { lock_param = "lock_reverb", params = {
-    {name="shimmer_preset", prob=0.15, default=3, random=function() return math.random(3, 4) end, direct_set=true},
+    {name="shimmer_preset", prob=0.15, default=4, random=function() return math.random(3, 5) end, direct_set=true},
     {name="shimmer_mix", prob=0.3, default=0, random=function() return math.random(0, 40) end},
     {name="t60", prob=0.5, default=4, random=function() return random_float(0.8, 6) end},
     {name="damp", prob=0.4, default=0, random=function() return random_float(0, 25) end},
