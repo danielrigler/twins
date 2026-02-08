@@ -36,8 +36,9 @@ Hold **K3**: Symmetry
 **K2**/**K3**: Navigate  
 **E2**/**E3**: Adjust Parameters  
 **K2**+**K3**: Lock Parameters  
-**K2**+**K3**: HP/LP Filter   
+**K2**+**K3**: HP/LP Filter  
 **K1**+**K2**/**K3**: Randomize  
+Hold **K2**+**K3**/**E3**: Assign LFOs  
 **K2**+**E2**/**E3**: LFO depth  
 **K3**+**E2**/**E3**: LFO offset  
 
