@@ -1671,10 +1671,13 @@ function redraw()
       if filter_lock_ratio then draw_lock(x, y_bot) end
       T(flash_level(t, LEVEL.hi), x, y_bot + 1, string.format("%.0f", v))
     end
-    if (mode == "seek" or mode == "speed") and loaded and C.live.dir_[t] ~= 1 then
-      local s = C.spd[t]
-      local icon = math.abs(s) < 0.01 and "⏸" or (s > 0 and "▶" or "◀")
-      T(vL, t == 1 and 77 or 118, y_bot+1, icon)
+    if (mode == "seek" or mode == "speed") then
+      local audio_loaded = audio_active[t] or C.live.in_[t] == 1 or C.live.dir_[t] == 1
+      if audio_loaded and C.live.dir_[t] ~= 1 then
+        local s = C.spd[t]
+        local icon = math.abs(s) < 0.01 and "||" or (s > 0 and ">" or "<")
+        T(vL, t == 1 and 77 or 118, y_bot+1, icon)
+      end
     end
     if mode == "seek" or mode == "speed" then draw_seek_bar_viz(t, x) end
   end
