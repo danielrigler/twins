@@ -78,8 +78,7 @@ alloc {
             var rand_val, rand_val2;
             var ratchet_gate, extra_trig;
             var signal;
-            var trigger1 = Impulse.kr(30);
-            var trigger2 = Impulse.kr(60);
+            var trigger60 = Impulse.kr(60);
             var stepIndex, actualStep, direction, totalStep;
             var scaleDegree, octaveShift, semitones;
             var grain_pan, envBuf, randomEnv;
@@ -121,8 +120,7 @@ alloc {
             }, 1);
 
             grain_pitch = grain_pitch * (2 ** (((rand_val2 < pitch_random_prob) * random_interval * pitch_random_direction)/12));
-  
-            grain_pan = pan + TRand.kr(trig: grain_trig, lo: spread.neg, hi: spread);
+            grain_pan = (pan + TRand.kr(trig: grain_trig, lo: spread.neg, hi: spread)).clip(-1, 1);
             randomEnv = TIRand.kr(0, 5, grain_trig);
             envBuf = Select.kr(env_select, [-1] ++ grainEnvs ++ [Select.kr(randomEnv, grainEnvs)]);
 
@@ -139,7 +137,7 @@ alloc {
                     rate: grain_pitch * harmonic * grain_direction, 
                     pos: buf_pos + jitter_sig, 
                     interp: 2, 
-                    pan: grain_pan - 0.5,
+                    pan: grain_pan,
                     envbufnum: envBuf, 
                     mul: volumes[i]
                 );
@@ -154,7 +152,7 @@ alloc {
                     rate: grain_pitch * harmonic * grain_direction, 
                     pos: buf_pos + jitter_sig, 
                     interp: 2, 
-                    pan: grain_pan + 0.5,
+                    pan: grain_pan,
                     envbufnum: envBuf, 
                     mul: volumes[i]
                 );
@@ -170,10 +168,10 @@ alloc {
             sig_mix = HPF.ar(sig_mix, Lag.kr(hpf, 0.6));
             sig_mix = MoogFF.ar(sig_mix, Lag.kr(cutoff, 0.6), lpfgain);
             
-            SendReply.kr(trigger1, '/buf_pos', [voice, buf_pos]);
+            SendReply.kr(trigger60, '/buf_pos', [voice, buf_pos]);
             SendReply.kr(grain_trig, '/grain_pos', [voice, Wrap.kr(buf_pos + jitter_sig), grain_size]);
             signal = sig_mix * Lag.kr(gain) * 1.25;
-            SendReply.kr(trigger2, '/voice_peak', [voice, Peak.kr(signal[0], trigger2), Peak.kr(signal[1], trigger2)]);
+            SendReply.kr(trigger60, '/voice_peak', [voice, Peak.kr(signal[0], trigger60), Peak.kr(signal[1], trigger60)]);
 
             Out.ar(out, signal);
         }).add;

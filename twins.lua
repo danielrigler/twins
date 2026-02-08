@@ -105,13 +105,11 @@ local param_modes = {
 local param_rows = {} for mode, config in pairs(param_modes) do if config.y then table.insert(param_rows, {y = config.y, label = config.label, mode = mode, param1 = "1" .. config.param, param2 = "2" .. config.param, hz = config.hz, st = config.st }) end end table.sort(param_rows, function(a, b) return a.y < b.y end)
 local LIMITS = {size={min=20,max=4999},density={min=0.1,max=50},pitch={min=-48,max=48}}
 local scale_array_cache = {}
-
 local function normalize_scale_name(scale_name)
     if scale_name == "none" or scale_name == "off" then return "none" end
     local scale_map = {["major pent."] = "major pentatonic", ["minor pent."] = "minor pentatonic", ["whole tone"] = "whole"}
     return scale_map[scale_name] or scale_name
 end
-
 local function get_scale_array(scale_name)
     scale_name = normalize_scale_name(scale_name)
     if scale_name == "none" then return nil end
@@ -133,7 +131,7 @@ local function get_next_scale_note(pitch_value, scale_name, direction)
     local next_idx = util.clamp(current_idx + (direction > 0 and 1 or -1), 1, #scale_array)
     return scale_array[next_idx] - 60
 end
-local animation_y = -64 animation_complete = false animation_start_time = nil animation_fade = 0
+local animation_y = -64 animation_complete = false animation_start_time = nil
 local pan_indicator_x = {[1] = -80, [2] = 80} pan_indicators_visible = false pan_slide_start_time = nil
 local volume_bar_y = {[1] = 120, [2] = 120} volume_bars_visible = false
 local seek_bar_width = 0 seek_bars_visible = false
@@ -159,21 +157,14 @@ local function setup_ui_metro()
         if not animation_complete then
             animation_start_time = animation_start_time or now
             local elapsed = now - animation_start_time
-            local progress = math.min(elapsed * 1.5, 1)
-            local fade_progress = math.min(elapsed * 0.6, 1)
+            local progress = math.min(elapsed * 2, 1)
             if progress < 1 then
                 animation_y = -64 + ((1 - (1 - progress) ^ 3) * 64)
                 needs_redraw = true
             else
                 animation_y = 0
             end
-            if fade_progress < 1 then
-                animation_fade = 1 - (1 - fade_progress) ^ 3
-                needs_redraw = true
-            else
-                animation_fade = 1
-            end
-            animation_complete = progress >= 1 and fade_progress >= 1
+            animation_complete = progress >= 1
             if progress >= 0.4 and not pan_slide_start_time then pan_slide_start_time = now end
         end
         if pan_slide_start_time and not (pan_indicators_visible and volume_bars_visible and seek_bars_visible) then
@@ -842,7 +833,7 @@ local function setup_params()
         params:add_taper(i.."min_density", i.." density (min)", 0.1, 50, 0.5, 5, "Hz")
         params:add_taper(i.."max_density", i.." density (max)", 0.1, 50, 25, 5, "Hz")
         params:add_taper(i.."min_spread", i.." spread (min)", 0, 100, 0, 0, "%")
-        params:add_taper(i.."max_spread", i.." spread (max)", 0, 100, 70, 0, "%")
+        params:add_taper(i.."max_spread", i.." spread (max)", 0, 100, 100, 0, "%")
         params:add_control(i.."min_pitch", i.." pitch (min)", controlspec.new(-48, 48, "lin", 1, -31, "st"))
         params:add_control(i.."max_pitch", i.." pitch (max)", controlspec.new(-48, 48, "lin", 1, 31, "st"))
         params:add_taper(i.."min_speed", i.." speed (min)", -2, 2, -0.15, 0, "x")
@@ -887,7 +878,7 @@ local function setup_params()
       end) params:hide(i.. "pitch")
       params:add_taper(i.. "jitter", i.. " jitter", 0, 999900, 250, 10, "ms") params:set_action(i.. "jitter", function(value) engine.jitter(i, value * 0.001) end) params:hide(i.. "jitter")
       params:add_taper(i.. "size", i.. " size", 20, 5999, 500, 1, "ms") params:set_action(i.. "size", function(value) engine.size(i, value * 0.001) end) params:hide(i.. "size")
-      params:add_taper(i.. "spread", i.. " spread", 0, 100, 30, 0, "%") params:set_action(i.. "spread", function(value) engine.spread(i, value * 0.01) end) params:hide(i.. "spread")
+      params:add_taper(i.. "spread", i.. " spread", 0, 100, 50, 0, "%") params:set_action(i.. "spread", function(value) engine.spread(i, value * 0.01) end) params:hide(i.. "spread")
       params:add_control(i.. "seek", i.. " seek", controlspec.new(0, 100, "lin", 0.01, 0, "%")) params:set_action(i.. "seek", function(value) engine.seek(i, value * 0.01) end) params:hide(i.. "seek")
     end
     params:bang()
@@ -1523,8 +1514,7 @@ local function flush()
   for l=1,15 do
     local bucket = level_buckets[l]
     if bucket and (bucket.r_count > 0 or bucket.p_count > 0 or bucket.t_count > 0) then
-      local faded_level = math.floor(l * animation_fade + 0.5)
-      screen.level(faded_level)
+      screen.level(l)
       if bucket.r_count > 0 then
         for i=1,bucket.r_count do
           local r = bucket.r[i]

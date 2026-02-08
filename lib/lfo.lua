@@ -113,7 +113,9 @@ lfo.target_ranges = {
   ["1seek"] = { depth = { 0, 100 }, offset = { 0, 1 }, frequency = { 0.02, 0.3 }, waveform = { "sine" }, chance = 0.3 },
   ["2seek"] = { depth = { 0, 100 }, offset = { 0, 1 }, frequency = { 0.02, 0.3 }, waveform = { "sine" }, chance = 0.3 },
   ["1speed"] = { depth = { 10, 50 }, offset = { -1, 1 }, frequency = { 0.02, 0.3 }, waveform = { "sine" }, chance = 0.2 },
-  ["2speed"] = { depth = { 10, 50 }, offset = { -1, 1 }, frequency = { 0.02, 0.3 }, waveform = { "sine" }, chance = 0.2 }
+  ["2speed"] = { depth = { 10, 50 }, offset = { -1, 1 }, frequency = { 0.02, 0.3 }, waveform = { "sine" }, chance = 0.2 },
+  ["1pitch"] = { depth = { 5, 30 }, offset = { -1, 1 }, frequency = { 0.1, 0.4 }, waveform = { "sine" }, chance = 0 },
+  ["2pitch"] = { depth = { 5, 30 }, offset = { -1, 1 }, frequency = { 0.1, 0.4 }, waveform = { "sine" }, chance = 0 } 
 }
 
 local param_ranges = {
@@ -148,7 +150,7 @@ function lfo.clear_range_cache() RANGE_CACHE = {} end
 function lfo.assign_to_current_row(current_mode, current_filter_mode)
   local param_map = {
     seek = "seek", pan = "pan", jitter = "jitter",
-    size = "size", density = "density", spread = "spread", speed = "speed"
+    size = "size", density = "density", spread = "spread", speed = "speed", pitch = "pitch"
   }
   local param_name = param_map[current_mode]
   if not param_name then return end
