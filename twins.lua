@@ -18,6 +18,7 @@
 -- K2+K3: Lock Parameters
 -- K2+K3: HP/LP Filter 
 -- K1+K2/K3: Randomize
+-- Hold K2+K3: Assign LFOs
 -- K2+E2/E3: LFO depth
 -- K3+E2/E3: LFO offset
 --
@@ -68,14 +69,13 @@ local valid_audio_exts = {[".wav"]=true,[".aif"]=true,[".aiff"]=true,[".flac"]=t
 local mode_list = {"spread","pitch","density","size","jitter","lpf","pan","speed","seek"}
 local mode_indices = {} for i,v in ipairs(mode_list) do mode_indices[v] = i end
 local key_trackers = {}
-for n = 1, 3 do 
-    key_trackers[n] = {press_time = nil, had_interaction = false, long_triggered = false}
-end
+for n = 1, 3 do key_trackers[n] = {press_time = nil, had_interaction = false, long_triggered = false} end
 local KEY_LONG_PRESS_THRESHOLD = 1
 local key_longpress_actions = {
     [1] = {param = "scene_mode", a = 1, b = 2},
     [2] = {param = "global_pitch_size_density_link", a = 1, b = 0},
-    [3] = {param = "symmetry", a = 1, b = 0}}
+    [3] = {param = "symmetry", a = 1, b = 0},
+    [23] = {action = "assign_lfo_to_current_row"}}
 local showing_save_message = false
 local longpress_metro = nil
 local current_scene_mode = "off"
@@ -224,17 +224,22 @@ local function init_longpress_checker()
         for n = 1, 3 do
             local tracker = key_trackers[n]
             local action = key_longpress_actions[n]
-            if tracker.press_time and 
-               not tracker.had_interaction and 
-               not tracker.long_triggered and
-               action then
-                local duration = now - tracker.press_time
-                if duration >= KEY_LONG_PRESS_THRESHOLD then
+            if tracker.press_time and not tracker.had_interaction and 
+               not tracker.long_triggered and action then
+                if (now - tracker.press_time) >= KEY_LONG_PRESS_THRESHOLD then
                     tracker.long_triggered = true
                     tracker.had_interaction = true
                     local curr = params:get(action.param)
                     params:set(action.param, (curr == action.a) and action.b or action.a)
                 end
+            end
+        end
+        local combo_tracker = key_trackers[23]
+        if combo_tracker and combo_tracker.press_time and not combo_tracker.had_interaction and not combo_tracker.long_triggered then
+            if (now - combo_tracker.press_time) >= KEY_LONG_PRESS_THRESHOLD then
+                combo_tracker.long_triggered = true
+                combo_tracker.had_interaction = true
+                lfo.assign_to_current_row(current_mode, current_filter_mode)
             end
         end
     end
@@ -1396,16 +1401,22 @@ function enc(n, d)
     end
 end
 
-local function reset_key_tracking(n)
-    key_trackers[n].press_time = nil
-    key_trackers[n].had_interaction = false
-    key_trackers[n].long_triggered = false
-end
-
-local function init_key_tracking(n)
-    key_trackers[n].press_time = util.time()
-    key_trackers[n].had_interaction = false
-    key_trackers[n].long_triggered = false
+local function set_key_tracking(n, state)
+    local tracker = key_trackers[n]
+    if state == "init" then
+        tracker.press_time = util.time()
+        tracker.had_interaction = false
+        tracker.long_triggered = false
+    else
+        tracker.press_time = nil
+        tracker.had_interaction = false
+        tracker.long_triggered = false
+        if (n == 2 or n == 3) and key_trackers[23] then
+            key_trackers[23].press_time = nil
+            key_trackers[23].had_interaction = false
+            key_trackers[23].long_triggered = false
+        end
+    end
 end
 
 function key(n, z)
@@ -1421,31 +1432,38 @@ function key(n, z)
 end
 
 function handle_key_press(n)
-    if n <= 3 then init_key_tracking(n) end
+    if n <= 3 then set_key_tracking(n, "init") end
+    if key_state[2] and key_state[3] then
+        if not key_trackers[23] then key_trackers[23] = {press_time = nil, had_interaction = false, long_triggered = false} end
+        set_key_tracking(23, "init")
+        key_trackers[2].had_interaction = true
+        key_trackers[3].had_interaction = true
+    end
     if (key_state[1] and (n == 2 or n == 3)) or (n == 1 and (key_state[2] or key_state[3])) then
         key_trackers[1].had_interaction = true
         key_trackers[1].long_triggered = true
-    end
-    if key_state[2] and key_state[3] then
-        handle_parameter_lock()
-        key_trackers[2].had_interaction = true
-        key_trackers[3].had_interaction = true
-        key_trackers[2].long_triggered = true
-        key_trackers[3].long_triggered = true
     end
     if n ~= 1 and key_state[1] then handle_randomize_track(n) end
 end
 
 function handle_key_release(n, both_keys_pressed)
     local tracker = key_trackers[n]
-    if tracker.press_time and 
-       not tracker.long_triggered and 
-       not tracker.had_interaction and 
-       not both_keys_pressed then
-        local duration = util.time() - tracker.press_time
-        if duration < KEY_LONG_PRESS_THRESHOLD then handle_mode_navigation(n) end
+    if (n == 2 or n == 3) and key_trackers[23] and key_trackers[23].press_time then
+        local combo_tracker = key_trackers[23]
+        local duration = util.time() - combo_tracker.press_time
+        if not combo_tracker.had_interaction then
+            if duration >= KEY_LONG_PRESS_THRESHOLD then lfo.assign_to_current_row(current_mode, current_filter_mode)
+            else
+                handle_parameter_lock()
+            end
+            combo_tracker.had_interaction = true
+        end
     end
-    reset_key_tracking(n)
+    if tracker.press_time and not tracker.long_triggered and 
+       not tracker.had_interaction and not both_keys_pressed then
+        if (util.time() - tracker.press_time) < KEY_LONG_PRESS_THRESHOLD then handle_mode_navigation(n) end
+    end
+    set_key_tracking(n)
     lfos_turned_off = {}
 end
 
