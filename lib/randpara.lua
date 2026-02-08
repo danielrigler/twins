@@ -358,7 +358,7 @@ local track_param_configs = {
     {name=track.."ratcheting_prob", prob=0.2, default=0, random=function() return math.random(0, 30) end},
   }} end,
   pitch = function(track) return { lock_param = track.."lock_pitch", params = {
-    {name=track.."pitch_random_prob", prob=0.25, default=0, random=function() return math.random(-60, 60) end},
+    {name=track.."pitch_random_prob", prob=0.25, default=0, random=function() return math.random(0, 60) end},
     {name=track.."pitch_random_scale_type", prob=0.5, default=1, random=function() return math.random(1, 4) end, 
      condition=function() 
        if params.lookup["lock_pitch"] and params:get("lock_pitch") == 2 then return false end

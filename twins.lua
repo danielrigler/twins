@@ -89,7 +89,7 @@ local cached_buffer_durations = {[1] = 1, [2] = 1}
 local voice_peak_amplitudes = {[1] = {l = 0, r = 0}, [2] = {l = 0, r = 0}}
 local ui_metro = nil
 local lfos_turned_off = {}
-local shimmer_presets = {{oct = 0.25, lowpass = 4000, hipass = 20, fb = 0.48}, {oct = 0.5, lowpass = 6000, hipass = 20, fb = 0.48}, {oct = 2, lowpass = 9000, hipass = 300, fb = 0.36}, {oct = 4, lowpass = 12000, hipass = 700, fb = 0.36}}
+local shimmer_presets = {{oct = 0.25, lowpass = 4000, hipass = 20, fb = 0.48}, {oct = 0.5, lowpass = 6000, hipass = 20, fb = 0.48}, {oct = 1, lowpass = 20000, hipass = 20, fb = 0.48}, {oct = 2, lowpass = 9000, hipass = 300, fb = 0.36}, {oct = 4, lowpass = 12000, hipass = 700, fb = 0.36}}
 local param_modes = {
     speed = {param = "speed", delta = 1, engine = true, has_lock = true},
     seek = {param = "seek", delta = 1, engine = true, has_lock = true},
