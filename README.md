@@ -27,7 +27,7 @@ norns / norns shield
 _some features might require a pi4 based unit. If you hear clicks and crackles try turning off a few effects. Most expensive ones are reverb and analog tape sim_
 
 ### Documentation
-**E1**: Master Volume
+**E1**: Master Volume  
 **K1**+**E2**/**E3**: Volume  
 Hold **K1**: Morphing  
 Hold **K2**: Linked Mode  
@@ -38,7 +38,7 @@ Hold **K3**: Symmetry
 **K2**+**K3**: Lock Parameters  
 **K2**+**K3**: HP/LP Filter  
 **K1**+**K2**/**K3**: Randomize  
-Hold **K2**+**K3**/**E3**: Assign LFOs  
+Hold **K2**+**K3**: Assign LFOs  
 **K2**+**E2**/**E3**: LFO depth  
 **K3**+**E2**/**E3**: LFO offset  
 
