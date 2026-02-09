@@ -107,7 +107,7 @@ local LIMITS = {size={min=20,max=4999},density={min=0.1,max=50},pitch={min=-48,m
 local scale_array_cache = {}
 local function normalize_scale_name(scale_name)
     if scale_name == "none" or scale_name == "off" then return "none" end
-    local scale_map = {["major pent."] = "major pentatonic", ["minor pent."] = "minor pentatonic", ["whole tone"] = "whole"}
+    local scale_map = {["major pent."] = "major pentatonic", ["minor pent."] = "minor pentatonic"}
     return scale_map[scale_name] or scale_name
 end
 local function get_scale_array(scale_name)
