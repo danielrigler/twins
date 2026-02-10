@@ -25,7 +25,43 @@ classvar pitchScales;
 
 *new { arg context, doneCallback; ^super.new(context, doneCallback); }
 
-readBuf { arg i, path; if(buffersL[i].notNil && buffersR[i].notNil, { if (File.exists(path), { var numChannels = SoundFile.use(path.asString(), { |f| f.numChannels }); Buffer.readChannel(context.server, path, 0, -1, [0], { |b| voices[i].set(\buf_l, b); buffersL[i].free; buffersL[i] = b; voices[i].set(\t_reset_pos, 1); if (numChannels > 1, { Buffer.readChannel(context.server, path, 0, -1, [1], { |b| voices[i].set(\buf_r, b); buffersR[i].free; buffersR[i] = b; voices[i].set(\t_reset_pos, 1); }); }, { voices[i].set(\buf_r, b); buffersR[i].free; buffersR[i] = b; voices[i].set(\t_reset_pos, 1); }); }); }); }); }
+readBuf { arg i, path; 
+    if(buffersL[i].notNil && buffersR[i].notNil, { 
+        if (File.exists(path), { 
+            var numChannels = SoundFile.use(path.asString(), { |f| f.numChannels }); 
+            
+            Buffer.readChannel(context.server, path, 0, -1, [0], { |b| 
+                voices[i].set(\buf_l, b); 
+                buffersL[i].free; 
+                buffersL[i] = b; 
+                voices[i].set(\t_reset_pos, 1); 
+                
+                if (numChannels > 1, { 
+                    Buffer.readChannel(context.server, path, 0, -1, [1], { |b| 
+                        voices[i].set(\buf_r, b); 
+                        buffersR[i].free; 
+                        buffersR[i] = b; 
+                        voices[i].set(\t_reset_pos, 1); 
+                        
+                        // Send completion notification for stereo file (i+1 for Lua 1-based indexing)
+                        NetAddr("127.0.0.1", 10111).sendMsg("/twins/buffer_loaded", i + 1);
+                    }); 
+                }, { 
+                    voices[i].set(\buf_r, b); 
+                    buffersR[i].free; 
+                    buffersR[i] = b; 
+                    voices[i].set(\t_reset_pos, 1); 
+                    
+                    // Send completion notification for mono file (i+1 for Lua 1-based indexing)
+                    NetAddr("127.0.0.1", 10111).sendMsg("/twins/buffer_loaded", i + 1);
+                }); 
+            }); 
+        }, {
+            // File doesn't exist - send completion anyway so we don't hang
+            NetAddr("127.0.0.1", 10111).sendMsg("/twins/buffer_loaded", i + 1);
+        }); 
+    }); 
+}
 
 unloadAll { 2.do({ arg i, live_buffer_length; var newBufL = Buffer.alloc(context.server, context.server.sampleRate * live_buffer_length); var newBufR = Buffer.alloc(context.server, context.server.sampleRate * live_buffer_length); if(buffersL[i].notNil, { buffersL[i].free; }); if(buffersR[i].notNil, { buffersR[i].free; }); buffersL.put(i, newBufL); buffersR.put(i, newBufR); if(voices[i].notNil, { voices[i].set( \buf_l, newBufL, \buf_r, newBufR, \t_reset_pos, 1 ); }); liveInputBuffersL[i].zero; liveInputBuffersR[i].zero; if(liveInputRecorders[i].notNil, { liveInputRecorders[i].free; liveInputRecorders[i] = nil; }); }); wobbleBuffer.zero; }
 

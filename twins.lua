@@ -1745,6 +1745,10 @@ function redraw()
 end
 
 local osc_handlers = {
+   ["/twins/buffer_loaded"] = function(args)
+        local voice = args[1]
+        presets.buffer_loaded(voice)
+    end,
     ["/twins/buf_pos"] = function(args)
         local vid, pos = args[1] + 1, args[2]
         if audio_active[vid] or params:get(vid.."live_input") == 1 or params:get(vid.."live_direct") == 1 then

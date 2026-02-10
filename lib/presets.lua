@@ -6,10 +6,47 @@ presets.menu_mode = "load"
 presets.selected_index = 1
 presets.preset_list = {}
 presets.confirmation = nil
+
 _G.preset_loading = false
+local buffer_loading = {
+    pending = {},
+    complete = {}
+}
+
+local PRESETS_DIR = "twins"
+local BUFFER_TIMEOUT = 15
+local PRESET_VERSION = 1
 
 function presets.set_lfo_reference(lfo_module)
     lfo = lfo_module
+end
+
+function presets.buffer_loaded(voice)
+    buffer_loading.complete[voice] = true
+    buffer_loading.pending[voice] = false
+    print("Buffer " .. voice .. " loaded")
+end
+
+local function all_buffers_loaded()
+    for voice, pending in pairs(buffer_loading.pending) do
+        if pending and not buffer_loading.complete[voice] then
+            return false
+        end
+    end
+    return true
+end
+
+local function wait_for_buffers(timeout)
+    timeout = timeout or BUFFER_TIMEOUT
+    local start_time = util.time()
+    while not all_buffers_loaded() do
+        if util.time() - start_time > timeout then
+            print("⚠ Buffer loading timeout")
+            return false
+        end
+        clock.sleep(0.1)
+    end
+    return true
 end
 
 local function table_to_string(tbl, indent)
@@ -46,14 +83,15 @@ end
 
 local function get_lfo_states()
     local lfo_states = {}
+    
     for i = 1, 16 do
-        local lfo_param = i.."lfo"
+        local lfo_param = i .. "lfo"
         if params.lookup[lfo_param] and params:get(lfo_param) == 2 then
-            local target_param = i.."lfo_target"
-            local shape_param = i.."lfo_shape"
-            local freq_param = i.."lfo_freq"
-            local depth_param = i.."lfo_depth"
-            local offset_param = i.."offset"
+            local target_param = i .. "lfo_target"
+            local shape_param = i .. "lfo_shape"
+            local freq_param = i .. "lfo_freq"
+            local depth_param = i .. "lfo_depth"
+            local offset_param = i .. "offset"
 
             if params.lookup[target_param] and params.lookup[shape_param] and 
                params.lookup[freq_param] and params.lookup[depth_param] and 
@@ -70,6 +108,7 @@ local function get_lfo_states()
             end
         end
     end
+    
     return lfo_states
 end
 
@@ -99,7 +138,7 @@ function presets.save_complete_preset(preset_name, scene_data_ref, update_pan_po
         local preset_data = {
             name = preset_name,
             timestamp = os.time(),
-            version = 1,
+            version = PRESET_VERSION,
             params = get_all_params_state(),
             lfo_states = get_lfo_states(),
             morph = {
@@ -109,8 +148,8 @@ function presets.save_complete_preset(preset_name, scene_data_ref, update_pan_po
             morph_amount = params:get("morph_amount") or 0
         }
         
-        util.make_dir(_path.data .. "twins")
-        local file_path = _path.data .. "twins/" .. preset_name .. ".lua"
+        util.make_dir(_path.data .. PRESETS_DIR)
+        local file_path = _path.data .. PRESETS_DIR .. "/" .. preset_name .. ".lua"
         local file = io.open(file_path, "w")
         
         if not file then
@@ -118,33 +157,32 @@ function presets.save_complete_preset(preset_name, scene_data_ref, update_pan_po
         end
         
         local header = string.format(
-            "-- Twins Complete Preset\n-- Name: %s\n-- Saved: %s\n-- Version: 1\n\nreturn ",
-            preset_name, os.date("%Y-%m-%d %H:%M:%S")
+            "-- Twins Preset\n-- Name: %s\n-- Saved: %s\n-- Version: %d\n\nreturn ",
+            preset_name, os.date("%Y-%m-%d %H:%M:%S"), PRESET_VERSION
         )
         
         file:write(header .. table_to_string(preset_data))
         file:close()
-        print("Preset saved: " .. preset_name)
+        print("✓ Preset saved: " .. preset_name)
     end)
     
-    if success then
-        return true
-    else
-        print("Error saving preset: " .. (err or "unknown"))
-        return false
+    if not success then
+        print("✗ Error saving preset: " .. (err or "unknown"))
     end
+    
+    return success
 end
 
 local function apply_lfo_states(lfo_states)
     if not lfo_states then return end
     
     for slot, lfo_state in pairs(lfo_states) do
-        local target_param = slot.."lfo_target"
-        local shape_param = slot.."lfo_shape"
-        local freq_param = slot.."lfo_freq"
-        local depth_param = slot.."lfo_depth"
-        local offset_param = slot.."offset"
-        local lfo_param = slot.."lfo"
+        local target_param = slot .. "lfo_target"
+        local shape_param = slot .. "lfo_shape"
+        local freq_param = slot .. "lfo_freq"
+        local depth_param = slot .. "lfo_depth"
+        local offset_param = slot .. "offset"
+        local lfo_param = slot .. "lfo"
         
         if params.lookup[target_param] and params.lookup[shape_param] and 
            params.lookup[freq_param] and params.lookup[depth_param] and 
@@ -170,48 +208,159 @@ local function apply_scene_data(preset_data, scene_data_ref)
     end
 end
 
-local function load_audio_samples(audio_active_ref)
+local function wait_for_audio_samples()
+    buffer_loading.pending = {}
+    buffer_loading.complete = {}
+    
+    local sample_count = 0
+    
     for i = 1, 2 do
         local sample_param = i .. "sample"
         if params.lookup[sample_param] then
             local sample_path = params:get(sample_param)
             if sample_path and sample_path ~= "-" and sample_path ~= "" and sample_path ~= "none" then
+                buffer_loading.pending[i] = true
+                buffer_loading.complete[i] = false
+                sample_count = sample_count + 1
+            end
+        end
+    end
+    
+    if sample_count > 0 then
+        print("⏳ Loading " .. sample_count .. " sample" .. (sample_count > 1 and "s" or "") .. "...")
+        local success = wait_for_buffers(BUFFER_TIMEOUT)
+        if success then
+            print("✓ All buffers loaded")
+        else
+            print("⚠ Timeout - some samples may not be ready")
+        end
+        return success
+    end
+    
+    return true
+end
+
+local function load_audio_samples(audio_active_ref)
+    buffer_loading.pending = {}
+    buffer_loading.complete = {}
+    
+    local sample_count = 0
+    
+    for i = 1, 2 do
+        local sample_param = i .. "sample"
+        if params.lookup[sample_param] then
+            local sample_path = params:get(sample_param)
+            if sample_path and sample_path ~= "-" and sample_path ~= "" and sample_path ~= "none" then
+                buffer_loading.pending[i] = true
+                buffer_loading.complete[i] = false
                 engine.read(i, sample_path)
                 audio_active_ref[i] = true
+                sample_count = sample_count + 1
             end
+        end
+    end
+    
+    if sample_count > 0 then
+        print("⏳ Loading " .. sample_count .. " sample" .. (sample_count > 1 and "s" or "") .. "...")
+        local success = wait_for_buffers(BUFFER_TIMEOUT)
+        if success then
+            print("✓ All buffers loaded")
+        else
+            print("⚠ Timeout - some samples may not be ready")
+        end
+        return success
+    end
+    
+    return true
+end
+
+local function categorize_params(preset_params)
+    local lock_params = {}
+    local audio_params = {}
+    local volume_params = {}
+    local other_params = {}
+    
+    for param_id, value in pairs(preset_params) do
+        if params.lookup[param_id] then
+            if param_id:match("^%d+lock$") then
+                table.insert(lock_params, {id = param_id, value = value})
+            elseif param_id:match("sample_start$") or param_id:match("sample_end$") then
+                table.insert(audio_params, {id = param_id, value = value})
+            elseif param_id:match("volume$") then
+                table.insert(volume_params, {id = param_id, value = value})
+            elseif not param_id:match("sample$") then
+                table.insert(other_params, {id = param_id, value = value})
+            end
+        end
+    end
+    
+    return lock_params, audio_params, volume_params, other_params
+end
+
+local function apply_params(lock_params, audio_params, volume_params, other_params)
+    for _, p in ipairs(lock_params) do
+        params:set(p.id, p.value)
+    end
+    clock.sleep(0.02)
+    
+    for _, p in ipairs(audio_params) do
+        params:set(p.id, p.value)
+    end
+    clock.sleep(0.03)
+    
+    for _, p in ipairs(other_params) do
+        params:set(p.id, p.value)
+    end
+    clock.sleep(0.03)
+    
+    for _, p in ipairs(volume_params) do
+        params:set(p.id, p.value)
+    end
+end
+
+local function refresh_voice_params()
+    for i = 1, 2 do
+        local vol_param = i .. "volume"
+        if params.lookup[vol_param] then
+            local vol = params:get(vol_param)
+            params:set(vol_param, vol)
+        end
+        
+        local gain_param = i .. "granular_gain"
+        if params.lookup[gain_param] then
+            local gain = params:get(gain_param)
+            params:set(gain_param, gain)
         end
     end
 end
 
 function presets.load_complete_preset(preset_name, scene_data_ref, update_pan_positioning_fn, audio_active_ref)
-    local file_path = _path.data .. "twins/" .. preset_name .. ".lua"
+    local file_path = _path.data .. PRESETS_DIR .. "/" .. preset_name .. ".lua"
     
     if not util.file_exists(file_path) then
-        print("Preset file not found: " .. preset_name)
+        print("✗ Preset file not found: " .. preset_name)
         return false
     end
     
     local chunk, err = loadfile(file_path)
     if not chunk then
-        print("Error loading preset: " .. (err or "unknown"))
+        print("✗ Error loading preset: " .. (err or "unknown"))
         return false
     end
     
     local success, preset_data = pcall(chunk)
     if not success or not preset_data then
-        print("Error parsing preset: " .. (preset_data or "unknown"))
+        print("✗ Error parsing preset: " .. (preset_data or "unknown"))
         return false
     end
     
-    if preset_data.version and preset_data.version > 1 then
-        print("Warning: Preset saved with newer version")
+    if preset_data.version and preset_data.version > PRESET_VERSION then
+        print("⚠ Preset saved with newer version")
     end
     
-    local saved_volumes = {}
     for i = 1, 2 do
-        local vol_param = i.."volume"
+        local vol_param = i .. "volume"
         if params.lookup[vol_param] then
-            saved_volumes[i] = params:get(vol_param)
             params:set(vol_param, -70)
         end
     end
@@ -219,19 +368,17 @@ function presets.load_complete_preset(preset_name, scene_data_ref, update_pan_po
     _G.preset_loading = true
     
     clock.run(function()
-      
         if params.lookup["unload_all"] then
             params:set("unload_all", 1)
+            clock.sleep(0.05)
         end
-        clock.sleep(0.05)
 
         for i = 1, 16 do
-            local lfo_param = i.."lfo"
+            local lfo_param = i .. "lfo"
             if params.lookup[lfo_param] then
                 params:set(lfo_param, 1)
             end
         end
-        
         apply_scene_data(preset_data, scene_data_ref)
         
         if preset_data.morph_amount then
@@ -241,93 +388,74 @@ function presets.load_complete_preset(preset_name, scene_data_ref, update_pan_po
             end
         end
         
-        if preset_data.params then
+        buffer_loading.pending = {}
+        buffer_loading.complete = {}
+        
+        local sample_count = 0
+        for i = 1, 2 do
+            local sample_param = i .. "sample"
+            if params.lookup[sample_param] and preset_data.params and preset_data.params[sample_param] then
+                local sample_path = preset_data.params[sample_param]
+                if sample_path and sample_path ~= "-" and sample_path ~= "" and sample_path ~= "none" then
+                    buffer_loading.pending[i] = true
+                    buffer_loading.complete[i] = false
+                    sample_count = sample_count + 1
+                end
+            end
+        end
+
+        if preset_data.params and sample_count > 0 then
+            print("⏳ Loading " .. sample_count .. " sample" .. (sample_count > 1 and "s" or "") .. "...")
+            
             for param_id, value in pairs(preset_data.params) do
                 if param_id:match("sample$") and params.lookup[param_id] then
                     params:set(param_id, value)
                 end
             end
         end
-        clock.sleep(0.1)
+        
+        clock.sleep(0.05)
+        
+        if sample_count > 0 then
+            local success = wait_for_buffers(BUFFER_TIMEOUT)
+            if success then
+                print("✓ All buffers loaded")
+            else
+                print("⚠ Timeout - some samples may not be ready")
+            end
+
+            for i = 1, 2 do
+                local sample_param = i .. "sample"
+                if params.lookup[sample_param] then
+                    local sample_path = params:get(sample_param)
+                    if sample_path and sample_path ~= "-" and sample_path ~= "" and sample_path ~= "none" then
+                        audio_active_ref[i] = true
+                    end
+                end
+            end
+        end
         
         _G.preset_loading = false
         
         if preset_data.params then
-            local lock_params = {}
-            local audio_params = {}
-            local volume_params = {}
-            local other_params = {}
-            
-            for param_id, value in pairs(preset_data.params) do
-                if params.lookup[param_id] and 
-                   param_id ~= "morph_amount" and 
-                   not param_id:match("sample$") then
-                    
-                    if param_id:match("lock_") then
-                        table.insert(lock_params, {id = param_id, value = value})
-                    elseif param_id:match("volume$") or param_id:match("granular_gain$") then
-                        table.insert(volume_params, {id = param_id, value = value})
-                    elseif param_id:match("^[12]") and (
-                        param_id:match("cutoff$") or
-                        param_id:match("hpf$") or
-                        param_id:match("speed$") or
-                        param_id:match("pan$") or
-                        param_id:match("seek$")
-                    ) then
-                        table.insert(audio_params, {id = param_id, value = value})
-                    else
-                        table.insert(other_params, {id = param_id, value = value})
-                    end
-                end
-            end
-            
-            for _, p in ipairs(lock_params) do
-                params:set(p.id, p.value)
-            end
-            
-            for i, p in ipairs(audio_params) do
-                params:set(p.id, p.value)
-                if i % 15 == 0 then clock.sleep(0.002) end
-            end
-            
-            for i, p in ipairs(other_params) do
-                params:set(p.id, p.value)
-                if i % 30 == 0 then clock.sleep(0.002) end
-            end
-            
-            clock.sleep(0.05)
-            
-            for _, p in ipairs(volume_params) do
-                params:set(p.id, p.value)
-            end
+            local lock_params, audio_params, volume_params, other_params = 
+                categorize_params(preset_data.params)
+            apply_params(lock_params, audio_params, volume_params, other_params)
         end
         
-        clock.sleep(0.05)
+        clock.sleep(0.03)
 
         apply_lfo_states(preset_data.lfo_states)
-        clock.sleep(0.05)
+        clock.sleep(0.03)
 
-        load_audio_samples(audio_active_ref)
-        clock.sleep(0.05)
-        
         update_pan_positioning_fn()
-        
-        for i = 1, 2 do
-            local vol_param = i.."volume"
-            if params.lookup[vol_param] then
-                local vol = params:get(vol_param)
-                params:set(vol_param, vol)
-            end
-            local gain_param = i.."granular_gain"
-            if params.lookup[gain_param] then
-                local gain = params:get(gain_param)
-                params:set(gain_param, gain)
-            end
-        end
 
-        clock.sleep(0.15)
+        refresh_voice_params()
+
+        clock.sleep(0.1)
         redraw()
-        print("Preset loaded: " .. preset_name)
+        
+        print("✓ Preset loaded: " .. preset_name)
     end)
 
     return true
@@ -335,7 +463,7 @@ end
 
 function presets.list_presets()
     local presets_list = {}
-    local dir = _path.data .. "twins"
+    local dir = _path.data .. PRESETS_DIR
     util.make_dir(dir)
     
     local success, entries = pcall(util.scandir, dir)
@@ -366,19 +494,19 @@ function presets.list_presets()
 end
 
 function presets.delete_preset(preset_name)
-    local file_path = _path.data .. "twins/" .. preset_name .. ".lua"
+    local file_path = _path.data .. PRESETS_DIR .. "/" .. preset_name .. ".lua"
     
     if not util.file_exists(file_path) then
-        print("Preset not found: " .. preset_name)
+        print("✗ Preset not found: " .. preset_name)
         return false
     end
     
     local success, err = pcall(os.remove, file_path)
     if success then
-        print("Preset deleted: " .. preset_name)
+        print("✓ Preset deleted: " .. preset_name)
         return true
     else
-        print("Error deleting preset: " .. (err or "unknown"))
+        print("✗ Error deleting preset: " .. (err or "unknown"))
         return false
     end
 end
