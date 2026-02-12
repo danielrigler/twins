@@ -368,9 +368,9 @@ local track_param_configs = {
      end},
   }} end,
   eq = function(track) return { lock_param = "lock_eq", params = {
-    {name=track.."eq_low_gain", prob=0.4, default=0, random=function() return random_float(-0.2, 0.1) end},
-    {name=track.."eq_mid_gain", prob=0.6, default=0, random=function() return random_float(-0.1, 0) end},
-    {name=track.."eq_high_gain", prob=0.4, default=0.2, random=function() return random_float(0, 0.35) end},
+    {name=track.."eq_low_gain", prob=0.4, default=0, random=function() return random_float(-0.2, 0.2) end},
+    {name=track.."eq_mid_gain", prob=0.4, default=0, random=function() return random_float(-0.1, 0.1) end},
+    {name=track.."eq_high_gain", prob=0.4, default=0.25, random=function() return random_float(0, 0.4) end},
   }} end
 }
 

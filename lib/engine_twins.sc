@@ -202,8 +202,8 @@ alloc {
             granular_sig = Mix.ar(grains);
             sig_mix = dry_sig * (1 - granular_gain) + (granular_sig * granular_gain);
      
-            sig_mix = BLowShelf.ar(sig_mix, 75, 6, low_gain);
-            sig_mix = BPeakEQ.ar(sig_mix, 750, 1, mid_gain);
+            sig_mix = BLowShelf.ar(sig_mix, 60, 6, low_gain);
+            sig_mix = BPeakEQ.ar(sig_mix, 700, 1, mid_gain);
             sig_mix = BHiShelf.ar(sig_mix, 3900, 6, high_gain);
     
             sig_mix = HPF.ar(sig_mix, Lag.kr(hpf, 0.6));
@@ -237,8 +237,8 @@ alloc {
             arg out, pan, gain, cutoff, hpf, low_gain, mid_gain, high_gain, isMono, lpfgain;
             var sig = SoundIn.ar([0, 1]);
             sig = Select.ar(isMono, [sig, [sig[0], sig[0]] ]);
-            sig = BLowShelf.ar(sig, 75, 6, low_gain);
-            sig = BPeakEQ.ar(sig, 750, 1, mid_gain);
+            sig = BLowShelf.ar(sig, 60, 6, low_gain);
+            sig = BPeakEQ.ar(sig, 700, 1, mid_gain);
             sig = BHiShelf.ar(sig, 3900, 6, high_gain);
             sig = HPF.ar(sig, Lag.kr(hpf, 0.6));
             sig = MoogFF.ar(sig, Lag.kr(cutoff, 0.6), lpfgain);
