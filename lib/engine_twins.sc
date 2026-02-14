@@ -361,13 +361,13 @@ alloc {
         }).add;
         
         SynthDef(\glitch, {
-            arg bus, probability=3, glitchRatio=0, minLength=0.01, maxLength=0.2, reverse=0.3, pitch=0.2, bufferSize=0.5;
+            arg bus, probability=3, glitch_ratio=0, minLength=0.01, maxLength=0.2, reverse=0.3, pitch=0.2, bufferSize=0.5;
             var sig, trigOn, trigOff, isGlitching, writePos, glitchLength, glitchStart, shouldReverse, pitchShift, readRate, glitchPos, glitched, env, wet, filtered, bufFrames, bufNum;
             sig = In.ar(bus, 2);
             bufFrames = (bufferSize * SampleRate.ir).ceil;
             bufNum = LocalBuf(bufFrames, 2).clear;
-            trigOn = Dust.kr(probability * glitchRatio);
-            trigOff = Dust.kr(probability * (1 - glitchRatio));
+            trigOn = Dust.kr(probability * glitch_ratio);
+            trigOff = Dust.kr(probability * (1 - glitch_ratio));
             isGlitching = SetResetFF.kr(trigOn, trigOff);
             writePos = Phasor.ar(0, 1, 0, bufFrames);
             BufWr.ar(sig, bufNum, writePos);
@@ -466,11 +466,11 @@ alloc {
         
         bitcrushEffect = Synth.new(\bitcrush, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
         sineEffect = Synth.new(\sine, [\bus, mixBus.index, \sine_drive_wet, 0.0], context.xg, 'addToTail');
+        glitchEffect = Synth.new(\glitch, [\bus, mixBus.index, \glitch_ratio, 0.0], context.xg, 'addToTail');
         tapeEffect = Synth.new(\tape, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');  
         wobbleEffect = Synth.new(\wobble, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
         chewEffect = Synth.new(\chew, [\bus, mixBus.index, \chew_depth, 0.0], context.xg, 'addToTail');
         lossdegradeEffect = Synth.new(\lossdegrade, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
-        glitchEffect = Synth.new(\glitch, [\bus, mixBus.index, \glitchRatio, 0.0], context.xg, 'addToTail');
         saturationEffect = Synth.new(\saturation, [\bus, mixBus.index, \drive, 0.0], context.xg, 'addToTail');
 
         delayEffect = Synth.new(\delay, [\inBus, mixBus.index, \outBus, parallelBus.index, \mix, 0.0], context.xg, 'addToTail');
@@ -485,7 +485,6 @@ alloc {
         monobassEffect = Synth.new(\monobass, [\bus, postFxBus.index, \mix, 0.0], context.xg, 'addToTail');
         widthEffect = Synth.new(\width, [\bus, postFxBus.index, \width, 1.0], context.xg, 'addToTail');
         rotateEffect = Synth.new(\rotate, [\bus, postFxBus.index], context.xg, 'addToTail');
-        
         outputRecorder = Synth.new(\outputRecorder, [\buf, outputRecordBuffer, \inBus, postFxBus.index], context.xg, 'addToTail');
         finalOutputRouter = Synth.new(\output, [\in, postFxBus.index, \out, context.out_b.index], context.xg, 'addToTail');
 
@@ -568,7 +567,7 @@ alloc {
         this.addCommand("sine_drive_wet", "f", { arg msg; sineEffect.set(\sine_drive_wet, msg[1]); sineEffect.run(msg[1] > 0); });
         this.addCommand("drive", "f", { arg msg; saturationEffect.set(\drive, msg[1]); saturationEffect.run(msg[1] > 0); });
 
-        this.addCommand("glitchRatio", "f", { arg msg; glitchEffect.set(\glitchRatio, msg[1]); glitchEffect.run(msg[1] > 0); });
+        this.addCommand("glitch_ratio", "f", { arg msg; glitchEffect.set(\glitch_ratio, msg[1]); glitchEffect.run(msg[1] > 0); });
         this.addCommand("glitch_probability", "f", { arg msg; glitchEffect.set(\probability, msg[1]); });
         this.addCommand("glitch_min_length", "f", { arg msg; glitchEffect.set(\minLength, msg[1]); });
         this.addCommand("glitch_max_length", "f", { arg msg; glitchEffect.set(\maxLength, msg[1]); });

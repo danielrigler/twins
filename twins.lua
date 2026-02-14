@@ -247,7 +247,7 @@ local function init_longpress_checker()
 end
 
 local morph_voice_params={"speed","pitch","jitter","size","density","spread","pan","seek","cutoff","hpf","lpfgain","granular_gain","subharmonics_3","subharmonics_2","subharmonics_1","overtones_1","overtones_2","smoothbass","pitch_walk_rate","pitch_walk_step","ratcheting_prob","size_variation","direction_mod","density_mod_amt","pitch_random_scale_type","pitch_random_prob","pitch_mode","trig_mode","probability","eq_low_gain","eq_mid_gain","eq_high_gain","env_select","volume"}
-local morph_global_params={"delay_mix","delay_time","delay_feedback","delay_lowpass","delay_highpass","wiggle_depth","wiggle_rate","stereo","reverb_mix","t60","damp","rsize","earlyDiff","modDepth","modFreq","low","mid","high","lowcut","highcut","shimmer_mix","shimmer_preset","lock_shimmer","tape_mix","sine_drive_wet","drive","wobble_mix","wobble_amp","wobble_rpm","flutter_amp","flutter_freq","flutter_var","chew_depth","chew_freq","chew_variance","lossdegrade_mix","Width","dimension_mix","haas","rspeed","monobass_mix","bitcrush_mix","bitcrush_rate","bitcrush_bits","evolution","evolution_range","evolution_rate","lock_eq","lock_tape","lock_reverb","lock_delay","global_lfo_freq_scale","pitch_quantize_scale","pitch_lag","shimmer_mix1","shimmer_oct1","pitchv1","lowpass1","hipass1","fbDelay1","fb1", "glitch_probability", "glitchRatio", "glitch_min_length", "glitch_max_length", "glitch_reverse", "glitch_pitch" }
+local morph_global_params={"delay_mix","delay_time","delay_feedback","delay_lowpass","delay_highpass","wiggle_depth","wiggle_rate","stereo","reverb_mix","t60","damp","rsize","earlyDiff","modDepth","modFreq","low","mid","high","lowcut","highcut","shimmer_mix","shimmer_preset","lock_shimmer","tape_mix","sine_drive_wet","drive","wobble_mix","wobble_amp","wobble_rpm","flutter_amp","flutter_freq","flutter_var","chew_depth","chew_freq","chew_variance","lossdegrade_mix","Width","dimension_mix","haas","rspeed","monobass_mix","bitcrush_mix","bitcrush_rate","bitcrush_bits","evolution","evolution_range","evolution_rate","lock_eq","lock_tape","lock_reverb","lock_delay","global_lfo_freq_scale","pitch_quantize_scale","pitch_lag","shimmer_mix1","shimmer_oct1","pitchv1","lowpass1","hipass1","fbDelay1","fb1", "glitch_probability", "glitch_ratio", "glitch_min_length", "glitch_max_length", "glitch_reverse", "glitch_pitch" }
 local morph_voice_params_count=#morph_voice_params
 local morph_global_params_count=#morph_global_params
 local skip_param_set={}
@@ -790,7 +790,7 @@ local function setup_params()
     params:add_taper("bitcrush_bits", "Bits", 1, 24, 14, 1) params:set_action("bitcrush_bits", function(value) engine.bitcrush_bits(value) end)
 
     params:add_group("GLITCH", 9)
-    params:add_control("glitchRatio", "Glitch", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("glitchRatio", function(value) engine.glitchRatio(value * 0.01) end)
+    params:add_control("glitch_ratio", "Glitch", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("glitch_ratio", function(value) engine.glitch_ratio(value * 0.01) font.update_fx_cache("glitch_ratio", value) end)
     params:add_taper("glitch_probability", "Frequency", 0.1, 20, 3, 1, "Hz") params:set_action("glitch_probability", function(value) engine.glitch_probability(value) end)
     params:add_control("glitch_min_length", "Min Length", controlspec.new(10, 500, "lin", 1, 100, "ms")) params:set_action("glitch_min_length", function(value) engine.glitch_min_length(value * 0.001) end)
     params:add_control("glitch_max_length", "Max Length", controlspec.new(20, 500, "lin", 1, 250, "ms")) params:set_action("glitch_max_length", function(value) engine.glitch_max_length(value * 0.001) end)
@@ -800,7 +800,6 @@ local function setup_params()
     params:add_binary("randomize_glitch", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_glitch", function() 
         if params:get("lock_glitch") == 1 then
             params:set("glitch_probability", math.random(1, 150) / 10)
-            params:set("glitchRatio", math.random(0, 100))
             params:set("glitch_min_length", math.random(10, 200))
             params:set("glitch_max_length", math.random(100, 500))
             params:set("glitch_reverse", math.random(0, 100))
@@ -1794,7 +1793,7 @@ local osc_handlers = {
         params:set("unload_all", 1)
         tracked_clock_run(function()
             clock.sleep(0.1)
-            params:set("1granular_gain", 0) disable_lfos_for_param("1speed") disable_lfos_for_param("1pan") params:set("1speed", 1) params:set("1sample", filepath) params:set("1pan", 0) params:set("2pan", 0) params:set("reverb_mix", 0) params:set("delay_mix", 0) params:set("shimmer_mix1", 0) params:set("glitchRatio", 0) params:set("tape_mix", 1) params:set("dimension_mix", 0) params:set("sine_drive_wet", 0) params:set("drive", 0) params:set("wobble_mix", 0) params:set("chew_depth", 0) params:set("lossdegrade_mix", 0) params:set("Width", 100)  params:set("rspeed", 0) params:set("haas", 1) params:set("monobass_mix", 1) params:set("bitcrush_mix", 0) params:set("1lock_speed", 2)
+            params:set("1granular_gain", 0) disable_lfos_for_param("1speed") disable_lfos_for_param("1pan") params:set("1speed", 1) params:set("1sample", filepath) params:set("1pan", 0) params:set("2pan", 0) params:set("reverb_mix", 0) params:set("delay_mix", 0) params:set("shimmer_mix1", 0) params:set("glitch_ratio", 0) params:set("tape_mix", 1) params:set("dimension_mix", 0) params:set("sine_drive_wet", 0) params:set("drive", 0) params:set("wobble_mix", 0) params:set("chew_depth", 0) params:set("lossdegrade_mix", 0) params:set("Width", 100)  params:set("rspeed", 0) params:set("haas", 1) params:set("monobass_mix", 1) params:set("bitcrush_mix", 0) params:set("1lock_speed", 2)
             for i = 1, 2 do params:set(i.."eq_low_gain", 0) params:set(i.."eq_mid_gain", 0) params:set(i.."eq_high_gain", 0) params:set(i.."cutoff", 20000) params:set(i.."hpf", 20) end
         end)
     end, 
