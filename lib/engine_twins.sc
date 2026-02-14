@@ -379,7 +379,7 @@ alloc {
             glitchPos = Phasor.ar(trigOn, readRate, glitchStart, glitchStart + glitchLength, glitchStart);
             glitched = BufRd.ar(2, glitchBuffer, glitchPos, interpolation: 2);
             env = EnvGen.kr(Env.asr(0.01, 1, 0.05), gate: isGlitching);
-            wet = (glitched * env) + (sig * (1 - env));
+            wet = (glitched.softclip * env) + (sig * (1 - env));
             ReplaceOut.ar(bus, XFade2.ar(sig, wet, mix * 2 - 1));
         }).add;
 
