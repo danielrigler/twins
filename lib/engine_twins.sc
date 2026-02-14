@@ -1,7 +1,7 @@
 Engine_twins : CroneEngine {
 
 var dimensionEffect, haasEffect, bitcrushEffect, saturationEffect, delayEffect, reverbEffect, shimmerEffect, tapeEffect, chewEffect, widthEffect, monobassEffect, sineEffect, wobbleEffect, lossdegradeEffect, rotateEffect, glitchEffect;
-var <buffersL, <buffersR, wobbleBuffer, glitchBuffer, mixBus, postFxBus, shimmerBus, parallelBus, <voices, bufSine, pg, <liveInputBuffersL, <liveInputBuffersR, <liveInputRecorders, o, o_output, o_rec, o_grain, o_voice_peak;
+var <buffersL, <buffersR, wobbleBuffer, mixBus, postFxBus, shimmerBus, parallelBus, <voices, bufSine, pg, <liveInputBuffersL, <liveInputBuffersR, <liveInputRecorders, o, o_output, o_rec, o_grain, o_voice_peak;
 var mixToParallelRouter, parallelToPostFxRouter, finalOutputRouter;
 var currentSpeed, currentJitter, currentSize, currentDensity, currentDensityModAmt, currentPitch, currentPan, currentSpread, currentVolume, currentGranularGain, currentCutoff, currentHpf, currentlpfgain, currentSubharmonics1, currentSubharmonics2, currentSubharmonics3, currentOvertones1, currentOvertones2, currentPitchMode, currentTrigMode, currentDirectionMod, currentSizeVariation, currentSmoothbass, currentLowGain, currentMidGain, currentHighGain, currentProbability, liveBufferMix = 1.0, currentPitchWalkRate, currentPitchWalkStep, currentPitchRandomProb, currentPitchRandomScale, currentRatchetingProb, currentPitchLag;
 var <outputRecordBuffer, <outputRecorder;
@@ -74,7 +74,6 @@ alloc {
 
         bufSine = Buffer.alloc(context.server, 1024 * 16, 1); bufSine.sine2([2], [0.5], false);
         wobbleBuffer = Buffer.alloc(context.server, 48000 * 5, 2);
-        glitchBuffer = Buffer.alloc(context.server, 48000 * 0.5, 2);
         mixBus = Bus.audio(context.server, 2);
         postFxBus = Bus.audio(context.server, 2);
         shimmerBus = Bus.audio(context.server, 2);
@@ -363,22 +362,24 @@ alloc {
         }).add;
         
         SynthDef(\glitch, {
-            arg bus, mix=0.0, probability=3, glitchRatio=0.5, minLength=0.01, maxLength=0.2, reverse=0.3, pitch=0.2;
-            var sig, trigOn, trigOff, isGlitching, writePos, glitchLength, glitchStart, shouldReverse, pitchShift, readRate, glitchPos, glitched, env, wet;
+            arg bus, mix=0.0, probability=3, glitchRatio=0.5, minLength=0.01, maxLength=0.2, reverse=0.3, pitch=0.2, bufferSize=0.5;
+            var sig, trigOn, trigOff, isGlitching, writePos, glitchLength, glitchStart, shouldReverse, pitchShift, readRate, glitchPos, glitched, env, wet, filtered, bufFrames, bufNum;
             sig = In.ar(bus, 2);
+            bufFrames = (bufferSize * SampleRate.ir).ceil;
+            bufNum = LocalBuf(bufFrames, 2).clear;
             trigOn = Dust.kr(probability * glitchRatio);
             trigOff = Dust.kr(probability * (1 - glitchRatio));
             isGlitching = SetResetFF.kr(trigOn, trigOff);
-            writePos = Phasor.ar(0, 1, 0, BufFrames.kr(glitchBuffer));
-            BufWr.ar(sig, glitchBuffer, writePos);
-            glitchLength = TRand.kr(minLength, maxLength, trigOn) * SampleRate.ir;
-            glitchStart = TRand.kr(0, BufFrames.kr(glitchBuffer) - glitchLength, trigOn);
+            writePos = Phasor.ar(0, 1, 0, bufFrames);
+            BufWr.ar(sig, bufNum, writePos);
+            glitchLength = (TRand.kr(minLength, maxLength, trigOn) * SampleRate.ir).min(bufFrames - 2);
+            glitchStart = TRand.kr(0, bufFrames - glitchLength - 1, trigOn);
             shouldReverse = TRand.kr(0, 1, trigOn) < reverse;
-            pitchShift = TRand.kr(0.5, 2, trigOn);
+            pitchShift = Select.kr(TIRand.kr(0, 4, trigOn), [0.707, 0.841, 1, 1.189, 1.414]);
             readRate = Select.kr(shouldReverse, [1, -1]) * Select.kr(TRand.kr(0, 1, trigOn) < pitch, [1, pitchShift]);
             glitchPos = Phasor.ar(trigOn, readRate, glitchStart, glitchStart + glitchLength, glitchStart);
-            glitched = BufRd.ar(2, glitchBuffer, glitchPos, interpolation: 2);
-            env = EnvGen.kr(Env.asr(0.01, 1, 0.05), gate: isGlitching);
+            glitched = BufRd.ar(2, bufNum, glitchPos % bufFrames, interpolation: 2);
+            env = EnvGen.kr(Env.asr(0.01, 1, 0.05), gate: isGlitching, doneAction: 0);
             wet = (glitched.softclip * env) + (sig * (1 - env));
             ReplaceOut.ar(bus, XFade2.ar(sig, wet, mix * 2 - 1));
         }).add;
@@ -634,7 +635,6 @@ free {
         if (o_output.notNil) { o_output.free; o_output = nil; };
         if (o_voice_peak.notNil) { o_voice_peak.free; o_voice_peak = nil; };
         if (wobbleBuffer.notNil) { wobbleBuffer.free; wobbleBuffer = nil; };
-        if (glitchBuffer.notNil) { glitchBuffer.free; glitchBuffer = nil; };
         if (mixBus.notNil) { mixBus.free; mixBus = nil; };
         if (postFxBus.notNil) { postFxBus.free; postFxBus = nil; };
         if (shimmerBus.notNil) { shimmerBus.free; shimmerBus = nil; };
