@@ -378,9 +378,8 @@ alloc {
             readRate = Select.kr(shouldReverse, [1, -1]) * Select.kr(TRand.kr(0, 1, trigOn) < pitch, [1, pitchShift]);
             glitchPos = Phasor.ar(trigOn, readRate, glitchStart, glitchStart + glitchLength, glitchStart);
             glitched = BufRd.ar(2, glitchBuffer, glitchPos, interpolation: 2);
-            env = EnvGen.kr(Env.asr(0.005, 1, 0.01), gate: isGlitching);
+            env = EnvGen.kr(Env.asr(0.01, 1, 0.05), gate: isGlitching);
             wet = (glitched * env) + (sig * (1 - env));
-            wet = LeakDC.ar(wet);
             ReplaceOut.ar(bus, XFade2.ar(sig, wet, mix * 2 - 1));
         }).add;
 
