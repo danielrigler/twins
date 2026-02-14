@@ -361,7 +361,7 @@ alloc {
         }).add;
         
         SynthDef(\glitch, {
-            arg bus, mix=0.0, probability=3, glitchRatio=0.5, minLength=0.01, maxLength=0.2, reverse=0.3, pitch=0.2, bufferSize=0.5;
+            arg bus, probability=3, glitchRatio=0, minLength=0.01, maxLength=0.2, reverse=0.3, pitch=0.2, bufferSize=0.5;
             var sig, trigOn, trigOff, isGlitching, writePos, glitchLength, glitchStart, shouldReverse, pitchShift, readRate, glitchPos, glitched, env, wet, filtered, bufFrames, bufNum;
             sig = In.ar(bus, 2);
             bufFrames = (bufferSize * SampleRate.ir).ceil;
@@ -380,7 +380,7 @@ alloc {
             glitched = BufRd.ar(2, bufNum, glitchPos % bufFrames, interpolation: 2);
             env = EnvGen.kr(Env.asr(0.01, 1, 0.05), gate: isGlitching, doneAction: 0);
             wet = (glitched.softclip * env) + (sig * (1 - env));
-            ReplaceOut.ar(bus, XFade2.ar(sig, wet, mix * 2 - 1));
+            ReplaceOut.ar(bus, wet);
         }).add;
 
         SynthDef(\tape, {
@@ -470,7 +470,7 @@ alloc {
         wobbleEffect = Synth.new(\wobble, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
         chewEffect = Synth.new(\chew, [\bus, mixBus.index, \chew_depth, 0.0], context.xg, 'addToTail');
         lossdegradeEffect = Synth.new(\lossdegrade, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
-        glitchEffect = Synth.new(\glitch, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
+        glitchEffect = Synth.new(\glitch, [\bus, mixBus.index, \glitchRatio, 0.0], context.xg, 'addToTail');
         saturationEffect = Synth.new(\saturation, [\bus, mixBus.index, \drive, 0.0], context.xg, 'addToTail');
 
         delayEffect = Synth.new(\delay, [\inBus, mixBus.index, \outBus, parallelBus.index, \mix, 0.0], context.xg, 'addToTail');
@@ -568,9 +568,8 @@ alloc {
         this.addCommand("sine_drive_wet", "f", { arg msg; sineEffect.set(\sine_drive_wet, msg[1]); sineEffect.run(msg[1] > 0); });
         this.addCommand("drive", "f", { arg msg; saturationEffect.set(\drive, msg[1]); saturationEffect.run(msg[1] > 0); });
 
-        this.addCommand("glitch_mix", "f", { arg msg; glitchEffect.set(\mix, msg[1]); glitchEffect.run(msg[1] > 0); });
+        this.addCommand("glitchRatio", "f", { arg msg; glitchEffect.set(\glitchRatio, msg[1]); glitchEffect.run(msg[1] > 0); });
         this.addCommand("glitch_probability", "f", { arg msg; glitchEffect.set(\probability, msg[1]); });
-        this.addCommand("glitch_ratio", "f", { arg msg; glitchEffect.set(\glitchRatio, msg[1]); });
         this.addCommand("glitch_min_length", "f", { arg msg; glitchEffect.set(\minLength, msg[1]); });
         this.addCommand("glitch_max_length", "f", { arg msg; glitchEffect.set(\maxLength, msg[1]); });
         this.addCommand("glitch_reverse", "f", { arg msg; glitchEffect.set(\reverse, msg[1]); });

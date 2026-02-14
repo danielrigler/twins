@@ -334,9 +334,8 @@ local param_configs = {
     {name="flutter_var", prob=0.4, default=2, random=function() return math.random(1, 5) end},
   }},
   glitch = { lock_param = "lock_glitch", params = {
-    {name="glitch_probability", prob=0.5, default=3, random=function() return random_float(0.1, 15) end},
-    {name="glitch_ratio", prob=0.5, default=50, random=function() return math.random(0, 100) end},
-    {name="glitch_min_length", prob=0.5, default=10, random=function() return math.random(10, 100) end},
+    {name="glitch_probability", prob=0.5, default=3, random=function() return random_float(0.1, 20) end},
+    {name="glitch_min_length", prob=0.5, default=10, random=function() return math.random(10, 200) end},
     {name="glitch_max_length", prob=0.5, default=200, random=function() return math.random(20, 500) end},
     {name="glitch_reverse", prob=0.5, default=30, random=function() return math.random(0, 100) end},
     {name="glitch_pitch", prob=0.5, default=20, random=function() return math.random(0, 100) end}
