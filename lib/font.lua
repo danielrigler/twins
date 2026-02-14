@@ -21,6 +21,11 @@ font.micro_font = {
     {1,0,0},
     {1,1,1},
   },
+  G = {
+    {1,1,0},
+    {1,0,1},
+    {1,1,1},
+  },
   E = {
     {1,1,1},
     {1,1,0},
@@ -89,6 +94,7 @@ local fx_cache = {
   rspeed = 0,
   monobass_mix = 1,
   bitcrush_mix = 0,
+  glitch_mix = 0,
   ["1cutoff"] = 20000,
   ["2cutoff"] = 20000,
   ["1hpf"] = 20,
@@ -160,6 +166,12 @@ function font.draw_fx_status_bucketed(P_func)
   if fx_cache.reverb_mix > 0 then
     local level = is_locked("lock_reverb") and get_blink_level() or 1
     font.draw_micro_text_bucketed(P_func, x, y, "R", level)
+    x = x + 4
+  end
+  
+  if fx_cache.glitch_mix > 0 then
+    local level = is_locked("lock_glitch") and get_blink_level() or 1
+    font.draw_micro_text_bucketed(P_func, x, y, "G", level)
     x = x + 4
   end
 

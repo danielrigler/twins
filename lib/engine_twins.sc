@@ -1,6 +1,6 @@
 Engine_twins : CroneEngine {
 
-var dimensionEffect, haasEffect, bitcrushEffect, saturationEffect, delayEffect, reverbEffect, shimmerEffect, tapeEffect, chewEffect, widthEffect, monobassEffect, sineEffect, wobbleEffect, lossdegradeEffect, rotateEffect;
+var dimensionEffect, haasEffect, bitcrushEffect, saturationEffect, delayEffect, reverbEffect, shimmerEffect, tapeEffect, chewEffect, widthEffect, monobassEffect, sineEffect, wobbleEffect, lossdegradeEffect, rotateEffect, glitchEffect;
 var <buffersL, <buffersR, wobbleBuffer, mixBus, postFxBus, shimmerBus, parallelBus, <voices, bufSine, pg, <liveInputBuffersL, <liveInputBuffersR, <liveInputRecorders, o, o_output, o_rec, o_grain, o_voice_peak;
 var mixToParallelRouter, parallelToPostFxRouter, finalOutputRouter;
 var currentSpeed, currentJitter, currentSize, currentDensity, currentDensityModAmt, currentPitch, currentPan, currentSpread, currentVolume, currentGranularGain, currentCutoff, currentHpf, currentlpfgain, currentSubharmonics1, currentSubharmonics2, currentSubharmonics3, currentOvertones1, currentOvertones2, currentPitchMode, currentTrigMode, currentDirectionMod, currentSizeVariation, currentSmoothbass, currentLowGain, currentMidGain, currentHighGain, currentProbability, liveBufferMix = 1.0, currentPitchWalkRate, currentPitchWalkStep, currentPitchRandomProb, currentPitchRandomScale, currentRatchetingProb, currentPitchLag;
@@ -42,8 +42,6 @@ readBuf { arg i, path;
                         buffersR[i].free; 
                         buffersR[i] = b; 
                         voices[i].set(\t_reset_pos, 1); 
-                        
-                        // Send completion notification for stereo file (i+1 for Lua 1-based indexing)
                         NetAddr("127.0.0.1", 10111).sendMsg("/twins/buffer_loaded", i + 1);
                     }); 
                 }, { 
@@ -51,13 +49,10 @@ readBuf { arg i, path;
                     buffersR[i].free; 
                     buffersR[i] = b; 
                     voices[i].set(\t_reset_pos, 1); 
-                    
-                    // Send completion notification for mono file (i+1 for Lua 1-based indexing)
                     NetAddr("127.0.0.1", 10111).sendMsg("/twins/buffer_loaded", i + 1);
                 }); 
             }); 
         }, {
-            // File doesn't exist - send completion anyway so we don't hang
             NetAddr("127.0.0.1", 10111).sendMsg("/twins/buffer_loaded", i + 1);
         }); 
     }); 
@@ -366,6 +361,28 @@ alloc {
             ReplaceOut.ar(bus, XFade2.ar(sig, wide, mix * 2 - 1));
         }).add;
         
+        SynthDef(\glitch, {
+            arg bus, mix=0.0, probability=3, glitchRatio=0.5, minLength=0.01, maxLength=0.2, reverse=0.3, pitch=0.2;
+            var sig, glitchBuffer, trigOn, trigOff, isGlitching, writePos, glitchLength, glitchStart, shouldReverse, pitchShift, readRate, glitchPos, glitched, env, wet;
+            sig = In.ar(bus, 2);
+            glitchBuffer = LocalBuf(48000 * 0.5, 2);
+            trigOn = Dust.kr(probability * glitchRatio);
+            trigOff = Dust.kr(probability * (1 - glitchRatio));
+            isGlitching = SetResetFF.kr(trigOn, trigOff);
+            writePos = Phasor.ar(0, 1, 0, BufFrames.kr(glitchBuffer));
+            BufWr.ar(sig, glitchBuffer, writePos);
+            glitchLength = TRand.kr(minLength, maxLength, trigOn) * SampleRate.ir;
+            glitchStart = TRand.kr(0, BufFrames.kr(glitchBuffer) - glitchLength, trigOn);
+            shouldReverse = TRand.kr(0, 1, trigOn) < reverse;
+            pitchShift = TRand.kr(0.5, 2, trigOn);
+            readRate = Select.kr(shouldReverse, [1, -1]) * Select.kr(TRand.kr(0, 1, trigOn) < pitch, [1, pitchShift]);
+            glitchPos = Phasor.ar(trigOn, readRate, glitchStart, glitchStart + glitchLength, glitchStart);
+            glitched = BufRd.ar(2, glitchBuffer, glitchPos, interpolation: 2);
+            env = EnvGen.kr(Env.asr(0.002, 1, 0.005), gate: isGlitching);
+            wet = SelectX.ar(env, [sig, glitched]);
+            ReplaceOut.ar(bus, XFade2.ar(sig, wet, mix * 2 - 1));
+        }).add;
+
         SynthDef(\tape, {
             arg bus, mix=0.0;
             var orig = In.ar(bus, 2);
@@ -407,11 +424,13 @@ alloc {
         }).add;
         
         SynthDef(\saturation, {
-            arg bus, drive=0.0;
-            var dry, sig;
-            dry = In.ar(bus, 2);
-            sig = ((1+drive)*dry).tanh;
-            ReplaceOut.ar(bus, XFade2.ar(dry, sig, drive * 2 - 1));
+            arg bus, drive=0.0, tone=0.5, character=0.5;
+            var dry = In.ar(bus, 2);
+            var stage1 = ((1 + (drive * 0.3)) * dry).softclip;
+            var stage2 = ((1 + (drive * 0.4)) * stage1).tanh;
+            var tube = SelectX.ar(character, [stage2, (stage2.abs * stage2.sign)]);
+            var filtered = LPF.ar(tube, 16000 - (drive * 4000));
+            ReplaceOut.ar(bus, XFade2.ar(dry, filtered, drive * 2 - 1));
         }).add;
 
         SynthDef(\rotate, {
@@ -451,6 +470,7 @@ alloc {
         wobbleEffect = Synth.new(\wobble, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
         chewEffect = Synth.new(\chew, [\bus, mixBus.index, \chew_depth, 0.0], context.xg, 'addToTail');
         lossdegradeEffect = Synth.new(\lossdegrade, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
+        glitchEffect = Synth.new(\glitch, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
         saturationEffect = Synth.new(\saturation, [\bus, mixBus.index, \drive, 0.0], context.xg, 'addToTail');
 
         delayEffect = Synth.new(\delay, [\inBus, mixBus.index, \outBus, parallelBus.index, \mix, 0.0], context.xg, 'addToTail');
@@ -465,8 +485,8 @@ alloc {
         monobassEffect = Synth.new(\monobass, [\bus, postFxBus.index, \mix, 0.0], context.xg, 'addToTail');
         widthEffect = Synth.new(\width, [\bus, postFxBus.index, \width, 1.0], context.xg, 'addToTail');
         rotateEffect = Synth.new(\rotate, [\bus, postFxBus.index], context.xg, 'addToTail');
+        
         outputRecorder = Synth.new(\outputRecorder, [\buf, outputRecordBuffer, \inBus, postFxBus.index], context.xg, 'addToTail');
-
         finalOutputRouter = Synth.new(\output, [\in, postFxBus.index, \out, context.out_b.index], context.xg, 'addToTail');
 
         this.addCommand(\mix, "f", { arg msg; delayEffect.set(\mix, msg[1]); delayEffect.run(msg[1] > 0); });
@@ -548,6 +568,14 @@ alloc {
         this.addCommand("sine_drive_wet", "f", { arg msg; sineEffect.set(\sine_drive_wet, msg[1]); sineEffect.run(msg[1] > 0); });
         this.addCommand("drive", "f", { arg msg; saturationEffect.set(\drive, msg[1]); saturationEffect.run(msg[1] > 0); });
 
+        this.addCommand("glitch_mix", "f", { arg msg; glitchEffect.set(\mix, msg[1]); glitchEffect.run(msg[1] > 0); });
+        this.addCommand("glitch_probability", "f", { arg msg; glitchEffect.set(\probability, msg[1]); });
+        this.addCommand("glitch_ratio", "f", { arg msg; glitchEffect.set(\glitchRatio, msg[1]); });
+        this.addCommand("glitch_min_length", "f", { arg msg; glitchEffect.set(\minLength, msg[1]); });
+        this.addCommand("glitch_max_length", "f", { arg msg; glitchEffect.set(\maxLength, msg[1]); });
+        this.addCommand("glitch_reverse", "f", { arg msg; glitchEffect.set(\reverse, msg[1]); });
+        this.addCommand("glitch_pitch", "f", { arg msg; glitchEffect.set(\pitch, msg[1]); });
+
         this.addCommand("wobble_mix", "f", { arg msg; wobbleEffect.set(\mix, msg[1]); wobbleEffect.run(msg[1] > 0); });
         this.addCommand("wobble_amp", "f", { arg msg; wobbleEffect.set(\wobble_amp, msg[1]); });
         this.addCommand("wobble_rpm", "f", { arg msg; wobbleEffect.set(\wobble_rpm, msg[1]); });
@@ -621,6 +649,7 @@ free {
         if (lossdegradeEffect.notNil) { lossdegradeEffect.free; lossdegradeEffect = nil; };
         if (sineEffect.notNil) { sineEffect.free; sineEffect = nil; };
         if (wobbleEffect.notNil) { wobbleEffect.free; wobbleEffect = nil; };
+        if (glitchEffect.notNil) { glitchEffect.free; glitchEffect = nil; };
         if (delayEffect.notNil) { delayEffect.free; delayEffect = nil; };
         if (reverbEffect.notNil) { reverbEffect.free; reverbEffect = nil; };
         if (rotateEffect.notNil) { rotateEffect.free; rotateEffect = nil; };

@@ -61,7 +61,7 @@ local PARAM_SPECS = {
 local LOCK_PARAMS = {
   filter = "lock_filter", eq = "lock_eq", granular = "lock_granular",
   delay = "lock_delay", reverb = "lock_reverb", tape = "lock_tape", shimmer = "lock_shimmer", pitch = "lock_pitch",
-  pitch_1 = "1lock_pitch", pitch_2 = "2lock_pitch" }
+  pitch_1 = "1lock_pitch", pitch_2 = "2lock_pitch", glitch = "lock_glitch" }
 
 local function get_param_range(param_name) return PARAM_SPECS[param_name] and PARAM_SPECS[param_name][1] or 1 end
 local function get_param_bounds(param_name) return PARAM_SPECS[param_name] and PARAM_SPECS[param_name][2] or {0, 1} end
@@ -333,6 +333,14 @@ local param_configs = {
     {name="flutter_freq", prob=0.4, default=6, random=function() return math.random(2, 10) end},
     {name="flutter_var", prob=0.4, default=2, random=function() return math.random(1, 5) end},
   }},
+  glitch = { lock_param = "lock_glitch", params = {
+    {name="glitch_probability", prob=0.5, default=3, random=function() return random_float(0.1, 15) end},
+    {name="glitch_ratio", prob=0.5, default=50, random=function() return math.random(0, 100) end},
+    {name="glitch_min_length", prob=0.5, default=10, random=function() return math.random(10, 100) end},
+    {name="glitch_max_length", prob=0.5, default=200, random=function() return math.random(20, 500) end},
+    {name="glitch_reverse", prob=0.5, default=30, random=function() return math.random(0, 100) end},
+    {name="glitch_pitch", prob=0.5, default=20, random=function() return math.random(0, 100) end}
+  }},
   pitch = { lock_param = "lock_pitch", params = {
     {name="pitch_quantize_scale", prob=0.3, default=2, random=function() return math.random(2, 12) end, direct_set=true,
      condition=function()
@@ -388,7 +396,7 @@ local function randomize_params(steps, track_num)
 
   local symmetry = (params:get("symmetry") == 1)
 
-  for _, group in ipairs({param_configs.tape, param_configs.delay, param_configs.jpverb, param_configs.shimmer, param_configs.pitch}) do
+  for _, group in ipairs({param_configs.tape, param_configs.delay, param_configs.jpverb, param_configs.shimmer, param_configs.glitch, param_configs.pitch}) do
     randomize_param_group(group)
   end
 
@@ -436,9 +444,7 @@ end
 
 return {
   randomize_params = randomize_params,
-  randomize_group = randomize_param_group,
   randomize_jpverb_params = create_randomizer("jpverb"),
-  randomize_shimmer_params = create_randomizer("shimmer"),
   randomize_delay_params = create_randomizer("delay"),
   randomize_tape_params = create_randomizer("tape"),
   randomize_granular_params = create_track_randomizer(track_param_configs.granular),
@@ -448,7 +454,5 @@ return {
   set_evolution_range = set_evolution_range,
   set_evolution_rate = set_evolution_rate,
   reset_evolution_centers = reset_evolution_centers,
-  on_lock_param_change = on_lock_param_change,  -- New function to call when locks change
   cleanup = cleanup,
-  is_evolution_active = function() return evolution_active end,
 }
