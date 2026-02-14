@@ -10,7 +10,7 @@ Inspired by @cfd90’s Twine and contains influence and code from other norns us
 
 **Some of the new features:**
 * Morphing
-* Reverb, delay, chorus, tape effects, shimmer, EQ, filters, bit reduction, etc.
+* Reverb, delay, chorus, tape effects, glitch, shimmer, EQ, filters, bit reduction, etc.
 * Extra granular parameters, increased parameter ranges
 * Pitch quantization
 * Freely assignable LFOs with randomization
@@ -45,7 +45,7 @@ Hold **K2**+**K3**: Assign LFOs
 ### Discussion
 **[FORUM](https://llllllll.co/t/twins/71052)**
 ### Download
-**v0.49**
+**v0.51**
 install from Maiden Project Manager, or from Maiden REPL:
 ```
 ;install https://github.com/danielrigler/twins
