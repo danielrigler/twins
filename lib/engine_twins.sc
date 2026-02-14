@@ -347,16 +347,15 @@ alloc {
         SynthDef(\dimension, {
             arg bus, mix=0;
             var sig = In.ar(bus, 2);
-            var wet, depth = 0.3, rate = 0.6, predelay = 0.025, voice1, voice2, voice3, voice4, mid, side, wide;
+            var wet, depth = 0.2, rate = 0.6, predelay = 0.025, voice1, voice2, voice3, voice4, mid, side, wide;
             var chorus = { |input, delayTime, rate, depth| var mod = SinOsc.kr(rate, [0, pi/2, pi, 3*pi/2]).range(-1, 1) * depth; var delays = delayTime + (mod * 0.02); DelayC.ar(input, 0.05, delays); };
             voice1 = chorus.(sig, predelay * 0.5, rate * 0.99, depth * 0.8);
             voice2 = chorus.(sig, predelay * 0.65, rate * 1.01, depth * 0.9);
             voice3 = chorus.(sig, predelay * 0.85, rate * 0.98, depth * 1.0);
             voice4 = chorus.(sig, predelay * 1.05, rate * 1.02, depth * 0.7);
-            wet = [voice1[0] * 0.25 + voice2[0] * 0.25 + voice3[1] * 0.25 + voice4[1] * 0.25,
-                   voice1[1] * 0.25 + voice2[1] * 0.25 + voice3[0] * 0.25 + voice4[0] * 0.25];
-            mid = (wet[0] + wet[1]) * 0.5;
-            side = ((wet[0] - wet[1]) * 0.5 * 1.5);
+            wet = [voice1[0] * 0.25 + voice2[0] * 0.25 + voice3[1] * 0.25 + voice4[1] * 0.25, voice1[1] * 0.25 + voice2[1] * 0.25 + voice3[0] * 0.25 + voice4[0] * 0.25];
+            mid = (wet[0] + wet[1]);
+            side = (wet[0] - wet[1]);
             wide = [mid + side, mid - side] * 4;
             ReplaceOut.ar(bus, XFade2.ar(sig, wide, mix * 2 - 1));
         }).add;
@@ -387,7 +386,7 @@ alloc {
         SynthDef(\tape, {
             arg bus, mix=0.0;
             var orig = In.ar(bus, 2);
-            var wet = AnalogTape.ar(orig, 0.93, 0.93, 0.93, 0, 0) * 0.85;
+            var wet = AnalogTape.ar(orig, 0.93, 0.93, 0.93, 0, 0) * 0.87;
             ReplaceOut.ar(bus, XFade2.ar(orig, wet, mix * 2 - 1));
         }).add;
         
