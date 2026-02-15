@@ -95,6 +95,7 @@ local fx_cache = {
   monobass_mix = 1,
   bitcrush_mix = 0,
   glitch_ratio = 0,
+  glitch_mix = 0,
   ["1cutoff"] = 20000,
   ["2cutoff"] = 20000,
   ["1hpf"] = 20,
@@ -203,7 +204,7 @@ function font.draw_fx_status_bucketed(P_func)
     x = x + 5
   end
 
-  if fx_cache.glitch_ratio > 0 then
+  if ((fx_cache.glitch_ratio > 0) and (fx_cache.glitch_mix > 0)) then
     local level = is_locked("lock_glitch") and get_blink_level() or 1
     font.draw_micro_text_bucketed(P_func, x, y, "G", level)
     x = x + 4

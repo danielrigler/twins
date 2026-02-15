@@ -3,7 +3,7 @@ Engine_twins : CroneEngine {
 var dimensionEffect, haasEffect, bitcrushEffect, saturationEffect, delayEffect, reverbEffect, shimmerEffect, tapeEffect, chewEffect, widthEffect, monobassEffect, sineEffect, wobbleEffect, lossdegradeEffect, rotateEffect, glitchEffect;
 var <buffersL, <buffersR, wobbleBuffer, mixBus, postFxBus, shimmerBus, parallelBus, <voices, bufSine, pg, <liveInputBuffersL, <liveInputBuffersR, <liveInputRecorders, o, o_output, o_rec, o_grain, o_voice_peak;
 var mixToParallelRouter, parallelToPostFxRouter, finalOutputRouter;
-var currentSpeed, currentJitter, currentSize, currentDensity, currentDensityModAmt, currentPitch, currentPan, currentSpread, currentVolume, currentGranularGain, currentCutoff, currentHpf, currentlpfgain, currentSubharmonics1, currentSubharmonics2, currentSubharmonics3, currentOvertones1, currentOvertones2, currentPitchMode, currentTrigMode, currentDirectionMod, currentSizeVariation, currentSmoothbass, currentLowGain, currentMidGain, currentHighGain, currentProbability, liveBufferMix = 1.0, currentPitchWalkRate, currentPitchWalkStep, currentPitchRandomProb, currentPitchRandomScale, currentRatchetingProb, currentPitchLag;
+var currentSpeed, currentJitter, currentSize, currentDensity, currentDensityModAmt, currentPitch, currentPan, currentSpread, currentVolume, currentGranularGain, currentCutoff, currentHpf, currentlpfgain, currentSubharmonics1, currentSubharmonics2, currentSubharmonics3, currentOvertones1, currentOvertones2, currentPitchMode, currentTrigMode, currentDirectionMod, currentSizeVariation, currentSmoothbass, currentLowGain, currentMidGain, currentHighGain, currentProbability, liveBufferMix = 1.0, currentPitchWalkRate, currentPitchWalkStep, currentPitchRandomProb, currentPitchRandomScale, currentRatchetingProb, currentPitchLag, currentGlitchRatio = 0.0, currentGlitchMix = 0.0;
 var <outputRecordBuffer, <outputRecorder;
 var outputBufferLength = 8, currentOutputWritePos;
 var grainEnvs, pitchScaleBuffers, pitchScaleLengths;
@@ -359,28 +359,31 @@ alloc {
             wide = [mid + side, mid - side] * 4;
             ReplaceOut.ar(bus, XFade2.ar(sig, wide, mix * 2 - 1));
         }).add;
-        
+
         SynthDef(\glitch, {
-            arg bus, probability=3, glitch_ratio=0, minLength=0.01, maxLength=0.2, reverse=0.3, pitch=0.2, bufferSize=0.5;
-            var sig, trigOn, trigOff, isGlitching, writePos, glitchLength, glitchStart, shouldReverse, pitchShift, readRate, glitchPos, glitched, env, wet, filtered, bufFrames, bufNum;
+            arg bus, probability = 3, glitch_ratio = 0.5, mix = 1.0, minLength = 0.1, maxLength = 0.25, reverse = 0.25, pitch = 0.5;
+            var sig, dry, wet, bufNum, bufFrames, writePos, trigRate, chunkTrig, capturePos, chunkLength, chunkStart, chunkEnd, playbackPos, playbackRate, pitchShift, shouldReverse, shouldPitchShift, glitched, isGlitching, trigOn, trigOff;
             sig = In.ar(bus, 2);
-            bufFrames = (bufferSize * SampleRate.ir).ceil;
+            dry = sig;
+            bufFrames = SampleRate.ir * 2;
             bufNum = LocalBuf(bufFrames, 2).clear;
+            writePos = Phasor.ar(0, 1, 0, bufFrames);
+            BufWr.ar(sig, bufNum, writePos);
             trigOn = Dust.kr(probability * glitch_ratio);
             trigOff = Dust.kr(probability * (1 - glitch_ratio));
             isGlitching = SetResetFF.kr(trigOn, trigOff);
-            writePos = Phasor.ar(0, 1, 0, bufFrames);
-            BufWr.ar(sig, bufNum, writePos);
-            glitchLength = (TRand.kr(minLength, maxLength, trigOn) * SampleRate.ir).min(bufFrames - 2);
-            glitchStart = TRand.kr(0, bufFrames - glitchLength - 1, trigOn);
+            capturePos = Latch.kr(writePos, trigOn);
+            chunkLength = TRand.kr((minLength * SampleRate.ir), (maxLength * SampleRate.ir), trigOn);
+            chunkStart = (capturePos - (chunkLength * 0.5)).wrap(0, bufFrames);
+            chunkEnd = (chunkStart + chunkLength).wrap(0, bufFrames);
+            shouldPitchShift = TRand.kr(0, 1, trigOn) < pitch;
+            pitchShift = Select.kr(shouldPitchShift, [1.0, Select.kr(TIRand.kr(0, 4, trigOn), [0.707, 0.841, 1, 1.189, 1.414])]);
             shouldReverse = TRand.kr(0, 1, trigOn) < reverse;
-            pitchShift = Select.kr(TIRand.kr(0, 4, trigOn), [0.707, 0.841, 1, 1.189, 1.414]);
-            readRate = Select.kr(shouldReverse, [1, -1]) * Select.kr(TRand.kr(0, 1, trigOn) < pitch, [1, pitchShift]);
-            glitchPos = Phasor.ar(trigOn, readRate, glitchStart, glitchStart + glitchLength, glitchStart);
-            glitched = BufRd.ar(2, bufNum, glitchPos % bufFrames, interpolation: 2);
-            env = EnvGen.kr(Env.asr(0.01, 1, 0.05), gate: isGlitching, doneAction: 0);
-            wet = (glitched.softclip * env) + (sig * (1 - env));
-            ReplaceOut.ar(bus, wet);
+            playbackRate = Select.kr(shouldReverse, [pitchShift, pitchShift.neg]);
+            playbackPos = Phasor.ar(trigOn + trigOff, playbackRate * isGlitching, chunkStart, chunkEnd, chunkStart);
+            wet = BufRd.ar(2, bufNum, playbackPos.wrap(0, bufFrames), interpolation: 2);
+            glitched = Select.ar(isGlitching, [dry, wet]);
+            ReplaceOut.ar(bus, XFade2.ar(dry, glitched, mix * 2 - 1));
         }).add;
 
         SynthDef(\tape, {
@@ -567,7 +570,8 @@ alloc {
         this.addCommand("sine_drive_wet", "f", { arg msg; sineEffect.set(\sine_drive_wet, msg[1]); sineEffect.run(msg[1] > 0); });
         this.addCommand("drive", "f", { arg msg; saturationEffect.set(\drive, msg[1]); saturationEffect.run(msg[1] > 0); });
 
-        this.addCommand("glitch_ratio", "f", { arg msg; glitchEffect.set(\glitch_ratio, msg[1]); glitchEffect.run(msg[1] > 0); });
+        this.addCommand("glitch_ratio", "f", { arg msg; currentGlitchRatio = msg[1]; glitchEffect.set(\glitch_ratio, currentGlitchRatio); glitchEffect.run((currentGlitchRatio > 0) && (currentGlitchMix > 0)); });
+        this.addCommand("glitch_mix", "f", { arg msg; currentGlitchMix = msg[1]; glitchEffect.set(\mix, currentGlitchMix); glitchEffect.run((currentGlitchRatio > 0) && (currentGlitchMix > 0)); });
         this.addCommand("glitch_probability", "f", { arg msg; glitchEffect.set(\probability, msg[1]); });
         this.addCommand("glitch_min_length", "f", { arg msg; glitchEffect.set(\minLength, msg[1]); });
         this.addCommand("glitch_max_length", "f", { arg msg; glitchEffect.set(\maxLength, msg[1]); });
