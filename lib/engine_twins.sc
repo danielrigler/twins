@@ -1,7 +1,7 @@
 Engine_twins : CroneEngine {
 
 var dimensionEffect, haasEffect, bitcrushEffect, saturationEffect, delayEffect, reverbEffect, shimmerEffect, tapeEffect, chewEffect, widthEffect, monobassEffect, sineEffect, wobbleEffect, lossdegradeEffect, rotateEffect, glitchEffect;
-var <buffersL, <buffersR, wobbleBuffer, mixBus, postFxBus, shimmerBus, parallelBus, <voices, bufSine, pg, <liveInputBuffersL, <liveInputBuffersR, <liveInputRecorders, o, o_output, o_rec, o_grain, o_voice_peak;
+var <buffersL, <buffersR, wobbleBuffer, glitchBuffer, mixBus, postFxBus, shimmerBus, parallelBus, <voices, bufSine, pg, <liveInputBuffersL, <liveInputBuffersR, <liveInputRecorders, o, o_output, o_rec, o_grain, o_voice_peak;
 var mixToParallelRouter, parallelToPostFxRouter, finalOutputRouter;
 var currentSpeed, currentJitter, currentSize, currentDensity, currentDensityModAmt, currentPitch, currentPan, currentSpread, currentVolume, currentGranularGain, currentCutoff, currentHpf, currentlpfgain, currentSubharmonics1, currentSubharmonics2, currentSubharmonics3, currentOvertones1, currentOvertones2, currentPitchMode, currentTrigMode, currentDirectionMod, currentSizeVariation, currentSmoothbass, currentLowGain, currentMidGain, currentHighGain, currentProbability, liveBufferMix = 1.0, currentPitchWalkRate, currentPitchWalkStep, currentPitchRandomProb, currentPitchRandomScale, currentRatchetingProb, currentPitchLag, currentGlitchRatio = 0.0, currentGlitchMix = 0.0;
 var <outputRecordBuffer, <outputRecorder;
@@ -73,7 +73,8 @@ alloc {
         outputRecordBuffer = Buffer.alloc(context.server, context.server.sampleRate * outputBufferLength, 2);
 
         bufSine = Buffer.alloc(context.server, 1024 * 16, 1); bufSine.sine2([2], [0.5], false);
-        wobbleBuffer = Buffer.alloc(context.server, 48000 * 5, 2);
+        wobbleBuffer = Buffer.alloc(context.server, context.server.sampleRate * 5, 2);
+        glitchBuffer = Buffer.alloc(context.server, context.server.sampleRate * 1, 2);
         mixBus = Bus.audio(context.server, 2);
         postFxBus = Bus.audio(context.server, 2);
         shimmerBus = Bus.audio(context.server, 2);
@@ -362,13 +363,12 @@ alloc {
 
         SynthDef(\glitch, {
             arg bus, probability = 3, glitch_ratio = 0.5, mix = 1.0, minLength = 0.1, maxLength = 0.25, reverse = 0.25, pitch = 0.5;
-            var sig, dry, wet, bufNum, bufFrames, writePos, trigRate, chunkTrig, capturePos, chunkLength, chunkStart, chunkEnd, playbackPos, playbackRate, pitchShift, shouldReverse, shouldPitchShift, glitched, isGlitching, trigOn, trigOff;
+            var sig, dry, wet, bufFrames, writePos, trigRate, chunkTrig, capturePos, chunkLength, chunkStart, chunkEnd, playbackPos, playbackRate, pitchShift, shouldReverse, shouldPitchShift, glitched, isGlitching, trigOn, trigOff;
             sig = In.ar(bus, 2);
             dry = sig;
-            bufFrames = SampleRate.ir * 2;
-            bufNum = LocalBuf(bufFrames, 2).clear;
+            bufFrames = BufFrames.kr(wobbleBuffer);
             writePos = Phasor.ar(0, 1, 0, bufFrames);
-            BufWr.ar(sig, bufNum, writePos);
+            BufWr.ar(sig, wobbleBuffer, writePos);
             trigOn = Dust.kr(probability * glitch_ratio);
             trigOff = Dust.kr(probability * (1 - glitch_ratio));
             isGlitching = SetResetFF.kr(trigOn, trigOff);
@@ -381,7 +381,7 @@ alloc {
             shouldReverse = TRand.kr(0, 1, trigOn) < reverse;
             playbackRate = Select.kr(shouldReverse, [pitchShift, pitchShift.neg]);
             playbackPos = Phasor.ar(trigOn + trigOff, playbackRate * isGlitching, chunkStart, chunkEnd, chunkStart);
-            wet = BufRd.ar(2, bufNum, playbackPos.wrap(0, bufFrames), interpolation: 2);
+            wet = BufRd.ar(2, wobbleBuffer, playbackPos.wrap(0, bufFrames), interpolation: 4);
             glitched = Select.ar(isGlitching, [dry, wet]);
             ReplaceOut.ar(bus, XFade2.ar(dry, glitched, mix * 2 - 1));
         }).add;
@@ -636,6 +636,7 @@ free {
         if (o_output.notNil) { o_output.free; o_output = nil; };
         if (o_voice_peak.notNil) { o_voice_peak.free; o_voice_peak = nil; };
         if (wobbleBuffer.notNil) { wobbleBuffer.free; wobbleBuffer = nil; };
+        if (glitchBuffer.notNil) { glitchBuffer.free; glitchBuffer = nil; };
         if (mixBus.notNil) { mixBus.free; mixBus = nil; };
         if (postFxBus.notNil) { postFxBus.free; postFxBus = nil; };
         if (shimmerBus.notNil) { shimmerBus.free; shimmerBus = nil; };
