@@ -786,7 +786,7 @@ local function setup_params()
 
     params:add_group("BITCRUSH", 3)
     params:add_taper("bitcrush_mix", "Mix", 0, 100, 0.0, 0, "%") params:set_action("bitcrush_mix", function(value) engine.bitcrush_mix(value * 0.01) font.update_fx_cache("bitcrush_mix", value) end)
-    params:add_taper("bitcrush_rate", "Rate", 1, 44100, 4500, 3, "Hz") params:set_action("bitcrush_rate", function(value) engine.bitcrush_rate(value) end)
+    params:add_taper("bitcrush_rate", "Rate", 1, 48000, 4500, 3, "Hz") params:set_action("bitcrush_rate", function(value) engine.bitcrush_rate(value) end)
     params:add_taper("bitcrush_bits", "Bits", 1, 24, 14, 1) params:set_action("bitcrush_bits", function(value) engine.bitcrush_bits(value) end)
 
     params:add_group("GLITCH", 9)

@@ -331,7 +331,7 @@ alloc {
         }).add;  
         
         SynthDef(\bitcrush, {
-            arg bus, mix=0.0, rate=44100, bits=24;
+            arg bus, mix=0.0, rate, bits;
             var sig = In.ar(bus, 2);
             var mod = LFNoise1.kr(0.25).range(0.4, 1);
             var bit = LPF.ar(Decimator.ar(sig, Lag.kr(rate, 0.6) * mod, bits), 10000);
@@ -363,48 +363,22 @@ alloc {
 
         SynthDef(\glitch, {
             arg bus, probability = 3, glitch_ratio = 0.5, mix = 1.0, minLength = 0.1, maxLength = 0.25, reverse = 0.25, pitch = 0.5;
-            var sig, dry, wet, bufFrames, writePos, trigRate, chunkTrig, capturePos, chunkLength, chunkStart, chunkEnd, playbackPos, playbackRate, pitchShift, shouldReverse, shouldPitchShift, glitched, isGlitching, trigOn, trigOff;
+            var sig, bufFrames, writePos, trigOn, trigOff, isGlitching, capturePos, chunkLength, chunkStart, pitchShift, playbackRate, playbackPos, wet;
             sig = In.ar(bus, 2);
-            dry = sig;
-            bufFrames = BufFrames.kr(wobbleBuffer);
+            bufFrames = BufFrames.kr(glitchBuffer);
             writePos = Phasor.ar(0, 1, 0, bufFrames);
-            BufWr.ar(sig, wobbleBuffer, writePos);
+            BufWr.ar(sig, glitchBuffer, writePos);
             trigOn = Dust.kr(probability * glitch_ratio);
             trigOff = Dust.kr(probability * (1 - glitch_ratio));
             isGlitching = SetResetFF.kr(trigOn, trigOff);
             capturePos = Latch.kr(writePos, trigOn);
-            chunkLength = TRand.kr((minLength * SampleRate.ir), (maxLength * SampleRate.ir), trigOn);
+            chunkLength = TRand.kr(minLength * SampleRate.ir, maxLength * SampleRate.ir, trigOn);
             chunkStart = (capturePos - (chunkLength * 0.5)).wrap(0, bufFrames);
-            chunkEnd = (chunkStart + chunkLength).wrap(0, bufFrames);
-            shouldPitchShift = TRand.kr(0, 1, trigOn) < pitch;
-            pitchShift = Select.kr(shouldPitchShift, [1.0, Select.kr(TIRand.kr(0, 4, trigOn), [0.707, 0.841, 1, 1.189, 1.414])]);
-            shouldReverse = TRand.kr(0, 1, trigOn) < reverse;
-            playbackRate = Select.kr(shouldReverse, [pitchShift, pitchShift.neg]);
-            playbackPos = Phasor.ar(trigOn + trigOff, playbackRate * isGlitching, chunkStart, chunkEnd, chunkStart);
-            wet = BufRd.ar(2, wobbleBuffer, playbackPos.wrap(0, bufFrames), interpolation: 4);
-            glitched = Select.ar(isGlitching, [dry, wet]);
-            ReplaceOut.ar(bus, XFade2.ar(dry, glitched, mix * 2 - 1));
-        }).add;
-
-        SynthDef(\tape, {
-            arg bus, mix=0.0;
-            var orig = In.ar(bus, 2);
-            var wet = AnalogTape.ar(orig, 0.93, 0.93, 0.93, 0, 0) * 0.87;
-            ReplaceOut.ar(bus, XFade2.ar(orig, wet, mix * 2 - 1));
-        }).add;
-        
-        SynthDef(\wobble, {
-            arg bus, mix=0.0, wobble_amp=0.05, wobble_rpm=33, flutter_amp=0.03, flutter_freq=6, flutter_var=2;
-            var pr, pw, rate, wet, flutter, wow, dry;
-            dry = In.ar(bus, 2);
-            wow = wobble_amp * SinOsc.kr(wobble_rpm/60, mul:0.2);
-            flutter = flutter_amp * SinOsc.kr(flutter_freq + LFNoise2.kr(flutter_var), mul:0.1);
-            rate = 1 + (wow + flutter);
-            pw = Phasor.ar(0, BufRateScale.kr(wobbleBuffer), 0, BufFrames.kr(wobbleBuffer));
-            BufWr.ar(dry, wobbleBuffer, pw);
-            pr = DelayL.ar(Phasor.ar(0, BufRateScale.kr(wobbleBuffer)*rate, 0, BufFrames.kr(wobbleBuffer)), 0.2, 0.2);
-            wet = BufRd.ar(2, wobbleBuffer, pr, interpolation:4);
-            ReplaceOut.ar(bus, XFade2.ar(dry, wet, mix * 2 - 1));
+            pitchShift = 1.0 + ((TRand.kr(0, 1, trigOn) < pitch) * (Select.kr(TIRand.kr(0, 4, trigOn), [0.707, 0.841, 1.0, 1.189, 1.414]) - 1.0));
+            playbackRate = pitchShift * Select.kr(TRand.kr(0, 1, trigOn) < reverse, [1, -1]);
+            playbackPos = Phasor.ar(trigOn + trigOff, playbackRate * isGlitching, chunkStart, (chunkStart + chunkLength).wrap(0, bufFrames), chunkStart);
+            wet = BufRd.ar(2, glitchBuffer, playbackPos.wrap(0, bufFrames), interpolation: 4);
+            ReplaceOut.ar(bus, XFade2.ar(sig, Select.ar(isGlitching, [sig, wet]), mix * 2 - 1));
         }).add;
         
         SynthDef(\chew, {
