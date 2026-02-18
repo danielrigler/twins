@@ -87,8 +87,26 @@ local osc_positions = {[1] = 0, [2] = 0}
 local rec_positions = {[1] = 0, [2] = 0}
 local cached_buffer_durations = {[1] = 1, [2] = 1}
 local voice_peak_amplitudes = {[1] = {l = 0, r = 0}, [2] = {l = 0, r = 0}}
+local link_base = {[1]={pitch=nil,size=nil,density=nil,product=nil},
+                   [2]={pitch=nil,size=nil,density=nil,product=nil}}
 local ui_metro = nil
 local lfos_turned_off = {}
+local lfo_cache = {}
+local lfo_cache_dirty = true
+local function invalidate_lfo_cache() lfo_cache_dirty = true end
+local function rebuild_lfo_cache()
+    for k in pairs(lfo_cache) do lfo_cache[k] = nil end
+    local targets = lfo.lfo_targets
+    if targets then
+        for i = 1, 16 do
+            if params:get(i .. "lfo") == 2 then
+                local param_name = targets[params:get(i .. "lfo_target")]
+                if param_name and param_name ~= "none" then lfo_cache[param_name] = i end
+            end
+        end
+    end
+    lfo_cache_dirty = false
+end
 local shimmer_presets = {{oct = 0.25, lowpass = 4000, hipass = 20, fb = 0.48}, {oct = 0.5, lowpass = 6000, hipass = 20, fb = 0.48}, {oct = 1, lowpass = 20000, hipass = 20, fb = 0.48}, {oct = 2, lowpass = 9000, hipass = 300, fb = 0.36}, {oct = 4, lowpass = 12000, hipass = 700, fb = 0.36}}
 local param_modes = {
     speed = {param = "speed", delta = 1, engine = true, has_lock = true},
@@ -131,6 +149,16 @@ local function get_next_scale_note(pitch_value, scale_name, direction)
     local next_idx = util.clamp(current_idx + (direction > 0 and 1 or -1), 1, #scale_array)
     return scale_array[next_idx] - 60
 end
+local scale_intervals_cache = {}
+local function get_scale_intervals(scale_name)
+    scale_name = normalize_scale_name(scale_name)
+    if scale_name == "none" then scale_name = "major" end
+    if not scale_intervals_cache[scale_name] then
+        scale_intervals_cache[scale_name] = MusicUtil.generate_scale(0, scale_name, 1)
+                                         or MusicUtil.generate_scale(0, "major", 1)
+    end
+    return scale_intervals_cache[scale_name]
+end
 local animation_y = -64 animation_complete = false animation_start_time = nil
 local pan_indicator_x = {[1] = -80, [2] = 80} pan_indicators_visible = false pan_slide_start_time = nil
 local volume_bar_y = {[1] = 120, [2] = 120} volume_bars_visible = false
@@ -146,7 +174,11 @@ local function stop_metro_safe(m) if m then pcall(function() m:stop() end) if m 
 local function tracked_clock_run(func) local co = clock.run(func) table.insert(active_clocks, co) return co end
 local function cancel_all_clocks() for i = #active_clocks, 1, -1 do local co = active_clocks[i] if co then pcall(function() clock.cancel(co) end) end active_clocks[i] = nil end end
 local function is_param_locked(track_num, param) return params:get(track_num .. "lock_" .. param) == 2 end
-local function is_lfo_active_for_param(param_name) for i = 1, 16 do local target_index = params:get(i.. "lfo_target") if lfo.lfo_targets[target_index] == param_name and params:get(i.. "lfo") == 2 then return true, i end end return false, nil end
+local function is_lfo_active_for_param(param_name)
+    if lfo_cache_dirty then rebuild_lfo_cache() end
+    local idx = lfo_cache[param_name]
+    return idx ~= nil, idx
+end
 local function update_pan_positioning() if _G.preset_loading then return end local loaded1 = is_audio_loaded(1) local loaded2 = is_audio_loaded(2) local pan1_locked = is_param_locked(1, "pan") local pan1_has_lfo = is_lfo_active_for_param("1pan") local pan2_locked = is_param_locked(2, "pan") local pan2_has_lfo = is_lfo_active_for_param("2pan") if not pan1_locked and not pan1_has_lfo then params:set("1pan", loaded2 and -15 or 0) end if not pan2_locked and not pan2_has_lfo then params:set("2pan", loaded1 and 15 or 0) end end
 
 local function setup_ui_metro()
@@ -240,6 +272,7 @@ local function init_longpress_checker()
                 combo_tracker.long_triggered = true
                 combo_tracker.had_interaction = true
                 lfo.assign_to_current_row(current_mode, current_filter_mode)
+                invalidate_lfo_cache()
             end
         end
     end
@@ -301,6 +334,7 @@ local function recall_scene(track,scene)
       end
     end
   end
+  invalidate_lfo_cache()
 end
 
 local function apply_morph()
@@ -513,6 +547,7 @@ local function apply_morph()
     local pname=morph_global_params[i]
     interp(pname,scene1_1[pname],scene1_2[pname])
   end
+  invalidate_lfo_cache()
 end
 
 local function capture_to_temp_scene()
@@ -567,12 +602,12 @@ local function disable_lfos_for_param(param_name, only_self)
     local base_param = param_name:sub(2)
     if only_self then
         local is_active, lfo_index = is_lfo_active_for_param(param_name)
-        if is_active then params:set(lfo_index .. "lfo", 1) end
+        if is_active then params:set(lfo_index .. "lfo", 1) invalidate_lfo_cache() end
     else
         for track = 1, 2 do
             local full_param = track .. base_param
             local is_active, lfo_index = is_lfo_active_for_param(full_param)
-            if is_active then params:set(lfo_index .. "lfo", 1) end
+            if is_active then params:set(lfo_index .. "lfo", 1) invalidate_lfo_cache() end
         end
     end
 end
@@ -592,7 +627,7 @@ local function handle_lfo(param_name, force_disable)
     if force_disable then disable_lfos_for_param(param_name)
     else
         local active, idx = is_lfo_active_for_param(param_name)
-        if active then params:set(idx.."lfo", 1) end
+        if active then params:set(idx.."lfo", 1) invalidate_lfo_cache() end
     end
 end
 
@@ -769,12 +804,12 @@ local function setup_params()
     params:add_option("lock_eq", "Lock Parameters", {"off", "on"}, 1)
     
     params:add_group("LFO", 118)
-    params:add_binary("randomize_lfos", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_lfos", function() lfo.clearLFOs() local allow_vol = params:get("allow_volume_lfos") == 2 for i = 1, 2 do lfo.randomize_lfos(i, allow_vol) end end)
-    params:add_binary("lfo.assign_to_current_row", "Assign to Selection", "trigger", 0) params:set_action("lfo.assign_to_current_row", function() lfo.assign_to_current_row(current_mode, current_filter_mode) end)
+    params:add_binary("randomize_lfos", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_lfos", function() lfo.clearLFOs() local allow_vol = params:get("allow_volume_lfos") == 2 for i = 1, 2 do lfo.randomize_lfos(i, allow_vol) end invalidate_lfo_cache() end)
+    params:add_binary("lfo.assign_to_current_row", "Assign to Selection", "trigger", 0) params:set_action("lfo.assign_to_current_row", function() lfo.assign_to_current_row(current_mode, current_filter_mode) invalidate_lfo_cache() end)
     params:add_control("global_lfo_freq_scale", "Freq Scale", controlspec.new(0.1, 10, "exp", 0.01, 1, "x")) params:set_action("global_lfo_freq_scale", function(value) local base_freq for i = 1, 16 do local phase = lfo[i].phase base_freq = params:get(i.."lfo_freq") or 0.05 lfo[i].base_freq = base_freq lfo[i].freq = base_freq * value lfo[i].phase = phase end end)
     params:add_binary("lfo_pause", "Pause ⏸︎", "toggle", 0) params:set_action("lfo_pause", function(value) lfo.set_pause(value == 1) end)
-    params:add_binary("ClearLFOs", "Clear All", "trigger", 0) params:set_action("ClearLFOs", function() lfo.clearLFOs() update_pan_positioning() end)
-    params:add_option("allow_volume_lfos", "Allow Volume LFOs", {"no", "yes"}, 1) params:set_action("allow_volume_lfos", function(value) if value == 2 then lfo.clearLFOs("1", "volume") lfo.clearLFOs("2", "volume") lfo.assign_volume_lfos() else lfo.clearLFOs("1", "volume") lfo.clearLFOs("2", "volume") end end)
+    params:add_binary("ClearLFOs", "Clear All", "trigger", 0) params:set_action("ClearLFOs", function() lfo.clearLFOs() invalidate_lfo_cache() update_pan_positioning() end)
+    params:add_option("allow_volume_lfos", "Allow Volume LFOs", {"no", "yes"}, 1) params:set_action("allow_volume_lfos", function(value) if value == 2 then lfo.clearLFOs("1", "volume") lfo.clearLFOs("2", "volume") lfo.assign_volume_lfos() else lfo.clearLFOs("1", "volume") lfo.clearLFOs("2", "volume") end invalidate_lfo_cache() end)
     lfo.init()
     
     params:add_group("STEREO", 5)
@@ -879,7 +914,7 @@ local function setup_params()
     params:add_binary("randomtape1", "Random Tape 1", "trigger", 0) params:set_action("randomtape1", function() load_random_tape_file(1) end)
     params:add_binary("randomtape2", "Random Tape 2", "trigger", 0) params:set_action("randomtape2", function() load_random_tape_file(2) end)
     params:add_binary("unload_all", "Unload All Audio", "trigger", 0) params:set_action("unload_all", function() for i=1, 2 do params:set(i.."seek", 0) params:set(i.."sample", "-") params:set(i.."live_input", 0) params:set(i.."live_direct", 0) audio_active[i] = false osc_positions[i] = 0 end engine.unload_all() update_pan_positioning() end)
-    params:add_binary("global_pitch_size_density_link", "Linked Mode", "toggle", 0) params:set_action("global_pitch_size_density_link", function(value) if value == 1 then for i = 1, 2 do local pitch = params:get(i.."pitch") local size = params:get(i.."size") local density = params:get(i.."density") if size > 0 and density > 0 then _G["base_pitch_"..i] = pitch _G["base_size_"..i] = size _G["base_density_"..i] = density _G["size_density_product_"..i] = size * density end end end end)
+    params:add_binary("global_pitch_size_density_link", "Linked Mode", "toggle", 0) params:set_action("global_pitch_size_density_link", function(value) if value == 1 then for i = 1, 2 do local pitch = params:get(i.."pitch") local size = params:get(i.."size") local density = params:get(i.."density") if size > 0 and density > 0 then local lb = link_base[i] lb.pitch = pitch lb.size = size lb.density = density lb.product = size * density end end end end)
     params:add_option("steps", "Transition Time", {"short", "medium", "long"}, 1) params:set_action("steps", function(value) steps = ({20, 300, 800})[value] end)
 
     for i = 1, 2 do
@@ -913,9 +948,7 @@ local function randomize_pitch(track, other_track, symmetry)
     if min_pitch >= max_pitch then return end
     local base_pitch = params:get(other_track .. "pitch")
     local scale_name = params:string("pitch_quantize_scale")
-    if scale_name == "none" then scale_name = "major" end
-    local scale = MusicUtil.generate_scale(0, scale_name, 1)
-    if not scale then scale = MusicUtil.generate_scale(0, "major", 1) end
+    local scale = get_scale_intervals(scale_name)
     if not scale then return end
     local weighted_intervals = {}
     local larger_intervals = {}
@@ -1037,10 +1070,11 @@ local function randomize(n)
                     local density_val = params:get(track.."density")
                     local pitch_val = params:get(track.."pitch")
                     if size_val > 0 and density_val > 0 then
-                        _G["base_pitch_"..track] = pitch_val
-                        _G["base_size_"..track] = size_val
-                        _G["base_density_"..track] = density_val
-                        _G["size_density_product_"..track] = size_val * density_val
+                        local lb = link_base[track]
+                        lb.pitch   = pitch_val
+                        lb.size    = size_val
+                        lb.density = density_val
+                        lb.product = size_val * density_val
                     end
                 end
             end
@@ -1086,10 +1120,11 @@ local function handle_pitch_size_density_link(track, config, delta)
     if symmetry then disable_linked_lfos(other_track) end
     handle_lfo(track .. param, symmetry)
     local function update_linked_params(tr, delta_mult)
-        local base_pitch   = _G["base_pitch_"..tr]
-        local base_size    = _G["base_size_"..tr]
-        local base_density = _G["base_density_"..tr]
-        local size_den_prod = _G["size_density_product_"..tr]
+        local lb = link_base[tr]
+        local base_pitch   = lb.pitch
+        local base_size    = lb.size
+        local base_density = lb.density
+        local size_den_prod = lb.product
         if not (base_pitch and base_size and base_density and size_den_prod) then return end
         local new_pitch, new_size, new_den
         if param == "pitch" then
@@ -1124,10 +1159,10 @@ local function handle_pitch_size_density_link(track, config, delta)
         end
         params:set(tr.."size", new_size)
         params:set(tr.."density", new_den)
-        _G["base_pitch_"..tr] = new_pitch
-        _G["base_size_"..tr] = new_size
-        _G["base_density_"..tr] = new_den
-        _G["size_density_product_"..tr] = new_size * new_den
+        lb.pitch   = new_pitch
+        lb.size    = new_size
+        lb.density = new_den
+        lb.product = new_size * new_den
     end
     local speed = SPEED[param]
     update_linked_params(track, speed)
@@ -1213,6 +1248,7 @@ local function handle_randomize_track(n)
     stop_metro_safe(randomize_metro[track])
     lfo.clearLFOs(tostring(track))
     lfo.randomize_lfos(tostring(track), params:get("allow_volume_lfos") == 2)
+    invalidate_lfo_cache()
     randomize(track)
     randpara.randomize_params(steps, track)
     randpara.reset_evolution_centers()
@@ -1275,6 +1311,7 @@ local function find_or_create_lfo_for_param(track, param_name, only_existing, cr
                 params:set(i_str .. "lfo_depth", create_with_depth and 0.01 or 0)
                 params:set(i_str .. "offset", offset)
                 params:set(i_str .. "lfo", create_with_depth and 2 or 1)
+                invalidate_lfo_cache()
                 return i
             end
         end
@@ -1307,12 +1344,13 @@ local function adjust_lfo_depth(lfo_idx, delta)
             params:set(lfo_idx .. "offset", initial_offset)
             params:set(lfo_idx .. "lfo_depth", initial_depth)
             params:set(lfo_idx .. "lfo", 2)
+            invalidate_lfo_cache()
             lfos_turned_off[target_param] = nil
         end
         return
     end
     local proposed_depth = current_depth + delta
-    if proposed_depth <= 0 then if current_depth > 0 then params:set(lfo_idx .. "lfo", 1) end return end
+    if proposed_depth <= 0 then if current_depth > 0 then params:set(lfo_idx .. "lfo", 1) invalidate_lfo_cache() end return end
     local max_offset = 1 - proposed_depth * 0.01
     local current_offset = params:get(lfo_idx .. "offset")
     local new_offset = util.clamp(current_offset, -max_offset, max_offset)
@@ -1463,7 +1501,7 @@ function handle_key_release(n, both_keys_pressed)
         local combo_tracker = key_trackers[23]
         local duration = util.time() - combo_tracker.press_time
         if not combo_tracker.had_interaction then
-            if duration >= KEY_LONG_PRESS_THRESHOLD then lfo.assign_to_current_row(current_mode, current_filter_mode)
+            if duration >= KEY_LONG_PRESS_THRESHOLD then lfo.assign_to_current_row(current_mode, current_filter_mode) invalidate_lfo_cache()
             else
                 handle_parameter_lock()
             end
@@ -1495,21 +1533,33 @@ local FORMAT = {
   spread=function(v) return string.format("%.0f%%",v) end,
   jitter=function(v) return format_jitter(v) end,
   size=function(v) return format_size(v) end}
-local ops, level_buckets = {r={},p={},t={}}, {}
+local ops = {r={}, r_n=0, p={}, p_n=0, t={}, t_n=0}
+local level_buckets = {}
 local function clear_ops()
-  for i=#ops. r,1,-1 do ops.r[i]=nil end
-  for i=#ops.p,1,-1 do ops.p[i]=nil end
-  for i=#ops.t,1,-1 do ops. t[i]=nil end
+  ops.r_n = 0; ops.p_n = 0; ops.t_n = 0
 end
-local function R(l,x,y,w,h) ops.r[#ops.r+1]={l,x,y,w,h} end
-local function P(l,x,y) ops.p[#ops.p+1]={l,x,y} end
-local function T(l,x,y,s,a) ops.t[#ops.t+1]={l,x,y,s,a} end
+local function R(l,x,y,w,h)
+  local n = ops.r_n + 1; ops.r_n = n
+  local s = ops.r[n]
+  if s then s[1]=l;s[2]=x;s[3]=y;s[4]=w;s[5]=h else ops.r[n]={l,x,y,w,h} end
+end
+local function P(l,x,y)
+  local n = ops.p_n + 1; ops.p_n = n
+  local s = ops.p[n]
+  if s then s[1]=l;s[2]=x;s[3]=y else ops.p[n]={l,x,y} end
+end
+local function T(l,x,y,s,a)
+  local n = ops.t_n + 1; ops.t_n = n
+  local slot = ops.t[n]
+  if slot then slot[1]=l;slot[2]=x;slot[3]=y;slot[4]=s;slot[5]=a else ops.t[n]={l,x,y,s,a} end
+end
+local LOCK_OFFSETS = {{-3,0},{-4,0},{-4,-1},{-4,-2}}
 local function draw_lock(x,y)
-  local offsets = {{-3,0},{-4,0},{-4,-1},{-4,-2}}
-  for _,o in ipairs(offsets) do P(LEVEL.dim, x+o[1], y+o[2]) end
+  for _,o in ipairs(LOCK_OFFSETS) do P(LEVEL.dim, x+o[1], y+o[2]) end
 end
+local SIZE_LINK_OFFSETS = {1,3,5,7,9,11,13,15}
 local function draw_size_link(x,y) 
-  for _,offset in ipairs{1,3,5,7,9,11,13,15} do 
+  for _,offset in ipairs(SIZE_LINK_OFFSETS) do 
     local center = 8
     local distance = math.abs(offset - center)
     local level = math.floor(10 * (1 - distance / center))
@@ -1521,24 +1571,27 @@ local function get_or_create_bucket(l)
   return level_buckets[l]
 end
 local function flush()
-  for _,bucket in pairs(level_buckets) do bucket.r_count, bucket.p_count, bucket. t_count = 0, 0, 0 end
-  for i=1,#ops.r do
+  for _,bucket in pairs(level_buckets) do bucket.r_count, bucket.p_count, bucket.t_count = 0, 0, 0 end
+  for i=1,ops.r_n do
     local o = ops.r[i]
     local bucket = get_or_create_bucket(o[1])
-    bucket.r_count = bucket.r_count + 1
-    bucket.r[bucket.r_count] = {o[2], o[3], o[4], o[5]}
+    local rc = bucket.r_count + 1; bucket.r_count = rc
+    local s = bucket.r[rc]
+    if s then s[1]=o[2];s[2]=o[3];s[3]=o[4];s[4]=o[5] else bucket.r[rc]={o[2],o[3],o[4],o[5]} end
   end
-  for i=1,#ops.p do
+  for i=1,ops.p_n do
     local o = ops.p[i]
     local bucket = get_or_create_bucket(o[1])
-    bucket.p_count = bucket.p_count + 1
-    bucket.p[bucket. p_count] = {o[2], o[3]}
+    local pc = bucket.p_count + 1; bucket.p_count = pc
+    local s = bucket.p[pc]
+    if s then s[1]=o[2];s[2]=o[3] else bucket.p[pc]={o[2],o[3]} end
   end
-  for i=1,#ops.t do
+  for i=1,ops.t_n do
     local o = ops.t[i]
     local bucket = get_or_create_bucket(o[1])
-    bucket.t_count = bucket.t_count + 1
-    bucket.t[bucket. t_count] = {o[2], o[3], o[4], o[5]}
+    local tc = bucket.t_count + 1; bucket.t_count = tc
+    local s = bucket.t[tc]
+    if s then s[1]=o[2];s[2]=o[3];s[3]=o[4];s[4]=o[5] else bucket.t[tc]={o[2],o[3],o[4],o[5]} end
   end
   for l=1,15 do
     local bucket = level_buckets[l]
@@ -1556,7 +1609,7 @@ local function flush()
           local p = bucket.p[i]
           screen.pixel(p[1], p[2])
         end
-        screen. fill()
+        screen.fill()
       end
       for i=1,bucket.t_count do
         local t = bucket.t[i]
@@ -1804,6 +1857,7 @@ function init()
     setup_ui_metro()
     setup_params()
     setup_osc()
+    lfo.on_state_change = invalidate_lfo_cache
     font.init_fx_cache()
     init_longpress_checker()
 end
@@ -1814,6 +1868,7 @@ function cleanup()
     stop_metro_safe(longpress_metro)
     for i = 1, 2 do stop_metro_safe(randomize_metro[i]) end
     lfo.cleanup()
+    lfo.on_state_change = nil
     randpara.cleanup()
     if initial_monitor_level then params:set('monitor_level', initial_monitor_level) end
     if initial_reverb_onoff then params:set('reverb', initial_reverb_onoff) end

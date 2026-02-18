@@ -5,6 +5,7 @@ local lfo = {}
 local assigned_params = {}
 local lfo_paused = false
 local lfo_cleaning_up = false
+lfo.on_state_change = nil
 local util_clamp = util.clamp
 local math_random = math.random
 local math_pi = math.pi
@@ -453,6 +454,7 @@ function lfo.process()
       end
     else
       pset(i.."lfo", 1)
+      if lfo.on_state_change then lfo.on_state_change() end
     end
 
     ::continue::
@@ -469,6 +471,7 @@ function lfo.init()
   for i = 1, number_of_outputs do
     params:add_separator("LFO " .. i)
     params:add_option(i .. "lfo_target", i .. " target", lfo.lfo_targets, 1)
+    params:set_action(i .. "lfo_target", function() if lfo.on_state_change then lfo.on_state_change() end end)
     params:add_option(i .. "lfo_shape", i .. " shape", options.lfotypes, 1)
     params:set_action(i .. "lfo_shape", function(value) lfo[i].waveform = options.lfotypes[value] end)
     params:add_number(i .. "lfo_depth", i .. " depth", 0, 100, 50)
@@ -478,6 +481,7 @@ function lfo.init()
     params:add_control(i .. "lfo_freq", i .. " freq", controlspec.new(0.01, 2.00, "lin", 0.01, 0.05, ""))
     params:set_action(i .. "lfo_freq", function(value) lfo[i].freq = value * params:get("global_lfo_freq_scale") end)
     params:add_option(i .. "lfo", i .. " LFO", { "off", "on" }, 1)
+    params:set_action(i .. "lfo", function() if lfo.on_state_change then lfo.on_state_change() end end)
   end
 
   lfo_metro = metro.init()
