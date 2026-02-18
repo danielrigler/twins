@@ -1470,7 +1470,7 @@ function handle_key_release(n, both_keys_pressed)
             combo_tracker.had_interaction = true
         end
     end
-    if tracker.press_time and not tracker.long_triggered and 
+    if (n == 2 or n == 3) and tracker.press_time and not tracker.long_triggered and 
        not tracker.had_interaction and not both_keys_pressed then
         if (util.time() - tracker.press_time) < KEY_LONG_PRESS_THRESHOLD then handle_mode_navigation(n) end
     end
