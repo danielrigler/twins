@@ -18,9 +18,9 @@
 -- K2+K3: Lock Parameters
 -- K2+K3: HP/LP Filter 
 -- K1+K2/K3: Randomize
--- Hold K2+K3: Assign LFOs
--- K2+E2/E3: LFO depth
--- K3+E2/E3: LFO offset
+-- K2+K3+E1/E2/E3: Effect Mix
+-- Hold K2+K3: Add Random LFO
+-- K2/K3+E1/E2/E3: Adjust LFO
 --
 --
 --
@@ -77,6 +77,8 @@ local key_longpress_actions = {
     [3] = {param = "symmetry", a = 1, b = 0},
     [23] = {action = "assign_lfo_to_current_row"}}
 local showing_save_message = false
+local fx_popup = {label = nil, value = nil, time = nil}
+local FX_POPUP_DURATION = 1
 local longpress_metro = nil
 local current_scene_mode = "off"
 local scene_data = {[1] = {[1] = {}, [2] = {}}, [2] = {[1] = {}, [2] = {}}}
@@ -153,10 +155,7 @@ local scale_intervals_cache = {}
 local function get_scale_intervals(scale_name)
     scale_name = normalize_scale_name(scale_name)
     if scale_name == "none" then scale_name = "major" end
-    if not scale_intervals_cache[scale_name] then
-        scale_intervals_cache[scale_name] = MusicUtil.generate_scale(0, scale_name, 1)
-                                         or MusicUtil.generate_scale(0, "major", 1)
-    end
+    if not scale_intervals_cache[scale_name] then scale_intervals_cache[scale_name] = MusicUtil.generate_scale(0, scale_name, 1) or MusicUtil.generate_scale(0, "major", 1) end
     return scale_intervals_cache[scale_name]
 end
 local animation_y = -64 animation_complete = false animation_start_time = nil
@@ -256,8 +255,9 @@ local function init_longpress_checker()
         for n = 1, 3 do
             local tracker = key_trackers[n]
             local action = key_longpress_actions[n]
+            local blocked = (n == 2 or n == 3) and key_state[1]
             if tracker.press_time and not tracker.had_interaction and 
-               not tracker.long_triggered and action then
+               not tracker.long_triggered and action and not blocked then
                 if (now - tracker.press_time) >= KEY_LONG_PRESS_THRESHOLD then
                     tracker.long_triggered = true
                     tracker.had_interaction = true
@@ -1078,7 +1078,7 @@ local function randomize(n)
                     end
                 end
             end
-            if all_done then stop_metro_safe(m_rand) end
+            if all_done then stop_metro_safe(m_rand) randomize_metro[n] = nil end
         end
         m_rand:start()
     end
@@ -1245,7 +1245,7 @@ end
 local function handle_randomize_track(n)
     if not key_state[1] then return false end
     local track = n == 3 and 2 or 1
-    stop_metro_safe(randomize_metro[track])
+    stop_metro_safe(randomize_metro[track]) randomize_metro[track] = nil
     lfo.clearLFOs(tostring(track))
     lfo.randomize_lfos(tostring(track), params:get("allow_volume_lfos") == 2)
     invalidate_lfo_cache()
@@ -1369,62 +1369,72 @@ function enc(n, d)
     local should_auto_save = current_scene_mode == "on" and (morph_amount == 0 or morph_amount == 100)
     local is_morphing = current_scene_mode == "on" and morph_amount > 0 and morph_amount < 100
     local function mark_key_interaction()
-        if k1 then 
-            key_trackers[1].had_interaction = true
-            key_trackers[1].long_triggered = true
-        end
-        if k2 then 
-            key_trackers[2].had_interaction = true
-            key_trackers[2].long_triggered = true
-        end
-        if k3 then 
-            key_trackers[3].had_interaction = true
-            key_trackers[3].long_triggered = true
-        end
+        if k1 then key_trackers[1].had_interaction = true key_trackers[1].long_triggered = true end
+        if k2 then key_trackers[2].had_interaction = true key_trackers[2].long_triggered = true end
+        if k3 then key_trackers[3].had_interaction = true key_trackers[3].long_triggered = true end
+        if k2 and k3 then key_trackers[23].had_interaction = true key_trackers[23].long_triggered = true end
     end
     local function finalize_change()
         if is_morphing then capture_to_temp_scene() end
         if should_auto_save then auto_save_to_scene() end
     end
-    local function adjust_lfo_with_symmetry(track, param_name, lfo_idx, adjustment_fn, delta_modifier)
+    local function adjust_lfo_with_symmetry(track, param_name, lfo_idx, adjustment_fn, delta_modifier, only_existing, create_with_depth)
         adjustment_fn(lfo_idx, d)
         if params:get("symmetry") == 1 then
-            local other_track = 3 - track
-            local other_lfo = find_or_create_lfo_for_param(other_track, param_name, k3, k2, lfo_idx)
-            if other_lfo then
-                local adjusted_d = delta_modifier and delta_modifier(d) or d
-                adjustment_fn(other_lfo, adjusted_d)
-            end
+            local other_lfo = find_or_create_lfo_for_param(3 - track, param_name, only_existing, create_with_depth, lfo_idx)
+            if other_lfo then adjustment_fn(other_lfo, delta_modifier and delta_modifier(d) or d) end
         end
     end
-    if (k2 or k3) and (n == 2 or n == 3) then
-        local track = n - 1
-        local mode_name = current_mode
-        local param_name = current_mode
-        if current_mode == "lpf" or current_mode == "hpf" then 
-            mode_name = current_filter_mode
-            param_name = current_filter_mode == "lpf" and "cutoff" or "hpf"
+    if k2 and k3 and not k1 then
+        local fx_map = {[1] = "reverb_mix", [2] = "delay_mix", [3] = "shimmer_mix1"}
+        local fx_labels = {[1] = "reverb", [2] = "delay", [3] = "shimmer"}
+        local fx = fx_map[n]
+        if fx then
+            mark_key_interaction()
+            params:delta(fx, d)
+            fx_popup.label = fx_labels[n]
+            fx_popup.value = params:get(fx)
+            fx_popup.time = util.time()
+            finalize_change()
         end
-        if k1 then mode_name = "volume" param_name = "volume" end
-        if param_modes[mode_name] then
-            local lfo_idx = find_or_create_lfo_for_param(track, param_name, k3, k2)
+        return
+    end
+    if (k2 or k3) and not (k2 and k3) then
+        local voice = k2 and 1 or 2
+        local param_name
+        if k1 then
+            param_name = "volume"
+        else
+            local mode_name = (current_mode == "lpf" or current_mode == "hpf") and current_filter_mode or current_mode
+            param_name = param_modes[mode_name] and param_modes[mode_name].param or mode_name
+        end
+        mark_key_interaction()
+        if n == 1 then
+            local lfo_idx = find_or_create_lfo_for_param(voice, param_name, true, false)
             if lfo_idx then
-                mark_key_interaction()
-                if k3 then
-                    local pan_inverter = param_name == "pan" and function(v) return -v end or nil
-                    adjust_lfo_with_symmetry(track, param_name, lfo_idx, adjust_lfo_offset, pan_inverter)
-                elseif k2 then
-                    adjust_lfo_with_symmetry(track, param_name, lfo_idx, adjust_lfo_depth)
-                end
+                params:delta(lfo_idx .. "lfo_freq", d * 0.5)
                 finalize_change()
-                return
+            end
+        elseif n == 2 then
+            local lfo_idx = find_or_create_lfo_for_param(voice, param_name, false, true)
+            if lfo_idx then
+                adjust_lfo_with_symmetry(voice, param_name, lfo_idx, adjust_lfo_depth, nil, false, true)
+                finalize_change()
+            end
+        elseif n == 3 then
+            local lfo_idx = find_or_create_lfo_for_param(voice, param_name, true, false)
+            if lfo_idx then
+                local pan_inv = param_name == "pan" and function(v) return -v end or nil
+                adjust_lfo_with_symmetry(voice, param_name, lfo_idx, adjust_lfo_offset, pan_inv, true, false)
+                finalize_change()
             end
         end
+        return
     end
     if n == 1 then
         mark_key_interaction()
         if should_auto_save then auto_save_to_scene() end
-        if k1 and current_scene_mode == "on" then 
+        if k1 and current_scene_mode == "on" then
             params:set("morph_amount", util.clamp(morph_amount + (d * 3), 0, 100))
         else
             handle_volume_lfo(1, d, k1)
@@ -1435,7 +1445,7 @@ function enc(n, d)
     if n == 2 or n == 3 then
         local track = n - 1
         mark_key_interaction()
-        stop_metro_safe(randomize_metro[track])
+        stop_metro_safe(randomize_metro[track]) randomize_metro[track] = nil
         if k1 then
             local p = track .. "volume"
             disable_lfos_for_param(p, true)
@@ -1452,19 +1462,14 @@ end
 
 local function set_key_tracking(n, state)
     local tracker = key_trackers[n]
-    if state == "init" then
-        tracker.press_time = util.time()
-        tracker.had_interaction = false
-        tracker.long_triggered = false
-    else
-        tracker.press_time = nil
-        tracker.had_interaction = false
-        tracker.long_triggered = false
-        if (n == 2 or n == 3) and key_trackers[23] then
-            key_trackers[23].press_time = nil
-            key_trackers[23].had_interaction = false
-            key_trackers[23].long_triggered = false
-        end
+    local is_init = state == "init"
+    tracker.press_time = is_init and util.time() or nil
+    tracker.had_interaction = false
+    tracker.long_triggered = false
+    if not is_init and (n == 2 or n == 3) and key_trackers[23] then
+        key_trackers[23].press_time = nil
+        key_trackers[23].had_interaction = false
+        key_trackers[23].long_triggered = false
     end
 end
 
@@ -1499,16 +1504,18 @@ function handle_key_release(n, both_keys_pressed)
     local tracker = key_trackers[n]
     if (n == 2 or n == 3) and key_trackers[23] and key_trackers[23].press_time then
         local combo_tracker = key_trackers[23]
-        local duration = util.time() - combo_tracker.press_time
         if not combo_tracker.had_interaction then
-            if duration >= KEY_LONG_PRESS_THRESHOLD then lfo.assign_to_current_row(current_mode, current_filter_mode) invalidate_lfo_cache()
+            local duration = util.time() - combo_tracker.press_time
+            if duration >= KEY_LONG_PRESS_THRESHOLD then
+                lfo.assign_to_current_row(current_mode, current_filter_mode)
+                invalidate_lfo_cache()
             else
                 handle_parameter_lock()
             end
             combo_tracker.had_interaction = true
         end
     end
-    if (n == 2 or n == 3) and tracker.press_time and not tracker.long_triggered and 
+    if (n == 2 or n == 3) and tracker.press_time and not tracker.long_triggered and
        not tracker.had_interaction and not both_keys_pressed then
         if (util.time() - tracker.press_time) < KEY_LONG_PRESS_THRESHOLD then handle_mode_navigation(n) end
     end
@@ -1638,9 +1645,7 @@ function redraw()
     cut  = {params:get("1cutoff"), params:get("2cutoff")},
     hpf  = {params:get("1hpf"),    params:get("2hpf")},
     size = {params:get("1size"),   params:get("2size")},
-    live = {
-      in_  = {params:get("1live_input"),  params:get("2live_input")},
-      dir_ = {params:get("1live_direct"), params:get("2live_direct")}},
+    live = {in_  = {params:get("1live_input"),  params:get("2live_input")}, dir_ = {params:get("1live_direct"), params:get("2live_direct")}},
     link = params:get("global_pitch_size_density_link") == 1,
     dry  = params:get("dry_mode") == 1,
     sym  = params:get("symmetry") == 1,
@@ -1803,6 +1808,13 @@ function redraw()
     font.draw_fx_status_bucketed(P) 
   end
   if showing_save_message then R(1, 40, 25, 48, 10) T(LEVEL.hi, 64, 33, "SAVING...", "center") end
+  if fx_popup.time and (now - fx_popup.time) < FX_POPUP_DURATION then
+    local pct = string.format("%.0f%%", fx_popup.value)
+    local txt = fx_popup.label .. ": " .. pct
+    local w = #txt * 5 + 8
+    R(1, 64 - math.floor(w/2), 27, w, 10)
+    T(LEVEL.hi, 64, 35, txt, "center")
+  end
   flush()
   screen.restore()
   screen.update()

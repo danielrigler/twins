@@ -1,5 +1,4 @@
 local presets = {}
-local lfo = nil
 
 presets.menu_open = false
 presets.menu_mode = "load"
@@ -12,14 +11,11 @@ local buffer_loading = {
     pending = {},
     complete = {}
 }
+local loading_clock = nil
 
 local PRESETS_DIR = "twins"
 local BUFFER_TIMEOUT = 15
 local PRESET_VERSION = 1
-
-function presets.set_lfo_reference(lfo_module)
-    lfo = lfo_module
-end
 
 function presets.buffer_loaded(voice)
     buffer_loading.complete[voice] = true
@@ -81,37 +77,6 @@ local function get_all_params_state()
     return state
 end
 
-local function get_lfo_states()
-    local lfo_states = {}
-    
-    for i = 1, 16 do
-        local lfo_param = i .. "lfo"
-        if params.lookup[lfo_param] and params:get(lfo_param) == 2 then
-            local target_param = i .. "lfo_target"
-            local shape_param = i .. "lfo_shape"
-            local freq_param = i .. "lfo_freq"
-            local depth_param = i .. "lfo_depth"
-            local offset_param = i .. "offset"
-
-            if params.lookup[target_param] and params.lookup[shape_param] and 
-               params.lookup[freq_param] and params.lookup[depth_param] and 
-               params.lookup[offset_param] then
-                lfo_states[i] = {
-                    slot = i,
-                    enabled = true,
-                    target = params:get(target_param),
-                    shape = params:get(shape_param),
-                    freq = params:get(freq_param),
-                    depth = params:get(depth_param),
-                    offset = params:get(offset_param)
-                }
-            end
-        end
-    end
-    
-    return lfo_states
-end
-
 local function generate_preset_name(preset_name)
     if not preset_name or preset_name == "" then
         local time_prefix = os.date("%Y%m%d_%H%M")
@@ -140,7 +105,6 @@ function presets.save_complete_preset(preset_name, scene_data_ref, update_pan_po
             timestamp = os.time(),
             version = PRESET_VERSION,
             params = get_all_params_state(),
-            lfo_states = get_lfo_states(),
             morph = {
                 [1] = { scene_data_ref[1][1] or {}, scene_data_ref[1][2] or {} },
                 [2] = { scene_data_ref[2][1] or {}, scene_data_ref[2][2] or {} }
@@ -173,30 +137,6 @@ function presets.save_complete_preset(preset_name, scene_data_ref, update_pan_po
     return success
 end
 
-local function apply_lfo_states(lfo_states)
-    if not lfo_states then return end
-    
-    for slot, lfo_state in pairs(lfo_states) do
-        local target_param = slot .. "lfo_target"
-        local shape_param = slot .. "lfo_shape"
-        local freq_param = slot .. "lfo_freq"
-        local depth_param = slot .. "lfo_depth"
-        local offset_param = slot .. "offset"
-        local lfo_param = slot .. "lfo"
-        
-        if params.lookup[target_param] and params.lookup[shape_param] and 
-           params.lookup[freq_param] and params.lookup[depth_param] and 
-           params.lookup[offset_param] and params.lookup[lfo_param] then
-            params:set(target_param, lfo_state.target)
-            params:set(shape_param, lfo_state.shape)
-            params:set(freq_param, lfo_state.freq)
-            params:set(depth_param, lfo_state.depth)
-            params:set(offset_param, lfo_state.offset)
-            params:set(lfo_param, 2)
-        end
-    end
-end
-
 local function apply_scene_data(preset_data, scene_data_ref)
     local source = preset_data.morph or preset_data.scene_data
     if not source then return end
@@ -206,72 +146,6 @@ local function apply_scene_data(preset_data, scene_data_ref)
             scene_data_ref[track][scene] = (source[track] and source[track][scene]) or {}
         end
     end
-end
-
-local function wait_for_audio_samples()
-    buffer_loading.pending = {}
-    buffer_loading.complete = {}
-    
-    local sample_count = 0
-    
-    for i = 1, 2 do
-        local sample_param = i .. "sample"
-        if params.lookup[sample_param] then
-            local sample_path = params:get(sample_param)
-            if sample_path and sample_path ~= "-" and sample_path ~= "" and sample_path ~= "none" then
-                buffer_loading.pending[i] = true
-                buffer_loading.complete[i] = false
-                sample_count = sample_count + 1
-            end
-        end
-    end
-    
-    if sample_count > 0 then
-        print("⏳ Loading " .. sample_count .. " sample" .. (sample_count > 1 and "s" or "") .. "...")
-        local success = wait_for_buffers(BUFFER_TIMEOUT)
-        if success then
-            print("✓ All buffers loaded")
-        else
-            print("⚠ Timeout - some samples may not be ready")
-        end
-        return success
-    end
-    
-    return true
-end
-
-local function load_audio_samples(audio_active_ref)
-    buffer_loading.pending = {}
-    buffer_loading.complete = {}
-    
-    local sample_count = 0
-    
-    for i = 1, 2 do
-        local sample_param = i .. "sample"
-        if params.lookup[sample_param] then
-            local sample_path = params:get(sample_param)
-            if sample_path and sample_path ~= "-" and sample_path ~= "" and sample_path ~= "none" then
-                buffer_loading.pending[i] = true
-                buffer_loading.complete[i] = false
-                engine.read(i, sample_path)
-                audio_active_ref[i] = true
-                sample_count = sample_count + 1
-            end
-        end
-    end
-    
-    if sample_count > 0 then
-        print("⏳ Loading " .. sample_count .. " sample" .. (sample_count > 1 and "s" or "") .. "...")
-        local success = wait_for_buffers(BUFFER_TIMEOUT)
-        if success then
-            print("✓ All buffers loaded")
-        else
-            print("⚠ Timeout - some samples may not be ready")
-        end
-        return success
-    end
-    
-    return true
 end
 
 local function categorize_params(preset_params)
@@ -366,8 +240,17 @@ function presets.load_complete_preset(preset_name, scene_data_ref, update_pan_po
     end
     
     _G.preset_loading = true
-    
-    clock.run(function()
+
+    if loading_clock then
+        pcall(function()
+            if coroutine.status(loading_clock) ~= "dead" then
+                clock.cancel(loading_clock)
+            end
+        end)
+        loading_clock = nil
+    end
+
+    loading_clock = clock.run(function()
         if params.lookup["unload_all"] then
             params:set("unload_all", 1)
             clock.sleep(0.05)
@@ -443,11 +326,6 @@ function presets.load_complete_preset(preset_name, scene_data_ref, update_pan_po
             apply_params(lock_params, audio_params, volume_params, other_params)
         end
         
-        clock.sleep(0.03)
-
-        apply_lfo_states(preset_data.lfo_states)
-        clock.sleep(0.03)
-
         update_pan_positioning_fn()
 
         refresh_voice_params()
@@ -456,6 +334,7 @@ function presets.load_complete_preset(preset_name, scene_data_ref, update_pan_po
         redraw()
         
         print("✓ Preset loaded: " .. preset_name)
+        loading_clock = nil
     end)
 
     return true
@@ -679,6 +558,18 @@ end
 
 function presets.is_menu_open()
     return presets.menu_open
+end
+
+function presets.cleanup()
+    if loading_clock then
+        pcall(function()
+            if coroutine.status(loading_clock) ~= "dead" then
+                clock.cancel(loading_clock)
+            end
+        end)
+        loading_clock = nil
+    end
+    _G.preset_loading = false
 end
 
 return presets

@@ -122,24 +122,24 @@ lfo.lfo_targets = {
 }
 
 lfo.target_ranges = {
-  ["1pan"] = { depth = { 25, 90 }, offset = { 0, 0 }, frequency = { 0.1, 0.6 }, waveform = { "sine" }, chance = 0.8 },
-  ["2pan"] = { depth = { 25, 90 }, offset = { 0, 0 }, frequency = { 0.1, 0.6 }, waveform = { "sine" }, chance = 0.8 },
-  ["1jitter"] = { depth = { 20, 70 }, offset = { -1, 1 }, frequency = { 0.1, 0.4 }, waveform = { "sine" }, chance = 0.6 },
-  ["2jitter"] = { depth = { 20, 70 }, offset = { -1, 1 }, frequency = { 0.1, 0.4 }, waveform = { "sine" }, chance = 0.6 },
-  ["1spread"] = { depth = { 10, 30 }, offset = { 0, 0.3 }, frequency = { 0.1, 0.4 }, waveform = { "sine" }, chance = 0.6 },
-  ["2spread"] = { depth = { 10, 30 }, offset = { 0, 0.3 }, frequency = { 0.1, 0.4 }, waveform = { "sine" }, chance = 0.6},
-  ["1size"] = { depth = { 5, 30 }, offset = { 0.1, 1 }, frequency = { 0.1, 0.4 }, waveform = { "sine" }, chance = 0.6 },
-  ["2size"] = { depth = { 5, 30 }, offset = { 0.1, 1 }, frequency = { 0.1, 0.4 }, waveform = { "sine" }, chance = 0.6 },
-  ["1density"] = { depth = { 5, 40 }, offset = { 0, 1 }, frequency = { 0.1, 0.4 }, waveform = { "sine" }, chance = 0.6 },
-  ["2density"] = { depth = { 5, 40 }, offset = { 0, 1 }, frequency = { 0.1, 0.4 }, waveform = { "sine" }, chance = 0.6 },
+  ["1pan"] = { depth = { 25, 90 }, offset = { 0, 0 }, frequency = { 0.1, 1 }, waveform = { "sine" }, chance = 0.75 },
+  ["2pan"] = { depth = { 25, 90 }, offset = { 0, 0 }, frequency = { 0.1, 1 }, waveform = { "sine" }, chance = 0.75 },
+  ["1jitter"] = { depth = { 20, 70 }, offset = { -1, 1 }, frequency = { 0.1, 0.6 }, waveform = { "sine" }, chance = 0.6 },
+  ["2jitter"] = { depth = { 20, 70 }, offset = { -1, 1 }, frequency = { 0.1, 0.6 }, waveform = { "sine" }, chance = 0.6 },
+  ["1spread"] = { depth = { 10, 30 }, offset = { 0, 0.3 }, frequency = { 0.1, 0.6 }, waveform = { "sine" }, chance = 0.6 },
+  ["2spread"] = { depth = { 10, 30 }, offset = { 0, 0.3 }, frequency = { 0.1, 0.6 }, waveform = { "sine" }, chance = 0.6},
+  ["1size"] = { depth = { 5, 30 }, offset = { 0.1, 1 }, frequency = { 0.1, 0.6 }, waveform = { "sine" }, chance = 0.6 },
+  ["2size"] = { depth = { 5, 30 }, offset = { 0.1, 1 }, frequency = { 0.1, 0.6 }, waveform = { "sine" }, chance = 0.6 },
+  ["1density"] = { depth = { 5, 40 }, offset = { 0, 1 }, frequency = { 0.1, 0.6 }, waveform = { "sine" }, chance = 0.6 },
+  ["2density"] = { depth = { 5, 40 }, offset = { 0, 1 }, frequency = { 0.1, 0.6 }, waveform = { "sine" }, chance = 0.6 },
   ["1volume"] = { depth = { 2, 3 }, offset = { 0, 1 }, frequency = { 0.1, 0.5 }, waveform = { "sine" }, chance = 1.0 },
   ["2volume"] = { depth = { 2, 3 }, offset = { 0, 1 }, frequency = { 0.1, 0.5 }, waveform = { "sine" }, chance = 1.0 },
-  ["1seek"] = { depth = { 0, 100 }, offset = { 0, 1 }, frequency = { 0.02, 0.3 }, waveform = { "sine" }, chance = 0.3 },
-  ["2seek"] = { depth = { 0, 100 }, offset = { 0, 1 }, frequency = { 0.02, 0.3 }, waveform = { "sine" }, chance = 0.3 },
-  ["1speed"] = { depth = { 10, 50 }, offset = { -1, 1 }, frequency = { 0.02, 0.3 }, waveform = { "sine" }, chance = 0.2 },
-  ["2speed"] = { depth = { 10, 50 }, offset = { -1, 1 }, frequency = { 0.02, 0.3 }, waveform = { "sine" }, chance = 0.2 },
-  ["1pitch"] = { depth = { 5, 30 }, offset = { -1, 1 }, frequency = { 0.1, 0.4 }, waveform = { "sine" }, chance = 0 },
-  ["2pitch"] = { depth = { 5, 30 }, offset = { -1, 1 }, frequency = { 0.1, 0.4 }, waveform = { "sine" }, chance = 0 } 
+  ["1seek"] = { depth = { 0, 100 }, offset = { 0, 1 }, frequency = { 0.1, 0.6 }, waveform = { "sine" }, chance = 0.3 },
+  ["2seek"] = { depth = { 0, 100 }, offset = { 0, 1 }, frequency = { 0.1, 0.6 }, waveform = { "sine" }, chance = 0.3 },
+  ["1speed"] = { depth = { 10, 50 }, offset = { -1, 1 }, frequency = { 0.1, 0.6 }, waveform = { "sine" }, chance = 0.3 },
+  ["2speed"] = { depth = { 10, 50 }, offset = { -1, 1 }, frequency = { 0.1, 0.6 }, waveform = { "sine" }, chance = 0.3 },
+  ["1pitch"] = { depth = { 5, 30 }, offset = { -1, 1 }, frequency = { 0.1, 0.6 }, waveform = { "sine" }, chance = 0.0 },
+  ["2pitch"] = { depth = { 5, 30 }, offset = { -1, 1 }, frequency = { 0.1, 0.6 }, waveform = { "sine" }, chance = 0.0 } 
 }
 
 local param_ranges = {
