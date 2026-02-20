@@ -17,6 +17,9 @@ local PRESETS_DIR = "twins"
 local BUFFER_TIMEOUT = 15
 local PRESET_VERSION = 1
 
+local _LFO_KEYS = {}
+for _i = 1, 16 do _LFO_KEYS[_i] = _i .. "lfo" end
+
 function presets.buffer_loaded(voice)
     buffer_loading.complete[voice] = true
     buffer_loading.pending[voice] = false
@@ -195,16 +198,9 @@ end
 local function refresh_voice_params()
     for i = 1, 2 do
         local vol_param = i .. "volume"
-        if params.lookup[vol_param] then
-            local vol = params:get(vol_param)
-            params:set(vol_param, vol)
-        end
-        
+        if params.lookup[vol_param] then params:set(vol_param, params:get(vol_param)) end
         local gain_param = i .. "granular_gain"
-        if params.lookup[gain_param] then
-            local gain = params:get(gain_param)
-            params:set(gain_param, gain)
-        end
+        if params.lookup[gain_param] then params:set(gain_param, params:get(gain_param)) end
     end
 end
 
@@ -257,9 +253,8 @@ function presets.load_complete_preset(preset_name, scene_data_ref, update_pan_po
         end
 
         for i = 1, 16 do
-            local lfo_param = i .. "lfo"
-            if params.lookup[lfo_param] then
-                params:set(lfo_param, 1)
+            if params.lookup[_LFO_KEYS[i]] then
+                params:set(_LFO_KEYS[i], 1)
             end
         end
         apply_scene_data(preset_data, scene_data_ref)

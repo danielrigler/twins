@@ -111,29 +111,25 @@ end
 local function build_evolvable_params_cache(force)
   if not cache_dirty and not force then return end
   
-  local new_cache = {}
   local new_cache_set = {}
-  
+  local write_idx = 0
+
   for param_name, spec in pairs(PARAM_SPECS) do
     local group = spec[3]
     local lock_param = LOCK_PARAMS[group]
     local is_unlocked = not lock_param or not params.lookup[lock_param] or params:get(lock_param) ~= 2
     
     if params.lookup[param_name] and is_unlocked then
-      table.insert(new_cache, param_name)
+      write_idx = write_idx + 1
+      evolvable_params_cache[write_idx] = param_name
       new_cache_set[param_name] = true
     end
   end
-  
+  for i = write_idx + 1, #evolvable_params_cache do evolvable_params_cache[i] = nil end
   for param_name in pairs(evolution_states) do
     if not new_cache_set[param_name] then
       evolution_states[param_name] = nil
     end
-  end
-  
-  clear_table(evolvable_params_cache)
-  for _, param_name in ipairs(new_cache) do
-    table.insert(evolvable_params_cache, param_name)
   end
   
   cache_dirty = false
@@ -148,29 +144,22 @@ local function evolution_update()
   local updated_params = {}
   
   for _, param_name in ipairs(evolvable_params_cache) do
-    local spec = PARAM_SPECS[param_name]
-    if spec then
-      local group = spec[3]
-      local lock_param = LOCK_PARAMS[group]
-      local is_locked = lock_param and params.lookup[lock_param] and params:get(lock_param) == 2
-
-      if params.lookup[param_name] and not updated_params[param_name] and not is_locked then
-        init_evolution_state(param_name)
-        local state = evolution_states[param_name]
-        local new_value = evolve_parameter(param_name, state)
-        params:set(param_name, new_value)
-        updated_params[param_name] = true
-        
-        if symmetry and param_name:match("^%d") then
-          local track_num = param_name:match("^(%d)")
-          local mirrored = param_name:gsub("^%d", tostring((tonumber(track_num) % 2) + 1))
-          if params.lookup[mirrored] and not updated_params[mirrored] then
-            init_evolution_state(mirrored)
-            evolution_states[mirrored].center_value = new_value
-            evolution_states[mirrored].current_drift = 0
-            params:set(mirrored, new_value)
-            updated_params[mirrored] = true
-          end
+    if params.lookup[param_name] and not updated_params[param_name] then
+      init_evolution_state(param_name)
+      local state = evolution_states[param_name]
+      local new_value = evolve_parameter(param_name, state)
+      params:set(param_name, new_value)
+      updated_params[param_name] = true
+      
+      if symmetry and param_name:match("^%d") then
+        local track_num = param_name:match("^(%d)")
+        local mirrored = param_name:gsub("^%d", tostring((tonumber(track_num) % 2) + 1))
+        if params.lookup[mirrored] and not updated_params[mirrored] then
+          init_evolution_state(mirrored)
+          evolution_states[mirrored].center_value = new_value
+          evolution_states[mirrored].current_drift = 0
+          params:set(mirrored, new_value)
+          updated_params[mirrored] = true
         end
       end
     end

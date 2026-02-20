@@ -68,6 +68,16 @@ local morph_amount = 0
 local valid_audio_exts = {[".wav"]=true,[".aif"]=true,[".aiff"]=true,[".flac"]=true}
 local mode_list = {"spread","pitch","density","size","jitter","lpf","pan","speed","seek"}
 local mode_indices = {} for i,v in ipairs(mode_list) do mode_indices[v] = i end
+local MORPH_LFO_KEYS, MORPH_TARGET_KEYS, MORPH_SHAPE_KEYS = {}, {}, {}
+local MORPH_FREQ_KEYS, MORPH_DEPTH_KEYS, MORPH_OFFSET_KEYS = {}, {}, {}
+for _mi = 1, 16 do
+  MORPH_LFO_KEYS[_mi]    = _mi .. "lfo"
+  MORPH_TARGET_KEYS[_mi] = _mi .. "lfo_target"
+  MORPH_SHAPE_KEYS[_mi]  = _mi .. "lfo_shape"
+  MORPH_FREQ_KEYS[_mi]   = _mi .. "lfo_freq"
+  MORPH_DEPTH_KEYS[_mi]  = _mi .. "lfo_depth"
+  MORPH_OFFSET_KEYS[_mi] = _mi .. "offset"
+end
 local key_trackers = {}
 for n = 1, 3 do key_trackers[n] = {press_time = nil, had_interaction = false, long_triggered = false} end
 local KEY_LONG_PRESS_THRESHOLD = 1
@@ -101,8 +111,8 @@ local function rebuild_lfo_cache()
     local targets = lfo.lfo_targets
     if targets then
         for i = 1, 16 do
-            if params:get(i .. "lfo") == 2 then
-                local param_name = targets[params:get(i .. "lfo_target")]
+            if params:get(MORPH_LFO_KEYS[i]) == 2 then
+                local param_name = targets[params:get(MORPH_TARGET_KEYS[i])]
                 if param_name and param_name ~= "none" then lfo_cache[param_name] = i end
             end
         end
@@ -122,7 +132,19 @@ local param_modes = {
     pitch = {param = "pitch", delta = 1, engine = true, has_lock = true, y = 41, label = "pitch:", st = true},
     spread = {param = "spread", delta = 2, engine = true, has_lock = true, y = 51, label = "spread:"},
     volume = {param = "volume", engine = true}}
-local param_rows = {} for mode, config in pairs(param_modes) do if config.y then table.insert(param_rows, {y = config.y, label = config.label, mode = mode, param1 = "1" .. config.param, param2 = "2" .. config.param, hz = config.hz, st = config.st }) end end table.sort(param_rows, function(a, b) return a.y < b.y end)
+local param_rows = {}
+for mode, config in pairs(param_modes) do
+  if config.y then
+    local lbl = config.label
+    table.insert(param_rows, {
+      y = config.y, label = lbl, label_upper = lbl:upper(),
+      name = lbl:match("%a+"),
+      mode = mode, param1 = "1" .. config.param, param2 = "2" .. config.param,
+      hz = config.hz, st = config.st
+    })
+  end
+end
+table.sort(param_rows, function(a, b) return a.y < b.y end)
 local LIMITS = {size={min=20,max=4999},density={min=0.1,max=50},pitch={min=-48,max=48}}
 local scale_array_cache = {}
 local function normalize_scale_name(scale_name)
@@ -303,9 +325,9 @@ local function store_scene(track,scene)
   end
   scene_params.lfo_data={}
   for i=1,16 do
-    local lfo_state=p_get(params,i.."lfo")
+    local lfo_state=p_get(params,MORPH_LFO_KEYS[i])
     if lfo_state==2 then
-      scene_params.lfo_data[i]={enabled=true,target=p_get(params,i.."lfo_target"),shape=p_get(params,i.."lfo_shape"),freq=p_get(params,i.."lfo_freq"),depth=p_get(params,i.."lfo_depth"),offset=p_get(params,i.."offset")}
+      scene_params.lfo_data[i]={enabled=true,target=p_get(params,MORPH_TARGET_KEYS[i]),shape=p_get(params,MORPH_SHAPE_KEYS[i]),freq=p_get(params,MORPH_FREQ_KEYS[i]),depth=p_get(params,MORPH_DEPTH_KEYS[i]),offset=p_get(params,MORPH_OFFSET_KEYS[i])}
     else
       scene_params.lfo_data[i]={enabled=false}
     end
@@ -317,7 +339,7 @@ local function recall_scene(track,scene)
   local scene_params=scene_data[track][scene]
   local p_lookup=params.lookup
   local p_set=params.set
-  for i=1,16 do p_set(params,i.."lfo",1)end
+  for i=1,16 do p_set(params,MORPH_LFO_KEYS[i],1)end
   for param_name,value in pairs(scene_params)do
     if param_name~="lfo_data"and p_lookup[param_name]then p_set(params,param_name,value)end
   end
@@ -325,16 +347,34 @@ local function recall_scene(track,scene)
     for i=1,16 do
       local lfo_entry=scene_params.lfo_data[i]
       if lfo_entry and lfo_entry.enabled then
-        p_set(params,i.."lfo_target",lfo_entry.target)
-        p_set(params,i.."lfo_shape",lfo_entry.shape)
-        p_set(params,i.."lfo_freq",lfo_entry.freq)
-        p_set(params,i.."lfo_depth",lfo_entry.depth)
-        p_set(params,i.."offset",lfo_entry.offset)
-        p_set(params,i.."lfo",2)
+        p_set(params,MORPH_TARGET_KEYS[i],lfo_entry.target)
+        p_set(params,MORPH_SHAPE_KEYS[i],lfo_entry.shape)
+        p_set(params,MORPH_FREQ_KEYS[i],lfo_entry.freq)
+        p_set(params,MORPH_DEPTH_KEYS[i],lfo_entry.depth)
+        p_set(params,MORPH_OFFSET_KEYS[i],lfo_entry.offset)
+        p_set(params,MORPH_LFO_KEYS[i],2)
       end
     end
   end
   invalidate_lfo_cache()
+end
+local function _morph_clamp(x) return x < -1 and -1 or (x > 1 and 1 or x) end
+local function _compute_offset(lfo_offset, const_val, target, t_weight, const_weight, get_range)
+  if not const_val then return _morph_clamp(lfo_offset * t_weight) end
+  local min_val, max_val = get_range(target)
+  if not min_val or not max_val or max_val <= min_val then return _morph_clamp(lfo_offset * t_weight) end
+  const_val = const_val < min_val and min_val or (const_val > max_val and max_val or const_val)
+  local tgt_off = ((const_val - min_val) / (max_val - min_val)) * 2 - 1
+  return _morph_clamp(lfo_offset * t_weight + tgt_off * const_weight)
+end
+
+local function _ensure_unique_assignment(target, slot, has_tracking, lfo_ref, p_set, params_ref)
+  if not has_tracking or not target then return end
+  if lfo_ref.is_param_assigned(target) then
+    local other = lfo_ref.get_lfo_for_param(target)
+    if other and other ~= slot then p_set(params_ref, MORPH_LFO_KEYS[other], 1) end
+  end
+  lfo_ref.mark_param_assigned(target)
 end
 
 local function apply_morph()
@@ -370,30 +410,19 @@ local function apply_morph()
   local has_tracking=lfo.clear_param_assignment and lfo.is_param_assigned and lfo.mark_param_assigned and lfo.get_lfo_for_param
   if has_tracking then
     for i=1,16 do
-      local lfo_state=p_get(params,i.."lfo")
+      local lfo_state=p_get(params,MORPH_LFO_KEYS[i])
       if lfo_state==2 then
-        local target_idx=p_get(params,i.."lfo_target")
+        local target_idx=p_get(params,MORPH_TARGET_KEYS[i])
         local target_param=lfo_targets[target_idx]
         if target_param and target_param~="none"then lfo.clear_param_assignment(target_param)end
       end
     end
   end
-  local function clamp(x)return x<-1 and-1 or(x>1 and 1 or x)end
   local function compute_offset(lfo_offset,const_val,target,t_weight,const_weight)
-    if not const_val then return clamp(lfo_offset*t_weight)end
-    local min_val,max_val=get_range(target)
-    if not min_val or not max_val or max_val<=min_val then return clamp(lfo_offset*t_weight)end
-    const_val=const_val<min_val and min_val or(const_val>max_val and max_val or const_val)
-    local tgt_off=((const_val-min_val)/(max_val-min_val))*2-1
-    return clamp(lfo_offset*t_weight+tgt_off*const_weight)
+    return _compute_offset(lfo_offset,const_val,target,t_weight,const_weight,get_range)
   end
   local function ensure_unique_assignment(target,slot)
-    if not has_tracking or not target then return end
-    if lfo.is_param_assigned(target)then
-      local other=lfo.get_lfo_for_param(target)
-      if other and other~=slot then p_set(params,other.."lfo",1)end
-    end
-    lfo.mark_param_assigned(target)
+    _ensure_unique_assignment(target,slot,has_tracking,lfo,p_set,params)
   end
   for k in pairs(skip_param_set)do skip_param_set[k]=nil end
   for k in pairs(used_slots)do used_slots[k]=nil end
@@ -406,7 +435,7 @@ local function apply_morph()
     local lfo_B_enabled=lfo_B and lfo_B.enabled
     local should_be_on=lfo_A_enabled or lfo_B_enabled
     if not should_be_on then
-      if p_get(params,i.."lfo")==2 then p_set(params,i.."lfo",1)end
+      if p_get(params,MORPH_LFO_KEYS[i])==2 then p_set(params,MORPH_LFO_KEYS[i],1)end
       goto continue
     end
     used_slots[i]=true
@@ -433,40 +462,40 @@ local function apply_morph()
     ensure_unique_assignment(target,i)
     skip_param_set[target]=true
     morph_temp_scene[target]=nil
-    local lfo_enable=i.."lfo"
-    local lfo_target=i.."lfo_target"
-    local lfo_shape=i.."lfo_shape"
-    local lfo_freq=i.."lfo_freq"
-    local lfo_depth=i.."lfo_depth"
-    local offset_param=i.."offset"
+    local lfo_enable_k  = MORPH_LFO_KEYS[i]
+    local lfo_target_k  = MORPH_TARGET_KEYS[i]
+    local lfo_shape_k   = MORPH_SHAPE_KEYS[i]
+    local lfo_freq_k    = MORPH_FREQ_KEYS[i]
+    local lfo_depth_k   = MORPH_DEPTH_KEYS[i]
+    local offset_param_k= MORPH_OFFSET_KEYS[i]
     if lfo_A_enabled and lfo_B_enabled and target_A==target_B then
-      p_set(params,lfo_target,lfo_A.target)
-      p_set(params,lfo_shape,t<0.5 and lfo_A.shape or lfo_B.shape)
-      p_set(params,lfo_freq,lfo_A.freq*t_inv+lfo_B.freq*t)
+      p_set(params,lfo_target_k,lfo_A.target)
+      p_set(params,lfo_shape_k,t<0.5 and lfo_A.shape or lfo_B.shape)
+      p_set(params,lfo_freq_k,lfo_A.freq*t_inv+lfo_B.freq*t)
       local depth_val=lfo_A.depth*t_inv+lfo_B.depth*t
-      p_set(params,lfo_depth,depth_val)
-      p_set(params,offset_param,clamp(lfo_A.offset*t_inv+lfo_B.offset*t))
-      p_set(params,lfo_enable,depth_val>=DEPTH_THRESHOLD and 2 or 1)
+      p_set(params,lfo_depth_k,depth_val)
+      p_set(params,offset_param_k,_morph_clamp(lfo_A.offset*t_inv+lfo_B.offset*t))
+      p_set(params,lfo_enable_k,depth_val>=DEPTH_THRESHOLD and 2 or 1)
     elseif lfo_A_enabled and target_A==target then
       local const_val=scene1_2[target]or scene2_2[target]
-      p_set(params,lfo_target,lfo_A.target)
-      p_set(params,lfo_shape,lfo_A.shape)
-      p_set(params,lfo_freq,lfo_A.freq)
+      p_set(params,lfo_target_k,lfo_A.target)
+      p_set(params,lfo_shape_k,lfo_A.shape)
+      p_set(params,lfo_freq_k,lfo_A.freq)
       local depth_val=lfo_A.depth*t_inv
-      p_set(params,lfo_depth,depth_val)
-      p_set(params,offset_param,compute_offset(lfo_A.offset,const_val,target,t_inv,t))
-      p_set(params,lfo_enable,depth_val>=DEPTH_THRESHOLD and 2 or 1)
+      p_set(params,lfo_depth_k,depth_val)
+      p_set(params,offset_param_k,compute_offset(lfo_A.offset,const_val,target,t_inv,t))
+      p_set(params,lfo_enable_k,depth_val>=DEPTH_THRESHOLD and 2 or 1)
     else
       local lfo_val=(lfo_B_enabled and lfo_B)or(lfo_A_enabled and lfo_A)
       if not lfo_val then goto continue end
       local const_val=scene1_1[target]or scene2_1[target]
-      p_set(params,lfo_target,lfo_val.target)
-      p_set(params,lfo_shape,lfo_val.shape)
-      p_set(params,lfo_freq,lfo_val.freq)
+      p_set(params,lfo_target_k,lfo_val.target)
+      p_set(params,lfo_shape_k,lfo_val.shape)
+      p_set(params,lfo_freq_k,lfo_val.freq)
       local depth_val=lfo_val.depth*t
-      p_set(params,lfo_depth,depth_val)
-      p_set(params,offset_param,compute_offset(lfo_val.offset,const_val,target,t,t_inv))
-      p_set(params,lfo_enable,depth_val>=DEPTH_THRESHOLD and 2 or 1)
+      p_set(params,lfo_depth_k,depth_val)
+      p_set(params,offset_param_k,compute_offset(lfo_val.offset,const_val,target,t,t_inv))
+      p_set(params,lfo_enable_k,depth_val>=DEPTH_THRESHOLD and 2 or 1)
     end
     ::continue::
   end
@@ -485,20 +514,14 @@ local function apply_morph()
         ensure_unique_assignment(m.param,slot)
         skip_param_set[m.param]=true
         morph_temp_scene[m.param]=nil
-        local lfo_enable=slot.."lfo"
-        local lfo_target=slot.."lfo_target"
-        local lfo_shape=slot.."lfo_shape"
-        local lfo_freq=slot.."lfo_freq"
-        local lfo_depth=slot.."lfo_depth"
-        local offset_param=slot.."offset"
-        p_set(params,lfo_target,m.lfo.target)
-        p_set(params,lfo_shape,m.lfo.shape)
-        p_set(params,lfo_freq,m.lfo.freq)
         local depth_val=m.lfo.depth*t
         local const_val=scene1_1[m.param]or scene2_1[m.param]
-        p_set(params,lfo_depth,depth_val)
-        p_set(params,offset_param,compute_offset(m.lfo.offset,const_val,m.param,t,t_inv))
-        p_set(params,lfo_enable,depth_val>=DEPTH_THRESHOLD and 2 or 1)
+        p_set(params,MORPH_TARGET_KEYS[slot],m.lfo.target)
+        p_set(params,MORPH_SHAPE_KEYS[slot],m.lfo.shape)
+        p_set(params,MORPH_FREQ_KEYS[slot],m.lfo.freq)
+        p_set(params,MORPH_DEPTH_KEYS[slot],depth_val)
+        p_set(params,MORPH_OFFSET_KEYS[slot],compute_offset(m.lfo.offset,const_val,m.param,t,t_inv))
+        p_set(params,MORPH_LFO_KEYS[slot],depth_val>=DEPTH_THRESHOLD and 2 or 1)
       end
     end
   end
@@ -1654,12 +1677,13 @@ function redraw()
   local cur_mode = current_mode
   local cur_filter = current_filter_mode
   for _,row in ipairs(param_rows) do
-    local name = row.label:match("%a+")
+    local name = row.name
+    local label_upper = row.label_upper
     local hi = cur_mode == row.mode
     local y = row.y
     if hi then 
-      T(1, 7, y + 1, row.label:upper())
-      T(LEVEL.hi, 6, y, row.label:upper())
+      T(1, 7, y + 1, label_upper)
+      T(LEVEL.hi, 6, y, label_upper)
     else
       T(LEVEL.hi, 6, y, row.label)
     end

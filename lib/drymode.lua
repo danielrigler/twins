@@ -112,7 +112,7 @@ local function store_and_disable_lfos(targets, storage)
                 offset = params:get(i.."offset"),
                 freq = params:get(i.."lfo_freq")
             }
-            params:set(i.."lfo", 1) -- Disable LFO
+            params:set(i.."lfo", 1)
         end
     end
 end
