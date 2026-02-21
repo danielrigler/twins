@@ -7,16 +7,11 @@ presets.preset_list = {}
 presets.confirmation = nil
 
 _G.preset_loading = false
-local buffer_loading = {
-    pending = {},
-    complete = {}
-}
+local buffer_loading = {pending = {}, complete = {}}
 local loading_clock = nil
-
 local PRESETS_DIR = "twins"
 local BUFFER_TIMEOUT = 15
 local PRESET_VERSION = 1
-
 local _LFO_KEYS = {}
 for _i = 1, 16 do _LFO_KEYS[_i] = _i .. "lfo" end
 
@@ -28,9 +23,7 @@ end
 
 local function all_buffers_loaded()
     for voice, pending in pairs(buffer_loading.pending) do
-        if pending and not buffer_loading.complete[voice] then
-            return false
-        end
+        if pending and not buffer_loading.complete[voice] then return false end
     end
     return true
 end
@@ -51,11 +44,9 @@ end
 local function table_to_string(tbl, indent)
     indent = indent or ""
     local items = {}
-    
     for k, v in pairs(tbl) do
         local key_str = type(k) == "string" and string.format("%q", k) or tostring(k)
         local value_str
-        
         if type(v) == "table" then
             value_str = table_to_string(v, indent .. "  ")
         elseif type(v) == "string" then
@@ -63,10 +54,8 @@ local function table_to_string(tbl, indent)
         else
             value_str = tostring(v)
         end
-         
         items[#items + 1] = string.format("%s  [%s] = %s", indent, key_str, value_str)
     end
-    
     return string.format("{\n%s\n%s}", table.concat(items, ",\n"), indent)
 end
 
@@ -85,24 +74,20 @@ local function generate_preset_name(preset_name)
         local time_prefix = os.date("%Y%m%d_%H%M")
         local existing_presets = presets.list_presets()
         local highest_num = 0
-        
         for _, preset in ipairs(existing_presets) do
             local num = preset:match("^twins_%d+_%d+_(%d+)$")
             if num then
                 highest_num = math.max(highest_num, tonumber(num))
             end
         end
-        
         return string.format("twins_%s_%03d", time_prefix, highest_num + 1)
     end
-    
     return preset_name:match("^twins_") and preset_name or "twins_" .. preset_name
 end
 
 function presets.save_complete_preset(preset_name, scene_data_ref, update_pan_positioning_fn, audio_active_ref)
     local success, err = pcall(function()
         preset_name = generate_preset_name(preset_name)
-        
         local preset_data = {
             name = preset_name,
             timestamp = os.time(),
@@ -114,36 +99,29 @@ function presets.save_complete_preset(preset_name, scene_data_ref, update_pan_po
             },
             morph_amount = params:get("morph_amount") or 0
         }
-        
         util.make_dir(_path.data .. PRESETS_DIR)
         local file_path = _path.data .. PRESETS_DIR .. "/" .. preset_name .. ".lua"
         local file = io.open(file_path, "w")
-        
         if not file then
             error("Could not open file for writing")
         end
-        
         local header = string.format(
             "-- Twins Preset\n-- Name: %s\n-- Saved: %s\n-- Version: %d\n\nreturn ",
             preset_name, os.date("%Y-%m-%d %H:%M:%S"), PRESET_VERSION
         )
-        
         file:write(header .. table_to_string(preset_data))
         file:close()
         print("✓ Preset saved: " .. preset_name)
     end)
-    
     if not success then
         print("✗ Error saving preset: " .. (err or "unknown"))
     end
-    
     return success
 end
 
 local function apply_scene_data(preset_data, scene_data_ref)
     local source = preset_data.morph or preset_data.scene_data
     if not source then return end
-    
     for track = 1, 2 do
         for scene = 1, 2 do
             scene_data_ref[track][scene] = (source[track] and source[track][scene]) or {}
@@ -156,8 +134,8 @@ local function categorize_params(preset_params)
     local audio_params = {}
     local volume_params = {}
     local lfo_enable_params = {}
+    local allow_volume_lfo_params = {}  -- new
     local other_params = {}
-    
     for param_id, value in pairs(preset_params) do
         if params.lookup[param_id] then
             if param_id:match("^%d+lock$") then
@@ -166,6 +144,8 @@ local function categorize_params(preset_params)
                 table.insert(audio_params, {id = param_id, value = value})
             elseif param_id:match("volume$") then
                 table.insert(volume_params, {id = param_id, value = value})
+            elseif param_id == "allow_volume_lfos" then
+                table.insert(allow_volume_lfo_params, {id = param_id, value = value})  -- new
             elseif param_id:match("^%d+lfo$") then
                 table.insert(lfo_enable_params, {id = param_id, value = value})
             elseif not param_id:match("sample$") then
@@ -173,23 +153,20 @@ local function categorize_params(preset_params)
             end
         end
     end
-    
-    return lock_params, audio_params, volume_params, lfo_enable_params, other_params
+    return lock_params, audio_params, volume_params, lfo_enable_params, allow_volume_lfo_params, other_params
 end
 
-local function apply_params(lock_params, audio_params, volume_params, lfo_enable_params, other_params)
+local function apply_params(lock_params, audio_params, volume_params, lfo_enable_params, allow_volume_lfo_params, other_params)
     for _, p in ipairs(lock_params) do params:set(p.id, p.value) end
     clock.sleep(0.02)
-    
     for _, p in ipairs(audio_params) do params:set(p.id, p.value) end
     clock.sleep(0.03)
-
     for _, p in ipairs(volume_params) do params:set(p.id, p.value) end
     clock.sleep(0.03)
-
+    for _, p in ipairs(allow_volume_lfo_params) do params:set(p.id, p.value) end
+    clock.sleep(0.03)
     for _, p in ipairs(other_params) do params:set(p.id, p.value) end
     clock.sleep(0.03)
-
     for _, p in ipairs(lfo_enable_params) do params:set(p.id, p.value) end
 end
 
@@ -204,37 +181,30 @@ end
 
 function presets.load_complete_preset(preset_name, scene_data_ref, update_pan_positioning_fn, audio_active_ref)
     local file_path = _path.data .. PRESETS_DIR .. "/" .. preset_name .. ".lua"
-    
     if not util.file_exists(file_path) then
         print("✗ Preset file not found: " .. preset_name)
         return false
     end
-    
     local chunk, err = loadfile(file_path)
     if not chunk then
         print("✗ Error loading preset: " .. (err or "unknown"))
         return false
     end
-    
     local success, preset_data = pcall(chunk)
     if not success or not preset_data then
         print("✗ Error parsing preset: " .. (preset_data or "unknown"))
         return false
     end
-    
     if preset_data.version and preset_data.version > PRESET_VERSION then
         print("⚠ Preset saved with newer version")
     end
-    
     for i = 1, 2 do
         local vol_param = i .. "volume"
         if params.lookup[vol_param] then
             params:set(vol_param, -70)
         end
     end
-    
     _G.preset_loading = true
-
     if loading_clock then
         pcall(function()
             if coroutine.status(loading_clock) ~= "dead" then
@@ -243,30 +213,25 @@ function presets.load_complete_preset(preset_name, scene_data_ref, update_pan_po
         end)
         loading_clock = nil
     end
-
     loading_clock = clock.run(function()
         if params.lookup["unload_all"] then
             params:set("unload_all", 1)
             clock.sleep(0.05)
         end
-
         for i = 1, 16 do
             if params.lookup[_LFO_KEYS[i]] then
                 params:set(_LFO_KEYS[i], 1)
             end
         end
         apply_scene_data(preset_data, scene_data_ref)
-        
         if preset_data.morph_amount then
             morph_amount = preset_data.morph_amount
             if params.lookup["morph_amount"] then
                 params:set("morph_amount", preset_data.morph_amount)
             end
         end
-        
         buffer_loading.pending = {}
         buffer_loading.complete = {}
-        
         local sample_count = 0
         for i = 1, 2 do
             local sample_param = i .. "sample"
@@ -279,19 +244,15 @@ function presets.load_complete_preset(preset_name, scene_data_ref, update_pan_po
                 end
             end
         end
-
         if preset_data.params and sample_count > 0 then
             print("⏳ Loading " .. sample_count .. " sample" .. (sample_count > 1 and "s" or "") .. "...")
-            
             for param_id, value in pairs(preset_data.params) do
                 if param_id:match("sample$") and params.lookup[param_id] then
                     params:set(param_id, value)
                 end
             end
         end
-        
         clock.sleep(0.05)
-        
         if sample_count > 0 then
             local success = wait_for_buffers(BUFFER_TIMEOUT)
             if success then
@@ -299,7 +260,6 @@ function presets.load_complete_preset(preset_name, scene_data_ref, update_pan_po
             else
                 print("⚠ Timeout - some samples may not be ready")
             end
-
             for i = 1, 2 do
                 local sample_param = i .. "sample"
                 if params.lookup[sample_param] then
@@ -310,25 +270,18 @@ function presets.load_complete_preset(preset_name, scene_data_ref, update_pan_po
                 end
             end
         end
-        
         _G.preset_loading = false
-        
         if preset_data.params then
-            local lock_params, audio_params, volume_params, lfo_enable_params, other_params = categorize_params(preset_data.params)
-            apply_params(lock_params, audio_params, volume_params, lfo_enable_params, other_params)
+            local lock_params, audio_params, volume_params, lfo_enable_params, allow_volume_lfo_params, other_params = categorize_params(preset_data.params)
+            apply_params(lock_params, audio_params, volume_params, lfo_enable_params, allow_volume_lfo_params, other_params)
         end
-        
         update_pan_positioning_fn()
-
         refresh_voice_params()
-
         clock.sleep(0.1)
         redraw()
-        
         print("✓ Preset loaded: " .. preset_name)
         loading_clock = nil
     end)
-
     return true
 end
 
@@ -336,42 +289,32 @@ function presets.list_presets()
     local presets_list = {}
     local dir = _path.data .. PRESETS_DIR
     util.make_dir(dir)
-    
     local success, entries = pcall(util.scandir, dir)
-    if not (success and entries) then
-        return presets_list
-    end
-    
+    if not (success and entries) then return presets_list end
     for _, entry in ipairs(entries) do
         if type(entry) == "string" and entry:match("%.lua$") then
             presets_list[#presets_list + 1] = entry:gsub("%.lua$", "")
         end
     end
-    
     table.sort(presets_list, function(a, b)
         local a_date, a_time, a_num = a:match("^twins_(%d+)_(%d+)_(%d+)$")
         local b_date, b_time, b_num = b:match("^twins_(%d+)_(%d+)_(%d+)$")
-        
         if a_date and b_date then
             if a_date ~= b_date then return a_date > b_date end
             if a_time ~= b_time then return a_time > b_time end
             return tonumber(a_num) > tonumber(b_num)
         end
-        
         return a_date and true or (not b_date and a > b)
     end)
-    
     return presets_list
 end
 
 function presets.delete_preset(preset_name)
     local file_path = _path.data .. PRESETS_DIR .. "/" .. preset_name .. ".lua"
-    
     if not util.file_exists(file_path) then
         print("✗ Preset not found: " .. preset_name)
         return false
     end
-    
     local success, err = pcall(os.remove, file_path)
     if success then
         print("✓ Preset deleted: " .. preset_name)
@@ -384,12 +327,10 @@ end
 
 function presets.open_menu()
     local list = presets.list_presets()
-    
     if #list == 0 then
         print("No presets found")
         return false
     end
-    
     presets.preset_list = list
     presets.selected_index = util.clamp(presets.selected_index, 1, #list)
     presets.menu_open = true
@@ -406,7 +347,6 @@ end
 
 function presets.menu_enc(n, d)
     if not presets.menu_open then return end
-    
     if n == 2 then
         presets.selected_index = util.clamp(presets.selected_index + d, 1, #presets.preset_list)
     elseif n == 1 or n == 3 then
@@ -416,7 +356,6 @@ end
 
 function presets.menu_key(n, z, scene_data_ref, update_pan_positioning_fn, audio_active_ref)
     if not presets.menu_open or z ~= 1 then return false end
-    
     if presets.confirmation then
         if n == 3 then
             if presets.confirmation.type == "delete" then
@@ -425,7 +364,6 @@ function presets.menu_key(n, z, scene_data_ref, update_pan_positioning_fn, audio
                 presets.delete_preset(preset_name)
                 presets.preset_list = presets.list_presets()
                 presets.confirmation = nil
-                
                 if #presets.preset_list == 0 then
                     presets.menu_open = false
                 else
@@ -442,9 +380,7 @@ function presets.menu_key(n, z, scene_data_ref, update_pan_positioning_fn, audio
         end
         return true
     end
-    
     local preset_name = presets.preset_list[presets.selected_index]
-    
     if n == 3 then
         if presets.menu_mode == "load" then
             local success = presets.load_complete_preset(preset_name, scene_data_ref, update_pan_positioning_fn, audio_active_ref)
@@ -468,7 +404,6 @@ function presets.menu_key(n, z, scene_data_ref, update_pan_positioning_fn, audio
         presets.close_menu()
         return true
     end
-    
     return false
 end
 
@@ -491,21 +426,17 @@ end
 
 function presets.draw_menu()
     if not presets.menu_open then return false end
-    
     if presets.confirmation then
         local title = presets.confirmation.type == "delete" and "DELETE PRESET?" or "OVERWRITE PRESET?"
         draw_confirmation(title, presets.confirmation.preset_name)
         return true
     end
-    
     screen.clear()
     screen.level(15)
     screen.move(64, 6)
     screen.text_center("PRESET BROWSER")
-    
     local visible_count = math.min(5, #presets.preset_list)
     local start_index = math.max(1, math.min(presets.selected_index - 2, #presets.preset_list - visible_count + 1))
-    
     for i = 1, visible_count do
         local idx = start_index + i - 1
         if idx <= #presets.preset_list then
@@ -515,7 +446,6 @@ function presets.draw_menu()
             screen.text((is_selected and "> " or "  ") .. presets.preset_list[idx])
         end
     end
-
     if #presets.preset_list > visible_count then
         screen.level(2)
         if start_index > 1 then
@@ -527,13 +457,11 @@ function presets.draw_menu()
             screen.text("↓")
         end
     end
-    
     screen.level(1)
     screen.move(2, 64)
     screen.text("K1: Back")
     screen.move(50, 64)
     screen.text("K2: Del")
-    
     if presets.menu_mode == "overwrite" then
         screen.level(15)
         screen.move(91, 64)
@@ -543,7 +471,6 @@ function presets.draw_menu()
         screen.move(91, 64)
         screen.text("K3: Load")
     end
-    
     screen.update()
     return true
 end

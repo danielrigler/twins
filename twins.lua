@@ -1752,7 +1752,7 @@ function redraw()
           for i=keep+1,#grains do grains[i] = nil end
         end
       else grain_positions[t] = {} end
-      if loaded then R(LEVEL.hi, x + math.floor(osc_positions[t] * animated_bar_w), Y.seek - 1, 1, 2) end
+      if loaded and C.live.dir_[t] ~= 1 then R(LEVEL.hi, x + math.floor(osc_positions[t] * animated_bar_w), Y.seek - 1, 1, 2) end
       if C.live.in_[t] == 1 then R(LEVEL.hi, x + math.floor(rec_positions[t] * BAR_W), Y.seek - 1, 2, 2) end
     end
   end
