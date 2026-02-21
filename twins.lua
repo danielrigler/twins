@@ -671,6 +671,13 @@ local function set_track_sample(track_num, file)
     return true
 end
 
+-- Sets a sample param to the live sentinel path and restores the file param's
+-- browse directory to _path.tape so that E3 navigation in the params menu doesn't
+-- crash when it tries to derive a directory from the fake "live!" path.
+local function set_sample_live(i)
+    params:set(i.."sample", _path.tape.."live!")
+end
+
 local function load_random_tape_file(track_num)
     local audio_files = scan_audio_files(_path.tape)
     if #audio_files == 0 then return false end
@@ -704,20 +711,20 @@ end
 local function setup_params()
     params:add_separator("Input")
     for i = 1, 2 do
-      params:add_file(i.."sample","Sample "..i); params:set_action(i.."sample",function(f) if f~=nil and f~="" and f~="none" and f~="-" then local jitter_locked=is_param_locked(i,"jitter"); if not jitter_locked then lfo.clearLFOs(tostring(i),"jitter"); end engine.read(i,f); audio_active[i]=true; update_pan_positioning(); local is_live=params:get(i.."live_input")==1; local dur=is_live and params:get("live_buffer_length") or get_audio_duration(f); if dur then cached_buffer_durations[i]=dur; local ms=dur*1000; local max_jit=math.min(ms,99999); params:set(i.."max_jitter",max_jit); params:set(i.."min_jitter",0); if not _G.preset_loading and not jitter_locked then local jp=i.."jitter"; handle_lfo(jp,true); local jitter_val; if math.random()<0.75 then local upper_limit=math.min(500,dur*1000); jitter_val=util.clamp(math.random()*upper_limit,0,99999); else jitter_val=util.clamp(math.random()*dur*1000,0,99999); end params:set(jp,jitter_val); end else if not jitter_locked then lfo.clearLFOs(tostring(i),"jitter"); end audio_active[i]=false; osc_positions[i]=0; update_pan_positioning(); end end end)
+      params:add_file(i.."sample","Sample "..i, _path.tape); params:set_action(i.."sample",function(f) if f~=nil and f~="" and f~="none" and f~="-" and f~=(_path.tape.."live!") then if params:get(i.."live_input")==1 then engine.set_live_input(i,0) params:set(i.."live_input",0,true) end if params:get(i.."live_direct")==1 then engine.live_direct(i,0) params:set(i.."live_direct",0,true) end local jitter_locked=is_param_locked(i,"jitter"); if not jitter_locked then lfo.clearLFOs(tostring(i),"jitter"); end engine.read(i,f); audio_active[i]=true; update_pan_positioning(); local is_live=params:get(i.."live_input")==1; local dur=is_live and params:get("live_buffer_length") or get_audio_duration(f); if dur then cached_buffer_durations[i]=dur; local ms=dur*1000; local max_jit=math.min(ms,99999); params:set(i.."max_jitter",max_jit); params:set(i.."min_jitter",0); if not _G.preset_loading and not jitter_locked then local jp=i.."jitter"; handle_lfo(jp,true); local jitter_val; if math.random()<0.75 then local upper_limit=math.min(500,dur*1000); jitter_val=util.clamp(math.random()*upper_limit,0,99999); else jitter_val=util.clamp(math.random()*dur*1000,0,99999); end params:set(jp,jitter_val); end else if not jitter_locked then lfo.clearLFOs(tostring(i),"jitter"); end audio_active[i]=false; osc_positions[i]=0; update_pan_positioning(); end end end)
     end
     params:add_binary("randomtapes", "Random Tapes", "trigger", 0) params:set_action("randomtapes", function() load_random_tape_file() end)
     
     params:add_group("LIVE!", 10)
     for i = 1, 2 do
-      params:add_binary(i.."live_input", "Live Buffer "..i.." ● ►", "toggle", 0) params:set_action(i.."live_input", function(value) if value == 1 then if params:get(i.."live_direct") == 1 then params:set(i.."live_direct", 0) end engine.set_live_input(i, 1) engine.live_mono(i, params:get("isMono") - 1) audio_active[i] = true cached_buffer_durations[i]=params:get("live_buffer_length") update_pan_positioning() else engine.set_live_input(i, 0) if not audio_active[i] and params:get(i.."live_direct") == 0 then osc_positions[i] = 0 else update_pan_positioning() end end end)
+      params:add_binary(i.."live_input", "Live Buffer "..i.." ● ►", "toggle", 0) params:set_action(i.."live_input", function(value) if value == 1 then if params:get(i.."live_direct") == 1 then params:set(i.."live_direct", 0) end engine.set_live_input(i, 1) engine.live_mono(i, params:get("isMono") - 1) audio_active[i] = true cached_buffer_durations[i]=params:get("live_buffer_length") set_sample_live(i) update_pan_positioning() else engine.set_live_input(i, 0) if not audio_active[i] and params:get(i.."live_direct") == 0 then osc_positions[i] = 0 params:set(i.."sample", "-") else set_sample_live(i) update_pan_positioning() end end end)
     end
     params:add_control("live_buffer_mix", "Overdub", controlspec.new(0, 100, "lin", 1, 100, "%")) params:set_action("live_buffer_mix", function(value) engine.live_buffer_mix(value * 0.01) end)
     params:add_taper("live_buffer_length", "Buffer Length", 0.05, 10, 2, 3, "s") params:set_action("live_buffer_length", function(value) engine.live_buffer_length(value) for i=1,2 do if params:get(i.."live_input")==1 then cached_buffer_durations[i]=value end end end)
     params:add{type = "trigger", id = "save_live_buffer1", name = "Buffer1 to Tape", action = function() local timestamp = os.date("%Y%m%d_%H%M%S") local filename = "live1_"..timestamp..".wav" engine.save_live_buffer(1, filename) end}
     params:add{type = "trigger", id = "save_live_buffer2", name = "Buffer2 to Tape", action = function() local timestamp = os.date("%Y%m%d_%H%M%S") local filename = "live2_"..timestamp..".wav" engine.save_live_buffer(2, filename) end}
     for i = 1, 2 do
-      params:add_binary(i.."live_direct", "Direct "..i.." ►", "toggle", 0) params:set_action(i.."live_direct", function(value) if value == 1 then local was_live = params:get(i.."live_input") if was_live == 1 then params:set(i.."live_input", 0) end engine.live_direct(i, 1) audio_active[i] = true update_pan_positioning() else engine.live_direct(i, 0) if not audio_active[i] and params:get(i.."live_input") == 0 then osc_positions[i] = 0 else update_pan_positioning() end end end)
+      params:add_binary(i.."live_direct", "Direct "..i.." ►", "toggle", 0) params:set_action(i.."live_direct", function(value) if value == 1 then local was_live = params:get(i.."live_input") if was_live == 1 then params:set(i.."live_input", 0) end engine.live_direct(i, 1) audio_active[i] = true set_sample_live(i) update_pan_positioning() else engine.live_direct(i, 0) if not audio_active[i] and params:get(i.."live_input") == 0 then osc_positions[i] = 0 params:set(i.."sample", "-") else set_sample_live(i) update_pan_positioning() end end end)
     end
     params:add_option("isMono", "Input Mode", {"stereo", "mono"}, 1) params:set_action("isMono", function(value) local monoValue = value - 1 for i = 1, 2 do if params:get(i.."live_direct") == 1 then engine.isMono(i, monoValue) end if params:get(i.."live_input") == 1 then engine.live_mono(i, monoValue) end end end)
     params:add_binary("dry_mode2", "Dry Mode", "toggle", 0) params:set_action("dry_mode2", function(x) drymode.toggle_dry_mode2() end)
@@ -1716,7 +1723,7 @@ function redraw()
       if loaded then R(LEVEL.hi, position_x, Y.seek - 1, 1, 2) end
     else
       local animated_bar_w = math.floor(BAR_W * seek_bar_width)
-      R(1, x, Y.seek, animated_bar_w, 1)
+      if C.live.dir_[t] ~= 1 then R(1, x, Y.seek, animated_bar_w, 1) end
       if params:get(t .. "granular_gain") > 0 then
         local grains = grain_positions[t]
         if grains then
