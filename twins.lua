@@ -671,12 +671,7 @@ local function set_track_sample(track_num, file)
     return true
 end
 
--- Sets a sample param to the live sentinel path and restores the file param's
--- browse directory to _path.tape so that E3 navigation in the params menu doesn't
--- crash when it tries to derive a directory from the fake "live!" path.
-local function set_sample_live(i)
-    params:set(i.."sample", _path.tape.."live!")
-end
+local function set_sample_live(i) params:set(i.."sample", _path.tape.."live!") end
 
 local function load_random_tape_file(track_num)
     local audio_files = scan_audio_files(_path.tape)
