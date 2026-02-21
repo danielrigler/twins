@@ -118,7 +118,7 @@ function lfo.clearLFOs(track, param_type)
 
   if not track and not param_type then
     if is_audio_loaded("1") and is_audio_loaded("2") then
-      pset("1pan", -15); pset("2pan", 15)
+      pset("1pan", -25); pset("2pan", 25)
     else
       pset("1pan", 0); pset("2pan", 0)
     end

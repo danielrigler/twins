@@ -77,8 +77,7 @@ function Mirror.copy_voice_params(from_track, to_track, mirror_pan)
 
     local static_params = { "speed", "pitch", "jitter", "size", "density", "spread", "pan", "seek",
                              "cutoff", "hpf", "lpfgain", "granular_gain", "subharmonics_3", "subharmonics_2",
-                             "subharmonics_1", "overtones_1", "overtones_2", "smoothbass",
-                             "pitch_walk_rate", "pitch_walk_step", "ratcheting_prob",
+                             "subharmonics_1", "overtones_1", "overtones_2", "smoothbass", "ratcheting_prob",
                              "size_variation", "direction_mod", "density_mod_amt", "pitch_random_scale_type", "pitch_random_prob",
                              "pitch_mode", "trig_mode", "probability", "eq_low_gain", "eq_mid_gain", "eq_high_gain", "env_select", "volume" }
 

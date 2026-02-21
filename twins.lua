@@ -6,18 +6,18 @@
 --            by: @dddstudio                       
 -- 
 --                          
---                           v0.51
+--                           v0.52
 -- E1: Master Volume
 -- K1+E2/E3: Volume
+-- K2/K3: Navigate
+-- E2/E3: Adjust Parameters
+-- K1+K2/K3: Randomize
+-- K2+K3: Lock Parameters
 -- Hold K1: Morphing
 -- Hold K2: Linked Mode
 -- Hold K3: Symmetry
 -- K1+E1: Crossfade/Morph
--- K2/K3: Navigate
--- E2/E3: Adjust Parameters
--- K2+K3: Lock Parameters
--- K2+K3: HP/LP Filter 
--- K1+K2/K3: Randomize
+-- K2+K3: HPF/LPF
 -- K2+K3+E1/E2/E3: Effect Mix
 -- Hold K2+K3: Add Random LFO
 -- K2/K3+E1/E2/E3: Adjust LFO
@@ -99,8 +99,7 @@ local osc_positions = {[1] = 0, [2] = 0}
 local rec_positions = {[1] = 0, [2] = 0}
 local cached_buffer_durations = {[1] = 1, [2] = 1}
 local voice_peak_amplitudes = {[1] = {l = 0, r = 0}, [2] = {l = 0, r = 0}}
-local link_base = {[1]={pitch=nil,size=nil,density=nil,product=nil},
-                   [2]={pitch=nil,size=nil,density=nil,product=nil}}
+local link_base = {[1]={pitch=nil,size=nil,density=nil,product=nil}, [2]={pitch=nil,size=nil,density=nil,product=nil}}
 local ui_metro = nil
 local lfos_turned_off = {}
 local lfo_cache = {}
@@ -200,7 +199,7 @@ local function is_lfo_active_for_param(param_name)
     local idx = lfo_cache[param_name]
     return idx ~= nil, idx
 end
-local function update_pan_positioning() if _G.preset_loading then return end local loaded1 = is_audio_loaded(1) local loaded2 = is_audio_loaded(2) local pan1_locked = is_param_locked(1, "pan") local pan1_has_lfo = is_lfo_active_for_param("1pan") local pan2_locked = is_param_locked(2, "pan") local pan2_has_lfo = is_lfo_active_for_param("2pan") if not pan1_locked and not pan1_has_lfo then params:set("1pan", loaded2 and -15 or 0) end if not pan2_locked and not pan2_has_lfo then params:set("2pan", loaded1 and 15 or 0) end end
+local function update_pan_positioning() if _G.preset_loading then return end local loaded1 = is_audio_loaded(1) local loaded2 = is_audio_loaded(2) local pan1_locked = is_param_locked(1, "pan") local pan1_has_lfo = is_lfo_active_for_param("1pan") local pan2_locked = is_param_locked(2, "pan") local pan2_has_lfo = is_lfo_active_for_param("2pan") if not pan1_locked and not pan1_has_lfo then params:set("1pan", loaded2 and -25 or 0) end if not pan2_locked and not pan2_has_lfo then params:set("2pan", loaded1 and 25 or 0) end end
 
 local function setup_ui_metro()
     if ui_metro then stop_metro_safe(ui_metro) end
@@ -301,7 +300,7 @@ local function init_longpress_checker()
     longpress_metro:start()
 end
 
-local morph_voice_params={"speed","pitch","jitter","size","density","spread","pan","seek","cutoff","hpf","lpfgain","granular_gain","subharmonics_3","subharmonics_2","subharmonics_1","overtones_1","overtones_2","smoothbass","pitch_walk_rate","pitch_walk_step","ratcheting_prob","size_variation","direction_mod","density_mod_amt","pitch_random_scale_type","pitch_random_prob","pitch_mode","trig_mode","probability","eq_low_gain","eq_mid_gain","eq_high_gain","env_select","volume"}
+local morph_voice_params={"speed","pitch","jitter","size","density","spread","pan","seek","cutoff","hpf","lpfgain","granular_gain","subharmonics_3","subharmonics_2","subharmonics_1","overtones_1","overtones_2","smoothbass","ratcheting_prob","size_variation","direction_mod","density_mod_amt","pitch_random_scale_type","pitch_random_prob","pitch_mode","trig_mode","probability","eq_low_gain","eq_mid_gain","eq_high_gain","env_select","volume"}
 local morph_global_params={"delay_mix","delay_time","delay_feedback","delay_lowpass","delay_highpass","wiggle_depth","wiggle_rate","stereo","reverb_mix","t60","damp","rsize","earlyDiff","modDepth","modFreq","low","mid","high","lowcut","highcut","shimmer_mix","shimmer_preset","lock_shimmer","tape_mix","sine_drive_wet","drive","wobble_mix","wobble_amp","wobble_rpm","flutter_amp","flutter_freq","flutter_var","chew_depth","chew_freq","chew_variance","lossdegrade_mix","Width","dimension_mix","haas","rspeed","monobass_mix","bitcrush_mix","bitcrush_rate","bitcrush_bits","evolution","evolution_range","evolution_rate","lock_eq","lock_tape","lock_reverb","lock_delay","global_lfo_freq_scale","pitch_quantize_scale","pitch_lag","shimmer_mix1","shimmer_oct1","pitchv1","lowpass1","hipass1","fbDelay1","fb1", "glitch_probability", "glitch_ratio", "glitch_mix", "glitch_min_length", "glitch_max_length", "glitch_reverse", "glitch_pitch" }
 local morph_voice_params_count=#morph_voice_params
 local morph_global_params_count=#morph_global_params
@@ -727,7 +726,7 @@ local function setup_params()
     params:add{type = "trigger", id = "load_preset_menu", name = "Preset Browser", action = function() presets.open_menu() end}
 
     params:add_separator("Settings")
-    params:add_group("GRANULAR", 43)
+    params:add_group("GRANULAR", 39)
     for i = 1, 2 do
       params:add_separator("SAMPLE "..i)
       params:add_control(i.. "granular_gain", i.. " Mix", controlspec.new(0, 100, "lin", 1, 100, "%")) params:set_action(i.. "granular_gain", function(value) engine.granular_gain(i, value * 0.01) if value < 100 then lfo.clearLFOs(i, "seek") end end)
@@ -737,8 +736,6 @@ local function setup_params()
       params:add_control(i.. "overtones_1", i.. " Overtones +1oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0)) params:set_action(i.. "overtones_1", function(value) engine.overtones_1(i, value) end)
       params:add_control(i.. "overtones_2", i.. " Overtones +2oct", controlspec.new(0.00, 1.00, "lin", 0.01, 0)) params:set_action(i.. "overtones_2", function(value) engine.overtones_2(i, value) end)
       params:add_option(i.. "smoothbass", i.." Smooth Sub", {"off", "on"}, 1) params:set_action(i.. "smoothbass", function(x) local engine_value = (x == 2) and 2.5 or 1 engine.smoothbass(i, engine_value) end)
-      params:add_taper(i.."pitch_walk_rate", i.." Pitch Walk", 0, 30, 0, 3, "Hz") params:set_action(i.."pitch_walk_rate", function(value) engine.pitch_walk_rate(i, value) end)
-      params:add_control(i.."pitch_walk_step", i.." Walk Range", controlspec.new(1, 12, "lin", 1, 2, "steps")) params:set_action(i.."pitch_walk_step", function(value) engine.pitch_walk_step(i, value) end)
       params:add_control(i.."pitch_random_prob", i.." Pitch Randomize", controlspec.new(-100, 100, "lin", 1, 0, "%")) params:set_action(i.."pitch_random_prob", function(value) engine.pitch_random_prob(i, value) end)
       params:add_option(i.."pitch_random_scale_type", i.." Pitch Quantize", {"5th+oct", "5th+oct 2", "1 oct", "2 oct", "chrom", "maj", "min", "penta", "whole"}, 1) params:set_action(i.."pitch_random_scale_type", function(value) engine.pitch_random_scale_type(i, value - 1) end)
       params:add_control(i.."ratcheting_prob", i.." Ratcheting", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.."ratcheting_prob", function(value) engine.ratcheting_prob(i, value) end)
@@ -1434,8 +1431,11 @@ function enc(n, d)
         mark_key_interaction()
         if n == 1 then
             local lfo_idx = find_or_create_lfo_for_param(voice, param_name, true, false)
-            if lfo_idx then
-                params:delta(lfo_idx .. "lfo_freq", d * 0.5)
+            if lfo_idx then params:delta(lfo_idx .. "lfo_freq", d * 0.5)
+                if params:get("symmetry") == 1 then
+                    local other_lfo = find_or_create_lfo_for_param(3 - voice, param_name, true, false, lfo_idx)
+                    if other_lfo then params:delta(other_lfo .. "lfo_freq", d * 0.5) end
+                end
                 finalize_change()
             end
         elseif n == 2 then
@@ -1547,7 +1547,7 @@ function handle_key_release(n, both_keys_pressed)
 end
 
 local function format_density(value) return string.format("%.1f Hz", value) end
-local function format_pitch(value, track) if not track then return value > 0 and string.format("+%.0f", value) or string.format("%.0f", value) end local pitch_walk_enabled = (params:get(track.."pitch_walk_rate") or 0) > 0 local pitch_random_enabled = (params:get(track.."pitch_random_prob") or 0) ~= 0 local show_dots = pitch_walk_enabled or pitch_random_enabled local suffix = show_dots and ".. st" or " st" return value > 0 and string.format("+%.0f%s", value, suffix) or string.format("%.0f%s", value, suffix) end
+local function format_pitch(value, track) if not track then return value > 0 and string.format("+%.0f", value) or string.format("%.0f", value) end local pitch_random_enabled = (params:get(track.."pitch_random_prob") or 0) ~= 0 local show_dots = pitch_random_enabled local suffix = show_dots and ".. st" or " st" return value > 0 and string.format("+%.0f%s", value, suffix) or string.format("%.0f%s", value, suffix) end
 local function format_seek(value) return string.format("%.0f%%", value) end
 local function format_speed(speed) if math.abs(speed) < 0.01 then return ".00x" elseif math.abs(speed) < 1 then if speed < -0.01 then return string.format("-.%02dx", math.floor(math.abs(speed) * 100)) else return string.format(".%02dx", math.floor(math.abs(speed) * 100)) end else return string.format("%.2fx", speed) end end
 local function format_jitter(value) if value > 999 then return string.format("%.1f s", value / 1000) else return string.format("%.0f ms", value) end end

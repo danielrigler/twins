@@ -155,6 +155,7 @@ local function categorize_params(preset_params)
     local lock_params = {}
     local audio_params = {}
     local volume_params = {}
+    local lfo_enable_params = {}
     local other_params = {}
     
     for param_id, value in pairs(preset_params) do
@@ -165,34 +166,31 @@ local function categorize_params(preset_params)
                 table.insert(audio_params, {id = param_id, value = value})
             elseif param_id:match("volume$") then
                 table.insert(volume_params, {id = param_id, value = value})
+            elseif param_id:match("^%d+lfo$") then
+                table.insert(lfo_enable_params, {id = param_id, value = value})
             elseif not param_id:match("sample$") then
                 table.insert(other_params, {id = param_id, value = value})
             end
         end
     end
     
-    return lock_params, audio_params, volume_params, other_params
+    return lock_params, audio_params, volume_params, lfo_enable_params, other_params
 end
 
-local function apply_params(lock_params, audio_params, volume_params, other_params)
-    for _, p in ipairs(lock_params) do
-        params:set(p.id, p.value)
-    end
+local function apply_params(lock_params, audio_params, volume_params, lfo_enable_params, other_params)
+    for _, p in ipairs(lock_params) do params:set(p.id, p.value) end
     clock.sleep(0.02)
     
-    for _, p in ipairs(audio_params) do
-        params:set(p.id, p.value)
-    end
+    for _, p in ipairs(audio_params) do params:set(p.id, p.value) end
     clock.sleep(0.03)
-    
-    for _, p in ipairs(other_params) do
-        params:set(p.id, p.value)
-    end
+
+    for _, p in ipairs(volume_params) do params:set(p.id, p.value) end
     clock.sleep(0.03)
-    
-    for _, p in ipairs(volume_params) do
-        params:set(p.id, p.value)
-    end
+
+    for _, p in ipairs(other_params) do params:set(p.id, p.value) end
+    clock.sleep(0.03)
+
+    for _, p in ipairs(lfo_enable_params) do params:set(p.id, p.value) end
 end
 
 local function refresh_voice_params()
@@ -316,9 +314,8 @@ function presets.load_complete_preset(preset_name, scene_data_ref, update_pan_po
         _G.preset_loading = false
         
         if preset_data.params then
-            local lock_params, audio_params, volume_params, other_params = 
-                categorize_params(preset_data.params)
-            apply_params(lock_params, audio_params, volume_params, other_params)
+            local lock_params, audio_params, volume_params, lfo_enable_params, other_params = categorize_params(preset_data.params)
+            apply_params(lock_params, audio_params, volume_params, lfo_enable_params, other_params)
         end
         
         update_pan_positioning_fn()
