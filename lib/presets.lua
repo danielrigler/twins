@@ -237,7 +237,7 @@ function presets.load_complete_preset(preset_name, scene_data_ref, update_pan_po
             local sample_param = i .. "sample"
             if params.lookup[sample_param] and preset_data.params and preset_data.params[sample_param] then
                 local sample_path = preset_data.params[sample_param]
-                if sample_path and sample_path ~= "-" and sample_path ~= "" and sample_path ~= "none" then
+                if sample_path and sample_path ~= "-" and sample_path ~= _path.tape .. "live!" and sample_path ~= "" and sample_path ~= "none" then
                     buffer_loading.pending[i] = true
                     buffer_loading.complete[i] = false
                     sample_count = sample_count + 1

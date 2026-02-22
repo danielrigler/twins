@@ -656,7 +656,7 @@ local function setup_params()
       params:add_binary(i.."live_input", "Live Buffer "..i.." ● ►", "toggle", 0) params:set_action(i.."live_input", function(value) if value == 1 then if params:get(i.."live_direct") == 1 then params:set(i.."live_direct", 0) end engine.set_live_input(i, 1) engine.live_mono(i, params:get("isMono") - 1) audio_active[i] = true cached_buffer_durations[i]=params:get("live_buffer_length") set_sample_live(i) update_pan_positioning() else engine.set_live_input(i, 0) if not audio_active[i] and params:get(i.."live_direct") == 0 then osc_positions[i] = 0 params:set(i.."sample", "-") else set_sample_live(i) update_pan_positioning() end end end)
     end
     params:add_control("live_buffer_mix", "Overdub", controlspec.new(0, 100, "lin", 1, 100, "%")) params:set_action("live_buffer_mix", function(value) engine.live_buffer_mix(value * 0.01) end)
-    params:add_taper("live_buffer_length", "Buffer Length", 0.05, 10, 2, 3, "s") params:set_action("live_buffer_length", function(value) engine.live_buffer_length(value) for i=1,2 do if params:get(i.."live_input")==1 then cached_buffer_durations[i]=value end end end)
+    params:add_taper("live_buffer_length", "Buffer Length", 0.05, 10, 1, 3, "s") params:set_action("live_buffer_length", function(value) engine.live_buffer_length(value) for i=1,2 do if params:get(i.."live_input")==1 then cached_buffer_durations[i]=value end end end)
     params:add{type = "trigger", id = "save_live_buffer1", name = "Buffer1 to Tape", action = function() local timestamp = os.date("%Y%m%d_%H%M%S") local filename = "live1_"..timestamp..".wav" engine.save_live_buffer(1, filename) end}
     params:add{type = "trigger", id = "save_live_buffer2", name = "Buffer2 to Tape", action = function() local timestamp = os.date("%Y%m%d_%H%M%S") local filename = "live2_"..timestamp..".wav" engine.save_live_buffer(2, filename) end}
     for i = 1, 2 do
@@ -1825,22 +1825,18 @@ local osc_handlers = {
 local function setup_osc() osc.event = function(path, args) local handler = osc_handlers[path] if handler then handler(args) end end end
 
 function init()
+    if not installer:ready() then tracked_clock_run(function() while true do redraw() clock.sleep(1 / 10) end end) do return end end
     initial_reverb_onoff = params:get('reverb')
     params:set('reverb', 1)
     initial_monitor_level = params:get('monitor_level')
     params:set('monitor_level', -math.huge)
-    if not installer:ready() then tracked_clock_run(function() while true do redraw() clock.sleep(1 / 10) end end) do return end end
     setup_ui_metro()
     setup_params()
-    for i = 1, 2 do
-        if params:get(i.."sample") == "-" then
-            params:set(i.."sample", _path.tape, true)
-        end
-    end
     setup_osc()
     lfo.on_state_change = invalidate_lfo_cache
     font.init_fx_cache()
     init_longpress_checker()
+    for i = 1, 2 do if params:get(i.."sample") == "-" then params:set(i.."sample", _path.tape, true) end end
 end
 
 function cleanup()
