@@ -34,11 +34,11 @@ local DRY_VALUES_STEREO = {
     eq_high_gain = 0,
     cutoff = 20000,
     hpf = 20,
-    lpfgain = 0,
+    lpf_gain = 0.05,
     pan = 0
 }
 
-local STEREO_PARAMS = {"granular_gain", "speed", "eq_low_gain", "eq_mid_gain", "eq_high_gain", "cutoff", "hpf", "lpfgain", "pan"}
+local STEREO_PARAMS = {"granular_gain", "speed", "eq_low_gain", "eq_mid_gain", "eq_high_gain", "cutoff", "hpf", "lpf_gain", "pan"}
 local MONO_PARAMS = {"filter_lock_ratio", "reverb_mix", "delay_mix", "bitcrush_mix", "glitch_ratio", "glitch_mix", "shimmer_mix1", "tape_mix", 
                      "drive", "Width", "monobass_mix", "sine_drive_wet", "wobble_mix", "chew_depth", "lossdegrade_mix", 
                      "rspeed", "haas", "dimension_mix"}
