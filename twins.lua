@@ -94,6 +94,7 @@ local current_scene_mode = "off"
 local scene_data = {[1] = {[1] = {}, [2] = {}}, [2] = {[1] = {}, [2] = {}}}
 local morph_temp_scene = {}
 local last_morph_amount = 0 
+local last_selected_file = {[1] = nil, [2] = nil}
 local grain_positions = {[1] = {}, [2] = {}}
 local osc_positions = {[1] = 0, [2] = 0}
 local rec_positions = {[1] = 0, [2] = 0}
@@ -101,23 +102,10 @@ local cached_buffer_durations = {[1] = 1, [2] = 1}
 local voice_peak_amplitudes = {[1] = {l = 0, r = 0}, [2] = {l = 0, r = 0}}
 local link_base = {[1]={pitch=nil,size=nil,density=nil,product=nil}, [2]={pitch=nil,size=nil,density=nil,product=nil}}
 local ui_metro = nil
-local lfos_turned_off = {}
 local lfo_cache = {}
 local lfo_cache_dirty = true
 local function invalidate_lfo_cache() lfo_cache_dirty = true end
-local function rebuild_lfo_cache()
-    for k in pairs(lfo_cache) do lfo_cache[k] = nil end
-    local targets = lfo.lfo_targets
-    if targets then
-        for i = 1, 16 do
-            if params:get(MORPH_LFO_KEYS[i]) == 2 then
-                local param_name = targets[params:get(MORPH_TARGET_KEYS[i])]
-                if param_name and param_name ~= "none" then lfo_cache[param_name] = i end
-            end
-        end
-    end
-    lfo_cache_dirty = false
-end
+local function rebuild_lfo_cache() for k in pairs(lfo_cache) do lfo_cache[k] = nil end local targets = lfo.lfo_targets if targets then for i = 1, 16 do if params:get(MORPH_LFO_KEYS[i]) == 2 then local param_name = targets[params:get(MORPH_TARGET_KEYS[i])] if param_name and param_name ~= "none" then lfo_cache[param_name] = i end end end end lfo_cache_dirty = false end
 local shimmer_presets = {{oct = 0.25, lowpass = 4000, hipass = 20, fb = 0.48}, {oct = 0.5, lowpass = 6000, hipass = 20, fb = 0.48}, {oct = 1, lowpass = 20000, hipass = 20, fb = 0.48}, {oct = 2, lowpass = 9000, hipass = 300, fb = 0.36}, {oct = 4, lowpass = 12000, hipass = 700, fb = 0.36}}
 local param_modes = {
     speed = {param = "speed", delta = 1, engine = true, has_lock = true},
@@ -131,54 +119,14 @@ local param_modes = {
     pitch = {param = "pitch", delta = 1, engine = true, has_lock = true, y = 41, label = "pitch:", st = true},
     spread = {param = "spread", delta = 2, engine = true, has_lock = true, y = 51, label = "spread:"},
     volume = {param = "volume", engine = true}}
-local param_rows = {}
-for mode, config in pairs(param_modes) do
-  if config.y then
-    local lbl = config.label
-    table.insert(param_rows, {
-      y = config.y, label = lbl, label_upper = lbl:upper(),
-      name = lbl:match("%a+"),
-      mode = mode, param1 = "1" .. config.param, param2 = "2" .. config.param,
-      hz = config.hz, st = config.st
-    })
-  end
-end
-table.sort(param_rows, function(a, b) return a.y < b.y end)
+local param_rows = {} for mode, config in pairs(param_modes) do if config.y then local lbl = config.label table.insert(param_rows, {y = config.y, label = lbl, label_upper = lbl:upper(), name = lbl:match("%a+"), mode = mode, param1 = "1" .. config.param, param2 = "2" .. config.param, hz = config.hz, st = config.st}) end end table.sort(param_rows, function(a, b) return a.y < b.y end)
 local LIMITS = {size={min=20,max=4999},density={min=0.1,max=50},pitch={min=-48,max=48}}
 local scale_array_cache = {}
-local function normalize_scale_name(scale_name)
-    if scale_name == "none" or scale_name == "off" then return "none" end
-    local scale_map = {["major pent."] = "major pentatonic", ["minor pent."] = "minor pentatonic"}
-    return scale_map[scale_name] or scale_name
-end
-local function get_scale_array(scale_name)
-    scale_name = normalize_scale_name(scale_name)
-    if scale_name == "none" then return nil end
-    if not scale_array_cache[scale_name] then scale_array_cache[scale_name] = MusicUtil.generate_scale_of_length(60-48, scale_name, 97) end
-    return scale_array_cache[scale_name]
-end
-local function quantize_pitch_to_scale(pitch_value, scale_name)
-    local scale_array = get_scale_array(scale_name)
-    if not scale_array then return pitch_value end
-    return MusicUtil.snap_note_to_array(60 + pitch_value, scale_array) - 60
-end
-local function get_next_scale_note(pitch_value, scale_name, direction)
-    local scale_array = get_scale_array(scale_name)
-    if not scale_array then return pitch_value + direction end
-    local midi_note = MusicUtil.snap_note_to_array(60 + pitch_value, scale_array)
-    local current_idx
-    for i, note in ipairs(scale_array) do if note == midi_note then current_idx = i break end end
-    if not current_idx then return pitch_value end
-    local next_idx = util.clamp(current_idx + (direction > 0 and 1 or -1), 1, #scale_array)
-    return scale_array[next_idx] - 60
-end
-local scale_intervals_cache = {}
-local function get_scale_intervals(scale_name)
-    scale_name = normalize_scale_name(scale_name)
-    if scale_name == "none" then scale_name = "major" end
-    if not scale_intervals_cache[scale_name] then scale_intervals_cache[scale_name] = MusicUtil.generate_scale(0, scale_name, 1) or MusicUtil.generate_scale(0, "major", 1) end
-    return scale_intervals_cache[scale_name]
-end
+local function normalize_scale_name(scale_name) if scale_name == "none" or scale_name == "off" then return "none" end local scale_map = {["major pent."] = "major pentatonic", ["minor pent."] = "minor pentatonic"} return scale_map[scale_name] or scale_name end
+local function get_scale_array(scale_name) scale_name = normalize_scale_name(scale_name) if scale_name == "none" then return nil end if not scale_array_cache[scale_name] then scale_array_cache[scale_name] = MusicUtil.generate_scale_of_length(60-48, scale_name, 97) end return scale_array_cache[scale_name] end
+local function quantize_pitch_to_scale(pitch_value, scale_name) local scale_array = get_scale_array(scale_name) if not scale_array then return pitch_value end return MusicUtil.snap_note_to_array(60 + pitch_value, scale_array) - 60 end
+local function get_next_scale_note(pitch_value, scale_name, direction) local scale_array = get_scale_array(scale_name) if not scale_array then return pitch_value + direction end local midi_note = MusicUtil.snap_note_to_array(60 + pitch_value, scale_array) local current_idx for i, note in ipairs(scale_array) do if note == midi_note then current_idx = i break end end if not current_idx then return pitch_value end local next_idx = util.clamp(current_idx + (direction > 0 and 1 or -1), 1, #scale_array)    return scale_array[next_idx] - 60 end
+local scale_intervals_cache = {} local function get_scale_intervals(scale_name) scale_name = normalize_scale_name(scale_name) if scale_name == "none" then scale_name = "major" end if not scale_intervals_cache[scale_name] then scale_intervals_cache[scale_name] = MusicUtil.generate_scale(0, scale_name, 1) or MusicUtil.generate_scale(0, "major", 1) end return scale_intervals_cache[scale_name] end
 local animation_y = -64 animation_complete = false animation_start_time = nil
 local pan_indicator_x = {[1] = -80, [2] = 80} pan_indicators_visible = false pan_slide_start_time = nil
 local volume_bar_y = {[1] = 120, [2] = 120} volume_bars_visible = false
@@ -187,19 +135,13 @@ local randomize_flash = {[1] = 0, [2] = 0}
 local FLASH_INTENSITY = 8
 local FLASH_DECAY = 0.9
 local function flash_level(track, base_level) return math.min(base_level + math.floor(randomize_flash[track] * FLASH_INTENSITY), 15) end
-local function table_find(tbl, value) for i = 1, #tbl do if tbl[i] == value then return i end end return nil end
-local function is_audio_loaded(track_num) local file_path = params:get(track_num .. "sample") return (file_path and file_path ~= "-") or audio_active[track_num] end
 local function random_float(l, h) return l + math.random() * (h - l) end
 local function stop_metro_safe(m) if m then pcall(function() m:stop() end) if m then m.event = nil end end end
 local function tracked_clock_run(func) local co = clock.run(func) table.insert(active_clocks, co) return co end
 local function cancel_all_clocks() for i = #active_clocks, 1, -1 do local co = active_clocks[i] if co then pcall(function() clock.cancel(co) end) end active_clocks[i] = nil end end
 local function is_param_locked(track_num, param) return params:get(track_num .. "lock_" .. param) == 2 end
-local function is_lfo_active_for_param(param_name)
-    if lfo_cache_dirty then rebuild_lfo_cache() end
-    local idx = lfo_cache[param_name]
-    return idx ~= nil, idx
-end
-local function update_pan_positioning() if _G.preset_loading then return end local loaded1 = is_audio_loaded(1) local loaded2 = is_audio_loaded(2) local pan1_locked = is_param_locked(1, "pan") local pan1_has_lfo = is_lfo_active_for_param("1pan") local pan2_locked = is_param_locked(2, "pan") local pan2_has_lfo = is_lfo_active_for_param("2pan") if not pan1_locked and not pan1_has_lfo then params:set("1pan", loaded2 and -25 or 0) end if not pan2_locked and not pan2_has_lfo then params:set("2pan", loaded1 and 25 or 0) end end
+local function is_lfo_active_for_param(param_name) if lfo_cache_dirty then rebuild_lfo_cache() end local idx = lfo_cache[param_name] return idx ~= nil, idx end
+local function update_pan_positioning() if _G.preset_loading then return end; local l1,l2=audio_active[1],audio_active[2]; local function ok(v,id) return v and not is_param_locked(id,"pan") and not is_lfo_active_for_param(id.."pan") end; if l1 and l2 then if ok(l1,1) then params:set("1pan",-25) end; if ok(l2,2) then params:set("2pan",25) end else if ok(l1,1) then params:set("1pan",0) end; if ok(l2,2) then params:set("2pan",0) end end end
 
 local function setup_ui_metro()
     if ui_metro then stop_metro_safe(ui_metro) end
@@ -653,7 +595,6 @@ local function handle_lfo(param_name, force_disable)
     end
 end
 
-local last_selected = {[1] = nil, [2] = nil}
 local function scan_audio_files(dir)
     local files = {}
     for _, entry in ipairs(util.scandir(dir)) do
@@ -667,7 +608,7 @@ end
 local function set_track_sample(track_num, file)
     if params:get(track_num .. "live_input") == 1 then return false end
     if params:get(track_num .. "sample") ~= file then params:set(track_num .. "sample", file) end
-    last_selected[track_num] = file
+    last_selected_file[track_num] = file
     return true
 end
 
@@ -706,7 +647,7 @@ end
 local function setup_params()
     params:add_separator("Input")
     for i = 1, 2 do
-      params:add_file(i.."sample","Sample "..i, _path.tape); params:set_action(i.."sample",function(f) if f~=nil and f~="" and f~="none" and f~="-" and f~=(_path.tape.."live!") then if params:get(i.."live_input")==1 then engine.set_live_input(i,0) params:set(i.."live_input",0,true) end if params:get(i.."live_direct")==1 then engine.live_direct(i,0) params:set(i.."live_direct",0,true) end local jitter_locked=is_param_locked(i,"jitter"); if not jitter_locked then lfo.clearLFOs(tostring(i),"jitter"); end engine.read(i,f); audio_active[i]=true; update_pan_positioning(); local is_live=params:get(i.."live_input")==1; local dur=is_live and params:get("live_buffer_length") or get_audio_duration(f); if dur then cached_buffer_durations[i]=dur; local ms=dur*1000; local max_jit=math.min(ms,99999); params:set(i.."max_jitter",max_jit); params:set(i.."min_jitter",0); if not _G.preset_loading and not jitter_locked then local jp=i.."jitter"; handle_lfo(jp,true); local jitter_val; if math.random()<0.75 then local upper_limit=math.min(500,dur*1000); jitter_val=util.clamp(math.random()*upper_limit,0,99999); else jitter_val=util.clamp(math.random()*dur*1000,0,99999); end params:set(jp,jitter_val); end else if not jitter_locked then lfo.clearLFOs(tostring(i),"jitter"); end audio_active[i]=false; osc_positions[i]=0; update_pan_positioning(); end end end)
+      params:add_file(i.."sample","Sample "..i, _path.tape); params:set_action(i.."sample",function(f) if f~=nil and f~="" and f~="none" and f~="-" and f~=(_path.tape.."live!") and not f:match("/$") then if params:get(i.."live_input")==1 then engine.set_live_input(i,0) params:set(i.."live_input",0,true) end if params:get(i.."live_direct")==1 then engine.live_direct(i,0) params:set(i.."live_direct",0,true) end local jitter_locked=is_param_locked(i,"jitter"); if not jitter_locked then lfo.clearLFOs(tostring(i),"jitter"); end engine.read(i,f); audio_active[i]=true; update_pan_positioning(); local is_live=params:get(i.."live_input")==1; local dur=is_live and params:get("live_buffer_length") or get_audio_duration(f); if dur then cached_buffer_durations[i]=dur; local ms=dur*1000; local max_jit=math.min(ms,99999); params:set(i.."max_jitter",max_jit); params:set(i.."min_jitter",0); if not _G.preset_loading and not jitter_locked then local jp=i.."jitter"; handle_lfo(jp,true); local jitter_val; if math.random()<0.75 then local upper_limit=math.min(500,dur*1000); jitter_val=util.clamp(math.random()*upper_limit,0,99999); else jitter_val=util.clamp(math.random()*dur*1000,0,99999); end params:set(jp,jitter_val); end else if not jitter_locked then lfo.clearLFOs(tostring(i),"jitter"); end audio_active[i]=false; osc_positions[i]=0; update_pan_positioning(); end end end)
     end
     params:add_binary("randomtapes", "Random Tapes", "trigger", 0) params:set_action("randomtapes", function() load_random_tape_file() end)
     
@@ -1299,7 +1240,6 @@ end
 
 local function find_or_create_lfo_for_param(track, param_name, only_existing, create_with_depth, source_lfo_idx)
     local full_param = track .. param_name
-    if not only_existing then lfos_turned_off[full_param] = nil end
     local lfo_targets = lfo.lfo_targets
     for i = 1, 16 do
         local lfo_state = params:get(i .. "lfo")
@@ -1367,7 +1307,6 @@ local function adjust_lfo_depth(lfo_idx, delta)
             params:set(lfo_idx .. "lfo_depth", initial_depth)
             params:set(lfo_idx .. "lfo", 2)
             invalidate_lfo_cache()
-            lfos_turned_off[target_param] = nil
         end
         return
     end
@@ -1545,7 +1484,6 @@ function handle_key_release(n, both_keys_pressed)
         if (util.time() - tracker.press_time) < KEY_LONG_PRESS_THRESHOLD then handle_mode_navigation(n) end
     end
     set_key_tracking(n)
-    lfos_turned_off = {}
 end
 
 local function format_density(value) return string.format("%.1f Hz", value) end
@@ -1894,6 +1832,11 @@ function init()
     if not installer:ready() then tracked_clock_run(function() while true do redraw() clock.sleep(1 / 10) end end) do return end end
     setup_ui_metro()
     setup_params()
+    for i = 1, 2 do
+        if params:get(i.."sample") == "-" then
+            params:set(i.."sample", _path.tape, true)
+        end
+    end
     setup_osc()
     lfo.on_state_change = invalidate_lfo_cache
     font.init_fx_cache()
