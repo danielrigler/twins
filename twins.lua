@@ -957,7 +957,7 @@ local function randomize_pitch(track, other_track, symmetry)
 end
 
 local function randomize(n)
-    randomize_metro[n] = randomize_metro[n] or metro.init()
+    if not randomize_metro[n] then randomize_metro[n] = metro.init() end
     local m_rand = randomize_metro[n]
     local active_controlled_params = active_controlled_params or {}
     local symmetry = params:get("symmetry") == 1
@@ -1041,7 +1041,7 @@ local function randomize(n)
                     end
                 end
             end
-            if all_done then stop_metro_safe(m_rand) randomize_metro[n] = nil end
+            if all_done then stop_metro_safe(m_rand) end
         end
         m_rand:start()
     end
@@ -1208,7 +1208,7 @@ end
 local function handle_randomize_track(n)
     if not key_state[1] then return false end
     local track = n == 3 and 2 or 1
-    stop_metro_safe(randomize_metro[track]) randomize_metro[track] = nil
+    stop_metro_safe(randomize_metro[track])
     lfo.clearLFOs(tostring(track))
     lfo.randomize_lfos(tostring(track), params:get("allow_volume_lfos") == 2)
     invalidate_lfo_cache()

@@ -134,7 +134,7 @@ local function categorize_params(preset_params)
     local audio_params = {}
     local volume_params = {}
     local lfo_enable_params = {}
-    local allow_volume_lfo_params = {}  -- new
+    local allow_volume_lfo_params = {}
     local other_params = {}
     for param_id, value in pairs(preset_params) do
         if params.lookup[param_id] then
@@ -145,7 +145,7 @@ local function categorize_params(preset_params)
             elseif param_id:match("volume$") then
                 table.insert(volume_params, {id = param_id, value = value})
             elseif param_id == "allow_volume_lfos" then
-                table.insert(allow_volume_lfo_params, {id = param_id, value = value})  -- new
+                table.insert(allow_volume_lfo_params, {id = param_id, value = value})
             elseif param_id:match("^%d+lfo$") then
                 table.insert(lfo_enable_params, {id = param_id, value = value})
             elseif not param_id:match("sample$") then
@@ -233,11 +233,18 @@ function presets.load_complete_preset(preset_name, scene_data_ref, update_pan_po
         buffer_loading.pending = {}
         buffer_loading.complete = {}
         local sample_count = 0
+        local function is_valid_sample_path(p)
+            if not p then return false end
+            if p == "-" or p == "" or p == "none" then return false end
+            if p == _path.tape or p == (_path.tape .. "live!") then return false end
+            if not util.file_exists(p) then return false end
+            return true
+        end
         for i = 1, 2 do
             local sample_param = i .. "sample"
             if params.lookup[sample_param] and preset_data.params and preset_data.params[sample_param] then
                 local sample_path = preset_data.params[sample_param]
-                if sample_path and sample_path ~= "-" and sample_path ~= _path.tape .. "live!" and sample_path ~= "" and sample_path ~= "none" then
+                if is_valid_sample_path(sample_path) then
                     buffer_loading.pending[i] = true
                     buffer_loading.complete[i] = false
                     sample_count = sample_count + 1
@@ -260,13 +267,15 @@ function presets.load_complete_preset(preset_name, scene_data_ref, update_pan_po
             else
                 print("⚠ Timeout - some samples may not be ready")
             end
-            for i = 1, 2 do
-                local sample_param = i .. "sample"
-                if params.lookup[sample_param] then
-                    local sample_path = params:get(sample_param)
-                    if sample_path and sample_path ~= "-" and sample_path ~= "" and sample_path ~= "none" then
-                        audio_active_ref[i] = true
-                    end
+        end
+        for i = 1, 2 do
+            local sample_param = i .. "sample"
+            if params.lookup[sample_param] then
+                local sample_path = params:get(sample_param)
+                if is_valid_sample_path(sample_path) then
+                    audio_active_ref[i] = true
+                else
+                    audio_active_ref[i] = false
                 end
             end
         end

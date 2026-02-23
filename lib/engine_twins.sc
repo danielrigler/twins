@@ -68,7 +68,7 @@ alloc {
             var overtone_2_vol = overtones_2 * main_vol * 1.5;
             var trigger60 = Impulse.kr(60);
             var lagcutoff = Lag.kr(cutoff, 0.6);
-            var grain_direction, base_trig, base_grain_trig, rand_val, rand_val2, random_interval, ratchet_gate, extra_trig, signal, stepIndex, actualStep, direction, totalStep, scaleDegree, octaveShift, semitones, grain_pan, envBuf, randomEnv,            harmonics, volumes, grains, vol, size_mults;
+            var grain_direction, base_trig, base_grain_trig, rand_val, rand_val2, random_interval, ratchet_gate, extra_trig, signal, stepIndex, actualStep, direction, totalStep, scaleDegree, octaveShift, semitones, grain_pan, envBuf, randomEnv,            harmonics, volumes, l_harmonics, r_harmonics, vol, size_mults;
 
             speed = Lag.kr(speed, 1);
             density_mod = density * (2**(LFNoise1.kr(density).range(0, 1) * density_mod_amt));
@@ -110,16 +110,24 @@ alloc {
             harmonics = [1, 1/2, 1/4, 1/8, 2, 4];
             volumes = [main_vol, subharmonic_1_vol, subharmonic_2_vol, subharmonic_3_vol, overtone_1_vol, overtone_2_vol];
             size_mults = [1, smoothbass, smoothbass, smoothbass, 1, 1];
-            grains = [buf_l, buf_r].collect { |buf| harmonics.collect { |harmonic, i| var active_trig = grain_trig * (volumes[i] > 0); GrainBuf.ar(numChannels: 2, trigger: active_trig, dur: grain_size * size_mults[i], sndbuf: buf, rate: grain_pitch * harmonic * grain_direction, pos: buf_pos + jitter_sig, interp: 2, pan: grain_pan, envbufnum: envBuf, mul: volumes[i]); }}.flatten(1);
-            granular_sig = Mix.ar(grains);
+            l_harmonics = harmonics.collect { |harmonic, i|
+                var active_trig = grain_trig * (volumes[i] > 0);
+                var grain_pan_l = (grain_pan - 0.5).clip(-1, 1);
+                GrainBuf.ar(numChannels: 2, trigger: active_trig, dur: grain_size * size_mults[i], sndbuf: buf_l, rate: grain_pitch * harmonic * grain_direction, pos: buf_pos + jitter_sig, interp: 2, pan: grain_pan_l, envbufnum: envBuf, mul: volumes[i]);
+            };
+            r_harmonics = harmonics.collect { |harmonic, i|
+                var active_trig = grain_trig * (volumes[i] > 0);
+                var grain_pan_r = (grain_pan + 0.5).clip(-1, 1);
+                GrainBuf.ar(numChannels: 2, trigger: active_trig, dur: grain_size * size_mults[i], sndbuf: buf_r, rate: grain_pitch * harmonic * grain_direction, pos: buf_pos + jitter_sig, interp: 2, pan: grain_pan_r, envbufnum: envBuf, mul: volumes[i]);
+            };
+            granular_sig = Mix.ar(l_harmonics) + Mix.ar(r_harmonics);
             sig_mix = dry_sig * (1 - granular_gain) + (granular_sig * granular_gain);
      
             sig_mix = BLowShelf.ar(sig_mix, 55, 6, low_gain);
             sig_mix = BPeakEQ.ar(sig_mix, 700, 1, mid_gain);
             sig_mix = BHiShelf.ar(sig_mix, 3900, 6, high_gain);
-    
-            sig_mix = HPF.ar(sig_mix, Lag.kr(hpf, 0.6));
-            sig_mix = RLPF.ar(RLPF.ar(sig_mix, lagcutoff, lpf_gain), lagcutoff, lpf_gain);
+            sig_mix = HPF.ar(sig_mix, hpf);
+            sig_mix = MoogFF.ar(sig_mix, lagcutoff, lpf_gain);
             
             SendReply.kr(trigger60, '/buf_pos', [voice, buf_pos]);
             SendReply.kr(grain_trig, '/grain_pos', [voice, Wrap.kr(buf_pos + jitter_sig), grain_size]);
@@ -154,8 +162,8 @@ alloc {
             sig = BLowShelf.ar(sig, 55, 6, low_gain);
             sig = BPeakEQ.ar(sig, 700, 1, mid_gain);
             sig = BHiShelf.ar(sig, 3900, 6, high_gain);
-            sig = HPF.ar(sig, Lag.kr(hpf, 0.6));
-            sig = RLPF.ar(RLPF.ar(sig, lagcutoff, lpf_gain), lagcutoff, lpf_gain);
+            sig = HPF.ar(sig, hpf);
+            sig = MoogFF.ar(sig, lagcutoff, lpf_gain);
             sig = Balance2.ar(sig[0], sig[1], pan);
             sig = sig * Lag.kr(gain);
             SendReply.kr(trigger60, '/voice_peak', [voice, Peak.kr(sig[0], trigger60), Peak.kr(sig[1], trigger60)]);
