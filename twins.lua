@@ -205,7 +205,7 @@ local function setup_ui_metro()
         end
         redraw()
     end)
-    ui_metro.time = 1/60
+    ui_metro.time = 1/30
     ui_metro:start()
 end
 

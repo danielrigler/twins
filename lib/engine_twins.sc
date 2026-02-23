@@ -66,7 +66,7 @@ alloc {
             var subharmonic_3_vol = subharmonics_3 * main_vol * 2;
             var overtone_1_vol = overtones_1 * main_vol * 1.5;
             var overtone_2_vol = overtones_2 * main_vol * 1.5;
-            var trigger60 = Impulse.kr(60);
+            var trigger60 = Impulse.kr(30);
             var lagcutoff = Lag.kr(cutoff, 0.6);
             var grain_direction, base_trig, base_grain_trig, rand_val, rand_val2, random_interval, ratchet_gate, extra_trig, signal, stepIndex, actualStep, direction, totalStep, scaleDegree, octaveShift, semitones, grain_pan, envBuf, randomEnv,            harmonics, volumes, grains, vol, size_mults;
 
@@ -148,7 +148,7 @@ alloc {
         SynthDef(\liveDirect, {
             arg out, pan, gain, cutoff, hpf, low_gain, mid_gain, high_gain, isMono, lpf_gain, voice;
             var sig = SoundIn.ar([0, 1]);
-            var trigger60 = Impulse.kr(60);
+            var trigger60 = Impulse.kr(30);
             var lagcutoff =  Lag.kr(cutoff, 0.6);
             sig = Select.ar(isMono, [sig, [sig[0], sig[0]] ]);
             sig = BLowShelf.ar(sig, 55, 6, low_gain);
