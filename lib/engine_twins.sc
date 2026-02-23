@@ -66,7 +66,7 @@ alloc {
             var subharmonic_3_vol = subharmonics_3 * main_vol * 2;
             var overtone_1_vol = overtones_1 * main_vol * 1.5;
             var overtone_2_vol = overtones_2 * main_vol * 1.5;
-            var trigger60 = Impulse.kr(30);
+            var trigger60 = Impulse.kr(60);
             var lagcutoff = Lag.kr(cutoff, 0.6);
             var grain_direction, base_trig, base_grain_trig, rand_val, rand_val2, random_interval, ratchet_gate, extra_trig, signal, stepIndex, actualStep, direction, totalStep, scaleDegree, octaveShift, semitones, grain_pan, envBuf, randomEnv,            harmonics, volumes, grains, vol, size_mults;
 
@@ -123,10 +123,10 @@ alloc {
             
             SendReply.kr(trigger60, '/buf_pos', [voice, buf_pos]);
             SendReply.kr(grain_trig, '/grain_pos', [voice, Wrap.kr(buf_pos + jitter_sig), grain_size]);
-            signal = sig_mix * Lag.kr(gain) * 1.25;
+            signal = sig_mix * Lag.kr(gain);
             SendReply.kr(trigger60, '/voice_peak', [voice, Peak.kr(signal[0], trigger60), Peak.kr(signal[1], trigger60)]);
 
-            Out.ar(out, signal);
+            Out.ar(out, signal * 1.25);
         }).add;
 
         context.server.sync;
@@ -148,7 +148,7 @@ alloc {
         SynthDef(\liveDirect, {
             arg out, pan, gain, cutoff, hpf, low_gain, mid_gain, high_gain, isMono, lpf_gain, voice;
             var sig = SoundIn.ar([0, 1]);
-            var trigger60 = Impulse.kr(30);
+            var trigger60 = Impulse.kr(60);
             var lagcutoff =  Lag.kr(cutoff, 0.6);
             sig = Select.ar(isMono, [sig, [sig[0], sig[0]] ]);
             sig = BLowShelf.ar(sig, 55, 6, low_gain);
@@ -157,9 +157,9 @@ alloc {
             sig = HPF.ar(sig, Lag.kr(hpf, 0.6));
             sig = RLPF.ar(RLPF.ar(sig, lagcutoff, lpf_gain), lagcutoff, lpf_gain);
             sig = Balance2.ar(sig[0], sig[1], pan);
-            sig = sig * Lag.kr(gain) * 1.25;
+            sig = sig * Lag.kr(gain);
             SendReply.kr(trigger60, '/voice_peak', [voice, Peak.kr(sig[0], trigger60), Peak.kr(sig[1], trigger60)]);
-            Out.ar(out, sig);
+            Out.ar(out, sig * 1.25);
         }).add;
         
         SynthDef(\liveInputRecorder, {
