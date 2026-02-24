@@ -6,7 +6,7 @@
 --            by: @dddstudio                       
 -- 
 --                          
---                           v0.52
+--                           v0.53
 -- E1: Master Volume
 -- K1+E2/E3: Volume
 -- K2/K3: Navigate
@@ -35,7 +35,7 @@
 -- @justmat @artfwo @nzimas
 -- @sonoCircuit @graymazes
 -- @Higaru @NiklasKramer
--- @xmacex @vehka
+-- @xmacex @vehka @Quixotic7
 --
 -- If you like this,
 -- buy them a beer :)

@@ -1,4 +1,5 @@
 local presets = {}
+local NameSizer = include("lib/namesizer")
 
 presets.menu_open = false
 presets.menu_mode = "load"
@@ -69,20 +70,31 @@ local function get_all_params_state()
     return state
 end
 
+local function get_file_mtime(path)
+    local f = io.popen('stat -c "%Y" "' .. path .. '" 2>/dev/null')
+    if not f then return 0 end
+    local result = f:read("*n")
+    f:close()
+    return result or 0
+end
+
+local function get_all_mtimes(dir)
+    local mtimes = {}
+    local f = io.popen('stat -c "%n %Y" "' .. dir .. '"/*.lua 2>/dev/null')
+    if not f then return mtimes end
+    for line in f:lines() do
+        local name, t = line:match('([^/]+)%.lua (%d+)$')
+        if name and t then mtimes[name] = tonumber(t) end
+    end
+    f:close()
+    return mtimes
+end
+
 local function generate_preset_name(preset_name)
     if not preset_name or preset_name == "" then
-        local time_prefix = os.date("%Y%m%d_%H%M")
-        local existing_presets = presets.list_presets()
-        local highest_num = 0
-        for _, preset in ipairs(existing_presets) do
-            local num = preset:match("^twins_%d+_%d+_(%d+)$")
-            if num then
-                highest_num = math.max(highest_num, tonumber(num))
-            end
-        end
-        return string.format("twins_%s_%03d", time_prefix, highest_num + 1)
+        return NameSizer.rnd(" ")
     end
-    return preset_name:match("^twins_") and preset_name or "twins_" .. preset_name
+    return preset_name
 end
 
 function presets.save_complete_preset(preset_name, scene_data_ref, update_pan_positioning_fn, audio_active_ref)
@@ -305,15 +317,10 @@ function presets.list_presets()
             presets_list[#presets_list + 1] = entry:gsub("%.lua$", "")
         end
     end
+    local dir = _path.data .. PRESETS_DIR
+    local mtimes = get_all_mtimes(dir)
     table.sort(presets_list, function(a, b)
-        local a_date, a_time, a_num = a:match("^twins_(%d+)_(%d+)_(%d+)$")
-        local b_date, b_time, b_num = b:match("^twins_(%d+)_(%d+)_(%d+)$")
-        if a_date and b_date then
-            if a_date ~= b_date then return a_date > b_date end
-            if a_time ~= b_time then return a_time > b_time end
-            return tonumber(a_num) > tonumber(b_num)
-        end
-        return a_date and true or (not b_date and a > b)
+        return (mtimes[a] or 0) > (mtimes[b] or 0)
     end)
     return presets_list
 end
@@ -354,13 +361,32 @@ function presets.close_menu()
     presets.preset_list = {}
 end
 
+local MENU_MODES = {"load", "rename", "save"}
+local function cycle_mode(current, delta)
+    for i, m in ipairs(MENU_MODES) do
+        if m == current then
+            local next = math.max(1, math.min(#MENU_MODES, i + delta))
+            return MENU_MODES[next]
+        end
+    end
+    return "load"
+end
+
 function presets.menu_enc(n, d)
     if not presets.menu_open then return end
+    if presets.confirmation and presets.confirmation.type == "rename" then
+        if n == 2 or n == 3 then
+            presets.confirmation.suggested_name = NameSizer.rnd(" ")
+            redraw()
+        end
+        return
+    end
     if n == 2 then
         presets.selected_index = util.clamp(presets.selected_index + d, 1, #presets.preset_list)
     elseif n == 1 or n == 3 then
-        presets.menu_mode = d > 0 and "overwrite" or "load"
+        presets.menu_mode = cycle_mode(presets.menu_mode, d > 0 and 1 or -1)
     end
+    redraw()
 end
 
 function presets.menu_key(n, z, scene_data_ref, update_pan_positioning_fn, audio_active_ref)
@@ -378,9 +404,22 @@ function presets.menu_key(n, z, scene_data_ref, update_pan_positioning_fn, audio
                 else
                     presets.selected_index = util.clamp(preset_index, 1, #presets.preset_list)
                 end
-            elseif presets.confirmation.type == "overwrite" then
-                local preset_name = presets.confirmation.preset_name
-                presets.save_complete_preset(preset_name, scene_data_ref, update_pan_positioning_fn, audio_active_ref)
+            elseif presets.confirmation.type == "save" then
+                local file_path = _path.data .. PRESETS_DIR .. "/" .. presets.confirmation.preset_name .. ".lua"
+                local mtime = get_file_mtime(file_path)
+                presets.save_complete_preset(presets.confirmation.preset_name, scene_data_ref, update_pan_positioning_fn, audio_active_ref)
+                if mtime and mtime > 0 then
+                    os.execute('touch -m -d @' .. mtime .. ' "' .. file_path .. '"')
+                end
+                presets.confirmation = nil
+                presets.menu_open = false
+            elseif presets.confirmation.type == "rename" then
+                local new_name = presets.confirmation.suggested_name or presets.confirmation.preset_name
+                if new_name ~= presets.confirmation.preset_name then
+                    local old_path = _path.data .. PRESETS_DIR .. "/" .. presets.confirmation.preset_name .. ".lua"
+                    local new_path = _path.data .. PRESETS_DIR .. "/" .. new_name .. ".lua"
+                    os.rename(old_path, new_path)
+                end
                 presets.confirmation = nil
                 presets.menu_open = false
             end
@@ -395,10 +434,17 @@ function presets.menu_key(n, z, scene_data_ref, update_pan_positioning_fn, audio
             local success = presets.load_complete_preset(preset_name, scene_data_ref, update_pan_positioning_fn, audio_active_ref)
             presets.menu_open = false
             return success
-        else
+        elseif presets.menu_mode == "save" then
             presets.confirmation = {
-                type = "overwrite",
+                type = "save",
                 preset_name = preset_name
+            }
+            return true
+        else -- rename
+            presets.confirmation = {
+                type = "rename",
+                preset_name = preset_name,
+                suggested_name = preset_name
             }
             return true
         end
@@ -416,28 +462,40 @@ function presets.menu_key(n, z, scene_data_ref, update_pan_positioning_fn, audio
     return false
 end
 
-local function draw_confirmation(title, preset_name)
+local function draw_confirmation(title, preset_name, suggested_name)
     screen.clear()
     screen.level(15)
-    screen.move(64, 20)
+    screen.move(64, 12)
     screen.text_center(title)
-    screen.level(8)
-    screen.move(64, 30)
-    screen.text_center(preset_name or "Unknown Preset")
+    if suggested_name then
+        screen.level(4)
+        screen.move(64, 24)
+        screen.text_center("renaming to:")
+        screen.level(15)
+        screen.move(64, 34)
+        screen.text_center(suggested_name)
+        screen.level(2)
+        screen.move(64, 44)
+        screen.text_center("E2/E3: new name")
+    else
+        screen.level(8)
+        screen.move(64, 26)
+        screen.text_center(preset_name or "Unknown Preset")
+    end
     screen.level(4)
-    screen.move(64, 45)
-    screen.text_center("K2/K1: Cancel")
-    screen.level(15)
     screen.move(64, 55)
-    screen.text_center("K3: Confirm")
+    screen.text_center("K1/K2: Cancel   K3: Confirm")
     screen.update()
 end
 
 function presets.draw_menu()
     if not presets.menu_open then return false end
     if presets.confirmation then
-        local title = presets.confirmation.type == "delete" and "DELETE PRESET?" or "OVERWRITE PRESET?"
-        draw_confirmation(title, presets.confirmation.preset_name)
+        local title
+        if presets.confirmation.type == "delete" then title = "DELETE PRESET?"
+        elseif presets.confirmation.type == "save" then title = "OVERWRITE PRESET?"
+        else title = "RENAME PRESET" end
+        draw_confirmation(title, presets.confirmation.preset_name, presets.confirmation.suggested_name)
         return true
     end
     screen.clear()
@@ -471,15 +529,11 @@ function presets.draw_menu()
     screen.text("K1: Back")
     screen.move(50, 64)
     screen.text("K2: Del")
-    if presets.menu_mode == "overwrite" then
-        screen.level(15)
-        screen.move(91, 64)
-        screen.text("K3: Save")
-    else
-        screen.level(1)
-        screen.move(91, 64)
-        screen.text("K3: Load")
-    end
+    local mode_labels = {load = "Load", rename = "Name",  save = "Save"}
+    local mode_bright = {load = 1, save = 15, rename = 8}
+    screen.level(mode_bright[presets.menu_mode] or 1)
+    screen.move(91, 64)
+    screen.text("K3: " .. (mode_labels[presets.menu_mode] or "Load"))
     screen.update()
     return true
 end
