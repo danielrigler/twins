@@ -1,5 +1,5 @@
 local presets = {}
-local NameSizer = include("lib/namesizer")
+local NameSizer = include("lib/preset_names")
 
 presets.menu_open = false
 presets.menu_mode = "load"
@@ -15,6 +15,20 @@ local BUFFER_TIMEOUT = 15
 local PRESET_VERSION = 1
 local _LFO_KEYS = {}
 for _i = 1, 16 do _LFO_KEYS[_i] = _i .. "lfo" end
+
+local function is_valid_sample_path(p)
+    if not p then return false end
+    if p == "-" or p == "" or p == "none" then return false end
+    if p == _path.tape or p == (_path.tape .. "live!") then return false end
+    return util.file_exists(p)
+end
+
+local function cancel_loading_clock()
+    if loading_clock then
+        pcall(function() if coroutine.status(loading_clock) ~= "dead" then clock.cancel(loading_clock) end end)
+        loading_clock = nil
+    end
+end
 
 function presets.buffer_loaded(voice)
     buffer_loading.complete[voice] = true
@@ -90,11 +104,23 @@ local function get_all_mtimes(dir)
     return mtimes
 end
 
+local MAX_NAME_RETRIES = 20
+
 local function generate_preset_name(preset_name)
-    if not preset_name or preset_name == "" then
-        return NameSizer.rnd(" ")
+    if preset_name and preset_name ~= "" then
+        return preset_name
     end
-    return preset_name
+    for _ = 1, MAX_NAME_RETRIES do
+        local candidate = NameSizer.rnd(" ")
+        local path = _path.data .. PRESETS_DIR .. "/" .. candidate .. ".lua"
+        if not util.file_exists(path) then
+            return candidate
+        end
+        print("⚠ Name collision: " .. candidate .. ", retrying...")
+    end
+    local fallback = NameSizer.rnd(" ") .. "_" .. os.time()
+    print("⚠ Name retries exhausted, using fallback: " .. fallback)
+    return fallback
 end
 
 function presets.save_complete_preset(preset_name, scene_data_ref, update_pan_positioning_fn, audio_active_ref)
@@ -141,45 +167,42 @@ local function apply_scene_data(preset_data, scene_data_ref)
     end
 end
 
+local _PARAM_MATCHERS = {
+    { fn = function(id) return id:match("^%d+lock$")      end, bucket = 1 },
+    { fn = function(id) return id:match("sample_start$") or id:match("sample_end$") end, bucket = 2 },
+    { fn = function(id) return id:match("volume$")        end, bucket = 3 },
+    { fn = function(id) return id == "allow_volume_lfos"  end, bucket = 4 },
+    { fn = function(id) return id:match("^%d+lfo$")       end, bucket = 5 },
+    { fn = function(id) return not id:match("sample$")    end, bucket = 6 },
+}
+
 local function categorize_params(preset_params)
-    local lock_params = {}
-    local audio_params = {}
-    local volume_params = {}
-    local lfo_enable_params = {}
-    local allow_volume_lfo_params = {}
-    local other_params = {}
+    local buckets = { {}, {}, {}, {}, {}, {} }
     for param_id, value in pairs(preset_params) do
         if params.lookup[param_id] then
-            if param_id:match("^%d+lock$") then
-                table.insert(lock_params, {id = param_id, value = value})
-            elseif param_id:match("sample_start$") or param_id:match("sample_end$") then
-                table.insert(audio_params, {id = param_id, value = value})
-            elseif param_id:match("volume$") then
-                table.insert(volume_params, {id = param_id, value = value})
-            elseif param_id == "allow_volume_lfos" then
-                table.insert(allow_volume_lfo_params, {id = param_id, value = value})
-            elseif param_id:match("^%d+lfo$") then
-                table.insert(lfo_enable_params, {id = param_id, value = value})
-            elseif not param_id:match("sample$") then
-                table.insert(other_params, {id = param_id, value = value})
+            for _, m in ipairs(_PARAM_MATCHERS) do
+                if m.fn(param_id) then
+                    buckets[m.bucket][#buckets[m.bucket] + 1] = { id = param_id, value = value }
+                    break
+                end
             end
         end
     end
-    return lock_params, audio_params, volume_params, lfo_enable_params, allow_volume_lfo_params, other_params
+    return buckets[1], buckets[2], buckets[3], buckets[5], buckets[4], buckets[6]
 end
 
 local function apply_params(lock_params, audio_params, volume_params, lfo_enable_params, allow_volume_lfo_params, other_params)
-    for _, p in ipairs(lock_params) do params:set(p.id, p.value) end
+    for _, p in ipairs(lock_params)             do params:set(p.id, p.value) end
     clock.sleep(0.02)
-    for _, p in ipairs(audio_params) do params:set(p.id, p.value) end
+    for _, p in ipairs(audio_params)            do params:set(p.id, p.value) end
     clock.sleep(0.03)
-    for _, p in ipairs(volume_params) do params:set(p.id, p.value) end
+    for _, p in ipairs(volume_params)           do params:set(p.id, p.value) end
     clock.sleep(0.03)
     for _, p in ipairs(allow_volume_lfo_params) do params:set(p.id, p.value) end
     clock.sleep(0.03)
-    for _, p in ipairs(other_params) do params:set(p.id, p.value) end
+    for _, p in ipairs(other_params)            do params:set(p.id, p.value) end
     clock.sleep(0.03)
-    for _, p in ipairs(lfo_enable_params) do params:set(p.id, p.value) end
+    for _, p in ipairs(lfo_enable_params)       do params:set(p.id, p.value) end
 end
 
 local function refresh_voice_params()
@@ -217,14 +240,7 @@ function presets.load_complete_preset(preset_name, scene_data_ref, update_pan_po
         end
     end
     _G.preset_loading = true
-    if loading_clock then
-        pcall(function()
-            if coroutine.status(loading_clock) ~= "dead" then
-                clock.cancel(loading_clock)
-            end
-        end)
-        loading_clock = nil
-    end
+    cancel_loading_clock()
     loading_clock = clock.run(function()
         if params.lookup["unload_all"] then
             params:set("unload_all", 1)
@@ -245,18 +261,10 @@ function presets.load_complete_preset(preset_name, scene_data_ref, update_pan_po
         buffer_loading.pending = {}
         buffer_loading.complete = {}
         local sample_count = 0
-        local function is_valid_sample_path(p)
-            if not p then return false end
-            if p == "-" or p == "" or p == "none" then return false end
-            if p == _path.tape or p == (_path.tape .. "live!") then return false end
-            if not util.file_exists(p) then return false end
-            return true
-        end
         for i = 1, 2 do
             local sample_param = i .. "sample"
             if params.lookup[sample_param] and preset_data.params and preset_data.params[sample_param] then
-                local sample_path = preset_data.params[sample_param]
-                if is_valid_sample_path(sample_path) then
+                if is_valid_sample_path(preset_data.params[sample_param]) then
                     buffer_loading.pending[i] = true
                     buffer_loading.complete[i] = false
                     sample_count = sample_count + 1
@@ -273,22 +281,13 @@ function presets.load_complete_preset(preset_name, scene_data_ref, update_pan_po
         end
         clock.sleep(0.05)
         if sample_count > 0 then
-            local success = wait_for_buffers(BUFFER_TIMEOUT)
-            if success then
-                print("✓ All buffers loaded")
-            else
-                print("⚠ Timeout - some samples may not be ready")
-            end
+            local ok = wait_for_buffers(BUFFER_TIMEOUT)
+            print(ok and "✓ All buffers loaded" or "⚠ Timeout - some samples may not be ready")
         end
         for i = 1, 2 do
             local sample_param = i .. "sample"
             if params.lookup[sample_param] then
-                local sample_path = params:get(sample_param)
-                if is_valid_sample_path(sample_path) then
-                    audio_active_ref[i] = true
-                else
-                    audio_active_ref[i] = false
-                end
+                audio_active_ref[i] = is_valid_sample_path(params:get(sample_param))
             end
         end
         _G.preset_loading = false
@@ -317,7 +316,6 @@ function presets.list_presets()
             presets_list[#presets_list + 1] = entry:gsub("%.lua$", "")
         end
     end
-    local dir = _path.data .. PRESETS_DIR
     local mtimes = get_all_mtimes(dir)
     table.sort(presets_list, function(a, b)
         return (mtimes[a] or 0) > (mtimes[b] or 0)
@@ -362,14 +360,13 @@ function presets.close_menu()
 end
 
 local MENU_MODES = {"load", "rename", "save"}
+local _MODE_INDEX = {}
+for i, m in ipairs(MENU_MODES) do _MODE_INDEX[m] = i end
+
 local function cycle_mode(current, delta)
-    for i, m in ipairs(MENU_MODES) do
-        if m == current then
-            local next = math.max(1, math.min(#MENU_MODES, i + delta))
-            return MENU_MODES[next]
-        end
-    end
-    return "load"
+    local i = _MODE_INDEX[current]
+    if not i then return "load" end
+    return MENU_MODES[math.max(1, math.min(#MENU_MODES, i + delta))]
 end
 
 function presets.menu_enc(n, d)
@@ -440,7 +437,7 @@ function presets.menu_key(n, z, scene_data_ref, update_pan_positioning_fn, audio
                 preset_name = preset_name
             }
             return true
-        else -- rename
+        else
             presets.confirmation = {
                 type = "rename",
                 preset_name = preset_name,
@@ -529,7 +526,7 @@ function presets.draw_menu()
     screen.text("K1: Back")
     screen.move(50, 64)
     screen.text("K2: Del")
-    local mode_labels = {load = "Load", rename = "Name",  save = "Save"}
+    local mode_labels = {load = "Load", rename = "Name", save = "Save"}
     local mode_bright = {load = 1, save = 15, rename = 8}
     screen.level(mode_bright[presets.menu_mode] or 1)
     screen.move(91, 64)
@@ -543,14 +540,7 @@ function presets.is_menu_open()
 end
 
 function presets.cleanup()
-    if loading_clock then
-        pcall(function()
-            if coroutine.status(loading_clock) ~= "dead" then
-                clock.cancel(loading_clock)
-            end
-        end)
-        loading_clock = nil
-    end
+    cancel_loading_clock()
     _G.preset_loading = false
 end
 
