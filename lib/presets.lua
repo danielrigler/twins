@@ -104,23 +104,65 @@ local function get_all_mtimes(dir)
     return mtimes
 end
 
-local MAX_NAME_RETRIES = 20
+local function next_preset_number()
+    local max_n = 0
+    local f = io.popen('ls "' .. _path.data .. PRESETS_DIR .. '"/*.lua 2>/dev/null')
+    if f then
+        for line in f:lines() do
+            local n = tonumber(line:match("/(%d+) "))
+            if n and n > max_n then max_n = n end
+        end
+        f:close()
+    end
+    return max_n + 1
+end
+
+local function format_preset_number(n)
+    if n >= 100 then
+        return tostring(n)
+    else
+        return string.format("%02d", n)
+    end
+end
+
+local function parse_preset_name(name)
+    local n, word = name:match("^(%d+) (.+)$")
+    return tonumber(n), word
+end
+
+local function build_available_numbers(current_preset_name)
+    local current_n = parse_preset_name(current_preset_name)
+    local used = {}
+    local max_n = 0
+    local dir = _path.data .. PRESETS_DIR
+    local f = io.popen('ls "' .. dir .. '"/*.lua 2>/dev/null')
+    if f then
+        for line in f:lines() do
+            local n = tonumber(line:match("/(%d+) "))
+            if n and n ~= current_n then
+                used[n] = true
+                if n > max_n then max_n = n end
+            end
+        end
+        f:close()
+    end
+    local available = {}
+    for i = 1, max_n + 1 do
+        if not used[i] then
+            available[#available + 1] = i
+        end
+    end
+    if #available == 0 then available[1] = 1 end
+    return available
+end
 
 local function generate_preset_name(preset_name)
     if preset_name and preset_name ~= "" then
         return preset_name
     end
-    for _ = 1, MAX_NAME_RETRIES do
-        local candidate = NameSizer.rnd(" ")
-        local path = _path.data .. PRESETS_DIR .. "/" .. candidate .. ".lua"
-        if not util.file_exists(path) then
-            return candidate
-        end
-        print("⚠ Name collision: " .. candidate .. ", retrying...")
-    end
-    local fallback = NameSizer.rnd(" ") .. "_" .. os.time()
-    print("⚠ Name retries exhausted, using fallback: " .. fallback)
-    return fallback
+    local n = next_preset_number()
+    local word = NameSizer.rnd(" ")
+    return format_preset_number(n) .. " " .. word
 end
 
 function presets.save_complete_preset(preset_name, scene_data_ref, update_pan_positioning_fn, audio_active_ref)
@@ -168,12 +210,12 @@ local function apply_scene_data(preset_data, scene_data_ref)
 end
 
 local _PARAM_MATCHERS = {
-    { fn = function(id) return id:match("^%d+lock$")      end, bucket = 1 },
+    { fn = function(id) return id:match("^%d+lock$")                               end, bucket = 1 },
     { fn = function(id) return id:match("sample_start$") or id:match("sample_end$") end, bucket = 2 },
-    { fn = function(id) return id:match("volume$")        end, bucket = 3 },
-    { fn = function(id) return id == "allow_volume_lfos"  end, bucket = 4 },
-    { fn = function(id) return id:match("^%d+lfo$")       end, bucket = 5 },
-    { fn = function(id) return not id:match("sample$")    end, bucket = 6 },
+    { fn = function(id) return id:match("volume$")                                  end, bucket = 3 },
+    { fn = function(id) return id == "allow_volume_lfos"                            end, bucket = 4 },
+    { fn = function(id) return id:match("^%d+lfo$")                                end, bucket = 5 },
+    { fn = function(id) return not id:match("sample$")                             end, bucket = 6 },
 }
 
 local function categorize_params(preset_params)
@@ -318,6 +360,11 @@ function presets.list_presets()
     end
     local mtimes = get_all_mtimes(dir)
     table.sort(presets_list, function(a, b)
+        local na = parse_preset_name(a)
+        local nb = parse_preset_name(b)
+        na = na or 0
+        nb = nb or 0
+        if na ~= nb then return na > nb end
         return (mtimes[a] or 0) > (mtimes[b] or 0)
     end)
     return presets_list
@@ -372,8 +419,15 @@ end
 function presets.menu_enc(n, d)
     if not presets.menu_open then return end
     if presets.confirmation and presets.confirmation.type == "rename" then
-        if n == 2 or n == 3 then
-            presets.confirmation.suggested_name = NameSizer.rnd(" ")
+        local conf = presets.confirmation
+        if n == 2 then
+            conf.avail_index = util.clamp(conf.avail_index + d, 1, #conf.available_numbers)
+            conf.suggested_number = conf.available_numbers[conf.avail_index]
+            conf.suggested_name = format_preset_number(conf.suggested_number) .. " " .. conf.suggested_word
+            redraw()
+        elseif n == 3 then
+            conf.suggested_word = NameSizer.rnd(" ")
+            conf.suggested_name = format_preset_number(conf.suggested_number) .. " " .. conf.suggested_word
             redraw()
         end
         return
@@ -438,10 +492,23 @@ function presets.menu_key(n, z, scene_data_ref, update_pan_positioning_fn, audio
             }
             return true
         else
+            local current_n, current_word = parse_preset_name(preset_name)
+            current_n    = current_n    or 1
+            current_word = current_word or preset_name
+            local avail  = build_available_numbers(preset_name)
+            local avail_index = 1
+            for i, v in ipairs(avail) do
+                if v == current_n then avail_index = i; break end
+            end
+            local suggested_number = avail[avail_index]
             presets.confirmation = {
-                type = "rename",
-                preset_name = preset_name,
-                suggested_name = preset_name
+                type             = "rename",
+                preset_name      = preset_name,
+                suggested_number = suggested_number,
+                suggested_word   = current_word,
+                available_numbers = avail,
+                avail_index      = avail_index,
+                suggested_name   = format_preset_number(suggested_number) .. " " .. current_word
             }
             return true
         end
@@ -473,7 +540,7 @@ local function draw_confirmation(title, preset_name, suggested_name)
         screen.text_center(suggested_name)
         screen.level(2)
         screen.move(64, 44)
-        screen.text_center("E2/E3: new name")
+        screen.text_center("E2: number   E3: name")
     else
         screen.level(8)
         screen.move(64, 26)
@@ -505,9 +572,23 @@ function presets.draw_menu()
         local idx = start_index + i - 1
         if idx <= #presets.preset_list then
             local is_selected = idx == presets.selected_index
-            screen.level(is_selected and 15 or 4)
-            screen.move(2, 11 + (i * 8))
-            screen.text((is_selected and "> " or "  ") .. presets.preset_list[idx])
+            screen.level(is_selected and 15 or 1)
+            local y = 11 + (i * 8)
+            local name = presets.preset_list[idx]:gsub("twins_", "")
+            local n, word = name:match("^(%d+) (.+)$")
+            screen.move(2, y)
+            screen.text(is_selected and ">" or "")
+            if n then
+                screen.move(18, y)
+                screen.level(is_selected and 15 or 1)
+                screen.text_right(n)
+                screen.move(22, y)
+                screen.level(is_selected and 15 or 4)
+                screen.text(word)
+            else
+                screen.move(22, y)
+                screen.text(name)
+            end
         end
     end
     if #presets.preset_list > visible_count then
