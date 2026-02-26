@@ -50,6 +50,7 @@ local font = include("lib/font")
 local presets = include("lib/presets")
 local randpara = include("lib/randpara")
 local lfo = include("lib/lfo")
+local osc_positions = {[1] = 0, [2] = 0}
 local Mirror = include("lib/mirror") Mirror.init(osc_positions, lfo)
 local macro = include("lib/macro") macro.set_lfo_reference(lfo)
 local drymode = include("lib/drymode") drymode.set_lfo_reference(lfo)
@@ -96,7 +97,6 @@ local morph_temp_scene = {}
 local last_morph_amount = 0 
 local last_selected_file = {[1] = nil, [2] = nil}
 local grain_positions = {[1] = {}, [2] = {}}
-local osc_positions = {[1] = 0, [2] = 0}
 local rec_positions = {[1] = 0, [2] = 0}
 local cached_buffer_durations = {[1] = 1, [2] = 1}
 local voice_peak_amplitudes = {[1] = {l = 0, r = 0}, [2] = {l = 0, r = 0}}
@@ -127,10 +127,10 @@ local function get_scale_array(scale_name) scale_name = normalize_scale_name(sca
 local function quantize_pitch_to_scale(pitch_value, scale_name) local scale_array = get_scale_array(scale_name) if not scale_array then return pitch_value end return MusicUtil.snap_note_to_array(60 + pitch_value, scale_array) - 60 end
 local function get_next_scale_note(pitch_value, scale_name, direction) local scale_array = get_scale_array(scale_name) if not scale_array then return pitch_value + direction end local midi_note = MusicUtil.snap_note_to_array(60 + pitch_value, scale_array) local current_idx for i, note in ipairs(scale_array) do if note == midi_note then current_idx = i break end end if not current_idx then return pitch_value end local next_idx = util.clamp(current_idx + (direction > 0 and 1 or -1), 1, #scale_array)    return scale_array[next_idx] - 60 end
 local scale_intervals_cache = {} local function get_scale_intervals(scale_name) scale_name = normalize_scale_name(scale_name) if scale_name == "none" then scale_name = "major" end if not scale_intervals_cache[scale_name] then scale_intervals_cache[scale_name] = MusicUtil.generate_scale(0, scale_name, 1) or MusicUtil.generate_scale(0, "major", 1) end return scale_intervals_cache[scale_name] end
-local animation_y = -64 animation_complete = false animation_start_time = nil
-local pan_indicator_x = {[1] = -80, [2] = 80} pan_indicators_visible = false pan_slide_start_time = nil
-local volume_bar_y = {[1] = 120, [2] = 120} volume_bars_visible = false
-local seek_bar_width = 0 seek_bars_visible = false
+local animation_y = -64 local animation_complete = false local animation_start_time = nil
+local pan_indicator_x = {[1] = -80, [2] = 80} local pan_indicators_visible = false local pan_slide_start_time = nil
+local volume_bar_y = {[1] = 120, [2] = 120} local volume_bars_visible = false
+local seek_bar_width = 0 local seek_bars_visible = false
 local randomize_flash = {[1] = 0, [2] = 0}
 local FLASH_INTENSITY = 8
 local FLASH_DECAY = 0.9
@@ -147,14 +147,13 @@ local function setup_ui_metro()
     if ui_metro then stop_metro_safe(ui_metro) end
     ui_metro = metro.init(function()
         local now = util.time()
-        local needs_redraw = false
+
         if not animation_complete then
             animation_start_time = animation_start_time or now
             local elapsed = now - animation_start_time
             local progress = math.min(elapsed * 2, 1)
             if progress < 1 then
                 animation_y = -64 + ((1 - (1 - progress) ^ 3) * 64)
-                needs_redraw = true
             else
                 animation_y = 0
             end
@@ -168,7 +167,6 @@ local function setup_ui_metro()
                 if slide_progress < 1 then
                     pan_indicator_x[1] = -80 + (eased * 80)
                     pan_indicator_x[2] = 80 - (eased * 80)
-                    needs_redraw = true
                 else
                     pan_indicator_x[1] = 0
                     pan_indicator_x[2] = 0
@@ -179,7 +177,6 @@ local function setup_ui_metro()
                 if slide_progress < 1 then
                     volume_bar_y[1] = 120 - (eased * 120)
                     volume_bar_y[2] = 120 - (eased * 120)
-                    needs_redraw = true
                 else
                     volume_bar_y[1] = 0
                     volume_bar_y[2] = 0
@@ -189,7 +186,6 @@ local function setup_ui_metro()
             if not seek_bars_visible then
                 if slide_progress < 1 then
                     seek_bar_width = eased
-                    needs_redraw = true
                 else
                     seek_bar_width = 1
                     seek_bars_visible = true
@@ -200,7 +196,6 @@ local function setup_ui_metro()
         for i = 1, 2 do
             if randomize_flash[i] > 0.001 then
                 randomize_flash[i] = randomize_flash[i] * FLASH_DECAY
-                needs_redraw = true
             end
         end
         redraw()
@@ -682,7 +677,7 @@ local function setup_params()
       params:add_control(i.."pitch_random_prob", i.." Pitch Randomize", controlspec.new(-100, 100, "lin", 1, 0, "%")) params:set_action(i.."pitch_random_prob", function(value) engine.pitch_random_prob(i, value) end)
       params:add_option(i.."pitch_random_scale_type", i.." Pitch Quantize", {"5th+oct", "5th+oct 2", "1 oct", "2 oct", "chrom", "maj", "min", "penta", "whole"}, 1) params:set_action(i.."pitch_random_scale_type", function(value) engine.pitch_random_scale_type(i, value - 1) end)
       params:add_control(i.."ratcheting_prob", i.." Ratcheting", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.."ratcheting_prob", function(value) engine.ratcheting_prob(i, value) end)
-      params:add_option(i.."env_select", i.." Grain Envelope", {"Hann", "Triangle", "Tukey", "Perc.", "Rev. Perc.", "ADSR", "Random"}, 1) params:set_action(i.."env_select", function(value) engine.env_select(i, value - 1) end)
+      params:add_option(i.."env_select", i.." Grain Envelope", {"Hann", "Tukey", "Perc.", "Rev. Perc.", "ADSR", "Random"}, 1) params:set_action(i.."env_select", function(value) engine.env_select(i, value - 1) end)
       params:add_control(i.. "size_variation", i.. " Size Variation", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.. "size_variation", function(value) engine.size_variation(i, value * 0.01) end)
       params:add_control(i.. "direction_mod", i.. " Reverse", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.. "direction_mod", function(value) engine.direction_mod(i, value * 0.01) end)
       params:add_control(i.. "density_mod_amt", i.. " Density Mod", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.. "density_mod_amt", function(value) engine.density_mod_amt(i, value * 0.01) end)      
@@ -959,7 +954,7 @@ end
 local function randomize(n)
     if not randomize_metro[n] then randomize_metro[n] = metro.init() end
     local m_rand = randomize_metro[n]
-    local active_controlled_params = active_controlled_params or {}
+    local active_controlled_params = {}
     local symmetry = params:get("symmetry") == 1
     local other_track = 3 - n
     local locked_params = {}
@@ -1742,7 +1737,7 @@ function redraw()
     local pan_pos = util.linlin(-100, 100, PAN_X[t], PAN_X[t] + 25, C.pan[t])
     R(LEVEL.dim, pan_pos - 1 + pan_indicator_x[t], 1, 4, 1)
   end
-  if cur_mode == "lpf" or mode == "hpf" then
+  if cur_mode == "lpf" or cur_mode == "hpf" then
     for t=1,2 do
       local x = TRACK_X[t]
       R(1, x, Y.seek, BAR_W, 1)

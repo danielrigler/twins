@@ -39,7 +39,6 @@ alloc {
         parallelBus = Bus.audio(context.server, 2);
 
         grainEnvs = [
-            Env.triangle(1, 1),
             Env.new([0, 1, 1, 0], [0.15, 0.7, 0.15], [4, 0, -4]),
             Env.perc(0.01, 0.99, 1, -4),
             Env.perc(0.99, 0.01, 1, 4),
@@ -104,7 +103,7 @@ alloc {
             random_interval = BufRd.kr(1, pitch_random_scale_buf, TIRand.kr(0, pitch_random_scale_len - 1, grain_trig));
             grain_pitch = grain_pitch * (((rand_val2 < pitch_random_prob) * random_interval * pitch_random_direction).midiratio);
             grain_pan = (pan + TRand.kr(trig: grain_trig, lo: spread.neg, hi: spread));
-            randomEnv = TIRand.kr(0, 5, grain_trig);
+            randomEnv = TIRand.kr(0, 3, grain_trig);
             envBuf = Select.kr(env_select, [-1] ++ grainEnvs ++ [Select.kr(randomEnv, grainEnvs)]);
 
             harmonics = [1, 1/2, 1/4, 1/8, 2, 4];
