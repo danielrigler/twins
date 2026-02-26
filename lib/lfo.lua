@@ -3,6 +3,8 @@ local options = { lfotypes = { "sine", "random", "square", "walk" } }
 local lfo = {}
 local assigned_params = {}
 local lfo_paused = false
+local saved_shapes = {}
+lfo.walk_all = false
 lfo.on_state_change = nil
 
 local TWO_PI = math.pi * 2
@@ -57,6 +59,26 @@ function lfo.is_param_locked(track, param_name)
 end
 
 function lfo.set_pause(paused) lfo_paused = paused end
+
+function lfo.set_walk_all(enabled)
+  lfo.walk_all = enabled
+  if enabled then
+    for k in pairs(saved_shapes) do saved_shapes[k] = nil end
+    for i = 1, number_of_outputs do
+      if params.lookup and params.lookup[LFO_KEYS[i]] and pget(LFO_KEYS[i]) == 2 then
+        saved_shapes[i] = pget(SHAPE_KEYS[i])
+        pset(SHAPE_KEYS[i], 4)
+      end
+    end
+  else
+    for i, shape_idx in pairs(saved_shapes) do
+      if params.lookup and params.lookup[SHAPE_KEYS[i]] then
+        pset(SHAPE_KEYS[i], shape_idx)
+      end
+    end
+    for k in pairs(saved_shapes) do saved_shapes[k] = nil end
+  end
+end
 
 for i = 1, number_of_outputs do
   lfo[i] = {
@@ -215,6 +237,7 @@ local function randomize_lfo(i, target)
   pset(FREQ_KEYS[i], freq)
 
   local wf    = ranges.waveform[math.random(#ranges.waveform)]
+  if lfo.walk_all then wf = "walk" end
   lfo[i].waveform = wf
   for idx, name in ipairs(options.lfotypes) do
     if name == wf then pset(SHAPE_KEYS[i], idx) break end
