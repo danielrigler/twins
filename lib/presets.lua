@@ -6,6 +6,7 @@ presets.menu_mode = "load"
 presets.selected_index = 1
 presets.preset_list = {}
 presets.confirmation = nil
+presets.k2_mode = "delete"   -- "delete" or "move"
 
 _G.preset_loading = false
 local buffer_loading = {pending = {}, complete = {}}
@@ -396,6 +397,7 @@ function presets.open_menu()
     presets.selected_index = util.clamp(presets.selected_index, 1, #list)
     presets.menu_open = true
     presets.menu_mode = "load"
+    presets.k2_mode = "delete"
     return true
 end
 
@@ -403,7 +405,25 @@ function presets.close_menu()
     presets.menu_open = false
     presets.confirmation = nil
     presets.menu_mode = "load"
+    presets.k2_mode = "delete"
     presets.preset_list = {}
+end
+
+-- Swap the number-prefix of two presets so the list order changes.
+-- Returns the full new filename of the preset that was at idx_a (the "moved" one).
+local function move_preset_swap(idx_a, idx_b)
+    local name_a = presets.preset_list[idx_a]
+    local name_b = presets.preset_list[idx_b]
+    if not name_a or not name_b then return nil end
+    local na, wa = parse_preset_name(name_a)
+    local nb, wb = parse_preset_name(name_b)
+    if not na or not nb or not wa or not wb then return nil end
+    local new_name_a = format_preset_number(nb) .. " " .. wa
+    local new_name_b = format_preset_number(na) .. " " .. wb
+    local dir = _path.data .. PRESETS_DIR .. "/"
+    os.rename(dir .. name_a .. ".lua", dir .. new_name_a .. ".lua")
+    os.rename(dir .. name_b .. ".lua", dir .. new_name_b .. ".lua")
+    return new_name_a   -- caller uses this to relocate the selection
 end
 
 local MENU_MODES = {"load", "rename", "save"}
@@ -432,9 +452,33 @@ function presets.menu_enc(n, d)
         end
         return
     end
-    if n == 2 then
-        presets.selected_index = util.clamp(presets.selected_index + d, 1, #presets.preset_list)
-    elseif n == 1 or n == 3 then
+    if n == 1 then
+        -- E1: toggle K2 function between delete and move
+        presets.k2_mode = (d > 0) and "move" or "delete"
+    elseif n == 2 then
+        if presets.k2_mode == "move" then
+            -- drag selected preset up/down by swapping number-prefixes with neighbor
+            local dir = d > 0 and 1 or -1
+            local neighbor = presets.selected_index + dir
+            if neighbor >= 1 and neighbor <= #presets.preset_list then
+                local moved_name = move_preset_swap(presets.selected_index, neighbor)
+                presets.preset_list = presets.list_presets()
+                -- re-locate the moved preset by its new filename
+                if moved_name then
+                    for i, name in ipairs(presets.preset_list) do
+                        if name == moved_name then
+                            presets.selected_index = i
+                            break
+                        end
+                    end
+                end
+            end
+        else
+            -- normal scroll
+            presets.selected_index = util.clamp(presets.selected_index + d, 1, #presets.preset_list)
+        end
+    elseif n == 3 then
+        -- E3: cycle load / rename / save
         presets.menu_mode = cycle_mode(presets.menu_mode, d > 0 and 1 or -1)
     end
     redraw()
@@ -472,7 +516,13 @@ function presets.menu_key(n, z, scene_data_ref, update_pan_positioning_fn, audio
                     os.rename(old_path, new_path)
                 end
                 presets.confirmation = nil
-                presets.menu_open = false
+                presets.preset_list = presets.list_presets()
+                -- reselect the renamed preset in the refreshed list
+                local target = new_name
+                presets.selected_index = 1
+                for i, name in ipairs(presets.preset_list) do
+                    if name == target then presets.selected_index = i; break end
+                end
             end
         else
             presets.confirmation = nil
@@ -577,7 +627,12 @@ function presets.draw_menu()
             local name = presets.preset_list[idx]:gsub("twins_", "")
             local n, word = name:match("^(%d+) (.+)$")
             screen.move(2, y)
-            screen.text(is_selected and ">" or "")
+            if is_selected then
+                -- filled arrow when in move mode, outline when in delete/normal mode
+                screen.text(presets.k2_mode == "move" and "▶" or ">")
+            else
+                screen.text("")
+            end
             if n then
                 screen.move(18, y)
                 screen.level(is_selected and 15 or 1)
@@ -605,8 +660,10 @@ function presets.draw_menu()
     screen.level(1)
     screen.move(2, 64)
     screen.text("K1: Back")
+    screen.level(1)
     screen.move(50, 64)
     screen.text("K2: Del")
+    -- K3 label reflects current action mode
     local mode_labels = {load = "Load", rename = "Name", save = "Save"}
     local mode_bright = {load = 1, save = 15, rename = 8}
     screen.level(mode_bright[presets.menu_mode] or 1)
