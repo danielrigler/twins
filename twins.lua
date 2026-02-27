@@ -41,7 +41,6 @@
 -- buy them a beer :)
 --
 --                    Daniel Rigler
-
 installer_ = include("lib/scinstaller/scinstaller")
 installer = installer_:new{requirements = {"AnalogTape", "AnalogChew", "AnalogLoss", "AnalogDegrade"}, zip = "https://github.com/schollz/portedplugins/releases/download/v0.4.6/PortedPlugins-RaspberryPi.zip"}
 engine.name = installer:ready() and 'twins' or nil
@@ -627,7 +626,7 @@ local function register_tap()
     local now = util.time()
     if #tap_times > 0 and (now - tap_times[#tap_times]) > TAP_TIMEOUT then tap_times = {} end
     table.insert(tap_times, now)
-    while #tap_times > 3 do table.remove(tap_times, 1) end
+    if #tap_times > 3 then tap_times = {tap_times[#tap_times-2], tap_times[#tap_times-1], tap_times[#tap_times]} end
     if #tap_times >= 2 then
         local sum, count = 0, 0
         for i = math.max(2, #tap_times - 2), #tap_times do
@@ -974,18 +973,8 @@ local function randomize(n)
             local max_val = params:get(n .. "max_seek")
             local val = random_float(min_val, max_val)
             local val_norm = val * 0.01
-            if symmetry then
-                params:set(n .. "seek", val)
-                params:set(other_track .. "seek", val)
-                engine.seek(n, val_norm)
-                engine.seek(other_track, val_norm)
-                osc_positions[n] = val_norm
-                osc_positions[other_track] = val_norm
-            else
-                params:set(n .. "seek", val)
-                engine.seek(n, val_norm)
-                osc_positions[n] = val_norm
-            end
+            params:set(n.."seek", val); engine.seek(n, val_norm); osc_positions[n] = val_norm
+            if symmetry then params:set(other_track.."seek", val); engine.seek(other_track, val_norm); osc_positions[other_track] = val_norm end
         else
             local min_val = params:get(n .. "min_" .. key)
             local max_val = params:get(n .. "max_" .. key)
@@ -1066,15 +1055,15 @@ local function handle_volume_lfo(track, delta, crossfade_mode)
     end
 end
 
+local _LINK_PARAMS = {"pitch", "size", "density"}
+local _LINK_SPEED = {pitch = 1, size = 5, density = 0.5}
 local function handle_pitch_size_density_link(track, config, delta)
-    local LINKED_PARAMS = {"pitch", "size", "density"}
-    local SPEED = {pitch = 1, size = 5, density = 0.5}
     local param = config.param
     if params:get("global_pitch_size_density_link") ~= 1 then return false end
-    if not SPEED[param] then return false end
+    if not _LINK_SPEED[param] then return false end
     local symmetry = params:get("symmetry") == 1
     local other_track = 3 - track
-    local function disable_linked_lfos(t) for i = 1, 3 do disable_lfos_for_param(t .. LINKED_PARAMS[i], true) end end
+    local function disable_linked_lfos(t) for i = 1, 3 do disable_lfos_for_param(t .. _LINK_PARAMS[i], true) end end
     disable_linked_lfos(track)
     if symmetry then disable_linked_lfos(other_track) end
     handle_lfo(track .. param, symmetry)
@@ -1123,7 +1112,7 @@ local function handle_pitch_size_density_link(track, config, delta)
         lb.density = new_den
         lb.product = new_size * new_den
     end
-    local speed = SPEED[param]
+    local speed = _LINK_SPEED[param]
     update_linked_params(track, speed)
     if symmetry then update_linked_params(other_track, speed) end
     return true
@@ -1137,7 +1126,6 @@ local function handle_seek_param(track, config, delta)
     local current_pos2 = math.floor(osc_positions[2] * 100 + 0.5)
     local function update_seek(tr, current_pos)
         local new_pos = (current_pos + delta) % 100
-        if new_pos < 0 then new_pos = new_pos + 100 end
         local norm_pos = new_pos * 0.01
         osc_positions[tr] = norm_pos
         params:set(tr.."seek", new_pos)
@@ -1156,37 +1144,23 @@ local function handle_standard_param(track, config, delta)
     local sym = params:get("symmetry") == 1
     local p = track .. config.param
     handle_lfo(p, sym)
-    if sym and config.param == "pitch" then
+    if config.param == "pitch" then
         local old_value = params:get(p)
         local scale = params:string("pitch_quantize_scale")
         if scale ~= "none" then
             local direction = delta > 0 and 1 or -1
-            local new_value = get_next_scale_note(old_value, scale, direction)
-            new_value = util.clamp(new_value, LIMITS.pitch.min, LIMITS.pitch.max)
+            local new_value = util.clamp(get_next_scale_note(old_value, scale, direction), LIMITS.pitch.min, LIMITS.pitch.max)
             params:set(p, new_value)
-            local other_p = (3 - track) .. config.param
-            local other_old = params:get(other_p)
-            local other_new = get_next_scale_note(other_old, scale, direction)
-            other_new = util.clamp(other_new, LIMITS.pitch.min, LIMITS.pitch.max)
-            params:set(other_p, other_new)
+            if sym then
+                local other_p = (3 - track) .. config.param
+                params:set(other_p, util.clamp(get_next_scale_note(params:get(other_p), scale, direction), LIMITS.pitch.min, LIMITS.pitch.max))
+            end
         else
             params:delta(p, delta)
-            local new_value = params:get(p)
-            local actual_change = new_value - old_value
-            local other_p = (3 - track) .. config.param
-            local other_old = params:get(other_p)
-            params:set(other_p, other_old + actual_change)
-        end
-    elseif config.param == "pitch" then
-        local old_value = params:get(p)
-        local scale = params:string("pitch_quantize_scale")
-        if scale ~= "none" then
-            local direction = delta > 0 and 1 or -1
-            local new_value = get_next_scale_note(old_value, scale, direction)
-            new_value = util.clamp(new_value, LIMITS.pitch.min, LIMITS.pitch.max)
-            params:set(p, new_value)
-        else
-            params:delta(p, delta)
+            if sym then
+                local other_p = (3 - track) .. config.param
+                params:set(other_p, params:get(other_p) + (params:get(p) - old_value))
+            end
         end
     else
         params:delta(p, delta)
@@ -1495,8 +1469,8 @@ local TRACK_X, VOL_X, PAN_X = {51, 92}, {0,126}, {52,93}
 local BAR_W, Y = 30, {bottom=60, seek=63}
 local UPPER = {jitter=true, size=true, density=true, spread=true, pitch=true}
 local FORMAT = {
-  hz=function(v) return format_density(v) end,
-  st=function(v,t) return format_pitch(v,t) end,
+  hz=format_density,
+  st=format_pitch,
   spread=function(v) return string.format("%.0f%%",v) end,
   jitter=function(v) return format_jitter(v) end,
   size=function(v) return format_size(v) end}
