@@ -753,7 +753,7 @@ local function setup_params()
     params:add_group("EQ", 9)
     for i = 1, 2 do 
     params:add_control(i.."eq_low_gain", i.." Bass", controlspec.new(-1, 1, "lin", 0.01, 0, "")) params:set_action(i.."eq_low_gain", function(value) engine.eq_low_gain(i, value*55) end)
-    params:add_control(i.."eq_mid_gain", i.." Mid", controlspec.new(-1, 1, "lin", 0.01, 0, "")) params:set_action(i.."eq_mid_gain", function(value) engine.eq_mid_gain(i, value*20) end)
+    params:add_control(i.."eq_mid_gain", i.." Mid", controlspec.new(-1, 1, "lin", 0.01, 0, "")) params:set_action(i.."eq_mid_gain", function(value) engine.eq_mid_gain(i, value*35) end)
     params:add_control(i.."eq_high_gain", i.." Treble", controlspec.new(-1, 1, "lin", 0.01, 0, "")) params:set_action(i.."eq_high_gain", function(value) engine.eq_high_gain(i, value*45) end)
     end
     params:add_separator("     ")
@@ -887,7 +887,7 @@ local function setup_params()
       end) params:hide(i.. "pitch")
       params:add_taper(i.. "jitter", i.. " jitter", 0, 999900, 250, 10, "ms") params:set_action(i.. "jitter", function(value) engine.jitter(i, value * 0.001) end) params:hide(i.. "jitter")
       params:add_taper(i.. "size", i.. " size", 20, 5999, 500, 1, "ms") params:set_action(i.. "size", function(value) engine.size(i, value * 0.001) end) params:hide(i.. "size")
-      params:add_taper(i.. "spread", i.. " spread", 0, 100, 50, 0, "%") params:set_action(i.. "spread", function(value) engine.spread(i, value * 0.01) end) params:hide(i.. "spread")
+      params:add_taper(i.. "spread", i.. " spread", 0, 100, 75, 0, "%") params:set_action(i.. "spread", function(value) engine.spread(i, value * 0.01) end) params:hide(i.. "spread")
       params:add_control(i.. "seek", i.. " seek", controlspec.new(0, 100, "lin", 0.01, 0, "%")) params:set_action(i.. "seek", function(value) engine.seek(i, value * 0.01) end) params:hide(i.. "seek")
     end
     params:bang()
@@ -1474,26 +1474,12 @@ local FORMAT = {
   spread=function(v) return string.format("%.0f%%",v) end,
   jitter=function(v) return format_jitter(v) end,
   size=function(v) return format_size(v) end}
-local ops = {r={}, r_n=0, p={}, p_n=0, t={}, t_n=0}
-local level_buckets = {}
-local function clear_ops()
-  ops.r_n = 0; ops.p_n = 0; ops.t_n = 0
-end
-local function R(l,x,y,w,h)
-  local n = ops.r_n + 1; ops.r_n = n
-  local s = ops.r[n]
-  if s then s[1]=l;s[2]=x;s[3]=y;s[4]=w;s[5]=h else ops.r[n]={l,x,y,w,h} end
-end
-local function P(l,x,y)
-  local n = ops.p_n + 1; ops.p_n = n
-  local s = ops.p[n]
-  if s then s[1]=l;s[2]=x;s[3]=y else ops.p[n]={l,x,y} end
-end
-local function T(l,x,y,s,a)
-  local n = ops.t_n + 1; ops.t_n = n
-  local slot = ops.t[n]
-  if slot then slot[1]=l;slot[2]=x;slot[3]=y;slot[4]=s;slot[5]=a else ops.t[n]={l,x,y,s,a} end
-end
+local buckets = {}
+for _i = 1, 15 do buckets[_i] = {r={}, p={}, t={}} end
+local function clear_ops() for i=1,15 do local b=buckets[i]; b.r,b.p,b.t={},{},{} end end
+local function R(l,x,y,w,h) local b=buckets[l]; b.r[#b.r+1]={x,y,w,h} end
+local function P(l,x,y)     local b=buckets[l]; b.p[#b.p+1]={x,y} end
+local function T(l,x,y,s,a) local b=buckets[l]; b.t[#b.t+1]={x,y,s,a} end
 local LOCK_OFFSETS = {{-3,0},{-4,0},{-4,-1},{-4,-2}}
 local function draw_lock(x,y)
   for _,o in ipairs(LOCK_OFFSETS) do P(LEVEL.dim, x+o[1], y+o[2]) end
@@ -1507,58 +1493,14 @@ local function draw_size_link(x,y)
     P(level, x-4, y+offset) 
   end 
 end
-local function get_or_create_bucket(l)
-  if not level_buckets[l] then level_buckets[l] = {r={}, p={}, t={}, r_count=0, p_count=0, t_count=0} end
-  return level_buckets[l]
-end
 local function flush()
-  for _,bucket in pairs(level_buckets) do bucket.r_count, bucket.p_count, bucket.t_count = 0, 0, 0 end
-  for i=1,ops.r_n do
-    local o = ops.r[i]
-    local bucket = get_or_create_bucket(o[1])
-    local rc = bucket.r_count + 1; bucket.r_count = rc
-    local s = bucket.r[rc]
-    if s then s[1]=o[2];s[2]=o[3];s[3]=o[4];s[4]=o[5] else bucket.r[rc]={o[2],o[3],o[4],o[5]} end
-  end
-  for i=1,ops.p_n do
-    local o = ops.p[i]
-    local bucket = get_or_create_bucket(o[1])
-    local pc = bucket.p_count + 1; bucket.p_count = pc
-    local s = bucket.p[pc]
-    if s then s[1]=o[2];s[2]=o[3] else bucket.p[pc]={o[2],o[3]} end
-  end
-  for i=1,ops.t_n do
-    local o = ops.t[i]
-    local bucket = get_or_create_bucket(o[1])
-    local tc = bucket.t_count + 1; bucket.t_count = tc
-    local s = bucket.t[tc]
-    if s then s[1]=o[2];s[2]=o[3];s[3]=o[4];s[4]=o[5] else bucket.t[tc]={o[2],o[3],o[4],o[5]} end
-  end
   for l=1,15 do
-    local bucket = level_buckets[l]
-    if bucket and (bucket.r_count > 0 or bucket.p_count > 0 or bucket.t_count > 0) then
+    local b=buckets[l]
+    if #b.r>0 or #b.p>0 or #b.t>0 then
       screen.level(l)
-      if bucket.r_count > 0 then
-        for i=1,bucket.r_count do
-          local r = bucket.r[i]
-          screen.rect(r[1], r[2], r[3], r[4])
-        end
-        screen.fill()
-      end
-      if bucket.p_count > 0 then
-        for i=1,bucket.p_count do
-          local p = bucket.p[i]
-          screen.pixel(p[1], p[2])
-        end
-        screen.fill()
-      end
-      for i=1,bucket.t_count do
-        local t = bucket.t[i]
-        screen.move(t[1], t[2])
-        if t[4] == "center" then screen.text_center(t[3])
-        else screen.text(t[3])
-        end
-      end
+      for _,r in ipairs(b.r) do screen.rect(r[1],r[2],r[3],r[4]); screen.fill() end
+      for _,p in ipairs(b.p) do screen.pixel(p[1],p[2]);           screen.fill() end
+      for _,t in ipairs(b.t) do screen.move(t[1],t[2]); if t[4]=="center" then screen.text_center(t[3]) else screen.text(t[3]) end end
     end
   end
 end
@@ -1724,10 +1666,10 @@ function redraw()
     end
   end
   if C.dry then for x=7,15,4 do P(LEVEL.hi, x, 0) end end
-  if C.sym then 
-    for i=1,30 do
-      local y = (i * 2) % 64
-      if y ~= 0 then P(math.floor(10 * (1 - math.abs(y - 32) / 32)), 85, y + 2) end
+  if C.sym then
+    for sy = 4, 64, 2 do
+      local level = math.floor(10 * (1 - math.abs(sy - 34) / 32))
+      P(math.max(1, level), 85, sy)
     end
   end
   if C.evo then 

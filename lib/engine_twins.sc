@@ -15,7 +15,7 @@ unloadAll { fork { 2.do({ arg i; var newBufL = Buffer.alloc(context.server, cont
 
 saveLiveBufferToTape { arg voice, filename; var path = "/home/we/dust/audio/tape/" ++ filename; var bufL = liveInputBuffersL[voice]; var bufR = liveInputBuffersR[voice]; var interleaved = Buffer.alloc(context.server, bufL.numFrames, 2); bufL.loadToFloatArray(action: { |leftData| bufR.loadToFloatArray(action: { |rightData| var interleavedData = FloatArray.newClear(leftData.size * 2); leftData.size.do { |i| interleavedData[i * 2] = leftData[i]; interleavedData[i * 2 + 1] = rightData[i]; }; interleaved.loadCollection(interleavedData, action: { interleaved.write(path, "WAV", "float"); this.readBuf(voice, path); interleaved.free; }); }); }); }
 
-writeOutputBuffer { arg filename, notifyPath; var path="/home/we/dust/audio/tape/"++filename, gainBoost=2.8, crossfadeSamples=context.server.sampleRate.asInteger, actualLength=outputRecordBuffer.numFrames, writePos=(currentOutputWritePos?0.5)*actualLength, splitPoint=writePos.asInteger, finalLength, interleaved, stereoData; if(actualLength<=crossfadeSamples){Error("Buffer too short for crossfade length (% > %)".format(crossfadeSamples,actualLength)).throw;}; finalLength=actualLength-crossfadeSamples; interleaved=Buffer.alloc(context.server,finalLength,2); outputRecordBuffer.loadToFloatArray(action:{|stereoData| var interleavedData=FloatArray.newClear(finalLength*2), idx=0; finalLength.do{|sampleIdx| var blendL,blendR; if(sampleIdx<crossfadeSamples){ var crossfadePos=sampleIdx/(crossfadeSamples-1), fadeInGain=(1-cos(crossfadePos*pi))*0.5, fadeOutGain=(1+cos(crossfadePos*pi))*0.5, splitIdx=(splitPoint+sampleIdx)%actualLength, beforeIdx=(splitPoint-crossfadeSamples+sampleIdx)%actualLength; blendL=(stereoData[splitIdx*2]*fadeInGain)+(stereoData[beforeIdx*2]*fadeOutGain); blendR=(stereoData[splitIdx*2+1]*fadeInGain)+(stereoData[beforeIdx*2+1]*fadeOutGain); }{ var sourceIdx=(splitPoint+sampleIdx)%actualLength; blendL=stereoData[sourceIdx*2]; blendR=stereoData[sourceIdx*2+1]; }; interleavedData[idx]=blendL*gainBoost; interleavedData[idx+1]=blendR*gainBoost; idx=idx+2; }; interleaved.loadCollection(interleavedData,action:{ interleaved.write(path,"WAV","float"); if(notifyPath){nornsAddr.sendMsg("/twins/output_saved",path)}; nornsAddr.sendMsg("/twins/save_complete"); interleaved.free; }); }); }
+writeOutputBuffer { arg filename, notifyPath; var path="/home/we/dust/audio/tape/"++filename, gainBoost=3, crossfadeSamples=context.server.sampleRate.asInteger, actualLength=outputRecordBuffer.numFrames, writePos=(currentOutputWritePos)*actualLength, splitPoint=writePos.asInteger, finalLength, interleaved, stereoData; finalLength=actualLength-crossfadeSamples; interleaved=Buffer.alloc(context.server,finalLength,2); outputRecordBuffer.loadToFloatArray(action:{|stereoData| var interleavedData=FloatArray.newClear(finalLength*2), idx=0; finalLength.do{|sampleIdx| var blendL,blendR; if(sampleIdx<crossfadeSamples){ var crossfadePos=sampleIdx/(crossfadeSamples-1), fadeInGain=(1-cos(crossfadePos*pi))*0.5, fadeOutGain=(1+cos(crossfadePos*pi))*0.5, splitIdx=(splitPoint+sampleIdx)%actualLength, beforeIdx=(splitPoint-crossfadeSamples+sampleIdx)%actualLength; blendL=(stereoData[splitIdx*2]*fadeInGain)+(stereoData[beforeIdx*2]*fadeOutGain); blendR=(stereoData[splitIdx*2+1]*fadeInGain)+(stereoData[beforeIdx*2+1]*fadeOutGain); }{ var sourceIdx=(splitPoint+sampleIdx)%actualLength; blendL=stereoData[sourceIdx*2]; blendR=stereoData[sourceIdx*2+1]; }; interleavedData[idx]=blendL*gainBoost; interleavedData[idx+1]=blendR*gainBoost; idx=idx+2; }; interleaved.loadCollection(interleavedData,action:{ interleaved.write(path,"WAV","float"); if(notifyPath){nornsAddr.sendMsg("/twins/output_saved",path)}; nornsAddr.sendMsg("/twins/save_complete"); interleaved.free; }); }); }
 
 alloc {
         nornsAddr = NetAddr("127.0.0.1", 10111);
@@ -54,11 +54,7 @@ alloc {
         context.server.sync;
 
         SynthDef(\synth1, {
-            arg out, voice, buf_l, buf_r, pos, speed, jitter, size, density, density_mod_amt, pitch_offset, pan, spread, gain, t_reset_pos,
-            granular_gain, pitch_mode, trig_mode, subharmonics_1, subharmonics_2, subharmonics_3, overtones_1, overtones_2, 
-            cutoff, hpf, hpfq, lpf_gain, direction_mod, size_variation, low_gain, mid_gain, high_gain, smoothbass,
-            probability, env_select = 0, pitch_random_prob=0, pitch_random_scale_buf=0, pitch_random_scale_len=1, pitch_random_direction=1,
-            ratcheting_prob=0, pitch_lag_time, rec_pos_bus = -1;
+            arg out, voice, buf_l, buf_r, pos, speed, jitter, size, density, density_mod_amt, pitch_offset, pan, spread, gain, t_reset_pos, granular_gain, pitch_mode, trig_mode, subharmonics_1, subharmonics_2, subharmonics_3, overtones_1, overtones_2, cutoff, hpf, hpfq, lpf_gain, direction_mod, size_variation, low_gain, mid_gain, high_gain, smoothbass, probability, env_select = 0, pitch_random_prob=0, pitch_random_scale_buf=0, pitch_random_scale_len=1, pitch_random_direction=1, ratcheting_prob=0, pitch_lag_time, rec_pos_bus = -1;
             var grain_trig, jitter_sig, buf_dur, pan_sig, buf_pos, sig_mix, density_mod, dry_sig, granular_sig, base_pitch, grain_pitch, grain_size;
             var main_vol = 1 / (1 + subharmonics_1 + subharmonics_2 + subharmonics_3 + overtones_1 + overtones_2);
             var subharmonic_1_vol = subharmonics_1 * main_vol * 2;
@@ -68,7 +64,7 @@ alloc {
             var overtone_2_vol = overtones_2 * main_vol * 1.5;
             var trigger60 = Impulse.kr(60);
             var lagcutoff = Lag.kr(cutoff, 0.6);
-            var grain_direction, base_trig, base_grain_trig, rand_val, rand_val2, random_interval, ratchet_gate, extra_trig, signal, stepIndex, actualStep, direction, totalStep, scaleDegree, octaveShift, semitones, grain_pan, envBuf, randomEnv,            harmonics, volumes, l_harmonics, r_harmonics, vol, size_mults;
+            var grain_direction, base_trig, base_grain_trig, rand_val, rand_val2, random_interval, ratchet_gate, extra_trig, signal, stepIndex, actualStep, direction, totalStep, scaleDegree, octaveShift, semitones, grain_pan, envBuf, randomEnv, harmonics, volumes, l_harmonics, r_harmonics, vol, size_mults;
 
             speed = Lag.kr(speed, 1);
             density_mod = density * (2**(LFNoise1.kr(density).range(0, 1) * density_mod_amt));
@@ -100,9 +96,11 @@ alloc {
                 dry_sig = dry_sig * dryFade;
             }.value;
 
-            grain_pitch = Lag.kr(Select.kr(pitch_mode, [speed * pitch_offset, pitch_offset]), pitch_lag_time);
+            base_pitch = Select.kr(pitch_mode, [speed * pitch_offset, pitch_offset]);
+            grain_pitch = Lag.kr(base_pitch, pitch_lag_time);
             random_interval = BufRd.kr(1, pitch_random_scale_buf, TIRand.kr(0, pitch_random_scale_len - 1, grain_trig));
             grain_pitch = grain_pitch * (((rand_val2 < pitch_random_prob) * random_interval * pitch_random_direction).midiratio);
+    
             grain_pan = (pan + TRand.kr(trig: grain_trig, lo: spread.neg, hi: spread));
             randomEnv = TIRand.kr(0, 3, grain_trig);
             envBuf = Select.kr(env_select, [-1] ++ grainEnvs ++ [Select.kr(randomEnv, grainEnvs)]);
@@ -110,16 +108,8 @@ alloc {
             harmonics = [1, 1/2, 1/4, 1/8, 2, 4];
             volumes = [main_vol, subharmonic_1_vol, subharmonic_2_vol, subharmonic_3_vol, overtone_1_vol, overtone_2_vol];
             size_mults = [1, smoothbass, smoothbass, smoothbass, 1, 1];
-            l_harmonics = harmonics.collect { |harmonic, i|
-                var active_trig = grain_trig * (volumes[i] > 0);
-                var grain_pan_l = (grain_pan - 0.5).clip(-1, 1);
-                GrainBuf.ar(numChannels: 2, trigger: active_trig, dur: grain_size * size_mults[i], sndbuf: buf_l, rate: grain_pitch * harmonic * grain_direction, pos: buf_pos + jitter_sig, interp: 2, pan: grain_pan_l, envbufnum: envBuf, mul: volumes[i]);
-            };
-            r_harmonics = harmonics.collect { |harmonic, i|
-                var active_trig = grain_trig * (volumes[i] > 0);
-                var grain_pan_r = (grain_pan + 0.5).clip(-1, 1);
-                GrainBuf.ar(numChannels: 2, trigger: active_trig, dur: grain_size * size_mults[i], sndbuf: buf_r, rate: grain_pitch * harmonic * grain_direction, pos: buf_pos + jitter_sig, interp: 2, pan: grain_pan_r, envbufnum: envBuf, mul: volumes[i]);
-            };
+            l_harmonics = harmonics.collect { |harmonic, i| var active_trig = grain_trig * (volumes[i] > 0); var grain_pan_l = (grain_pan - 0.5).clip(-1, 1); GrainBuf.ar(numChannels: 2, trigger: active_trig, dur: grain_size * size_mults[i], sndbuf: buf_l, rate: grain_pitch * harmonic * grain_direction, pos: buf_pos + jitter_sig, interp: 2, pan: grain_pan_l, envbufnum: envBuf, mul: volumes[i]); };
+            r_harmonics = harmonics.collect { |harmonic, i| var active_trig = grain_trig * (volumes[i] > 0); var grain_pan_r = (grain_pan + 0.5).clip(-1, 1); GrainBuf.ar(numChannels: 2, trigger: active_trig, dur: grain_size * size_mults[i], sndbuf: buf_r, rate: grain_pitch * harmonic * grain_direction, pos: buf_pos + jitter_sig, interp: 2, pan: grain_pan_r, envbufnum: envBuf, mul: volumes[i]); };
             granular_sig = Mix.ar(l_harmonics) + Mix.ar(r_harmonics);
             sig_mix = dry_sig * (1 - granular_gain) + (granular_sig * granular_gain);
      
@@ -128,10 +118,11 @@ alloc {
             sig_mix = BHiShelf.ar(sig_mix, 3900, 6, high_gain);
             sig_mix = HPF.ar(sig_mix, hpf);
             sig_mix = MoogFF.ar(sig_mix, lagcutoff, lpf_gain);
-            
+    
+            signal = sig_mix * Lag.kr(gain);
+
             SendReply.kr(trigger60, '/buf_pos', [voice, buf_pos]);
             SendReply.kr(grain_trig, '/grain_pos', [voice, Wrap.kr(buf_pos + jitter_sig), grain_size]);
-            signal = sig_mix * Lag.kr(gain);
             SendReply.kr(trigger60, '/voice_peak', [voice, Peak.kr(signal[0], trigger60), Peak.kr(signal[1], trigger60)]);
 
             Out.ar(out, signal * 1.25);
