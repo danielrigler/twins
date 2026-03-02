@@ -206,7 +206,7 @@ function font.draw_fx_status_bucketed(P_func)
   ) then
     local level = _lock_cache.filter and _blink_level or 1
     font.draw_micro_text_bucketed(P_func, x, y, "F", level)
-    x = x + 5
+    x = x + 4
   end
 
   if ((fx_cache.glitch_ratio > 0) and (fx_cache.glitch_mix > 0)) then
