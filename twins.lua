@@ -800,12 +800,13 @@ local function setup_params()
     params:add_control("evolution_range", "Evolution Range", controlspec.new(0, 100, "lin", 1, 10, "%")) params:set_action("evolution_range", function(value) randpara.set_evolution_range(value) end)
     params:add_option("evolution_rate", "Evolution Rate", {"slowest", "slow", "moderate", "medium", "fast", "crazy"}, 2) params:set_action("evolution_rate", function(value) local rates = {1/0.5, 1/1.5, 1/4, 1/8, 1/15, 1/30} randpara.set_evolution_rate(rates[value]) end)
     
-    params:add_group("SYMMETRY", 5)
+    params:add_group("SYMMETRY", 6)
     params:add_binary("symmetry", "Symmetry", "toggle", 0)
-    params:add_binary("copy_1_to_2", "Copy 1 → 2", "trigger", 0) params:set_action("copy_1_to_2", function() Mirror.copy_voice_params("1", "2", true) end)
-    params:add_binary("copy_2_to_1", "Copy 1 ← 2", "trigger", 0) params:set_action("copy_2_to_1", function() Mirror.copy_voice_params("2", "1", true) end)
-    params:add_binary("copy_buffer_1_to_2", "Buffer 1 → 2", "trigger", 0) params:set_action("copy_buffer_1_to_2", function() local f = params:get("1sample") if f and f ~= "" and f ~= "-" and f ~= "none" then set_track_sample(2, f) audio_active[2] = audio_active[1] update_pan_positioning() end end)
-    params:add_binary("copy_buffer_2_to_1", "Buffer 1 ← 2", "trigger", 0) params:set_action("copy_buffer_2_to_1", function() local f = params:get("2sample") if f and f ~= "" and f ~= "-" and f ~= "none" then set_track_sample(1, f) audio_active[1] = audio_active[2] update_pan_positioning() end end)
+    params:add_separator("Copy")
+    params:add_binary("copy_1_to_2", "Params 1 → 2", "trigger", 0) params:set_action("copy_1_to_2", function() Mirror.copy_voice_params("1", "2", true) end)
+    params:add_binary("copy_2_to_1", "Params 1 ← 2", "trigger", 0) params:set_action("copy_2_to_1", function() Mirror.copy_voice_params("2", "1", true) end)
+    params:add_binary("copy_buffer_1_to_2", "Sample 1 → 2", "trigger", 0) params:set_action("copy_buffer_1_to_2", function() local f = params:get("1sample") if f and f ~= "" and f ~= "-" and f ~= "none" then set_track_sample(2, f) audio_active[2] = audio_active[1] update_pan_positioning() end end)
+    params:add_binary("copy_buffer_2_to_1", "Sample 1 ← 2", "trigger", 0) params:set_action("copy_buffer_2_to_1", function() local f = params:get("2sample") if f and f ~= "" and f ~= "-" and f ~= "none" then set_track_sample(1, f) audio_active[1] = audio_active[2] update_pan_positioning() end end)
 
     params:add_group("FILTER", 10)
     for i = 1, 2 do
