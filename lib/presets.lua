@@ -254,9 +254,9 @@ function presets.load_complete_preset(name, scene_data, update_pan, audio_active
             if params.lookup[sp] then audio_active[i] = is_valid_sample(params:get(sp)) end
         end
 
+        update_pan()
         _G.preset_loading = false
         if data.params then apply_params_ordered(data.params) end
-        update_pan()
 
         for i = 1, 2 do
             for _, suffix in ipairs({"volume", "granular_gain"}) do
