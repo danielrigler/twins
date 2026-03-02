@@ -120,6 +120,7 @@ local param_modes = {
     volume = {param = "volume", engine = true}}
 local param_rows = {} for mode, config in pairs(param_modes) do if config.y then local lbl = config.label table.insert(param_rows, {y = config.y, label = lbl, label_upper = lbl:upper(), name = lbl:match("%a+"), mode = mode, param1 = "1" .. config.param, param2 = "2" .. config.param, hz = config.hz, st = config.st}) end end table.sort(param_rows, function(a, b) return a.y < b.y end)
 local LIMITS = {size={min=20,max=4999},density={min=0.1,max=50},pitch={min=-48,max=48}}
+local audio_files_cache = nil
 local scale_array_cache = {}
 local function normalize_scale_name(scale_name) if scale_name == "none" or scale_name == "off" then return "none" end local scale_map = {["major pent."] = "major pentatonic", ["minor pent."] = "minor pentatonic"} return scale_map[scale_name] or scale_name end
 local function get_scale_array(scale_name) scale_name = normalize_scale_name(scale_name) if scale_name == "none" then return nil end if not scale_array_cache[scale_name] then scale_array_cache[scale_name] = MusicUtil.generate_scale_of_length(60-48, scale_name, 97) end return scale_array_cache[scale_name] end
@@ -609,7 +610,8 @@ end
 local function set_sample_live(i) params:set(i.."sample", _path.tape.."live!") end
 
 local function load_random_tape_file(track_num)
-    local audio_files = scan_audio_files(_path.tape)
+    if not audio_files_cache then audio_files_cache = scan_audio_files(_path.tape) end
+    local audio_files = audio_files_cache
     if #audio_files == 0 then return false end
     if track_num then
         local file = audio_files[math.random(#audio_files)]
@@ -798,10 +800,12 @@ local function setup_params()
     params:add_control("evolution_range", "Evolution Range", controlspec.new(0, 100, "lin", 1, 10, "%")) params:set_action("evolution_range", function(value) randpara.set_evolution_range(value) end)
     params:add_option("evolution_rate", "Evolution Rate", {"slowest", "slow", "moderate", "medium", "fast", "crazy"}, 2) params:set_action("evolution_rate", function(value) local rates = {1/0.5, 1/1.5, 1/4, 1/8, 1/15, 1/30} randpara.set_evolution_rate(rates[value]) end)
     
-    params:add_group("SYMMETRY", 3)
+    params:add_group("SYMMETRY", 5)
     params:add_binary("symmetry", "Symmetry", "toggle", 0)
     params:add_binary("copy_1_to_2", "Copy 1 → 2", "trigger", 0) params:set_action("copy_1_to_2", function() Mirror.copy_voice_params("1", "2", true) end)
     params:add_binary("copy_2_to_1", "Copy 1 ← 2", "trigger", 0) params:set_action("copy_2_to_1", function() Mirror.copy_voice_params("2", "1", true) end)
+    params:add_binary("copy_buffer_1_to_2", "Buffer 1 → 2", "trigger", 0) params:set_action("copy_buffer_1_to_2", function() local f = params:get("1sample") if f and f ~= "" and f ~= "-" and f ~= "none" then set_track_sample(2, f) audio_active[2] = audio_active[1] update_pan_positioning() end end)
+    params:add_binary("copy_buffer_2_to_1", "Buffer 1 ← 2", "trigger", 0) params:set_action("copy_buffer_2_to_1", function() local f = params:get("2sample") if f and f ~= "" and f ~= "-" and f ~= "none" then set_track_sample(1, f) audio_active[1] = audio_active[2] update_pan_positioning() end end)
 
     params:add_group("FILTER", 10)
     for i = 1, 2 do
