@@ -168,7 +168,7 @@ end
 
 function presets.buffer_loaded(voice)
     buf_complete = buf_complete + 1
-    print("Buffer " .. voice .. " loaded (" .. buf_complete .. "/" .. buf_pending .. ")")
+    print("Buffer " .. voice .. " loaded")
 end
 
 local function wait_for_buffers()
@@ -295,12 +295,6 @@ function presets.close_menu()
 end
 
 function presets.is_menu_open() return presets.menu_open end
-
-function presets.cleanup()
-    cancel_loading_clock()
-    cancel_rename_clock()
-    _G.preset_loading = false
-end
 
 local function available_numbers(current_name)
     local current_n = parse_preset_name(current_name)
@@ -507,13 +501,12 @@ function presets.menu_enc(n, d)
                     if conf.manual_cursor > 1 then
                         conf.manual_text   = t:sub(1, conf.manual_cursor-2) .. t:sub(conf.manual_cursor)
                         conf.manual_cursor = conf.manual_cursor - 1
-                        if #conf.manual_text == 0 then conf.manual_text = "A"; conf.manual_cursor = 1 end
                     end
                 else
                     if conf.manual_cursor <= #t then
                         conf.manual_text = t:sub(1, conf.manual_cursor-1) .. t:sub(conf.manual_cursor+1)
                         if #conf.manual_text == 0 then
-                            conf.manual_text = "A"; conf.manual_cursor = 1
+                            conf.manual_cursor = 1
                         else
                             conf.manual_cursor = math.min(conf.manual_cursor, #conf.manual_text)
                         end
