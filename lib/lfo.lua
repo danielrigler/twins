@@ -1,5 +1,7 @@
 local number_of_outputs = 16
 local options = { lfotypes = { "sine", "random", "square", "walk" } }
+local LFO_SHAPE_REVERSE = {}
+for i, name in ipairs(options.lfotypes) do LFO_SHAPE_REVERSE[name] = i end
 local lfo = {}
 local assigned_params = {}
 local lfo_paused = false
@@ -63,7 +65,7 @@ function lfo.set_pause(paused) lfo_paused = paused end
 function lfo.set_walk_all(enabled)
   lfo.walk_all = enabled
   if enabled then
-    for k in pairs(saved_shapes) do saved_shapes[k] = nil end
+    saved_shapes = {}
     for i = 1, number_of_outputs do
       if params.lookup and params.lookup[LFO_KEYS[i]] and pget(LFO_KEYS[i]) == 2 then
         saved_shapes[i] = pget(SHAPE_KEYS[i])
@@ -76,7 +78,7 @@ function lfo.set_walk_all(enabled)
         pset(SHAPE_KEYS[i], shape_idx)
       end
     end
-    for k in pairs(saved_shapes) do saved_shapes[k] = nil end
+    saved_shapes = {}
   end
 end
 
@@ -132,7 +134,6 @@ local param_ranges = {
   ["1pan"]     = {-100,100}, ["2pan"]     = {-100,100},
   ["1seek"]    = {0,100},    ["2seek"]    = {0,100},
   ["1speed"]   = {-2,2},     ["2speed"]   = {-2,2},
-  ["1jitter"]  = {0,99999},  ["2jitter"]  = {0,99999},
   ["1spread"]  = {0,100},    ["2spread"]  = {0,100},
   ["1size"]    = {20,599},   ["2size"]    = {20,599},
   ["1density"] = {1,30},     ["2density"] = {1,30},
@@ -151,7 +152,9 @@ function lfo.get_parameter_range(param_name)
   return 0, 100
 end
 
-function lfo.clear_range_cache() end
+function lfo.clear_range_cache()
+  scale_array_cache = {}
+end
 
 function lfo.scale(v, old_min, old_max, new_min, new_max)
   return (v - old_min) * (new_max - new_min) / (old_max - old_min) + new_min
@@ -163,11 +166,9 @@ function lfo.clearLFOs(track, param_type)
     elseif track then return target:match("^" .. track)
     else return true end
   end
-
   for target in pairs(assigned_params) do
     if matches(target) then assigned_params[target] = nil end
   end
-
   for i = 1, number_of_outputs do
     if params.lookup[LFO_KEYS[i]] and params.lookup[TARGET_KEYS[i]] then
       local target = lfo.lfo_targets[pget(TARGET_KEYS[i])]
@@ -181,7 +182,6 @@ function lfo.clearLFOs(track, param_type)
       end
     end
   end
-
   if not track and not param_type then
     if is_audio_loaded("1") and is_audio_loaded("2") then
       pset("1pan", -25); pset("2pan", 25)
@@ -194,21 +194,16 @@ end
 local function randomize_lfo(i, target)
   if assigned_params[target] or not lfo.target_ranges[target] then return end
   if target:match("seek$") and pget(target:sub(1,1) .. "granular_gain") < 100 then return end
-
   for j = 1, number_of_outputs do
-    if j ~= i and params.lookup[LFO_KEYS[j]] and pget(LFO_KEYS[j]) == 2
-       and lfo.lfo_targets[pget(TARGET_KEYS[j])] == target then return end
+    if j ~= i and params.lookup[LFO_KEYS[j]] and pget(LFO_KEYS[j]) == 2 and lfo.lfo_targets[pget(TARGET_KEYS[j])] == target then return end
   end
-
   local target_index = LFO_TARGET_REVERSE[target]
   if not target_index then return end
-
   local ranges   = lfo.target_ranges[target]
   local min_val, max_val = lfo.get_parameter_range(target)
   local cur_val  = pget(target) or min_val
   local is_pan   = target:match("pan$")
   local is_seek  = target:match("seek$")
-
   local offset
   if is_pan then
     offset = 0
@@ -217,32 +212,25 @@ local function randomize_lfo(i, target)
   else
     offset = lfo.scale(cur_val, min_val, max_val, -1, 1)
   end
-
   local depth = math.random(ranges.depth[1], ranges.depth[2])
-
-  local center    = lfo.scale(offset, -1, 1, min_val, max_val)
-  local half_swing = (depth * 0.01) * (max_val - min_val) / 2
-  center = util.clamp(center, min_val + half_swing, max_val - half_swing)
+  local range = max_val - min_val
+  local half_swing = (depth * 0.01) * range / 2
+  local center = util.clamp(lfo.scale(offset, -1, 1, min_val, max_val), min_val + half_swing, max_val - half_swing)
   offset = lfo.scale(center, min_val, max_val, -1, 1)
-
   lfo[i].depth  = depth
   lfo[i].offset = offset
   pset(DEPTH_KEYS[i],  depth)
   pset(OFFSET_KEYS[i], offset)
-
   local min_f = math.floor(ranges.frequency[1] * 100)
   local max_f = math.floor(ranges.frequency[2] * 100)
   local freq  = math.random(min_f, max_f) / 100
   lfo[i].freq = freq
   pset(FREQ_KEYS[i], freq)
-
   local wf    = ranges.waveform[math.random(#ranges.waveform)]
   if lfo.walk_all then wf = "walk" end
   lfo[i].waveform = wf
-  for idx, name in ipairs(options.lfotypes) do
-    if name == wf then pset(SHAPE_KEYS[i], idx) break end
-  end
-
+  local shape_idx = LFO_SHAPE_REVERSE[wf]
+  if shape_idx then pset(SHAPE_KEYS[i], shape_idx) end
   pset(TARGET_KEYS[i], target_index)
   pset(LFO_KEYS[i], 2)
   assigned_params[target] = true
@@ -259,15 +247,15 @@ local function mirror_lfo(dst, src, is_pan)
   if is_pan then
     obj_d.phase  = (obj_s.phase + 0.5) % 1.0
     obj_d.offset = -obj_s.offset
-    pset(OFFSET_KEYS[dst], -pget(OFFSET_KEYS[src]))
+    pset(OFFSET_KEYS[dst], -obj_s.offset)
   else
     obj_d.phase  = obj_s.phase
     obj_d.offset = obj_s.offset
-    pset(OFFSET_KEYS[dst], pget(OFFSET_KEYS[src]))
+    pset(OFFSET_KEYS[dst], obj_s.offset)
   end
-  pset(FREQ_KEYS[dst],  pget(FREQ_KEYS[src]))
-  pset(SHAPE_KEYS[dst], pget(SHAPE_KEYS[src]))
-  pset(DEPTH_KEYS[dst], pget(DEPTH_KEYS[src]))
+  pset(FREQ_KEYS[dst],  obj_s.freq)
+  pset(SHAPE_KEYS[dst], LFO_SHAPE_REVERSE[obj_s.waveform])
+  pset(DEPTH_KEYS[dst], obj_s.depth)
 end
 
 local function free_slots()
@@ -288,13 +276,10 @@ function lfo.assign_to_current_row(current_mode, current_filter_mode)
   }
   local param_name = param_map[current_mode]
   if not param_name then return end
-
   local symmetry = pget("symmetry") == 1
   lfo.clearLFOs("1", param_name)
   lfo.clearLFOs("2", param_name)
-
   local slots = free_slots()
-
   if symmetry and not lfo.is_param_locked("1", param_name)
               and not lfo.is_param_locked("2", param_name)
               and #slots >= 2 then
@@ -305,7 +290,6 @@ function lfo.assign_to_current_row(current_mode, current_filter_mode)
     mirror_lfo(s2, s1, param_name == "pan")
     return
   end
-
   if not lfo.is_param_locked("1", param_name) and #slots > 0 then
     randomize_lfo(table.remove(slots, 1), "1" .. param_name)
   end
@@ -324,7 +308,6 @@ end
 
 function lfo.randomize_lfos(track, allow_volume_lfos)
   local symmetry = pget("symmetry") == 1
-
   for i = 1, number_of_outputs do
     if params.lookup[LFO_KEYS[i]] and params.lookup[TARGET_KEYS[i]] then
       local t_idx = pget(TARGET_KEYS[i])
@@ -332,8 +315,7 @@ function lfo.randomize_lfos(track, allow_volume_lfos)
         local target = lfo.lfo_targets[t_idx]
         if target then
           local tn, pn = target:sub(1,1), target:sub(2)
-          local should_clear = (symmetry and not target:match("volume$") and target:match("^[12]"))
-                            or target:match("^" .. track)
+          local should_clear = (symmetry and not target:match("volume$") and target:match("^[12]")) or target:match("^" .. track)
           if should_clear and not lfo.is_param_locked(tn, pn) then
             pset(LFO_KEYS[i], 1)
             pset(TARGET_KEYS[i], 1)
@@ -343,13 +325,11 @@ function lfo.randomize_lfos(track, allow_volume_lfos)
       end
     end
   end
-
   local candidates = {}
   for target, ranges in pairs(lfo.target_ranges) do
     local tn, pn = target:sub(1,1), target:sub(2)
     local ok = (symmetry and not target:match("volume$")) or target:match("^" .. track)
-    if ok and not lfo.is_param_locked(tn, pn)
-           and (not target:match("volume$") or allow_volume_lfos) then
+    if ok and not lfo.is_param_locked(tn, pn) and (not target:match("volume$") or allow_volume_lfos) then
       if target:match("seek$") then
         if pget(tn .. "granular_gain") >= 100 and math.random() < ranges.chance then
           candidates[#candidates + 1] = target
@@ -359,10 +339,8 @@ function lfo.randomize_lfos(track, allow_volume_lfos)
       end
     end
   end
-
   local slots = free_slots()
   local mirrored = {}
-
   while #candidates > 0 and #slots > 0 do
     local idx    = math.random(#candidates)
     local target = table.remove(candidates, idx)
@@ -384,7 +362,6 @@ function lfo.randomize_lfos(track, allow_volume_lfos)
     end
   end
 end
-
 function lfo.get_lfo_for_param(param_name)
   for i = 1, number_of_outputs do
     if params.lookup[LFO_KEYS[i]] and pget(LFO_KEYS[i]) == 2 then
@@ -395,31 +372,23 @@ end
 
 function lfo.process()
   if lfo_paused or not params.lookup then return end
-
   local targets  = lfo.lfo_targets
   local get_range = lfo.get_parameter_range
-
   for i = 1, number_of_outputs do
     if params:get(LFO_KEYS[i]) ~= 2 then goto continue end
-
     local obj = lfo[i]
-
-    obj.phase = (obj.phase + obj.freq * PHASE_INCREMENT) % 1.0
-
+    local old_phase = obj.phase
+    obj.phase = (old_phase + obj.freq * PHASE_INCREMENT) % 1.0
+    local wrapped = obj.phase < old_phase
     local slope
     local wf = obj.waveform
-
     if wf == "sine" then
       slope = math.sin(obj.phase * TWO_PI)
-
     elseif wf == "square" then
       slope = obj.phase < 0.5 and 1 or -1
-
     elseif wf == "random" then
-      local prev_phase = (obj.phase - obj.freq * PHASE_INCREMENT) % 1.0
-      if prev_phase > obj.phase then obj.prev = math.random() * 2 - 1 end
+      if wrapped then obj.prev = math.random() * 2 - 1 end
       slope = obj.prev
-
     elseif wf == "walk" then
       local src = obj.sync_to and lfo[obj.sync_to]
       if src then
@@ -437,17 +406,13 @@ function lfo.process()
         obj.prev          = obj.prev * 0.80 + val * 0.20
       end
       slope = obj.prev
-
     else
       slope = 0
     end
-
-    local mod = util.clamp(slope, -1, 1) * (obj.depth * 0.01) + obj.offset
+    local mod = slope * (obj.depth * 0.01) + obj.offset
     obj.slope = mod
-
     local t_idx = params:get(TARGET_KEYS[i])
     local target = t_idx and targets[t_idx]
-
     if target and target ~= "none" and params.lookup[target] then
       local mn, mx = get_range(target)
       local value  = util.clamp(lfo.scale(mod, -1, 1, mn, mx), mn, mx)
@@ -460,7 +425,6 @@ function lfo.process()
       params:set(LFO_KEYS[i], 1)
       if lfo.on_state_change then lfo.on_state_change() end
     end
-
     ::continue::
   end
 end
@@ -483,7 +447,6 @@ function lfo.init()
     params:add_control(FREQ_KEYS[i],  i .. " freq",    controlspec.new(0.01, 2.00, "lin", 0.01, 0.05, ""))
     params:set_action(FREQ_KEYS[i],   function(v) lfo[i].freq = v * params:get("global_lfo_freq_scale") end)
   end
-
   lfo_metro = metro.init()
   lfo_metro.time  = PHASE_INCREMENT
   lfo_metro.count = -1
