@@ -18,17 +18,27 @@ local RENAME_COMMIT_DELAY = 1.0
 local RENAME_MAX_LEN      = 23
 local MENU_MODES          = {"load", "rename", "save"}
 
-local loading_clock  = nil
-local rename_clock   = nil
-local LFO_KEYS       = {}
+local loading_clock = nil
+local rename_clock  = nil
+local LFO_KEYS      = {}
 for i = 1, 16 do LFO_KEYS[i] = i .. "lfo" end
+
+local PARAM_MATCHERS = {
+    "^%d+lock$",
+    "sample_[se][tn][ad]r?t?$",
+    "volume$",
+}
+local PARAM_DELAYS = { 0.02, 0.03, 0.03, 0.03, 0, 0.03 }
+
+local function fmt_preset(n, w) return string.format("%02d", math.min(n, 99) < 10 and n or n) .. " " .. w end
+local function format_number(n) return n >= 100 and tostring(n) or string.format("%02d", n) end
+local function fmt_name(n, w)   return format_number(n) .. " " .. w end
 
 local function cancel_clock(c)
     if c then pcall(clock.cancel, c) end
     return nil
 end
-
-local function cancel_rename_clock() rename_clock  = cancel_clock(rename_clock)  end
+local function cancel_rename_clock()  rename_clock  = cancel_clock(rename_clock)  end
 local function cancel_loading_clock() loading_clock = cancel_clock(loading_clock) end
 
 local function pad_text(text, len)
@@ -61,49 +71,25 @@ local function parse_preset_name(name)
     return tonumber(n), word
 end
 
-local function format_number(n) return n >= 100 and tostring(n) or string.format("%02d", n) end
-
 local function is_valid_sample(p)
     if not p or p == "-" or p == "" or p == "none" then return false end
     if p == _path.tape or p == (_path.tape .. "live!") then return false end
     return util.file_exists(p)
 end
 
-local function serialize(tbl, indent)
-    indent = indent or ""
-    local items = {}
-    for k, v in pairs(tbl) do
-        local ks = type(k) == "string" and string.format("%q", k) or tostring(k)
-        local vs = type(v) == "table"  and serialize(v, indent .. "  ")
-               or (type(v) == "string" and string.format("%q", v) or tostring(v))
-        items[#items+1] = string.format("%s  [%s] = %s", indent, ks, vs)
-    end
-    return string.format("{\n%s\n%s}", table.concat(items, ",\n"), indent)
-end
-
-local function get_mtime(path)
-    local f = io.popen('stat -c "%Y" "' .. path .. '" 2>/dev/null')
-    if not f then return 0 end
-    local t = f:read("*n"); f:close(); return t or 0
-end
-
 function presets.list_presets()
-    local dir = _path.data .. PRESETS_DIR
+    local dir  = _path.data .. PRESETS_DIR
     util.make_dir(dir)
-    local list = {}
-    local ok, entries = pcall(util.scandir, dir)
-    if not (ok and entries) then return list end
-    for _, entry in ipairs(entries) do
-        if type(entry) == "string" and entry:match("%.lua$") then
-            list[#list+1] = entry:gsub("%.lua$", "")
-        end
-    end
+    local list   = {}
     local mtimes = {}
     local f = io.popen('stat -c "%n %Y" "' .. dir .. '"/*.lua 2>/dev/null')
     if f then
         for line in f:lines() do
             local name, t = line:match('([^/]+)%.lua (%d+)$')
-            if name and t then mtimes[name] = tonumber(t) end
+            if name then
+                list[#list+1]  = name
+                mtimes[name]   = tonumber(t)
+            end
         end
         f:close()
     end
@@ -118,10 +104,30 @@ end
 
 local function params_snapshot()
     local state = {}
-    for _, param in pairs(params.params) do
-        if param.id then state[param.id] = params:get(param.id) end
+    for id in pairs(params.lookup) do
+        state[id] = params:get(id)
     end
     return state
+end
+
+local function serialize(tbl, indent)
+    indent    = indent or ""
+    local sub = indent .. "  "
+    local out = { "{\n" }
+    for k, v in pairs(tbl) do
+        local ks = type(k) == "string" and string.format("%q", k) or tostring(k)
+        local vs = type(v) == "table"  and serialize(v, sub)
+               or (type(v) == "string" and string.format("%q", v) or tostring(v))
+        out[#out+1] = string.format("%s  [%s] = %s,\n", indent, ks, vs)
+    end
+    out[#out+1] = indent .. "}"
+    return table.concat(out)
+end
+
+local function get_mtime(path)
+    local f = io.popen('stat -c "%Y" "' .. path .. '" 2>/dev/null')
+    if not f then return 0 end
+    local t = f:read("*n"); f:close(); return t or 0
 end
 
 function presets.save_complete_preset(name, scene_data, update_pan, audio_active)
@@ -163,28 +169,31 @@ function presets.delete_preset(name)
     return ok
 end
 
-
 local function apply_params_ordered(p)
-    local matchers = {
-        function(id) return id:match("^%d+lock$") end,
-        function(id) return id:match("sample_start$") or id:match("sample_end$") end,
-        function(id) return id:match("volume$") end,
-        function(id) return id == "allow_volume_lfos" end,
-        function(id) return id:match("^%d+lfo$") end,
-        function()   return true end,
-    }
-    local delays  = {0.02, 0.03, 0.03, 0.03, 0, 0.03}
-    local buckets = {{}, {}, {}, {}, {}, {}}
+    local buckets = { {}, {}, {}, {}, {}, {} }
     for id, value in pairs(p) do
-        if params.lookup[id] then
-            for i, fn in ipairs(matchers) do
-                if fn(id) then buckets[i][#buckets[i]+1] = {id=id, value=value}; break end
+        if params.lookup[id] and not id:match("^%d+sample$") then
+            local placed = false
+            for i = 1, 3 do
+                if id:match(PARAM_MATCHERS[i]) then
+                    buckets[i][#buckets[i]+1] = { id=id, value=value }
+                    placed = true; break
+                end
+            end
+            if not placed then
+                if id == "allow_volume_lfos" then
+                    buckets[4][#buckets[4]+1] = { id=id, value=value }
+                elseif id:match("^%d+lfo$") then
+                    buckets[5][#buckets[5]+1] = { id=id, value=value }
+                else
+                    buckets[6][#buckets[6]+1] = { id=id, value=value }
+                end
             end
         end
     end
     for i, bucket in ipairs(buckets) do
         for _, item in ipairs(bucket) do params:set(item.id, item.value) end
-        if delays[i] > 0 then clock.sleep(delays[i]) end
+        if PARAM_DELAYS[i] > 0 then clock.sleep(PARAM_DELAYS[i]) end
     end
 end
 
@@ -196,17 +205,14 @@ function presets.load_complete_preset(name, scene_data, update_pan, audio_active
     local ok, data = pcall(chunk)
     if not ok or not data then print("✗ Parse error: " .. (data or "?")); return false end
     if data.version and data.version > PRESET_VERSION then print("⚠ Newer preset version") end
-
     for i = 1, 2 do
         if params.lookup[i .. "volume"] then params:set(i .. "volume", -70) end
     end
     _G.preset_loading = true
     cancel_loading_clock()
-
     loading_clock = clock.run(function()
         if params.lookup["unload_all"] then params:set("unload_all", 1); clock.sleep(0.1) end
         for _, k in ipairs(LFO_KEYS) do if params.lookup[k] then params:set(k, 1) end end
-
         local src = data.morph or data.scene_data
         if src then
             for track = 1, 2 do for scene = 1, 2 do
@@ -217,7 +223,6 @@ function presets.load_complete_preset(name, scene_data, update_pan, audio_active
             morph_amount = data.morph_amount
             if params.lookup["morph_amount"] then params:set("morph_amount", data.morph_amount) end
         end
-
         if data.params then
             for i = 1, 2 do
                 local sp = i .. "sample"
@@ -226,23 +231,19 @@ function presets.load_complete_preset(name, scene_data, update_pan, audio_active
                 end
             end
         end
-
         for i = 1, 2 do
             local sp = i .. "sample"
             if params.lookup[sp] then audio_active[i] = is_valid_sample(params:get(sp)) end
         end
-
         update_pan()
         _G.preset_loading = false
         if data.params then apply_params_ordered(data.params) end
-
         for i = 1, 2 do
             for _, suffix in ipairs({"volume", "granular_gain"}) do
                 local p = i .. suffix
                 if params.lookup[p] then params:set(p, params:get(p)) end
             end
         end
-
         clock.sleep(0.1); redraw()
         print("✓ Loaded: " .. name)
         loading_clock = nil
@@ -297,7 +298,7 @@ end
 
 local function update_suggested(conf)
     local trimmed = conf.manual_text:match("^(.-)%s*$") or conf.manual_text
-    conf.suggested_name = format_number(conf.suggested_number) .. " " .. trimmed
+    conf.suggested_name = fmt_name(conf.suggested_number, trimmed)
 end
 
 local function start_commit_clock(conf)
@@ -332,7 +333,7 @@ local function open_rename(preset_name)
         suggested_word    = word,
         available_numbers = avail,
         avail_index       = avail_idx,
-        suggested_name    = format_number(avail[avail_idx]) .. " " .. word,
+        suggested_name    = fmt_name(avail[avail_idx], word),
         manual_text       = word,
         manual_cursor     = 1,
         manual_char_idx   = char_to_charset_idx(word:sub(1, 1)),
@@ -348,9 +349,9 @@ local function swap_preset_numbers(idx_a, idx_b)
     local nb, wb = parse_preset_name(name_b)
     if not (na and nb and wa and wb) then return nil end
     local dir   = _path.data .. PRESETS_DIR .. "/"
-    local new_a = format_number(nb) .. " " .. wa
+    local new_a = fmt_name(nb, wa)
     os.rename(dir .. name_a .. ".lua", dir .. new_a .. ".lua")
-    os.rename(dir .. name_b .. ".lua", dir .. format_number(na) .. " " .. wb .. ".lua")
+    os.rename(dir .. name_b .. ".lua", dir .. fmt_name(na, wb) .. ".lua")
     return new_a
 end
 
@@ -358,36 +359,33 @@ local function draw_rename_manual(conf)
     screen.clear()
     screen.level(15); screen.move(64,  9); screen.text_center("RENAME")
     screen.level(3);  screen.move(64, 17); screen.text_center("manual mode")
-
     local num_str = format_number(conf.suggested_number) .. " "
-    local text    = conf.manual_cursor > #conf.manual_text
-                    and pad_text(conf.manual_text, conf.manual_cursor) or conf.manual_text
+    local text    = conf.manual_cursor > #conf.manual_text and pad_text(conf.manual_text, conf.manual_cursor) or conf.manual_text
     local before  = text:sub(1, conf.manual_cursor - 1)
     local cur_ch  = conf.pending_char or text:sub(conf.manual_cursor, conf.manual_cursor)
     if cur_ch == "" then cur_ch = " " end
     local after   = text:sub(conf.manual_cursor + 1):match("^(.-)%s*$") or text:sub(conf.manual_cursor + 1)
-
-    local pad       = 1
-    local sw        = screen.text_extents("|")
-    local num_w     = screen.text_extents(num_str:match("^(.-)%s*$") or num_str)
-    local before_w  = screen.text_extents(before .. "|") - sw
-    local rect_w    = math.max(screen.text_extents(cur_ch), 4) + pad * 2
-    local full_name = text:match("^(.-)%s*$") or text
-    local total_w   = num_w + 4 + screen.text_extents(full_name) + pad * 2
-    local start_x   = math.floor(64 - total_w / 2)
-    local before_x  = start_x + num_w + 4
-    local cur_x     = before_x + before_w
-    local y         = 30
-
+    local pad        = 1
+    local pipe_w     = screen.text_extents("|")
+    local num_w      = screen.text_extents(num_str:match("^(.-)%s*$") or num_str)
+    local before_w   = screen.text_extents(before .. "|") - pipe_w
+    local cur_ch_w   = screen.text_extents(cur_ch)
+    local rect_w     = math.max(cur_ch_w, 4) + pad * 2
+    local full_name  = text:match("^(.-)%s*$") or text
+    local name_w     = screen.text_extents(full_name)
+    local total_w    = num_w + 4 + name_w + pad * 2
+    local start_x    = math.floor(64 - total_w / 2)
+    local before_x   = start_x + num_w + 4
+    local cur_x      = before_x + before_w
+    local y          = 30
     screen.level(4);  screen.move(start_x,     y); screen.text(num_str)
     screen.level(15); screen.move(before_x,    y); screen.text(before)
     screen.level(15); screen.rect(cur_x, y-6, rect_w, 8); screen.fill()
     screen.level(0);  screen.move(cur_x + pad, y); screen.text(cur_ch)
     screen.level(15); screen.move(cur_x + rect_w, y); screen.text(after)
-
     screen.level(2); screen.move(64, 44); screen.text_center("E1: del   E2: pos   E3: char")
     screen.level(3); screen.move(2,   64); screen.text("[K1]: Exit")
-    screen.move(68, 64); screen.text_center("K2: Mode")
+    screen.move(68,  64); screen.text_center("K2: Mode")
     screen.move(126, 64); screen.text_right("K3: OK")
     screen.update()
 end
@@ -414,7 +412,6 @@ end
 
 function presets.draw_menu()
     if not presets.menu_open then return false end
-
     local conf = presets.confirmation
     if conf then
         if conf.type == "rename" then
@@ -425,7 +422,6 @@ function presets.draw_menu()
         end
         return true
     end
-
     screen.clear()
     screen.level(15); screen.move(64, 6); screen.text_center("PRESET BROWSER")
     local count     = math.min(5, #presets.preset_list)
@@ -450,11 +446,11 @@ function presets.draw_menu()
     end
     if #presets.preset_list > count then
         screen.level(2)
-        if start_idx > 1                          then screen.move(122, 19); screen.text("↑") end
+        if start_idx > 1                               then screen.move(122, 19); screen.text("↑") end
         if start_idx + count - 1 < #presets.preset_list then screen.move(122, 51); screen.text("↓") end
     end
-    local bright = {load=1, save=15, rename=8}
-    local labels  = {load="Load", rename="Edit", save="Save"}
+    local bright = { load=1, save=15, rename=8 }
+    local labels  = { load="Load", rename="Edit", save="Save" }
     screen.level(1); screen.move(2,  64); screen.text("[K1]: Exit")
     screen.level(1); screen.move(50, 64); screen.text("K2: Del")
     screen.level(bright[presets.menu_mode] or 1)
@@ -465,7 +461,6 @@ end
 
 function presets.menu_enc(n, d)
     if not presets.menu_open then return end
-
     local conf = presets.confirmation
     if conf and conf.type == "rename" then
         if conf.rename_mode == "manual" then
@@ -492,24 +487,18 @@ function presets.menu_enc(n, d)
                 end
                 conf.manual_char_idx = char_to_charset_idx(conf.manual_text:sub(conf.manual_cursor, conf.manual_cursor))
                 update_suggested(conf); redraw()
-
             elseif n == 2 then
                 cancel_rename_clock(); commit_pending(conf)
                 local trimmed_len = #(conf.manual_text:match("^(.-)%s*$") or conf.manual_text)
                 local new_cursor  = util.clamp(conf.manual_cursor + d, 1, math.min(trimmed_len + 2, RENAME_MAX_LEN))
                 if new_cursor ~= conf.manual_cursor then
-                    if new_cursor > #conf.manual_text then
-                        conf.manual_text = conf.manual_text .. string.rep(" ", new_cursor - #conf.manual_text)
-                    end
+                    if new_cursor > #conf.manual_text then conf.manual_text = conf.manual_text .. string.rep(" ", new_cursor - #conf.manual_text) end
                     conf.manual_cursor   = new_cursor
                     conf.manual_char_idx = char_to_charset_idx(conf.manual_text:sub(conf.manual_cursor, conf.manual_cursor))
                     update_suggested(conf)
-                    if conf.manual_text:sub(conf.manual_cursor, conf.manual_cursor) == " " then
-                        conf.pending_char = " "; start_commit_clock(conf)
-                    end
+                    if conf.manual_text:sub(conf.manual_cursor, conf.manual_cursor) == " " then conf.pending_char = " "; start_commit_clock(conf) end
                     redraw()
                 end
-
             elseif n == 3 then
                 local trimmed_len = #(conf.manual_text:match("^(.-)%s*$") or conf.manual_text)
                 local is_new  = conf.manual_cursor > trimmed_len
@@ -528,30 +517,26 @@ function presets.menu_enc(n, d)
                     conf.pending_char = new_char; start_commit_clock(conf)
                 else
                     cancel_rename_clock(); conf.pending_char = nil
-                    if conf.manual_cursor > #conf.manual_text then
-                        conf.manual_text = pad_text(conf.manual_text, conf.manual_cursor)
-                    end
+                    if conf.manual_cursor > #conf.manual_text then conf.manual_text = pad_text(conf.manual_text, conf.manual_cursor) end
                     conf.manual_text = str_set_char(conf.manual_text, conf.manual_cursor, new_char)
                     update_suggested(conf)
                 end
                 redraw()
             end
-
         else
             if n == 2 then
                 conf.avail_index      = util.clamp(conf.avail_index + d, 1, #conf.available_numbers)
                 conf.suggested_number = conf.available_numbers[conf.avail_index]
-                conf.suggested_name   = format_number(conf.suggested_number) .. " " .. conf.suggested_word
+                conf.suggested_name   = fmt_name(conf.suggested_number, conf.suggested_word)
                 redraw()
             elseif n == 3 then
                 conf.suggested_word = NameSizer.rnd(" ")
-                conf.suggested_name = format_number(conf.suggested_number) .. " " .. conf.suggested_word
+                conf.suggested_name = fmt_name(conf.suggested_number, conf.suggested_word)
                 redraw()
             end
         end
         return
     end
-
     if n == 1 then
         presets.k2_mode = d > 0 and "move" or "delete"
     elseif n == 2 then
@@ -577,11 +562,9 @@ end
 
 function presets.menu_key(n, z, scene_data, update_pan, audio_active)
     if not presets.menu_open or z ~= 1 then return false end
-
     local conf = presets.confirmation
     if conf then
         if n == 1 then cancel_rename_clock(); presets.close_menu(); return true end
-
         if n == 2 then
             if conf.type == "rename" then
                 cancel_rename_clock()
@@ -598,7 +581,7 @@ function presets.menu_key(n, z, scene_data, update_pan, audio_active)
                     conf.rename_mode    = "random"
                     local trimmed       = conf.manual_text:match("^(.-)%s*$") or conf.manual_text
                     conf.suggested_word = trimmed
-                    conf.suggested_name = format_number(conf.suggested_number) .. " " .. trimmed
+                    conf.suggested_name = fmt_name(conf.suggested_number, trimmed)
                 end
                 redraw()
             else
@@ -606,7 +589,6 @@ function presets.menu_key(n, z, scene_data, update_pan, audio_active)
             end
             return true
         end
-
         if n == 3 then
             if conf.type == "delete" then
                 presets.delete_preset(conf.preset_name)
@@ -617,7 +599,6 @@ function presets.menu_key(n, z, scene_data, update_pan, audio_active)
                 else
                     presets.selected_index = util.clamp(conf.preset_index, 1, #presets.preset_list)
                 end
-
             elseif conf.type == "save" then
                 local path  = _path.data .. PRESETS_DIR .. "/" .. conf.preset_name .. ".lua"
                 local mtime = get_mtime(path)
@@ -625,7 +606,6 @@ function presets.menu_key(n, z, scene_data, update_pan, audio_active)
                 if mtime > 0 then os.execute('touch -m -d @' .. mtime .. ' "' .. path .. '"') end
                 presets.confirmation = nil
                 presets.menu_open    = false
-
             elseif conf.type == "rename" then
                 cancel_rename_clock()
                 local new_name = (conf.suggested_name or conf.preset_name):match("^(.-)%s*$") or conf.preset_name
@@ -645,20 +625,19 @@ function presets.menu_key(n, z, scene_data, update_pan, audio_active)
         end
         return true
     end
-
     local name = presets.preset_list[presets.selected_index]
     if n == 3 then
         if presets.menu_mode == "load" then
             presets.load_complete_preset(name, scene_data, update_pan, audio_active)
             presets.menu_open = false
         elseif presets.menu_mode == "save" then
-            presets.confirmation = {type = "save", preset_name = name}
+            presets.confirmation = { type = "save", preset_name = name }
         else
             presets.confirmation = open_rename(name)
         end
         return true
     elseif n == 2 then
-        presets.confirmation = {type = "delete", preset_name = name, preset_index = presets.selected_index}
+        presets.confirmation = { type = "delete", preset_name = name, preset_index = presets.selected_index }
         return true
     elseif n == 1 then
         presets.close_menu(); return true

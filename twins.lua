@@ -421,7 +421,7 @@ local function apply_morph()
   if pending_count>0 then
     for idx=1,pending_count do
       local m=pending[idx]
-      local slot=nil
+      local slot
       for i=1,16 do
         if not used_slots[i]then
           slot=i
@@ -581,14 +581,13 @@ local function set_sample_live(i) params:set(i.."sample", _path.tape.."live!") e
 
 local function load_random_tape_file(track_num)
     if not audio_files_cache then audio_files_cache = scan_audio_files(_path.tape) end
-    local audio_files = audio_files_cache
-    if #audio_files == 0 then return false end
+    if #audio_files_cache == 0 then return false end
     if track_num then
-        local file = audio_files[math.random(#audio_files)]
+        local file = audio_files_cache[math.random(#audio_files_cache)]
         return set_track_sample(track_num, file)
     end
-    local file1 = audio_files[math.random(#audio_files)]
-    local file2 = (math.random() < 0.5) and file1 or audio_files[math.random(#audio_files)]
+    local file1 = audio_files_cache[math.random(#audio_files_cache)]
+    local file2 = (math.random() < 0.5) and file1 or audio_files_cache[math.random(#audio_files_cache)]
     set_track_sample(1, file1)
     set_track_sample(2, file2)
     return true
@@ -623,8 +622,8 @@ local function setup_params()
     end
     params:add_control("live_buffer_mix", "Overdub", controlspec.new(0, 100, "lin", 1, 100, "%")) params:set_action("live_buffer_mix", function(value) engine.live_buffer_mix(value * 0.01) end)
     params:add_taper("live_buffer_length", "Buffer Length", 0.05, 10, 1, 3, "s") params:set_action("live_buffer_length", function(value) engine.live_buffer_length(value) for i=1,2 do if params:get(i.."live_input")==1 then cached_buffer_durations[i]=value end end end)
-    params:add{type = "trigger", id = "save_live_buffer1", name = "Buffer1 to Tape", action = function() local timestamp = os.date("%Y%m%d_%H%M%S") local filename = "live1_"..timestamp..".wav" engine.save_live_buffer(1, filename) end}
-    params:add{type = "trigger", id = "save_live_buffer2", name = "Buffer2 to Tape", action = function() local timestamp = os.date("%Y%m%d_%H%M%S") local filename = "live2_"..timestamp..".wav" engine.save_live_buffer(2, filename) end}
+    params:add{type = "trigger", id = "save_live_buffer1", name = "Buffer1 to Tape", action = function() local timestamp = os.date("%Y%m%d_%H%M%S") local filename = "live1_"..timestamp..".wav" engine.save_live_buffer(1, filename) audio_files_cache = nil end}
+    params:add{type = "trigger", id = "save_live_buffer2", name = "Buffer2 to Tape", action = function() local timestamp = os.date("%Y%m%d_%H%M%S") local filename = "live2_"..timestamp..".wav" engine.save_live_buffer(2, filename) audio_files_cache = nil end}
     for i = 1, 2 do
       params:add_binary(i.."live_direct", "Direct "..i.." ►", "toggle", 0) params:set_action(i.."live_direct", function(value) if value == 1 then local was_live = params:get(i.."live_input") if was_live == 1 then params:set(i.."live_input", 0) end engine.live_direct(i, 1) audio_active[i] = true set_sample_live(i) update_pan_positioning() else engine.live_direct(i, 0) if not audio_active[i] and params:get(i.."live_input") == 0 then osc_positions[i] = 0 params:set(i.."sample", "-") else set_sample_live(i) update_pan_positioning() end end end)
     end
@@ -928,17 +927,17 @@ local function randomize(n)
     local m_rand = randomize_metro[n]
     local symmetry = params:get("symmetry") == 1
     local other_track = 3 - n
-    local locked_params = {}
+    local can_randomize = {}
     local param_names = {"speed", "jitter", "size", "density", "spread", "pitch", "seek"}
     local pitch_size_density_linked = params:get("global_pitch_size_density_link") == 1
-    for i = 1, #param_names do locked_params[param_names[i]] = params:get(n .. "lock_" .. param_names[i]) == 1 end
-    if locked_params.pitch then randomize_pitch(n, other_track, symmetry) end
+    for i = 1, #param_names do can_randomize[param_names[i]] = params:get(n .. "lock_" .. param_names[i]) == 1 end
+    if can_randomize.pitch then randomize_pitch(n, other_track, symmetry) end
     local targets = {}
     for i = 1, #param_names do
         local key = param_names[i]
         if key == "pitch" then goto continue end
         local cfg_name = n .. key
-        if not locked_params[key] then goto continue end
+        if not can_randomize[key] then goto continue end
         if key == "seek" then
             local min_val = params:get(n .. "min_seek")
             local max_val = params:get(n .. "max_seek")
@@ -1145,7 +1144,7 @@ local function handle_param_change(track, config, delta)
 end
 
 local function handle_randomize_track(n)
-    if not key_state[1] then return false end
+    if not key_state[1] then return end
     local track = n == 3 and 2 or 1
     stop_metro_safe(randomize_metro[track])
     lfo.clearLFOs(tostring(track))
@@ -1185,7 +1184,7 @@ local function find_or_create_lfo_for_param(track, param_name, only_existing, cr
         if lfo_state == 2 or (only_existing and lfo_state == 1) then if lfo_targets[params:get(i .. "lfo_target")] == full_param then return i end end
     end
     if only_existing then return nil end
-    local new_target_idx = nil
+    local new_target_idx
     for idx = 2, #lfo_targets do if lfo_targets[idx] == full_param then new_target_idx = idx break end end
     if not new_target_idx then return nil end
     local min_val, max_val = lfo.get_parameter_range(full_param)
@@ -1424,9 +1423,9 @@ function handle_key_release(n, both_keys_pressed)
     set_key_tracking(n)
 end
 
+local function format_spread(v) return string.format("%.0f%%", v) end
 local function format_density(value) return string.format("%.1f Hz", value) end
-local function format_pitch(value, track) if not track then return value > 0 and string.format("+%.0f", value) or string.format("%.0f", value) end local pitch_random_enabled = (params:get(track.."pitch_random_prob") or 0) ~= 0 local show_dots = pitch_random_enabled local suffix = show_dots and ".. st" or " st" return value > 0 and string.format("+%.0f%s", value, suffix) or string.format("%.0f%s", value, suffix) end
-local function format_seek(value) return string.format("%.0f%%", value) end
+local function format_pitch(value, track) if not track then return value > 0 and string.format("+%.0f", value) or string.format("%.0f", value) end local pitch_random_enabled = (params:get(track.."pitch_random_prob") or 0) ~= 0 local suffix = pitch_random_enabled and ".. st" or " st" return value > 0 and string.format("+%.0f%s", value, suffix) or string.format("%.0f%s", value, suffix) end
 local function format_speed(speed) if math.abs(speed) < 0.01 then return ".00x" elseif math.abs(speed) < 1 then if speed < -0.01 then return string.format("-.%02dx", math.floor(math.abs(speed) * 100)) else return string.format(".%02dx", math.floor(math.abs(speed) * 100)) end else return string.format("%.2fx", speed) end end
 local function format_jitter(value) if value > 999 then return string.format("%.1f s", value / 1000) else return string.format("%.0f ms", value) end end
 local function format_size(value) if value > 999 then return string.format("%.2f s", value / 1000) else return string.format("%.0f ms", value) end end
@@ -1438,9 +1437,9 @@ local UPPER = {jitter=true, size=true, density=true, spread=true, pitch=true}
 local FORMAT = {
   hz=format_density,
   st=format_pitch,
-  spread=function(v) return string.format("%.0f%%",v) end,
-  jitter=function(v) return format_jitter(v) end,
-  size=function(v) return format_size(v) end}
+  spread=format_spread,
+  jitter=format_jitter,
+  size=format_size}
 local buckets = {}
 for _i = 1, 15 do buckets[_i] = {r={}, p={}, t={}} end
 local function clear_ops() for i=1,15 do local b=buckets[i]; b.r,b.p,b.t={},{},{} end end
@@ -1483,7 +1482,6 @@ function redraw()
   local C = {
     vol  = {params:get("1volume"), params:get("2volume")},
     pan  = {params:get("1pan"),    params:get("2pan")},
-    seek = {params:get("1seek"),   params:get("2seek")},
     spd  = {params:get("1speed"),  params:get("2speed")},
     cut  = {params:get("1cutoff"), params:get("2cutoff")},
     hpf  = {params:get("1hpf"),    params:get("2hpf")},
@@ -1524,44 +1522,43 @@ function redraw()
     end
   end
   local function draw_seek_bar_viz(t, x)
-    local loaded = audio_active[t] or C.live.in_[t] == 1 or C.live.dir_[t] == 1
+    local dir_t, in_t, spd_t = C.live.dir_[t], C.live.in_[t], C.spd[t]
+    local loaded = audio_active[t] or in_t == 1 or dir_t == 1
     local mode = UPPER[cur_mode] and "seek" or cur_mode
     if mode == "speed" then
       R(1, x, Y.seek, BAR_W, 1)
-      local speed = C.spd[t]
-      local normalized_speed = util.clamp(speed / 2, -1, 1)
-      local center_x = x + math.floor(BAR_W / 2)
-      local position_offset = math.floor(normalized_speed * (BAR_W / 2))
-      local position_x = center_x + position_offset
-      if loaded then R(LEVEL.hi, position_x, Y.seek - 1, 1, 2) end
+      local half_w = math.floor(BAR_W / 2)
+      if loaded then R(LEVEL.hi, x + half_w + math.floor(util.clamp(spd_t / 2, -1, 1) * half_w), Y.seek - 1, 1, 2) end
     else
       local animated_bar_w = math.floor(BAR_W * seek_bar_width)
-      if C.live.dir_[t] ~= 1 then R(1, x, Y.seek, animated_bar_w, 1) end
+      if dir_t ~= 1 then R(1, x, Y.seek, animated_bar_w, 1) end
       if params:get(t .. "granular_gain") > 0 then
         local grains = grain_positions[t]
         if grains then
           local dur, keep, drawn = cached_buffer_durations[t], 0, 0
-          for i=1,#grains do
+          local spd_fwd = spd_t >= -0.01
+          local x_end = x + BAR_W - 1
+          local hi1 = LEVEL.hi - 1
+          for i = 1, #grains do
             local g = grains[i]
             local age = now - g.t
-            if age <= (g.size or 0.1) then
+            local gsize = g.size or 0.1
+            if age <= gsize then
               keep = keep + 1
               grains[keep] = g
               if drawn < 25 then
-                local grain_size_norm = (g.size or 0.1) / dur
-                local grain_end = (g.pos or 0) + grain_size_norm
-                local spd_fwd = C.spd[t] >= -0.01
-                local segments = grain_end > 1 and {{g.pos or 0, 1.0}, {0, grain_end - 1.0}} or {{g.pos or 0, grain_end}}
-                for _,seg in ipairs(segments) do
+                local gpos = g.pos or 0
+                local grain_end = gpos + gsize / dur
+                local segments = grain_end > 1 and {{gpos, 1.0}, {0, grain_end - 1.0}} or {{gpos, grain_end}}
+                for _, seg in ipairs(segments) do
                   local pos = x + math.floor(seg[1] * BAR_W)
                   local w = math.max(1, math.floor((seg[2] - seg[1]) * BAR_W))
-                  local l = spd_fwd and pos or (pos - w)
-                  local r = spd_fwd and (pos + w - 1) or (pos - 1)
-                  if r >= x and l <= x + BAR_W - 1 then
-                    local dl, dr = math.max(l, x), math.min(r, x + BAR_W - 1)
+                  local l, r = spd_fwd and pos or (pos - w), spd_fwd and (pos + w - 1) or (pos - 1)
+                  if r >= x and l <= x_end then
+                    local dl, dr = math.max(l, x), math.min(r, x_end)
                     local bw = dr - dl + 1
                     if bw > 0 then
-                      R(math.ceil(1 + (LEVEL.hi - 1) * (1 - age / (g.size or 0.1))), dl, Y.seek, bw, 1)
+                      R(math.ceil(1 + hi1 * (1 - age / gsize)), dl, Y.seek, bw, 1)
                       drawn = drawn + 1
                     end
                   end
@@ -1569,11 +1566,13 @@ function redraw()
               end
             end
           end
-          for i=keep+1,#grains do grains[i] = nil end
+          for i = keep + 1, #grains do grains[i] = nil end
         end
-      else grain_positions[t] = {} end
-      if loaded and C.live.dir_[t] ~= 1 then R(LEVEL.hi, x + math.floor(osc_positions[t] * animated_bar_w), Y.seek - 1, 1, 2) end
-      if C.live.in_[t] == 1 then R(LEVEL.hi, x + math.floor(rec_positions[t] * BAR_W), Y.seek - 1, 2, 2) end
+      else
+        grain_positions[t] = {}
+      end
+      if loaded and dir_t ~= 1 then R(LEVEL.hi, x + math.floor(osc_positions[t] * animated_bar_w), Y.seek - 1, 1, 2) end
+      if in_t == 1 then R(LEVEL.hi, x + math.floor(rec_positions[t] * BAR_W), Y.seek - 1, 2, 2) end
     end
   end
   local upper = UPPER[cur_mode]
@@ -1687,6 +1686,7 @@ local osc_handlers = {
     end,
     ["/twins/output_saved"] = function(args)
         local filepath = args[1]
+        audio_files_cache = nil
         params:set("unload_all", 1)
         tracked_clock_run(function()
             clock.sleep(0.1)
