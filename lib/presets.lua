@@ -11,7 +11,6 @@ presets.k2_mode        = "delete"
 _G.preset_loading = false
 
 local PRESETS_DIR         = "twins"
-local BUFFER_TIMEOUT      = 15
 local PRESET_VERSION      = 1
 local RENAME_CHARSET      = " abcdefghijklmnopqrstuvwxyz_0123456789"
 local RENAME_CHARSET_LEN  = #RENAME_CHARSET
@@ -21,8 +20,6 @@ local MENU_MODES          = {"load", "rename", "save"}
 
 local loading_clock  = nil
 local rename_clock   = nil
-local buf_pending    = 0
-local buf_complete   = 0
 local LFO_KEYS       = {}
 for i = 1, 16 do LFO_KEYS[i] = i .. "lfo" end
 
@@ -166,19 +163,6 @@ function presets.delete_preset(name)
     return ok
 end
 
-function presets.buffer_loaded(voice)
-    buf_complete = buf_complete + 1
-    print("Buffer " .. voice .. " loaded")
-end
-
-local function wait_for_buffers()
-    local start = util.time()
-    while buf_complete < buf_pending do
-        if util.time() - start > BUFFER_TIMEOUT then print("⚠ Buffer timeout"); return false end
-        clock.sleep(0.1)
-    end
-    return true
-end
 
 local function apply_params_ordered(p)
     local matchers = {
@@ -220,7 +204,7 @@ function presets.load_complete_preset(name, scene_data, update_pan, audio_active
     cancel_loading_clock()
 
     loading_clock = clock.run(function()
-        if params.lookup["unload_all"] then params:set("unload_all", 1); clock.sleep(0.05) end
+        if params.lookup["unload_all"] then params:set("unload_all", 1); clock.sleep(0.1) end
         for _, k in ipairs(LFO_KEYS) do if params.lookup[k] then params:set(k, 1) end end
 
         local src = data.morph or data.scene_data
@@ -234,19 +218,13 @@ function presets.load_complete_preset(name, scene_data, update_pan, audio_active
             if params.lookup["morph_amount"] then params:set("morph_amount", data.morph_amount) end
         end
 
-        buf_pending, buf_complete = 0, 0
         if data.params then
             for i = 1, 2 do
                 local sp = i .. "sample"
                 if params.lookup[sp] and is_valid_sample(data.params[sp]) then
-                    buf_pending = buf_pending + 1
                     params:set(sp, data.params[sp])
                 end
             end
-        end
-        if buf_pending > 0 then
-            print("⏳ Loading " .. buf_pending .. " sample(s)...")
-            wait_for_buffers()
         end
 
         for i = 1, 2 do
@@ -665,7 +643,6 @@ function presets.menu_key(n, z, scene_data, update_pan, audio_active)
             end
             return true
         end
-
         return true
     end
 
