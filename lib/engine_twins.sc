@@ -282,7 +282,7 @@ alloc {
         SynthDef(\tape, {
             arg bus, mix=0.0;
             var orig = In.ar(bus, 2);
-            var wet = AnalogTape.ar(orig, 0.95, 0.95, 0.95, 0, 0) * 0.87;
+            var wet = AnalogTape.ar(orig, 1, 1, 1, 0, 0) * 0.89;
             ReplaceOut.ar(bus, XFade2.ar(orig, wet, mix * 2 - 1));
         }).add;
         
@@ -353,13 +353,11 @@ alloc {
         }).add;
         
         SynthDef(\saturation, {
-            arg bus, drive=0.0, tone=0.5, character=0.5;
+            arg bus, drive=0.0;
             var dry = In.ar(bus, 2);
-            var stage1 = ((1 + (drive * 0.3)) * dry).softclip;
-            var stage2 = ((1 + (drive * 0.4)) * stage1).tanh;
-            var tube = SelectX.ar(character, [stage2, (stage2.abs * stage2.sign)]);
-            var filtered = LPF.ar(tube, 16000 - (drive * 4000));
-            ReplaceOut.ar(bus, XFade2.ar(dry, filtered, drive * 2 - 1));
+            var stage1 = ((1 + (drive * 0.4)) * dry).softclip;
+            var stage2 = ((1 + (drive * 0.5)) * stage1).tanh;
+            ReplaceOut.ar(bus, XFade2.ar(dry, stage2, drive * 2 - 1));
         }).add;
 
         SynthDef(\rotate, {
