@@ -836,11 +836,6 @@ local function setup_params()
     params:add{type = "trigger", id = "save_to_scene2", name = "Morph Target B", action = function() store_scene(1, 2) store_scene(2, 2) end}
     params:add{type = "trigger", id = "delete_morph_data", name = "Delete Morph Data", action = function() scene_data = {[1] = {[1] = {}, [2] = {}}, [2] = {[1] = {}, [2] = {}}} morph_amount = 0 params:set("morph_amount", 0) params:set("scene_mode", 1) current_scene_mode = "off" end}
     
-    params:add_group("LOOP", 3)
-    params:add{type = "trigger", id = "save_output_buffer_only", name = "Save", action = function() local filename = "twins_output.wav" if engine.save_output_buffer_only then showing_save_message = true engine.save_output_buffer_only(filename) end end}
-    params:add{type = "trigger", id = "save_output_buffer", name = "Bounce", action = function() local filename = "twins_output.wav" if engine.save_output_buffer then showing_save_message = true engine.save_output_buffer(filename) end end}
-    params:add_control("output_buffer_length", "Loop Length", controlspec.new(1, 60, "lin", 1, 8, "s")) params:set_action("output_buffer_length", function(value) engine.set_output_buffer_length(value + 1) end)    
-    
     params:add_group("OTHER", 25)
     params:add_binary("dry_mode", "Dry Mode", "toggle", 0) params:set_action("dry_mode", function(x) drymode.toggle_dry_mode() end)
     params:add_binary("randomtape1", "Random Tape 1", "trigger", 0) params:set_action("randomtape1", function() load_random_tape_file(1) end)
@@ -1684,16 +1679,6 @@ local osc_handlers = {
         voice_peak_amplitudes[voice].l = math.abs(peakL)
         voice_peak_amplitudes[voice].r = math.abs(peakR)
     end,
-    ["/twins/output_saved"] = function(args)
-        local filepath = args[1]
-        audio_files_cache = nil
-        params:set("unload_all", 1)
-        tracked_clock_run(function()
-            clock.sleep(0.1)
-            params:set("1granular_gain", 0) disable_lfos_for_param("1speed") disable_lfos_for_param("1pan") params:set("1speed", 1) params:set("1sample", filepath) params:set("1pan", 0) params:set("2pan", 0) params:set("reverb_mix", 0) params:set("delay_mix", 0) params:set("shimmer_mix1", 0) params:set("glitch_ratio", 0) params:set("glitch_mix", 100) params:set("tape_mix", 1) params:set("dimension_mix", 0) params:set("sine_drive_wet", 0) params:set("drive", 0) params:set("wobble_mix", 0) params:set("chew_depth", 0) params:set("lossdegrade_mix", 0) params:set("Width", 100)  params:set("rspeed", 0) params:set("haas", 1) params:set("monobass_mix", 1) params:set("bitcrush_mix", 0) params:set("1lock_speed", 2)
-            for i = 1, 2 do params:set(i.."eq_low_gain", 0) params:set(i.."eq_mid_gain", 0) params:set(i.."eq_high_gain", 0) params:set(i.."cutoff", 20000) params:set(i.."hpf", 20) end
-        end)
-    end, 
     ["/twins/save_complete"] = function(args)
         showing_save_message = false
     end}
