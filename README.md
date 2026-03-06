@@ -18,7 +18,6 @@ Inspired by @cfd90’s Twine and contains influence and code from other norns us
 * Symmetry mode and mirroring
 * Live input processing
 * Flexible volume control
-* Seamless loop saving
 
 And a lot more.
 
@@ -29,23 +28,23 @@ _some features might require a pi4 based unit. If you hear clicks and crackles t
 ### Documentation
 **E1**: Master Volume  
 **K1**+**E2**/**E3**: Volume  
+**K2**/**K3**: Navigate  
+**E2**/**E3**: Adjust Parameters  
+**K1**+**K2**/**K3**: Randomize  
+**K2**+**K3**: Lock Parameters  
 Hold **K1**: Morphing  
 Hold **K2**: Linked Mode  
 Hold **K3**: Symmetry  
 **K1**+**E1**: Crossfade/Morph  
-**K2**/**K3**: Navigate  
-**E2**/**E3**: Adjust Parameters  
-**K2**+**K3**: Lock Parameters  
-**K2**+**K3**: HP/LP Filter  
-**K1**+**K2**/**K3**: Randomize  
-Hold **K2**+**K3**: Assign LFOs  
-**K2**+**E2**/**E3**: LFO depth  
-**K3**+**E2**/**E3**: LFO offset  
-
+**K2**+**K3**: HPF/LPF  
+**K2**+**K3**+**E1**/**E2**/**E3**: Effect Mix  
+Hold **K2**+**K3**: Add Random LFO  
+**K2**/**K3**+**E1**/**E2**/**E3**: Adjust LFO  
+  
 ### Discussion
 **[FORUM](https://llllllll.co/t/twins/71052)**
 ### Download
-**v0.51**
+**v0.53**
 install from Maiden Project Manager, or from Maiden REPL:
 ```
 ;install https://github.com/danielrigler/twins
