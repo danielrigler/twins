@@ -225,7 +225,7 @@ alloc {
         SynthDef(\monobass, {
             arg bus, mix=0.0;
             var sig = In.ar(bus, 2);
-            sig = BHiPass.ar(sig,190)+Pan2.ar(BLowPass.ar(sig[0]+sig[1],190));
+            sig = BHiPass.ar(sig, 190)+Pan2.ar(BLowPass.ar(sig[0] + sig[1], 190));
             ReplaceOut.ar(bus, sig);
         }).add;  
         
@@ -282,7 +282,7 @@ alloc {
         }).add;
 
         SynthDef(\glitch, {
-            arg bus, probability = 3, glitch_ratio = 0.5, mix = 1.0, minLength = 0.1, maxLength = 0.25, reverse = 0.25, pitch = 0.5, maxStutters = 6;
+            arg bus, probability, glitch_ratio = 0.0, mix, minLength, maxLength, reverse, pitch, maxStutters;
             var sig, bufFrames, writePos, rawTrigOn, trigOn, earlyOff, trigOff, isGlitching, isGlitching_fb, capturePos, chunkLength, chunkStart, stutterCount, autoOff, pitchShift, isReverse, relPos, bufReadPos, wet_raw, wet, fadeSamples, startRamp, endRamp, loopEnv, sr;
             sig = In.ar(bus, 2);
             sr = SampleRate.ir;
@@ -304,14 +304,14 @@ alloc {
             trigOff = earlyOff + autoOff;
             isGlitching = SetResetFF.kr(trigOn, trigOff);
             LocalOut.kr(isGlitching);
-            relPos = Phasor.ar(trigOn, K2A.ar(pitchShift), 0, K2A.ar(chunkLength), 0);
-            bufReadPos = (K2A.ar(chunkStart) + Select.ar(K2A.ar(isReverse), [relPos, K2A.ar(chunkLength) - relPos])).wrap(0, bufFrames - 1);
-            wet_raw = BufRd.ar(2, glitchBuffer, bufReadPos, interpolation: 2);
+            relPos = Phasor.ar(trigOn, pitchShift, 0, chunkLength, 0);
+            bufReadPos = chunkStart + Select.ar(isReverse, [relPos, chunkLength - relPos]);
+            wet_raw = BufRd.ar(2, glitchBuffer, bufReadPos, loop: 1, interpolation: 2);
             startRamp = (relPos / fadeSamples).clip(0, 1);
-            endRamp = ((K2A.ar(chunkLength) - relPos) / fadeSamples).clip(0, 1);
-            loopEnv = (startRamp.min(endRamp) * pi).cos.madd(-0.5, 0.5);
-            wet = wet_raw * loopEnv;
-            ReplaceOut.ar(bus, XFade2.ar(sig, wet, K2A.ar(isGlitching) * mix * 2 - 1));
+            endRamp = ((chunkLength - relPos) / fadeSamples).clip(0, 1);
+            loopEnv = startRamp.min(endRamp);
+            wet = wet_raw * 2 * loopEnv;
+            ReplaceOut.ar(bus, LinXFade2.ar(sig, wet, (isGlitching * mix * 2) - 1));
         }).add;
         
         SynthDef(\chew, {
@@ -324,12 +324,12 @@ alloc {
         SynthDef(\lossdegrade, {
             arg bus, mix=0.0;
             var sig = In.ar(bus, 2);
-            var loss = AnalogLoss.ar(sig,0.5,1,0.5,0.5);
-            var depth=LFPar.kr(1/5,Rand(0,2),0.4,0.5);
-	          var amount=LFPar.kr(1/2,Rand(0,2),0.4,0.5);
-	          var variance=LFPar.kr(1/3,Rand(0,2),0.4,0.5);
-	          var envelope=LFPar.kr(1/4,Rand(0,2),0.4,0.5);
-            var degrade = AnalogDegrade.ar(loss,depth,amount,variance,envelope);
+            var loss = AnalogLoss.ar(sig, 0.5, 1, 0.5, 0.5);
+            var depth=LFPar.kr(1/5,Rand(0, 2), 0.4, 0.5);
+	          var amount=LFPar.kr(1/2,Rand(0, 2), 0.4, 0.5);
+	          var variance=LFPar.kr(1/3,Rand(0, 2), 0.4, 0.5);
+	          var envelope=LFPar.kr(1/4,Rand(0, 2), 0.4, 0.5);
+            var degrade = AnalogDegrade.ar(loss, depth, amount, variance, envelope);
             ReplaceOut.ar(bus, XFade2.ar(sig, degrade, mix * 2 - 1));
         }).add;
         
