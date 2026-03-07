@@ -130,30 +130,37 @@ local function get_mtime(path)
     local t = f:read("*n"); f:close(); return t or 0
 end
 
-function presets.save_complete_preset(name, scene_data, update_pan, audio_active)
+function presets.save_complete_preset(name, scene_data, update_pan, audio_active, active_mode, active_filter_mode)
     local ok, err = pcall(function()
         if not name or name == "" then
-            name = format_number(#presets.list_presets() + 1) .. " " .. NameSizer.rnd(" ")
+            local existing = presets.list_presets()
+            local max_n = 0
+            for i = 1, #existing do
+                local n = parse_preset_name(existing[i])
+                if n and n > max_n then max_n = n end
+            end
+            name = format_number(max_n + 1) .. " " .. NameSizer.rnd(" ")
         end
+        local params_state = params_snapshot()
+        local morph_amount = params:get("morph_amount") or 0
         local data = {
-            name         = name,
-            timestamp    = os.time(),
-            version      = PRESET_VERSION,
-            params       = params_snapshot(),
-            morph        = {
-                [1] = {scene_data[1][1] or {}, scene_data[1][2] or {}},
-                [2] = {scene_data[2][1] or {}, scene_data[2][2] or {}},
-            },
-            morph_amount = params:get("morph_amount") or 0,
+            name = name,
+            timestamp = os.time(),
+            version = PRESET_VERSION,
+            params = params_state,
+            morph = {{scene_data[1][1] or {}, scene_data[1][2] or {}},
+                     {scene_data[2][1] or {}, scene_data[2][2] or {}}},
+            morph_amount = morph_amount,
+            active_mode = active_mode,
+            active_filter_mode = active_filter_mode,
         }
-        util.make_dir(_path.data .. PRESETS_DIR)
-        local path = _path.data .. PRESETS_DIR .. "/" .. name .. ".lua"
-        local file = io.open(path, "w")
-        if not file then error("Cannot write: " .. path) end
-        file:write(string.format(
-            "-- Twins Preset\n-- Name: %s\n-- Saved: %s\n-- Version: %d\n\nreturn ",
-            name, os.date("%Y-%m-%d %H:%M:%S"), PRESET_VERSION
-        ) .. serialize(data))
+        local presets_path = _path.data .. PRESETS_DIR
+        util.make_dir(presets_path)
+        local path = presets_path .. "/" .. name .. ".lua"
+        local file, open_err = io.open(path, "w")
+        if not file then error("Cannot write: " .. path .. " (" .. tostring(open_err) .. ")") end
+        local header = string.format("-- Twins Preset\n-- Name: %s\n-- Saved: %s\n-- Version: %d\n\nreturn ", name, os.date("%Y-%m-%d %H:%M:%S"), PRESET_VERSION)
+        file:write(header, serialize(data))
         file:close()
         print("✓ Saved: " .. name)
     end)
@@ -172,7 +179,8 @@ end
 local function apply_params_ordered(p)
     local buckets = { {}, {}, {}, {}, {}, {} }
     for id, value in pairs(p) do
-        if params.lookup[id] and not id:match("^%d+sample$") then
+        if params.lookup[id] and not id:match("^%d+sample$")
+                and not id:match("^%d+volume$") and not id:match("^%d+granular_gain$") then
             local placed = false
             for i = 1, 3 do
                 if id:match(PARAM_MATCHERS[i]) then
@@ -197,7 +205,7 @@ local function apply_params_ordered(p)
     end
 end
 
-function presets.load_complete_preset(name, scene_data, update_pan, audio_active)
+function presets.load_complete_preset(name, scene_data, update_pan, audio_active, on_loaded)
     local path = _path.data .. PRESETS_DIR .. "/" .. name .. ".lua"
     if not util.file_exists(path) then print("✗ Not found: " .. name); return false end
     local chunk, err = loadfile(path)
@@ -241,12 +249,16 @@ function presets.load_complete_preset(name, scene_data, update_pan, audio_active
         for i = 1, 2 do
             for _, suffix in ipairs({"volume", "granular_gain"}) do
                 local p = i .. suffix
-                if params.lookup[p] then params:set(p, params:get(p)) end
+                if params.lookup[p] then
+                    local saved = data.params and data.params[p]
+                    params:set(p, saved ~= nil and saved or params:get(p))
+                end
             end
         end
         clock.sleep(0.1); redraw()
         print("✓ Loaded: " .. name)
         loading_clock = nil
+        if on_loaded then on_loaded(data.active_mode, data.active_filter_mode) end
     end)
     return true
 end
@@ -560,7 +572,7 @@ function presets.menu_enc(n, d)
     redraw()
 end
 
-function presets.menu_key(n, z, scene_data, update_pan, audio_active)
+function presets.menu_key(n, z, scene_data, update_pan, audio_active, active_mode, active_filter_mode, on_loaded)
     if not presets.menu_open or z ~= 1 then return false end
     local conf = presets.confirmation
     if conf then
@@ -602,7 +614,7 @@ function presets.menu_key(n, z, scene_data, update_pan, audio_active)
             elseif conf.type == "save" then
                 local path  = _path.data .. PRESETS_DIR .. "/" .. conf.preset_name .. ".lua"
                 local mtime = get_mtime(path)
-                presets.save_complete_preset(conf.preset_name, scene_data, update_pan, audio_active)
+                presets.save_complete_preset(conf.preset_name, scene_data, update_pan, audio_active, active_mode, active_filter_mode)
                 if mtime > 0 then os.execute('touch -m -d @' .. mtime .. ' "' .. path .. '"') end
                 presets.confirmation = nil
                 presets.menu_open    = false
@@ -628,7 +640,7 @@ function presets.menu_key(n, z, scene_data, update_pan, audio_active)
     local name = presets.preset_list[presets.selected_index]
     if n == 3 then
         if presets.menu_mode == "load" then
-            presets.load_complete_preset(name, scene_data, update_pan, audio_active)
+            presets.load_complete_preset(name, scene_data, update_pan, audio_active, on_loaded)
             presets.menu_open = false
         elseif presets.menu_mode == "save" then
             presets.confirmation = { type = "save", preset_name = name }

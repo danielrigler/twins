@@ -6,7 +6,7 @@
 --            by: @dddstudio                       
 -- 
 --                          
---                           v0.53
+--                           v0.54
 -- E1: Master Volume
 -- K1+E2/E3: Volume
 -- K2/K3: Navigate
@@ -61,8 +61,6 @@ local current_filter_mode = "lpf"
 local tap_times = {}
 local TAP_TIMEOUT = 2
 local initial_monitor_level, initial_reverb_onoff;
-local filter_lock_ratio = false
-local filter_differences = {[1] = 0, [2] = 0}
 local audio_active = {[1] = false, [2] = false}
 local morph_amount = 0
 local steps = 20
@@ -106,7 +104,7 @@ local lfo_cache = {}
 local lfo_cache_dirty = true
 local function invalidate_lfo_cache() lfo_cache_dirty = true end
 local function rebuild_lfo_cache() for k in pairs(lfo_cache) do lfo_cache[k] = nil end local targets = lfo.lfo_targets if targets then for i = 1, 16 do if params:get(MORPH_LFO_KEYS[i]) == 2 then local param_name = targets[params:get(MORPH_TARGET_KEYS[i])] if param_name and param_name ~= "none" then lfo_cache[param_name] = i end end end end lfo_cache_dirty = false end
-local shimmer_presets = {{oct = 0.25, lowpass = 4000, hipass = 20, fb = 0.48}, {oct = 0.5, lowpass = 6000, hipass = 20, fb = 0.48}, {oct = 1, lowpass = 20000, hipass = 20, fb = 0.48}, {oct = 2, lowpass = 9000, hipass = 300, fb = 0.36}, {oct = 4, lowpass = 12000, hipass = 700, fb = 0.36}}
+local shimmer_presets = {{oct = 0.25, lowpass = 4000, hipass = 60, fb = 0.4}, {oct = 0.5, lowpass = 6000, hipass = 80, fb = 0.4}, {oct = 1, lowpass = 20000, hipass = 20, fb = 0.4}, {oct = 2, lowpass = 14000, hipass = 300, fb = 0.36}, {oct = 4, lowpass = 14000, hipass = 300, fb = 0.36}}
 local param_modes = {
     speed = {param = "speed", delta = 1, engine = true, has_lock = true},
     seek = {param = "seek", delta = 1, engine = true, has_lock = true},
@@ -138,6 +136,7 @@ local FLASH_DECAY = 0.9
 local function flash_level(track, base_level) return math.min(base_level + math.floor(randomize_flash[track] * FLASH_INTENSITY), 15) end
 local function random_float(l, h) return l + math.random() * (h - l) end
 local function stop_metro_safe(m) if m then pcall(function() m:stop() end) if m then m.event = nil end end end
+local function pause_voice_if_idle(i) if not audio_active[i] and params:get(i.."live_input") ~= 1 and params:get(i.."live_direct") ~= 1 then engine.pause_voice(i) osc_positions[i] = 0 end end
 local function tracked_clock_run(func) local co = clock.run(func) table.insert(active_clocks, co) return co end
 local function cancel_all_clocks() for i = #active_clocks, 1, -1 do local co = active_clocks[i] if co then pcall(function() clock.cancel(co) end) end active_clocks[i] = nil end end
 local function is_param_locked(track_num, param) return params:get(track_num .. "lock_" .. param) == 2 end
@@ -618,19 +617,19 @@ local function setup_params()
     
     params:add_group("LIVE!", 10)
     for i = 1, 2 do
-      params:add_binary(i.."live_input", "Live Buffer "..i.." ● ►", "toggle", 0) params:set_action(i.."live_input", function(value) if value == 1 then if params:get(i.."live_direct") == 1 then params:set(i.."live_direct", 0) end engine.set_live_input(i, 1) engine.live_mono(i, params:get("isMono") - 1) audio_active[i] = true cached_buffer_durations[i]=params:get("live_buffer_length") set_sample_live(i) update_pan_positioning() else engine.set_live_input(i, 0) if not audio_active[i] and params:get(i.."live_direct") == 0 then osc_positions[i] = 0 params:set(i.."sample", "-") else set_sample_live(i) update_pan_positioning() end end end)
+      params:add_binary(i.."live_input", "Live Buffer "..i.." ● ►", "toggle", 0) params:set_action(i.."live_input", function(value) if value == 1 then if params:get(i.."live_direct") == 1 then params:set(i.."live_direct", 0) end engine.set_live_input(i, 1) engine.live_mono(i, params:get("isMono") - 1) audio_active[i] = true cached_buffer_durations[i]=params:get("live_buffer_length") set_sample_live(i) update_pan_positioning() else engine.set_live_input(i, 0) if not audio_active[i] and params:get(i.."live_direct") == 0 then osc_positions[i] = 0 params:set(i.."sample", "-") pause_voice_if_idle(i) else set_sample_live(i) update_pan_positioning() end end end)
     end
     params:add_control("live_buffer_mix", "Overdub", controlspec.new(0, 100, "lin", 1, 100, "%")) params:set_action("live_buffer_mix", function(value) engine.live_buffer_mix(value * 0.01) end)
     params:add_taper("live_buffer_length", "Buffer Length", 0.05, 10, 1, 3, "s") params:set_action("live_buffer_length", function(value) engine.live_buffer_length(value) for i=1,2 do if params:get(i.."live_input")==1 then cached_buffer_durations[i]=value end end end)
     params:add{type = "trigger", id = "save_live_buffer1", name = "Buffer1 to Tape", action = function() local timestamp = os.date("%Y%m%d_%H%M%S") local filename = "live1_"..timestamp..".wav" engine.save_live_buffer(1, filename) audio_files_cache = nil end}
     params:add{type = "trigger", id = "save_live_buffer2", name = "Buffer2 to Tape", action = function() local timestamp = os.date("%Y%m%d_%H%M%S") local filename = "live2_"..timestamp..".wav" engine.save_live_buffer(2, filename) audio_files_cache = nil end}
     for i = 1, 2 do
-      params:add_binary(i.."live_direct", "Direct "..i.." ►", "toggle", 0) params:set_action(i.."live_direct", function(value) if value == 1 then local was_live = params:get(i.."live_input") if was_live == 1 then params:set(i.."live_input", 0) end engine.live_direct(i, 1) audio_active[i] = true set_sample_live(i) update_pan_positioning() else engine.live_direct(i, 0) if not audio_active[i] and params:get(i.."live_input") == 0 then osc_positions[i] = 0 params:set(i.."sample", "-") else set_sample_live(i) update_pan_positioning() end end end)
+      params:add_binary(i.."live_direct", "Direct "..i.." ►", "toggle", 0) params:set_action(i.."live_direct", function(value) if value == 1 then local was_live = params:get(i.."live_input") if was_live == 1 then params:set(i.."live_input", 0) end engine.live_direct(i, 1) audio_active[i] = true set_sample_live(i) update_pan_positioning() else engine.live_direct(i, 0) audio_active[i] = last_selected_file[i] ~= nil if not audio_active[i] and params:get(i.."live_input") == 0 then osc_positions[i] = 0 params:set(i.."sample", "-") pause_voice_if_idle(i) else set_sample_live(i) update_pan_positioning() end end end)
     end
     params:add_option("isMono", "Input Mode", {"stereo", "mono"}, 1) params:set_action("isMono", function(value) local monoValue = value - 1 for i = 1, 2 do if params:get(i.."live_direct") == 1 then engine.isMono(i, monoValue) end if params:get(i.."live_input") == 1 then engine.live_mono(i, monoValue) end end end)
     params:add_binary("dry_mode2", "Dry Mode", "toggle", 0) params:set_action("dry_mode2", function(x) drymode.toggle_dry_mode2() end)
     
-    params:add{type = "trigger", id = "save_preset", name = "Save Preset", action = function() presets.save_complete_preset(nil, scene_data, current_scene_mode, initialize_scenes_with_current_params) end}
+    params:add{type = "trigger", id = "save_preset", name = "Save Preset", action = function() presets.save_complete_preset(nil, scene_data, current_scene_mode, initialize_scenes_with_current_params, current_mode, current_filter_mode) end}
     params:add{type = "trigger", id = "load_preset_menu", name = "Preset Browser", action = function() presets.open_menu() end}
 
     params:add_separator("Settings")
@@ -753,14 +752,15 @@ local function setup_params()
     params:add_taper("bitcrush_rate", "Rate", 1, 48000, 4500, 3, "Hz") params:set_action("bitcrush_rate", function(value) engine.bitcrush_rate(value) end)
     params:add_taper("bitcrush_bits", "Bits", 1, 24, 14, 1) params:set_action("bitcrush_bits", function(value) engine.bitcrush_bits(value) end)
 
-    params:add_group("GLITCH", 9)
+    params:add_group("GLITCH", 10)
     params:add_control("glitch_ratio", "Glitch", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("glitch_ratio", function(value) engine.glitch_ratio(value * 0.01) font.update_fx_cache("glitch_ratio", value) end)
     params:add_control("glitch_mix", "Mix", controlspec.new(0, 100, "lin", 1, 100, "%")) params:set_action("glitch_mix", function(value) engine.glitch_mix(value * 0.01) font.update_fx_cache("glitch_mix", value) end)
-    params:add_taper("glitch_probability", "Frequency", 0.1, 20, 3, 1, "Hz") params:set_action("glitch_probability", function(value) engine.glitch_probability(value) end)
-    params:add_control("glitch_min_length", "Min Length", controlspec.new(10, 500, "lin", 1, 100, "ms")) params:set_action("glitch_min_length", function(value) engine.glitch_min_length(value * 0.001) end)
-    params:add_control("glitch_max_length", "Max Length", controlspec.new(20, 500, "lin", 1, 250, "ms")) params:set_action("glitch_max_length", function(value) engine.glitch_max_length(value * 0.001) end)
-    params:add_control("glitch_reverse", "Reverse Prob", controlspec.new(0, 100, "lin", 1, 25, "%")) params:set_action("glitch_reverse", function(value) engine.glitch_reverse(value * 0.01) end)
-    params:add_control("glitch_pitch", "Pitch Prob", controlspec.new(0, 100, "lin", 1, 50, "%")) params:set_action("glitch_pitch", function(value) engine.glitch_pitch(value * 0.01) end)
+    params:add_taper("glitch_probability", "Frequency", 0.1, 20, 5, 1, "Hz") params:set_action("glitch_probability", function(value) engine.glitch_probability(value) end)
+    params:add_control("glitch_min_length", "Min Length", controlspec.new(10, 500, "lin", 1, 75, "ms")) params:set_action("glitch_min_length", function(value) engine.glitch_min_length(value * 0.001) end)
+    params:add_control("glitch_max_length", "Max Length", controlspec.new(20, 500, "lin", 1, 200, "ms")) params:set_action("glitch_max_length", function(value) engine.glitch_max_length(value * 0.001) end)
+    params:add_control("glitch_maxstutters", "Max Stutters", controlspec.new(2, 20, "lin", 1, 5, "")) params:set_action("glitch_maxstutters", function(value) engine.glitch_maxstutters(value) end)
+    params:add_control("glitch_reverse", "Reverse Prob", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("glitch_reverse", function(value) engine.glitch_reverse(value * 0.01) end)
+    params:add_control("glitch_pitch", "Pitch Prob", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("glitch_pitch", function(value) engine.glitch_pitch(value * 0.01) end)
     params:add_separator("       ")
     params:add_binary("randomize_glitch", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_glitch", function() if params:get("lock_glitch") == 1 then params:set("glitch_probability", math.random(1, 150) / 10) params:set("glitch_min_length", math.random(10, 200)) params:set("glitch_max_length", math.random(100, 500)) params:set("glitch_reverse", math.random(0, 100)) params:set("glitch_pitch", math.random(0, 100)) end end)
 
@@ -777,16 +777,15 @@ local function setup_params()
     params:add_binary("copy_buffer_1_to_2", "Sample 1 → 2", "trigger", 0) params:set_action("copy_buffer_1_to_2", function() local f = params:get("1sample") if f and f ~= "" and f ~= "-" and f ~= "none" then set_track_sample(2, f) audio_active[2] = audio_active[1] update_pan_positioning() end end)
     params:add_binary("copy_buffer_2_to_1", "Sample 1 ← 2", "trigger", 0) params:set_action("copy_buffer_2_to_1", function() local f = params:get("2sample") if f and f ~= "" and f ~= "-" and f ~= "none" then set_track_sample(1, f) audio_active[1] = audio_active[2] update_pan_positioning() end end)
 
-    params:add_group("FILTER", 10)
+    params:add_group("FILTER", 9)
     for i = 1, 2 do
-      params:add_control(i.."cutoff",i.." LPF",controlspec.new(20,20000,"exp",0,20000,"Hz")) params:set_action(i.."cutoff", function(value) engine.cutoff(i, value) font.update_fx_cache(i.."cutoff", value) if filter_lock_ratio then local new_hpf = value - filter_differences[i] new_hpf = util.clamp(new_hpf, 20, 20000) params:set(i.."hpf", new_hpf) end end)
-      params:add_control(i.."hpf",i.." HPF",controlspec.new(20,20000,"exp",0,20,"Hz")) params:set_action(i.."hpf", function(value) engine.hpf(i, value) font.update_fx_cache(i.."hpf", value) if filter_lock_ratio then local new_cutoff = value + filter_differences[i] new_cutoff = util.clamp(new_cutoff, 20, 20000) params:set(i.."cutoff", new_cutoff) end end)
+      params:add_control(i.."cutoff",i.." LPF",controlspec.new(20,20000,"exp",0,20000,"Hz")) params:set_action(i.."cutoff", function(value) engine.cutoff(i, value) font.update_fx_cache(i.."cutoff", value) end)
+      params:add_control(i.."hpf",i.." HPF",controlspec.new(20,20000,"exp",0,20,"Hz")) params:set_action(i.."hpf", function(value) engine.hpf(i, value) font.update_fx_cache(i.."hpf", value) end)
       params:add_taper(i.."lpf_gain", i.." Q", 0, 1, 0, 1, "") params:set_action(i.."lpf_gain", function(value) engine.lpf_gain(i, 4 * value) end)
     end
     params:add_separator("                   ")
-    params:add_binary("filter_lock_ratio", "Lock Filter Spread", "toggle", 0) params:set_action("filter_lock_ratio", function(value) filter_lock_ratio = value == 1 if filter_lock_ratio then for i = 1, 2 do local cutoff = params:get(i.."cutoff") local hpf = params:get(i.."hpf") filter_differences[i] = cutoff - hpf end end end)
     params:add_binary("randomizefilters", "RaNd0m1ze!", "trigger", 0) params:set_action("randomizefilters", function(value) for i = 1, 2 do local cutoff = math.random(20, 20000) params:set(i.."cutoff", cutoff) params:set(i.."lpf_gain", math.random()) params:set(i.."hpf", math.random(20, math.floor(cutoff))) end end)
-    params:add_binary("resetfilters", "Reset", "trigger", 0) params:set_action("resetfilters", function(value) params:set("filter_lock_ratio", 0) for i=1, 2 do params:set(i.."cutoff", 20000) params:set(i.."hpf", 20) params:set(i.."lpf_gain", 0.0) end end)
+    params:add_binary("resetfilters", "Reset", "trigger", 0) params:set_action("resetfilters", function(value) for i=1, 2 do params:set(i.."cutoff", 20000) params:set(i.."hpf", 20) params:set(i.."lpf_gain", 0.0) end end)
 
     params:add_group("PITCH", 4)
     params:add_option("pitch_quantize_scale", "Pitch Quantize", {"off", "major", "minor", "dorian", "phrygian", "lydian", "mixolydian", "locrian", "major pent.", "minor pent.", "blues", "whole tone"}, 2) params:set_action("pitch_quantize_scale", function(value) local scale = params:string("pitch_quantize_scale") if scale ~= "none" then for i = 1, 2 do local current_pitch = params:get(i.."pitch") local quantized = quantize_pitch_to_scale(current_pitch, scale) if current_pitch ~= quantized then params:set(i.."pitch", quantized) end end end end)
@@ -1373,7 +1372,11 @@ function key(n, z)
     if not installer:ready() then installer:key(n, z) return end
     if presets.is_menu_open() then
         if n == 1 and z == 1 then presets.close_menu() return end
-        if presets.menu_key(n, z, scene_data, update_pan_positioning, audio_active) then return end
+        if presets.menu_key(n, z, scene_data, update_pan_positioning, audio_active, current_mode, current_filter_mode, function(mode, filter)
+            if mode then current_mode = mode end
+            if filter then current_filter_mode = filter end
+            redraw()
+        end) then return end
     end
     local is_press = z == 1
     key_state[n] = is_press
@@ -1412,8 +1415,7 @@ function handle_key_release(n, both_keys_pressed)
         end
     end
     if (n == 2 or n == 3) and tracker.press_time and not tracker.long_triggered and
-       not tracker.had_interaction and not both_keys_pressed then
-        if (util.time() - tracker.press_time) < KEY_LONG_PRESS_THRESHOLD then handle_mode_navigation(n) end
+       not tracker.had_interaction and not both_keys_pressed then if (util.time() - tracker.press_time) < KEY_LONG_PRESS_THRESHOLD then handle_mode_navigation(n) end
     end
     set_key_tracking(n)
 end
@@ -1593,7 +1595,6 @@ function redraw()
       T(flash_level(t, LEVEL.hi), x, y_bot + 1, math.abs(p) < 0.5 and "0%" or string.format("%.0f%%", p))
     else
       local v = cur_filter == "lpf" and C.cut[t] or C.hpf[t]
-      if filter_lock_ratio then draw_lock(x, y_bot) end
       T(flash_level(t, LEVEL.hi), x, y_bot + 1, string.format("%.0f", v))
     end
     if (mode == "seek" or mode == "speed") then
@@ -1609,7 +1610,7 @@ function redraw()
   for t=1,2 do
     local h = util.linlin(-70, 10, 0, 64, C.vol[t])
     R(LEVEL.dim-3, VOL_X[t], 64 - h + volume_bar_y[t], 2, h)
-    local peak_amp = math.max(voice_peak_amplitudes[t].l, voice_peak_amplitudes[t].r)
+    local peak_amp = (audio_active[t] or C.live.in_[t] == 1 or C.live.dir_[t] == 1) and math.max(voice_peak_amplitudes[t].l, voice_peak_amplitudes[t].r) or 0
     local peak_db = util.clamp(20 * math.log(peak_amp, 10), -70, 10)
     local peak_h = math.min(util.linlin(-70, 10, 0, 64, peak_db), h)
     if peak_h > 0 then R(LEVEL.hi-1, VOL_X[t], 64 - peak_h + volume_bar_y[t], 2, peak_h) end
@@ -1697,7 +1698,8 @@ function init()
     lfo.on_state_change = invalidate_lfo_cache
     font.init_fx_cache()
     init_longpress_checker()
-    for i = 1, 2 do if params:get(i.."sample") == "-" then params:set(i.."sample", _path.tape, true) end end
+    for i = 1, 2 do params:set(i.."sample", _path.tape, true) end
+    for i = 1, 2 do engine.pause_voice(i) end
 end
 
 function cleanup()
