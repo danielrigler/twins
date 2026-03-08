@@ -150,6 +150,7 @@ local randomize_param_ranges = {
 
 function lfo.get_parameter_range(param_name, for_randomize)
   if param_name:match("jitter$") then return 0, pget(param_name:sub(1,1) .. "max_jitter") or 4999 end
+  if param_name:match("size$") then return 20, pget(param_name:sub(1,1) .. "max_size") or 599 end
   local r = (for_randomize and randomize_param_ranges[param_name]) or param_ranges[param_name]
   if r then return r[1], r[2] end
   return 0, 100
