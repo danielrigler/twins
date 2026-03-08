@@ -93,7 +93,6 @@ local current_scene_mode = "off"
 local scene_data = {[1] = {[1] = {}, [2] = {}}, [2] = {[1] = {}, [2] = {}}}
 local morph_temp_scene = {}
 local last_morph_amount = 0 
-local last_selected_file = {[1] = nil, [2] = nil}
 local grain_positions = {[1] = {}, [2] = {}}
 local rec_positions = {[1] = 0, [2] = 0}
 local cached_buffer_durations = {[1] = 1, [2] = 1}
@@ -104,7 +103,7 @@ local lfo_cache = {}
 local lfo_cache_dirty = true
 local function invalidate_lfo_cache() lfo_cache_dirty = true end
 local function rebuild_lfo_cache() for k in pairs(lfo_cache) do lfo_cache[k] = nil end local targets = lfo.lfo_targets if targets then for i = 1, 16 do if params.lookup and params.lookup[MORPH_LFO_KEYS[i]] and params.lookup[MORPH_TARGET_KEYS[i]] then if params:get(MORPH_LFO_KEYS[i]) == 2 then local param_name = targets[params:get(MORPH_TARGET_KEYS[i])] if param_name and param_name ~= "none" then lfo_cache[param_name] = i end end end end end lfo_cache_dirty = false end
-local shimmer_presets = {{oct = 0.25, lowpass = 4000, hipass = 60, fb = 0.4}, {oct = 0.5, lowpass = 6000, hipass = 80, fb = 0.4}, {oct = 1, lowpass = 20000, hipass = 20, fb = 0.4}, {oct = 2, lowpass = 14000, hipass = 300, fb = 0.36}, {oct = 4, lowpass = 14000, hipass = 300, fb = 0.36}}
+local shimmer_presets = {{oct = 0.25, lowpass = 4000, hipass = 60, fb = 0.4}, {oct = 0.5, lowpass = 6000, hipass = 80, fb = 0.4}, {oct = 1, lowpass = 20000, hipass = 20, fb = 0.4}, {oct = 2, lowpass = 14000, hipass = 300, fb = 0.4}, {oct = 4, lowpass = 14000, hipass = 300, fb = 0.4}}
 local param_modes = {
     speed = {param = "speed", delta = 1, engine = true, has_lock = true},
     seek = {param = "seek", delta = 1, engine = true, has_lock = true},
@@ -572,7 +571,6 @@ end
 local function set_track_sample(track_num, file)
     if params:get(track_num .. "live_input") == 1 then return false end
     if params:get(track_num .. "sample") ~= file then params:set(track_num .. "sample", file) end
-    last_selected_file[track_num] = file
     return true
 end
 
@@ -624,7 +622,7 @@ local function setup_params()
     params:add{type = "trigger", id = "save_live_buffer1", name = "Buffer1 to Tape", action = function() local timestamp = os.date("%Y%m%d_%H%M%S") local filename = "live1_"..timestamp..".wav" engine.save_live_buffer(1, filename) audio_files_cache = nil end}
     params:add{type = "trigger", id = "save_live_buffer2", name = "Buffer2 to Tape", action = function() local timestamp = os.date("%Y%m%d_%H%M%S") local filename = "live2_"..timestamp..".wav" engine.save_live_buffer(2, filename) audio_files_cache = nil end}
     for i = 1, 2 do
-      params:add_binary(i.."live_direct", "Direct "..i.." ►", "toggle", 0) params:set_action(i.."live_direct", function(value) if value == 1 then local was_live = params:get(i.."live_input") if was_live == 1 then params:set(i.."live_input", 0) end engine.live_direct(i, 1) audio_active[i] = true set_sample_live(i) update_pan_positioning() else engine.live_direct(i, 0) audio_active[i] = last_selected_file[i] ~= nil if not audio_active[i] and params:get(i.."live_input") == 0 then osc_positions[i] = 0 params:set(i.."sample", "-") pause_voice_if_idle(i) else set_sample_live(i) update_pan_positioning() end end end)
+      params:add_binary(i.."live_direct", "Direct "..i.." ►", "toggle", 0) params:set_action(i.."live_direct", function(value) if value == 1 then local was_live = params:get(i.."live_input") if was_live == 1 then params:set(i.."live_input", 0) end engine.live_direct(i, 1) audio_active[i] = true set_sample_live(i) update_pan_positioning() else engine.live_direct(i, 0) audio_active[i] = false if not audio_active[i] and params:get(i.."live_input") == 0 then osc_positions[i] = 0 params:set(i.."sample", "-") pause_voice_if_idle(i) else set_sample_live(i) update_pan_positioning() end end end)
     end
     params:add_option("isMono", "Input Mode", {"stereo", "mono"}, 1) params:set_action("isMono", function(value) local monoValue = value - 1 for i = 1, 2 do if params:get(i.."live_direct") == 1 then engine.isMono(i, monoValue) end if params:get(i.."live_input") == 1 then engine.live_mono(i, monoValue) end end end)
     params:add_binary("dry_mode2", "Dry Mode", "toggle", 0) params:set_action("dry_mode2", function(x) drymode.toggle_dry_mode2() end)
@@ -847,10 +845,10 @@ local function setup_params()
       params:add_taper(i.. "volume", i.. " volume", -70, 10, -15, 0, "dB") params:set_action(i.. "volume", function(value) if value == -70 then engine.volume(i, 0) else engine.volume(i, math.pow(10, value / 20)) end end)
       params:add_taper(i.. "pan", i.. " pan", -100, 100, 0, 0, "%") params:set_action(i.. "pan", function(value) engine.pan(i, value * 0.01)  end)
       params:add_taper(i.. "speed", i.. " speed", -2, 2, 0.10, 0) params:set_action(i.. "speed", function(value) if math.abs(value) < 0.01 then engine.speed(i, 0) else engine.speed(i, value) end end)
-      params:add_taper(i.. "density", i.. " density", 0.1, 300, 3.5, 5) params:set_action(i.. "density", function(value) engine.density(i, value) end)
+      params:add_taper(i.. "density", i.. " density", 0.1, 250, 3.5, 5) params:set_action(i.. "density", function(value) engine.density(i, value) end)
       params:add_control(i.. "pitch", i.. " pitch", controlspec.new(-48, 48, "lin", 1, 0, "st")) params:set_action(i.. "pitch", function(value) local scale = params:string("pitch_quantize_scale") local quantized = quantize_pitch_to_scale(value, scale) engine.pitch_offset(i, math.pow(0.5, -quantized / 12)) end)
       params:add_taper(i.. "jitter", i.. " jitter", 0, 999900, 250, 10, "ms") params:set_action(i.. "jitter", function(value) engine.jitter(i, value * 0.001) end)
-      params:add_taper(i.. "size", i.. " size", 20, 5999, 500, 1, "ms") params:set_action(i.. "size", function(value) engine.size(i, value * 0.001) end)
+      params:add_taper(i.. "size", i.. " size", 20, 5000, 500, 1, "ms") params:set_action(i.. "size", function(value) engine.size(i, value * 0.001) end)
       params:add_taper(i.. "spread", i.. " spread", 0, 100, 75, 0, "%") params:set_action(i.. "spread", function(value) engine.spread(i, value * 0.01) end)
       params:add_control(i.. "seek", i.. " seek", controlspec.new(0, 100, "lin", 0.01, 0, "%")) params:set_action(i.. "seek", function(value) engine.seek(i, value * 0.01) end)
     end
@@ -1217,7 +1215,9 @@ local function adjust_lfo_offset(lfo_idx, delta)
     local current_depth  = params:get(lfo_idx .. "lfo_depth")
     local offset_floor   = current_depth * 0.01 - 1
     local offset_ceiling = 1 - current_depth * 0.01
-    local proposed_offset = util.clamp(current_offset + delta * 0.004, offset_floor, offset_ceiling)
+    local target_param   = lfo.lfo_targets[params:get(lfo_idx .. "lfo_target")] or ""
+    local sensitivity    = (target_param:match("size$") or target_param:match("density$")) and 0.004 or 0.008
+    local proposed_offset = util.clamp(current_offset + delta * sensitivity, offset_floor, offset_ceiling)
     params:set(lfo_idx .. "offset", proposed_offset)
     lfo[lfo_idx].offset = proposed_offset
 end
@@ -1231,7 +1231,6 @@ local function adjust_lfo_depth(lfo_idx, delta)
     local narrow_range = (rand_max and rand_min) and (rand_max - rand_min) or full_range
     local remap_ratio  = narrow_range / full_range
     local step = 0.75 * remap_ratio * delta
-
     if current_depth == 0 and delta > 0 then
         local min_val, max_val = full_min, full_max
         if min_val and max_val and max_val > min_val then
@@ -1250,7 +1249,6 @@ local function adjust_lfo_depth(lfo_idx, delta)
     end
     local proposed_depth = current_depth + step
     if proposed_depth <= 0 then if current_depth > 0 then params:set(lfo_idx .. "lfo", 1) invalidate_lfo_cache() end return end
-    -- keep offset within floor/ceiling so neither bound clips
     local offset_floor   = proposed_depth * 0.01 - 1
     local offset_ceiling = 1 - proposed_depth * 0.01
     local current_offset = params:get(lfo_idx .. "offset")
@@ -1313,7 +1311,6 @@ function enc(n, d)
         if n == 1 then
             local lfo_idx = find_or_create_lfo_for_param(voice, param_name, true, false)
             if lfo_idx then
-                -- multiplicative stepping: 7% per detent, respects log feel across full range
                 local function apply_freq_step(idx, dir)
                     local cur = params:get(idx .. "lfo_freq")
                     local step = math.max(cur * 0.06, 0.005) * (dir > 0 and 1 or -1)
@@ -1532,7 +1529,14 @@ function redraw()
       T(flash_level(t, hi and LEVEL.hi or LEVEL.val), x, y, txt)
       if is_lfo then
         local a, b = lfo.get_parameter_range(param, true)
-        R(LEVEL.dim+2, x, y + 1, util.linlin(a, b, 0, BAR_W, val), 1)
+        local bar_w = util.clamp(math.floor(util.linlin(a, b, 0, BAR_W, val)), 0, BAR_W)
+        R(LEVEL.dim+2, x, y + 1, bar_w, 1)
+        local _, fb = lfo.get_parameter_range(param, false)
+        if val > b and fb > b then
+          local overflow_ratio = util.clamp((val - b) / (fb - b), 0, 1)
+          local overflow_w = math.max(1, math.floor(math.sqrt(overflow_ratio) * BAR_W))
+          R(LEVEL.hi, x, y + 1, overflow_w, 1)
+        end
       end
     end
   end
@@ -1563,20 +1567,19 @@ function redraw()
               grains[keep] = g
               if drawn < 25 then
                 local gpos = g.pos or 0
-                local grain_end = gpos + gsize / dur
-                local segments = grain_end > 1 and {{gpos, 1.0}, {0, grain_end - 1.0}} or {{gpos, grain_end}}
-                for _, seg in ipairs(segments) do
-                  local pos = x + math.floor(seg[1] * BAR_W)
-                  local w = math.max(1, math.floor((seg[2] - seg[1]) * BAR_W))
-                  local l, r = spd_fwd and pos or (pos - w), spd_fwd and (pos + w - 1) or (pos - 1)
-                  if r >= x and l <= x_end then
-                    local dl, dr = math.max(l, x), math.min(r, x_end)
-                    local bw = dr - dl + 1
-                    if bw > 0 then
-                      R(math.ceil(1 + hi1 * (1 - age / gsize)), dl, Y.seek, bw, 1)
-                      drawn = drawn + 1
-                    end
-                  end
+                local gsz = gsize / dur
+                local level = math.ceil(1 + hi1 * (1 - age / gsize))
+                local function draw_seg(a, b)
+                  local dl = math.max(x + math.floor(a * BAR_W), x)
+                  local dr = math.min(x + math.ceil(b * BAR_W) - 1, x_end)
+                  if dr >= dl then R(level, dl, Y.seek, dr - dl + 1, 1) drawn = drawn + 1 end
+                end
+                if spd_fwd then
+                  local e = gpos + gsz
+                  if e > 1 then draw_seg(gpos, 1.0) draw_seg(0, e - 1.0) else draw_seg(gpos, e) end
+                else
+                  local s = gpos - gsz
+                  if s < 0 then draw_seg(s + 1.0, 1.0) draw_seg(0, gpos) else draw_seg(s, gpos) end
                 end
               end
             end

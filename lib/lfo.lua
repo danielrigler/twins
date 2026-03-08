@@ -130,30 +130,26 @@ lfo.target_ranges = {
   ["2pitch"]   = { depth = {5,30},   offset = {-1,1},   frequency = {0.1,0.6}, waveform = {"sine"}, chance = 0.0  },
 }
 
--- Full physical ranges used by lfo.process to scale/clamp output to actual engine limits
 local param_ranges = {
   ["1pan"]     = {-100,100}, ["2pan"]     = {-100,100},
   ["1seek"]    = {0,100},    ["2seek"]    = {0,100},
   ["1speed"]   = {-2,2},     ["2speed"]   = {-2,2},
   ["1spread"]  = {0,100},    ["2spread"]  = {0,100},
-  ["1size"]    = {20,5999},  ["2size"]    = {20,5999},
-  ["1density"] = {0.1,300},  ["2density"] = {0.1,300},
+  ["1size"]    = {20,5000},  ["2size"]    = {20,5000},
+  ["1density"] = {0.1,250},  ["2density"] = {0.1,250},
   ["1volume"]  = {-70,10},   ["2volume"]  = {-70,10},
   ["1pitch"]   = {-48,48},   ["2pitch"]   = {-48,48},
   ["1cutoff"]  = {20,20000}, ["2cutoff"]  = {20,20000},
   ["1hpf"]     = {20,20000}, ["2hpf"]     = {20,20000},
 }
 
--- Narrower ranges used only by randomize_lfo for centering/swing calculations
 local randomize_param_ranges = {
   ["1size"]    = {20,599},  ["2size"]    = {20,599},
   ["1density"] = {1,30},    ["2density"] = {1,30},
 }
 
 function lfo.get_parameter_range(param_name, for_randomize)
-  if param_name:match("jitter$") then
-    return 0, pget(param_name:sub(1,1) .. "max_jitter") or 4999
-  end
+  if param_name:match("jitter$") then return 0, pget(param_name:sub(1,1) .. "max_jitter") or 4999 end
   local r = (for_randomize and randomize_param_ranges[param_name]) or param_ranges[param_name]
   if r then return r[1], r[2] end
   return 0, 100
@@ -207,7 +203,6 @@ local function randomize_lfo(i, target)
   local target_index = LFO_TARGET_REVERSE[target]
   if not target_index then return end
   local ranges   = lfo.target_ranges[target]
-  -- use narrow ranges for centering/swing logic, full ranges for output coordinates
   local full_min, full_max = lfo.get_parameter_range(target)
   local rand_min, rand_max = lfo.get_parameter_range(target, true)
   local cur_val  = pget(target) or rand_min
@@ -226,8 +221,6 @@ local function randomize_lfo(i, target)
   local full_range   = full_max - full_min
   local half_swing = (depth * 0.01) * narrow_range / 2
   local center = util.clamp(lfo.scale(offset, -1, 1, rand_min, rand_max), rand_min + half_swing, rand_max - half_swing)
-  -- remap center and depth into full-range coordinates so lfo.process
-  -- produces values within the narrow randomization bounds
   local full_offset = lfo.scale(center, full_min, full_max, -1, 1)
   local full_depth  = depth * (narrow_range / full_range)
   lfo[i].depth  = full_depth

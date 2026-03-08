@@ -9,35 +9,7 @@ classvar pitchScales; *initClass {pitchScales = [[7, 12], [7, 12, 19, 24], [12],
 
 *new { arg context, doneCallback; ^super.new(context, doneCallback); }
 
-readBuf { arg i, path;
-    if(buffersL[i].notNil && buffersR[i].notNil, {
-        if (File.exists(path), {
-            var numChannels;
-            numChannels = SoundFile.use(path.asString(), { |f| f.numChannels });
-            Buffer.readChannel(context.server, path, 0, -1, [0], {|b|
-                var oldL = buffersL[i];
-                voices[i].set(\buf_l, b);
-                buffersL[i] = b;
-                oldL.free;
-                if (numChannels <= 1, {
-                    var oldR = buffersR[i];
-                    voices[i].set(\buf_r, b);
-                    buffersR[i] = b;
-                    if (oldR !== oldL) { oldR.free };
-                    voices[i].run(true);
-                }, {
-                    Buffer.readChannel(context.server, path, 0, -1, [1], { |b|
-                        var oldR = buffersR[i];
-                        voices[i].set(\buf_r, b);
-                        buffersR[i] = b;
-                        oldR.free;
-                        voices[i].run(true);
-                    });
-                });
-            });
-        });
-    });
-}
+readBuf { arg i, path; if(buffersL[i].notNil && buffersR[i].notNil, { if (File.exists(path), { var numChannels; numChannels = SoundFile.use(path.asString(), { |f| f.numChannels }); Buffer.readChannel(context.server, path, 0, -1, [0], {|b| var oldL = buffersL[i]; voices[i].set(\buf_l, b); buffersL[i] = b; oldL.free; if (numChannels <= 1, { var oldR = buffersR[i]; voices[i].set(\buf_r, b); buffersR[i] = b; if (oldR !== oldL) { oldR.free }; voices[i].run(true); }, { Buffer.readChannel(context.server, path, 0, -1, [1], { |b| var oldR = buffersR[i]; voices[i].set(\buf_r, b); buffersR[i] = b; oldR.free; voices[i].run(true); }); }); }); }); }); }
 
 unloadAll { fork { 2.do({ arg i; if(voices[i].notNil, { voices[i].set(\buf_l, silentBuffer, \buf_r, silentBuffer, \t_reset_pos, 1); voices[i].run(false); }); voicesUsingLiveBuffer[i] = false; liveInputBuffersL[i].zero; liveInputBuffersR[i].zero; if(liveInputRecorders[i].notNil, { liveInputRecorders[i].free; liveInputRecorders[i] = nil; }); }); wobbleBuffer.zero; glitchBuffer.zero; }; }
 
@@ -199,7 +171,7 @@ alloc {
         }).add;
 
         SynthDef(\delay, {
-            arg inBus, outBus, mix=0.0, delay=0.5, fb_amt=0.3, dhpf=20, lpf=20000, w_rate=0.0, w_depth=0.0, stereo=0.27;
+            arg inBus, outBus, mix=0.0, delay=0.5, fb_amt=0.3, dhpf=20, lpf=20000, w_rate=0.0, w_depth=0.0, stereo=0.2;
             var input, local, fb, delayed, wet;
             var combinedMod;
             var lfo1Rate, lfo2Rate, lfo3Rate;
@@ -222,11 +194,11 @@ alloc {
         }).add;
         
         SynthDef(\reverb, {
-            arg inBus1, inBus2, outBus, mix=0.0, t60, damp, rsize, earlyDiff, modDepth, modFreq, low, mid, high, lowcut, highcut, shimmer_mix=0.0, shimmer_lowpass=8000, shimmer_fb=0.38, shimmer_hipass=600, shimmer_oct=2;
+            arg inBus1, inBus2, outBus, mix=0.0, t60, damp, rsize, earlyDiff, modDepth, modFreq, low, mid, high, lowcut, highcut, shimmer_mix=0.0, shimmer_lowpass, shimmer_fb, shimmer_hipass, shimmer_oct;
             var combined, reverb_input, reverb_output, pitch_shifted, pitch_feedback, reverb_feedback, limited_feedback;
             combined = In.ar(inBus1, 2) + In.ar(inBus2, 2);
             reverb_feedback = LocalIn.ar(2);
-            limited_feedback = (reverb_feedback * 1.2).softclip;
+            limited_feedback = Limiter.ar(reverb_feedback, 0.9, 0.01);
             pitch_shifted = PitchShift.ar(limited_feedback, 0.1, shimmer_oct, 0.01, 0.005, mul:5);
             pitch_shifted = LPF.ar(pitch_shifted, shimmer_lowpass);
             pitch_shifted = HPF.ar(pitch_shifted, shimmer_hipass);
