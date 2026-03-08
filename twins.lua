@@ -103,7 +103,7 @@ local ui_metro = nil
 local lfo_cache = {}
 local lfo_cache_dirty = true
 local function invalidate_lfo_cache() lfo_cache_dirty = true end
-local function rebuild_lfo_cache() for k in pairs(lfo_cache) do lfo_cache[k] = nil end local targets = lfo.lfo_targets if targets then for i = 1, 16 do if params:get(MORPH_LFO_KEYS[i]) == 2 then local param_name = targets[params:get(MORPH_TARGET_KEYS[i])] if param_name and param_name ~= "none" then lfo_cache[param_name] = i end end end end lfo_cache_dirty = false end
+local function rebuild_lfo_cache() for k in pairs(lfo_cache) do lfo_cache[k] = nil end local targets = lfo.lfo_targets if targets then for i = 1, 16 do if params.lookup and params.lookup[MORPH_LFO_KEYS[i]] and params.lookup[MORPH_TARGET_KEYS[i]] then if params:get(MORPH_LFO_KEYS[i]) == 2 then local param_name = targets[params:get(MORPH_TARGET_KEYS[i])] if param_name and param_name ~= "none" then lfo_cache[param_name] = i end end end end end lfo_cache_dirty = false end
 local shimmer_presets = {{oct = 0.25, lowpass = 4000, hipass = 60, fb = 0.4}, {oct = 0.5, lowpass = 6000, hipass = 80, fb = 0.4}, {oct = 1, lowpass = 20000, hipass = 20, fb = 0.4}, {oct = 2, lowpass = 14000, hipass = 300, fb = 0.36}, {oct = 4, lowpass = 14000, hipass = 300, fb = 0.36}}
 local param_modes = {
     speed = {param = "speed", delta = 1, engine = true, has_lock = true},
@@ -663,11 +663,11 @@ local function setup_params()
     params:add_taper("delay_time", "Time", 0.02, 2, 0.5, 0.1, "s") params:set_action("delay_time", function(value) engine.delay(value) end)
     params:add_binary("tap", "↳ TAP!", "trigger", 0) params:set_action("tap", function() register_tap() end)
     params:add_taper("delay_feedback", "Feedback", 0, 120, 30, 1, "%") params:set_action("delay_feedback", function(value) engine.fb_amt(value * 0.01) end)
-    params:add_control("delay_lowpass", "LPF", controlspec.new(20, 20000, 'exp', 1, 20000, "Hz")) params:set_action('delay_lowpass', function(value) engine.lpf(value) end)
-    params:add_control("delay_highpass", "HPF", controlspec.new(20, 20000, 'exp', 1, 20, "Hz")) params:set_action('delay_highpass', function(value) engine.dhpf(value) end)
+    params:add_control("delay_lowpass", "LPF", controlspec.new(20, 20000, 'exp', 1, 12000, "Hz")) params:set_action('delay_lowpass', function(value) engine.lpf(value) end)
+    params:add_control("delay_highpass", "HPF", controlspec.new(20, 20000, 'exp', 1, 150, "Hz")) params:set_action('delay_highpass', function(value) engine.dhpf(value) end)
     params:add_taper("wiggle_depth", "Mod Depth", 0, 100, 5, 0, "%") params:set_action("wiggle_depth", function(value) engine.w_depth(value * 0.01) end)
     params:add_taper("wiggle_rate", "Mod Freq", 0, 20, 2, 1, "Hz") params:set_action("wiggle_rate", function(value) engine.w_rate(value) end)
-    params:add_control("stereo", "Ping-Pong", controlspec.new(0, 100, "lin", 1, 30, "%")) params:set_action("stereo", function(x) engine.stereo(x * 0.01) end)
+    params:add_control("stereo", "Ping-Pong", controlspec.new(0, 100, "lin", 1, 20, "%")) params:set_action("stereo", function(x) engine.stereo(x * 0.01) end)
     params:add_separator("   ")
     params:add_binary("randomize_delay_params", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_delay_params", function() randpara.randomize_delay_params(steps) end)
     params:add_option("lock_delay", "Lock Parameters", {"off", "on"}, 1)
@@ -1214,23 +1214,30 @@ end
 
 local function adjust_lfo_offset(lfo_idx, delta)
     local current_offset = params:get(lfo_idx .. "offset")
-    local current_depth = params:get(lfo_idx .. "lfo_depth")
-    local offset_delta = delta * 0.02
-    local max_offset = 1 - current_depth * 0.01
-    local proposed_offset = util.clamp(current_offset + offset_delta, -max_offset, max_offset)
+    local current_depth  = params:get(lfo_idx .. "lfo_depth")
+    local offset_floor   = current_depth * 0.01 - 1
+    local offset_ceiling = 1 - current_depth * 0.01
+    local proposed_offset = util.clamp(current_offset + delta * 0.004, offset_floor, offset_ceiling)
     params:set(lfo_idx .. "offset", proposed_offset)
     lfo[lfo_idx].offset = proposed_offset
 end
 
 local function adjust_lfo_depth(lfo_idx, delta)
     local current_depth = params:get(lfo_idx .. "lfo_depth")
+    local target_param  = lfo.lfo_targets[params:get(lfo_idx .. "lfo_target")]
+    local full_min, full_max = lfo.get_parameter_range(target_param)
+    local rand_min, rand_max = lfo.get_parameter_range(target_param, true)
+    local full_range   = (full_max and full_min) and (full_max - full_min) or 1
+    local narrow_range = (rand_max and rand_min) and (rand_max - rand_min) or full_range
+    local remap_ratio  = narrow_range / full_range
+    local step = 0.75 * remap_ratio * delta
+
     if current_depth == 0 and delta > 0 then
-        local target_param = lfo.lfo_targets[params:get(lfo_idx .. "lfo_target")]
-        local min_val, max_val = lfo.get_parameter_range(target_param)
+        local min_val, max_val = full_min, full_max
         if min_val and max_val and max_val > min_val then
             local current_val = params:get(target_param)
             local normalized = (current_val - min_val) / (max_val - min_val)
-            local initial_depth = 0.01
+            local initial_depth = math.abs(step)
             local initial_offset = util.clamp(normalized * 2 - 1, -0.9999, 0.9999)
             lfo[lfo_idx].depth = initial_depth
             lfo[lfo_idx].offset = initial_offset
@@ -1241,12 +1248,14 @@ local function adjust_lfo_depth(lfo_idx, delta)
         end
         return
     end
-    local proposed_depth = current_depth + delta
+    local proposed_depth = current_depth + step
     if proposed_depth <= 0 then if current_depth > 0 then params:set(lfo_idx .. "lfo", 1) invalidate_lfo_cache() end return end
-    local max_offset = 1 - proposed_depth * 0.01
+    -- keep offset within floor/ceiling so neither bound clips
+    local offset_floor   = proposed_depth * 0.01 - 1
+    local offset_ceiling = 1 - proposed_depth * 0.01
     local current_offset = params:get(lfo_idx .. "offset")
-    local new_offset = util.clamp(current_offset, -max_offset, max_offset)
-    lfo[lfo_idx].depth = proposed_depth
+    local new_offset     = util.clamp(current_offset, offset_floor, offset_ceiling)
+    lfo[lfo_idx].depth  = proposed_depth
     params:set(lfo_idx .. "lfo_depth", proposed_depth)
     if new_offset ~= current_offset then
         lfo[lfo_idx].offset = new_offset
@@ -1303,10 +1312,19 @@ function enc(n, d)
         mark_key_interaction()
         if n == 1 then
             local lfo_idx = find_or_create_lfo_for_param(voice, param_name, true, false)
-            if lfo_idx then params:delta(lfo_idx .. "lfo_freq", d * 0.5)
+            if lfo_idx then
+                -- multiplicative stepping: 7% per detent, respects log feel across full range
+                local function apply_freq_step(idx, dir)
+                    local cur = params:get(idx .. "lfo_freq")
+                    local step = math.max(cur * 0.06, 0.005) * (dir > 0 and 1 or -1)
+                    local new_freq = math.max(cur + step, 0.01)
+                    params:set(idx .. "lfo_freq", new_freq)
+                    lfo[idx].freq = new_freq * params:get("global_lfo_freq_scale")
+                end
+                apply_freq_step(lfo_idx, d)
                 if params:get("symmetry") == 1 then
                     local other_lfo = find_or_create_lfo_for_param(3 - voice, param_name, true, false, lfo_idx)
-                    if other_lfo then params:delta(other_lfo .. "lfo_freq", d * 0.5) end
+                    if other_lfo then apply_freq_step(other_lfo, d) end
                 end
                 finalize_change()
             end
@@ -1513,7 +1531,7 @@ function redraw()
       local txt = fmt and fmt(val, t) or params:string(param)
       T(flash_level(t, hi and LEVEL.hi or LEVEL.val), x, y, txt)
       if is_lfo then
-        local a, b = lfo.get_parameter_range(param)
+        local a, b = lfo.get_parameter_range(param, true)
         R(LEVEL.dim+2, x, y + 1, util.linlin(a, b, 0, BAR_W, val), 1)
       end
     end

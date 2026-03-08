@@ -9,7 +9,35 @@ classvar pitchScales; *initClass {pitchScales = [[7, 12], [7, 12, 19, 24], [12],
 
 *new { arg context, doneCallback; ^super.new(context, doneCallback); }
 
-readBuf { arg i, path; if(buffersL[i].notNil && buffersR[i].notNil, {if (File.exists(path), {var numChannels;	var newbuf;	numChannels = SoundFile.use(path.asString(), { |f| f.numChannels }); newbuf = Buffer.readChannel(context.server, path, 0, -1, [0], {|b| voices[i].set(\buf_l, b); buffersL[i].free; buffersL[i] = b;}); if (numChannels > 1, {newbuf = Buffer.readChannel(context.server, path, 0, -1, [1], { |b| voices[i].set(\buf_r, b); buffersR[i].free; buffersR[i] = b; voices[i].run(true);});}, { voices[i].set(\buf_r, newbuf); buffersR[i].free; buffersR[i] = newbuf; voices[i].run(true);});});});}
+readBuf { arg i, path;
+    if(buffersL[i].notNil && buffersR[i].notNil, {
+        if (File.exists(path), {
+            var numChannels;
+            numChannels = SoundFile.use(path.asString(), { |f| f.numChannels });
+            Buffer.readChannel(context.server, path, 0, -1, [0], {|b|
+                var oldL = buffersL[i];
+                voices[i].set(\buf_l, b);
+                buffersL[i] = b;
+                oldL.free;
+                if (numChannels <= 1, {
+                    var oldR = buffersR[i];
+                    voices[i].set(\buf_r, b);
+                    buffersR[i] = b;
+                    if (oldR !== oldL) { oldR.free };
+                    voices[i].run(true);
+                }, {
+                    Buffer.readChannel(context.server, path, 0, -1, [1], { |b|
+                        var oldR = buffersR[i];
+                        voices[i].set(\buf_r, b);
+                        buffersR[i] = b;
+                        oldR.free;
+                        voices[i].run(true);
+                    });
+                });
+            });
+        });
+    });
+}
 
 unloadAll { fork { 2.do({ arg i; if(voices[i].notNil, { voices[i].set(\buf_l, silentBuffer, \buf_r, silentBuffer, \t_reset_pos, 1); voices[i].run(false); }); voicesUsingLiveBuffer[i] = false; liveInputBuffersL[i].zero; liveInputBuffersR[i].zero; if(liveInputRecorders[i].notNil, { liveInputRecorders[i].free; liveInputRecorders[i] = nil; }); }); wobbleBuffer.zero; glitchBuffer.zero; }; }
 

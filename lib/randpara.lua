@@ -320,9 +320,9 @@ local param_configs = {
   delay = { lock_param = "lock_delay", params = {
     {name="delay_time",     prob=0.3, default=0.5,   random=function() return random_float(0.1,1)        end, direct_set=true},
     {name="delay_feedback", prob=1,   default=30,    random=function() return math.random(10,80)         end},
-    {name="stereo",         prob=0.5, default=25,    random=function() return math.random(0,100)         end},
-    {name="delay_lowpass",  prob=0.5, default=12000, random=function() return math.random(600,20000)     end},
-    {name="delay_highpass", prob=0.5, default=100,   random=function() return math.random(20,200)        end},
+    {name="stereo",         prob=0.5, default=20,    random=function() return math.random(0,100)         end},
+    {name="delay_lowpass",  prob=0.6, default=12000, random=function() return math.random(500,20000)     end},
+    {name="delay_highpass", prob=0.6, default=150,   random=function() return math.random(20,800)        end},
     {name="wiggle_depth",   prob=0.4, default=5,     random=function() return math.random(0,50)          end, direct_set=true},
     {name="wiggle_rate",    prob=0.5, default=2,     random=function() return random_float(0.4,5)        end},
   }},

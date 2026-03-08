@@ -130,24 +130,31 @@ lfo.target_ranges = {
   ["2pitch"]   = { depth = {5,30},   offset = {-1,1},   frequency = {0.1,0.6}, waveform = {"sine"}, chance = 0.0  },
 }
 
+-- Full physical ranges used by lfo.process to scale/clamp output to actual engine limits
 local param_ranges = {
   ["1pan"]     = {-100,100}, ["2pan"]     = {-100,100},
   ["1seek"]    = {0,100},    ["2seek"]    = {0,100},
   ["1speed"]   = {-2,2},     ["2speed"]   = {-2,2},
   ["1spread"]  = {0,100},    ["2spread"]  = {0,100},
-  ["1size"]    = {20,599},   ["2size"]    = {20,599},
-  ["1density"] = {1,30},     ["2density"] = {1,30},
+  ["1size"]    = {20,5999},  ["2size"]    = {20,5999},
+  ["1density"] = {0.1,300},  ["2density"] = {0.1,300},
   ["1volume"]  = {-70,10},   ["2volume"]  = {-70,10},
   ["1pitch"]   = {-48,48},   ["2pitch"]   = {-48,48},
   ["1cutoff"]  = {20,20000}, ["2cutoff"]  = {20,20000},
   ["1hpf"]     = {20,20000}, ["2hpf"]     = {20,20000},
 }
 
-function lfo.get_parameter_range(param_name)
+-- Narrower ranges used only by randomize_lfo for centering/swing calculations
+local randomize_param_ranges = {
+  ["1size"]    = {20,599},  ["2size"]    = {20,599},
+  ["1density"] = {1,30},    ["2density"] = {1,30},
+}
+
+function lfo.get_parameter_range(param_name, for_randomize)
   if param_name:match("jitter$") then
     return 0, pget(param_name:sub(1,1) .. "max_jitter") or 4999
   end
-  local r = param_ranges[param_name]
+  local r = (for_randomize and randomize_param_ranges[param_name]) or param_ranges[param_name]
   if r then return r[1], r[2] end
   return 0, 100
 end
@@ -200,8 +207,10 @@ local function randomize_lfo(i, target)
   local target_index = LFO_TARGET_REVERSE[target]
   if not target_index then return end
   local ranges   = lfo.target_ranges[target]
-  local min_val, max_val = lfo.get_parameter_range(target)
-  local cur_val  = pget(target) or min_val
+  -- use narrow ranges for centering/swing logic, full ranges for output coordinates
+  local full_min, full_max = lfo.get_parameter_range(target)
+  local rand_min, rand_max = lfo.get_parameter_range(target, true)
+  local cur_val  = pget(target) or rand_min
   local is_pan   = target:match("pan$")
   local is_seek  = target:match("seek$")
   local offset
@@ -210,17 +219,21 @@ local function randomize_lfo(i, target)
   elseif is_seek then
     offset = (math.random() - 0.5)
   else
-    offset = lfo.scale(cur_val, min_val, max_val, -1, 1)
+    offset = lfo.scale(cur_val, rand_min, rand_max, -1, 1)
   end
   local depth = math.random(ranges.depth[1], ranges.depth[2])
-  local range = max_val - min_val
-  local half_swing = (depth * 0.01) * range / 2
-  local center = util.clamp(lfo.scale(offset, -1, 1, min_val, max_val), min_val + half_swing, max_val - half_swing)
-  offset = lfo.scale(center, min_val, max_val, -1, 1)
-  lfo[i].depth  = depth
-  lfo[i].offset = offset
-  pset(DEPTH_KEYS[i],  depth)
-  pset(OFFSET_KEYS[i], offset)
+  local narrow_range = rand_max - rand_min
+  local full_range   = full_max - full_min
+  local half_swing = (depth * 0.01) * narrow_range / 2
+  local center = util.clamp(lfo.scale(offset, -1, 1, rand_min, rand_max), rand_min + half_swing, rand_max - half_swing)
+  -- remap center and depth into full-range coordinates so lfo.process
+  -- produces values within the narrow randomization bounds
+  local full_offset = lfo.scale(center, full_min, full_max, -1, 1)
+  local full_depth  = depth * (narrow_range / full_range)
+  lfo[i].depth  = full_depth
+  lfo[i].offset = full_offset
+  pset(DEPTH_KEYS[i],  full_depth)
+  pset(OFFSET_KEYS[i], full_offset)
   local min_f = math.floor(ranges.frequency[1] * 100)
   local max_f = math.floor(ranges.frequency[2] * 100)
   local freq  = math.random(min_f, max_f) / 100
@@ -442,9 +455,9 @@ function lfo.init()
     params:set_action(SHAPE_KEYS[i],  function(v) lfo[i].waveform = options.lfotypes[v] end)
     params:add_number(DEPTH_KEYS[i],  i .. " depth",   0, 100, 50)
     params:set_action(DEPTH_KEYS[i],  function(v) lfo[i].depth = v end)
-    params:add_control(OFFSET_KEYS[i], i .. " offset", controlspec.new(-0.99, 0.99, "lin", 0.01, 0, ""))
+    params:add_control(OFFSET_KEYS[i], i .. " offset", controlspec.new(-0.99, 0.99, "lin", 0.001, 0, ""))
     params:set_action(OFFSET_KEYS[i], function(v) lfo[i].offset = v end)
-    params:add_control(FREQ_KEYS[i],  i .. " freq",    controlspec.new(0.01, 2.00, "lin", 0.01, 0.05, ""))
+    params:add_control(FREQ_KEYS[i],  i .. " freq",    controlspec.new(0.01, 10.00, "lin", 0.01, 0.05, ""))
     params:set_action(FREQ_KEYS[i],   function(v) lfo[i].freq = v * params:get("global_lfo_freq_scale") end)
   end
   lfo_metro = metro.init()
