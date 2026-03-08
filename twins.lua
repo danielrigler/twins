@@ -6,7 +6,7 @@
 --            by: @dddstudio                       
 -- 
 --                          
---                           v0.54
+--                           v0.55
 -- E1: Master Volume
 -- K1+E2/E3: Volume
 -- K2/K3: Navigate
@@ -94,6 +94,7 @@ local scene_data = {[1] = {[1] = {}, [2] = {}}, [2] = {[1] = {}, [2] = {}}}
 local morph_temp_scene = {}
 local last_morph_amount = 0 
 local grain_positions = {[1] = {}, [2] = {}}
+local grain_positions_r = {[1] = {}, [2] = {}}
 local rec_positions = {[1] = 0, [2] = 0}
 local cached_buffer_durations = {[1] = 1, [2] = 1}
 local voice_peak_amplitudes = {[1] = {l = 0, r = 0}, [2] = {l = 0, r = 0}}
@@ -218,8 +219,8 @@ local function init_longpress_checker()
     longpress_metro:start()
 end
 
-local morph_voice_params={"speed","pitch","jitter","size","density","spread","pan","seek","cutoff","hpf","lpf_gain","granular_gain","subharmonics_3","subharmonics_2","subharmonics_1","overtones_1","overtones_2","smoothbass","ratcheting_prob","size_variation","direction_mod","density_mod_amt","pitch_random_scale_type","pitch_random_prob","pitch_mode","trig_mode","probability","eq_low_gain","eq_mid_gain","eq_high_gain","env_select","volume"}
-local morph_global_params={"delay_mix","delay_time","delay_feedback","delay_lowpass","delay_highpass","wiggle_depth","wiggle_rate","stereo","reverb_mix","t60","damp","rsize","earlyDiff","modDepth","modFreq","low","mid","high","lowcut","highcut","shimmer_mix","shimmer_preset","lock_shimmer","tape_mix","sine_drive_wet","drive","wobble_mix","wobble_amp","wobble_rpm","flutter_amp","flutter_freq","flutter_var","chew_depth","chew_freq","chew_variance","lossdegrade_mix","Width","dimension_mix","haas","rspeed","monobass_mix","bitcrush_mix","bitcrush_rate","bitcrush_bits","evolution","evolution_range","evolution_rate","lock_eq","lock_tape","lock_reverb","lock_delay","global_lfo_freq_scale","pitch_quantize_scale","pitch_lag","shimmer_mix1","shimmer_oct1","pitchv1","lowpass1","hipass1","fbDelay1","fb1", "glitch_probability", "glitch_ratio", "glitch_mix", "glitch_min_length", "glitch_max_length", "glitch_reverse", "glitch_pitch" }
+local morph_voice_params={"speed","pitch","jitter","size","density","spread","pan","seek","cutoff","hpf","lpf_gain","granular_gain","subharmonics_3","subharmonics_2","subharmonics_1","overtones_1","overtones_2","smoothbass","ratcheting_prob","size_variation","direction_mod","density_mod_amt","pitch_random_scale_type","pitch_random_prob","pitch_mode","trig_mode","probability","eq_low_gain","eq_mid_gain","eq_high_gain","env_select","volume","stereo_trig_offset","stereo_independent"}
+local morph_global_params={"delay_mix","delay_time","delay_feedback","delay_lowpass","delay_highpass","wiggle_depth","wiggle_rate","stereo","reverb_mix","t60","damp","rsize","earlyDiff","modDepth","modFreq","low","mid","high","lowcut","highcut","shimmer_mix","shimmer_preset","lock_shimmer","tape_mix","sine_drive_wet","drive","wobble_mix","wobble_amp","wobble_rpm","flutter_amp","flutter_freq","flutter_var","chew_depth","chew_freq","chew_variance","lossdegrade_mix","Width","dimension_mix","haas","rspeed","monobass_mix","stereo_detune","bitcrush_mix","bitcrush_rate","bitcrush_bits","evolution","evolution_range","evolution_rate","lock_eq","lock_tape","lock_reverb","lock_delay","global_lfo_freq_scale","pitch_quantize_scale","pitch_lag","shimmer_mix1","shimmer_oct1","pitchv1","lowpass1","hipass1","fbDelay1","fb1", "glitch_probability", "glitch_ratio", "glitch_mix", "glitch_min_length", "glitch_max_length", "glitch_reverse", "glitch_pitch" }
 local morph_voice_params_count=#morph_voice_params
 local morph_global_params_count=#morph_global_params
 local skip_param_set={}
@@ -631,7 +632,7 @@ local function setup_params()
     params:add{type = "trigger", id = "load_preset_menu", name = "Preset Browser", action = function() presets.open_menu() end}
 
     params:add_separator("Settings")
-    params:add_group("GRANULAR", 39)
+    params:add_group("GRANULAR", 43)
     for i = 1, 2 do
       params:add_separator("SAMPLE "..i)
       params:add_control(i.. "granular_gain", i.. " Mix", controlspec.new(0, 100, "lin", 1, 100, "%")) params:set_action(i.. "granular_gain", function(value) engine.granular_gain(i, value * 0.01) if value < 100 then lfo.clearLFOs(i, "seek") end end)
@@ -647,9 +648,11 @@ local function setup_params()
       params:add_option(i.."env_select", i.." Grain Envelope", {"Hann", "Tukey", "Perc.", "Rev. Perc.", "ADSR", "Random"}, 1) params:set_action(i.."env_select", function(value) engine.env_select(i, value - 1) end)
       params:add_control(i.. "size_variation", i.. " Size Variation", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.. "size_variation", function(value) engine.size_variation(i, value * 0.01) end)
       params:add_control(i.. "direction_mod", i.. " Reverse", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.. "direction_mod", function(value) engine.direction_mod(i, value * 0.01) end)
-      params:add_control(i.. "density_mod_amt", i.. " Density Mod", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.. "density_mod_amt", function(value) engine.density_mod_amt(i, value * 0.01) end)      
       params:add_option(i.. "trig_mode", i.. " Trigger Mode", {"impulse", "dust"}, 1) params:set_action(i.."trig_mode", function(value) engine.trig_mode(i, value-1) end)
       params:add_control(i.."probability", i.." Trigger Probability", controlspec.new(0, 100, "lin", 1, 100, "%")) params:set_action(i.."probability", function(value) engine.probability(i, value * 0.01) end)
+      params:add_control(i.. "density_mod_amt", i.. " Density Mod", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.. "density_mod_amt", function(value) engine.density_mod_amt(i, value * 0.01) end)      
+      params:add_binary(i.."stereo_independent", i.." Independent Trig", "toggle", 0) params:set_action(i.."stereo_independent", function(value) engine.stereo_independent(i, value) end)
+      params:add_control(i.."stereo_trig_offset", i.." Trig Offset", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.."stereo_trig_offset", function(value) engine.stereo_trig_offset(i, value * 0.01) end)
       params:add_option(i.. "pitch_mode", i.. " Pitch Mode", {"match speed", "independent"}, 2) params:set_action(i.. "pitch_mode", function(value) engine.pitch_mode(i, value - 1) end)
     end
     params:add_separator(" ")
@@ -738,9 +741,10 @@ local function setup_params()
     params:add_option("allow_volume_lfos", "Allow Volume LFOs", {"no", "yes"}, 1) params:set_action("allow_volume_lfos", function(value) if value == 2 then lfo.clearLFOs("1", "volume") lfo.clearLFOs("2", "volume") lfo.assign_volume_lfos() else lfo.clearLFOs("1", "volume") lfo.clearLFOs("2", "volume") end invalidate_lfo_cache() end)
     lfo.init()
     
-    params:add_group("STEREO", 5)
+    params:add_group("STEREO", 6)
     params:add_control("Width", "Stereo Width", controlspec.new(0, 200, "lin", 2, 100, "%")) params:set_action("Width", function(value) engine.width(value * 0.01) font.update_fx_cache("Width", value) end)
     params:add_control("dimension_mix", "Dimension", controlspec.new(0, 100, "lin", 2, 0, "%")) params:set_action("dimension_mix", function(value) engine.dimension_mix(value * 0.01) font.update_fx_cache("dimension_mix", value) end)
+    params:add_control("stereo_detune", "Granular D", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("stereo_detune", function(value) for i = 1, 2 do engine.stereo_detune(i, value * 0.0002) end font.update_fx_cache("stereo_detune", value) end)
     params:add_option("haas", "Haas Effect", {"off", "on"}, 1) params:set_action("haas", function(x) engine.haas(x-1) font.update_fx_cache("haas", x) end)
     params:add_taper("rspeed", "Rotation", 0, 1, 0, 1, "Hz") params:set_action("rspeed", function(value) engine.rspeed(value) font.update_fx_cache("rspeed", value) end)
     params:add_option("monobass_mix", "Mono Bass", {"off", "on"}, 1) params:set_action("monobass_mix", function(x) engine.monobass_mix(x-1) font.update_fx_cache("monobass_mix", x) end)
@@ -1483,6 +1487,11 @@ local function flush()
   end
 end
 
+local SYM_CACHE = {}
+for sy = 4, 64, 2 do SYM_CACHE[sy] = math.max(1, math.floor(10 * (1 - math.abs(sy - 34) / 32))) end
+local LABEL_CACHE, LABEL_UPPER_CACHE = {}, {}
+for _, m in ipairs({"spread","pitch","density","size","jitter","lpf","hpf","pan","speed","seek"}) do local pad = (m == "lpf" or m == "hpf") and "       " or "      " LABEL_CACHE[m] = m .. ":" .. pad LABEL_UPPER_CACHE[m] = string.upper(m) .. ":" .. pad end
+
 function redraw()
   if not installer:ready() then installer:redraw() return end
   if presets.draw_menu() then return end
@@ -1553,28 +1562,29 @@ function redraw()
       if dir_t ~= 1 then R(1, x, Y.seek, animated_bar_w, 1) end
       if params:get(t .. "granular_gain") > 0 then
         local grains = grain_positions[t]
+        local grains_r = grain_positions_r[t]
         if grains then
           local dur, keep, drawn = cached_buffer_durations[t], 0, 0
           local spd_fwd = spd_t >= -0.01
+          local dir_mod = params:get(t.."direction_mod") * 0.01
           local x_end = x + BAR_W - 1
-          local hi1 = LEVEL.hi - 1
-          for i = 1, #grains do
-            local g = grains[i]
+          local function draw_grain(g, is_r)
             local age = now - g.t
             local gsize = g.size or 0.1
             if age <= gsize then
-              keep = keep + 1
-              grains[keep] = g
               if drawn < 25 then
                 local gpos = g.pos or 0
                 local gsz = gsize / dur
-                local level = math.ceil(1 + hi1 * (1 - age / gsize))
+                local rv = g.rv or 0.5
+                local grain_fwd = spd_fwd ~= (rv < dir_mod)
+                local base_level = is_r and (LEVEL.hi - 3) or (LEVEL.hi - 1)
+                local level = math.ceil(1 + base_level * (1 - age / gsize))
                 local function draw_seg(a, b)
                   local dl = math.max(x + math.floor(a * BAR_W), x)
                   local dr = math.min(x + math.ceil(b * BAR_W) - 1, x_end)
                   if dr >= dl then R(level, dl, Y.seek, dr - dl + 1, 1) drawn = drawn + 1 end
                 end
-                if spd_fwd then
+                if grain_fwd then
                   local e = gpos + gsz
                   if e > 1 then draw_seg(gpos, 1.0) draw_seg(0, e - 1.0) else draw_seg(gpos, e) end
                 else
@@ -1582,12 +1592,25 @@ function redraw()
                   if s < 0 then draw_seg(s + 1.0, 1.0) draw_seg(0, gpos) else draw_seg(s, gpos) end
                 end
               end
+              return true
             end
+            return false
+          end
+          for i = 1, #grains do
+            local g = grains[i]
+            if draw_grain(g, false) then keep = keep + 1; grains[keep] = g end
           end
           for i = keep + 1, #grains do grains[i] = nil end
+          local keep_r = 0
+          for i = 1, #grains_r do
+            local g = grains_r[i]
+            if draw_grain(g, true) then keep_r = keep_r + 1; grains_r[keep_r] = g end
+          end
+          for i = keep_r + 1, #grains_r do grains_r[i] = nil end
         end
       else
         grain_positions[t] = {}
+        grain_positions_r[t] = {}
       end
       if loaded and dir_t ~= 1 then R(LEVEL.hi, x + math.floor(osc_positions[t] * animated_bar_w), Y.seek - 1, 1, 2) end
       if in_t == 1 then R(LEVEL.hi, x + math.floor(rec_positions[t] * BAR_W), Y.seek - 1, 2, 2) end
@@ -1596,10 +1619,12 @@ function redraw()
   local upper = UPPER[cur_mode]
   local mode = upper and "seek" or cur_mode
   local active = not upper
-  local label = (mode == "lpf" or mode == "hpf") and (cur_filter .. ":       ") or (mode .. ":      ")
+  local disp_mode = (mode == "lpf" or mode == "hpf") and cur_filter or mode
+  local label = LABEL_CACHE[disp_mode] or (disp_mode .. ":      ")
+  local label_upper = LABEL_UPPER_CACHE[disp_mode] or string.upper(label)
   local y_bot = Y.bottom
-  if active then T(1, 7, y_bot + 2, label:upper()) end
-  T(LEVEL.hi, 6, y_bot + 1, active and label:upper() or label)
+  if active then T(1, 7, y_bot + 2, label_upper) end
+  T(LEVEL.hi, 6, y_bot + 1, active and label_upper or label)
   for t=1,2 do
     local x = TRACK_X[t]
     local vL = active and LEVEL.hi or LEVEL.val
@@ -1632,9 +1657,11 @@ function redraw()
     local h = util.linlin(-70, 10, 0, 64, C.vol[t])
     R(LEVEL.dim-3, VOL_X[t], 64 - h + volume_bar_y[t], 2, h)
     local peak_amp = (audio_active[t] or C.live.in_[t] == 1 or C.live.dir_[t] == 1) and math.max(voice_peak_amplitudes[t].l, voice_peak_amplitudes[t].r) or 0
-    local peak_db = util.clamp(20 * math.log(peak_amp, 10), -70, 10)
-    local peak_h = math.min(util.linlin(-70, 10, 0, 64, peak_db), h)
-    if peak_h > 0 then R(LEVEL.hi-1, VOL_X[t], 64 - peak_h + volume_bar_y[t], 2, peak_h) end
+    if peak_amp > 0.000316 then
+      local peak_db = util.clamp(20 * math.log(peak_amp, 10), -70, 10)
+      local peak_h = math.min(util.linlin(-70, 10, 0, 64, peak_db), h)
+      if peak_h > 0 then R(LEVEL.hi-1, VOL_X[t], 64 - peak_h + volume_bar_y[t], 2, peak_h) end
+    end
     local pan_pos = util.linlin(-100, 100, PAN_X[t], PAN_X[t] + 25, C.pan[t])
     R(LEVEL.dim, pan_pos - 1 + pan_indicator_x[t], 1, 4, 1)
   end
@@ -1649,21 +1676,14 @@ function redraw()
     end
   end
   if C.dry then for x=7,15,4 do P(LEVEL.hi, x, 0) end end
-  if C.sym then
-    for sy = 4, 64, 2 do
-      local level = math.floor(10 * (1 - math.abs(sy - 34) / 32))
-      P(math.max(1, level), 85, sy)
-    end
-  end
+  if C.sym then for sy, lvl in pairs(SYM_CACHE) do P(lvl, 85, sy) end end
   if C.evo then 
     local t = now * 4
     for i=0,2 do P(math.floor(8 + 7 * math.sin(t - i * 0.8)), (i * 2)+6, 63) end
   end
   if current_scene_mode == "on" then 
     R(1, 7, 1, 22, 1) 
-    if morph_amount > 0 then 
-      R(LEVEL.hi, 7, 1, util.linlin(0, 100, 0, 22, morph_amount), 1) 
-    end
+    if morph_amount > 0 then R(LEVEL.hi, 7, 1, util.linlin(0, 100, 0, 22, morph_amount), 1) end
   else 
     font.draw_fx_status_bucketed(P) 
   end
@@ -1693,8 +1713,12 @@ local osc_handlers = {
         if params:get(vid.."live_input") == 1 then rec_positions[vid] = pos end
     end,
     ["/twins/grain_pos"] = function(args)
-        local vid, pos, size = args[1] + 1, args[2], args[3]
-        if audio_active[vid] then table.insert(grain_positions[vid], {pos = pos, size = size, t = util.time()}) end
+        local vid, pos, size, rv = args[1] + 1, args[2], args[3], args[4]
+        if audio_active[vid] then table.insert(grain_positions[vid], {pos = pos, size = size, t = util.time(), rv = rv or 0.5}) end
+    end,
+    ["/twins/grain_pos_r"] = function(args)
+        local vid, pos, size, rv = args[1] + 1, args[2], args[3], args[4]
+        if audio_active[vid] then table.insert(grain_positions_r[vid], {pos = pos, size = size, t = util.time(), rv = rv or 0.5}) end
     end,
     ["/twins/voice_peak"] = function(args)
         local voice, peakL, peakR = args[1] + 1, args[2], args[3]
