@@ -256,21 +256,36 @@ local function recall_scene(track,scene)
   if not scene_data[track]or not scene_data[track][scene]then return end
   local scene_params=scene_data[track][scene]
   local p_lookup=params.lookup
+  local p_get=params.get
   local p_set=params.set
-  for i=1,16 do p_set(params,MORPH_LFO_KEYS[i],1)end
+  local morph_lfo_slot=nil
+  local morph_target_idx=lfo and lfo.lfo_targets and (function()
+    for idx,t in ipairs(lfo.lfo_targets) do if t=="morph_amount" then return idx end end
+  end)()
+  if morph_target_idx then
+    for i=1,16 do
+      if p_lookup[MORPH_LFO_KEYS[i]] and p_get(params,MORPH_LFO_KEYS[i])==2
+        and p_get(params,MORPH_TARGET_KEYS[i])==morph_target_idx then
+        morph_lfo_slot=i break
+      end
+    end
+  end
+  for i=1,16 do if i~=morph_lfo_slot then p_set(params,MORPH_LFO_KEYS[i],1) end end
   for param_name,value in pairs(scene_params)do
     if param_name~="lfo_data"and p_lookup[param_name]then p_set(params,param_name,value)end
   end
   if scene_params.lfo_data then
     for i=1,16 do
-      local lfo_entry=scene_params.lfo_data[i]
-      if lfo_entry and lfo_entry.enabled then
-        p_set(params,MORPH_TARGET_KEYS[i],lfo_entry.target)
-        p_set(params,MORPH_SHAPE_KEYS[i],lfo_entry.shape)
-        p_set(params,MORPH_FREQ_KEYS[i],lfo_entry.freq)
-        p_set(params,MORPH_DEPTH_KEYS[i],lfo_entry.depth)
-        p_set(params,MORPH_OFFSET_KEYS[i],lfo_entry.offset)
-        p_set(params,MORPH_LFO_KEYS[i],2)
+      if i~=morph_lfo_slot then
+        local lfo_entry=scene_params.lfo_data[i]
+        if lfo_entry and lfo_entry.enabled then
+          p_set(params,MORPH_TARGET_KEYS[i],lfo_entry.target)
+          p_set(params,MORPH_SHAPE_KEYS[i],lfo_entry.shape)
+          p_set(params,MORPH_FREQ_KEYS[i],lfo_entry.freq)
+          p_set(params,MORPH_DEPTH_KEYS[i],lfo_entry.depth)
+          p_set(params,MORPH_OFFSET_KEYS[i],lfo_entry.offset)
+          p_set(params,MORPH_LFO_KEYS[i],2)
+        end
       end
     end
   end
@@ -326,13 +341,26 @@ local function apply_morph()
   local p_lookup=params.lookup
   local pitch_scale=params:string("pitch_quantize_scale")
   local has_tracking=lfo.clear_param_assignment and lfo.is_param_assigned and lfo.mark_param_assigned and lfo.get_lfo_for_param
+  local morph_lfo_slot_am=nil
+  local morph_target_idx_am=(function()
+    for idx,t in ipairs(lfo_targets) do if t=="morph_amount" then return idx end end
+  end)()
+  if morph_target_idx_am then
+    for i=1,16 do
+      if p_get(params,MORPH_LFO_KEYS[i])==2 and p_get(params,MORPH_TARGET_KEYS[i])==morph_target_idx_am then
+        morph_lfo_slot_am=i break
+      end
+    end
+  end
   if has_tracking then
     for i=1,16 do
-      local lfo_state=p_get(params,MORPH_LFO_KEYS[i])
-      if lfo_state==2 then
-        local target_idx=p_get(params,MORPH_TARGET_KEYS[i])
-        local target_param=lfo_targets[target_idx]
-        if target_param and target_param~="none"then lfo.clear_param_assignment(target_param)end
+      if i~=morph_lfo_slot_am then
+        local lfo_state=p_get(params,MORPH_LFO_KEYS[i])
+        if lfo_state==2 then
+          local target_idx=p_get(params,MORPH_TARGET_KEYS[i])
+          local target_param=lfo_targets[target_idx]
+          if target_param and target_param~="none"then lfo.clear_param_assignment(target_param)end
+        end
       end
     end
   end
@@ -347,6 +375,7 @@ local function apply_morph()
   local pending_count=0
   local DEPTH_THRESHOLD=0.01
   for i=1,16 do
+    if i==morph_lfo_slot_am then goto continue end
     local lfo_A=lfo_data_A[i]
     local lfo_B=lfo_data_B[i]
     local lfo_A_enabled=lfo_A and lfo_A.enabled
@@ -528,6 +557,11 @@ local function initialize_scenes_with_current_params()
       store_scene(track,scene)
     end
   end
+end
+
+local function disable_morph_amount_lfo()
+  local active, lfo_idx = is_lfo_active_for_param("morph_amount")
+  if active then params:set(lfo_idx .. "lfo", 1) invalidate_lfo_cache() end
 end
 
 local function disable_lfos_for_param(param_name, only_self)
@@ -999,6 +1033,7 @@ end
 
 local function handle_volume_lfo(track, delta, crossfade_mode)
     if key_state[2] or key_state[3] then return end
+    disable_morph_amount_lfo()
     local p = track .. "volume"
     local op = (3 - track) .. "volume"
     local a1, i1 = is_lfo_active_for_param(p)
@@ -1025,6 +1060,7 @@ local function handle_pitch_size_density_link(track, config, delta)
     local param = config.param
     if params:get("global_pitch_size_density_link") ~= 1 then return false end
     if not _LINK_SPEED[param] then return false end
+    disable_morph_amount_lfo()
     local symmetry = params:get("symmetry") == 1
     local other_track = 3 - track
     local function disable_linked_lfos(t) for i = 1, 3 do disable_lfos_for_param(t .. _LINK_PARAMS[i], true) end end
@@ -1084,6 +1120,7 @@ end
 
 local function handle_seek_param(track, config, delta)
     if config.param ~= "seek" then return false end
+    disable_morph_amount_lfo()
     local sym = params:get("symmetry") == 1
     disable_lfos_for_param(track .. "seek", sym)
     local current_pos1 = math.floor(osc_positions[1] * 100 + 0.5)
@@ -1105,6 +1142,7 @@ local function handle_seek_param(track, config, delta)
 end
 
 local function handle_standard_param(track, config, delta)
+    disable_morph_amount_lfo()
     local sym = params:get("symmetry") == 1
     local p = track .. config.param
     disable_lfos_for_param(p, not sym)
@@ -1349,6 +1387,8 @@ function enc(n, d)
         mark_key_interaction()
         if should_auto_save then auto_save_to_scene() end
         if k1 and current_scene_mode == "on" then
+            local lfo_active, lfo_idx = is_lfo_active_for_param("morph_amount")
+            if lfo_active then params:set(lfo_idx .. "lfo", 1) invalidate_lfo_cache() end
             params:set("morph_amount", util.clamp(morph_amount + (d * 3), 0, 100))
         else
             handle_volume_lfo(1, d, k1)
@@ -1362,6 +1402,7 @@ function enc(n, d)
         stop_metro_safe(randomize_metro[track]) randomize_metro[track] = nil
         if k1 then
             local p = track .. "volume"
+            disable_morph_amount_lfo()
             disable_lfos_for_param(p, true)
             if params:get("symmetry") == 1 then disable_lfos_for_param(p) end
             params:delta(p, 3 * d)

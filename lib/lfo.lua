@@ -104,7 +104,7 @@ lfo.lfo_targets = {
   "none", "1pan", "2pan", "1seek", "2seek", "1jitter", "2jitter",
   "1spread", "2spread", "1size", "2size", "1density", "2density",
   "1volume", "2volume", "1pitch", "2pitch", "1cutoff", "2cutoff",
-  "1hpf", "2hpf", "1speed", "2speed"}
+  "1hpf", "2hpf", "1speed", "2speed", "morph_amount"}
 
 local LFO_TARGET_REVERSE = {}
 for i, t in ipairs(lfo.lfo_targets) do LFO_TARGET_REVERSE[t] = i end
@@ -141,6 +141,7 @@ local param_ranges = {
   ["1pitch"]   = {-48,48},   ["2pitch"]   = {-48,48},
   ["1cutoff"]  = {20,20000}, ["2cutoff"]  = {20,20000},
   ["1hpf"]     = {20,20000}, ["2hpf"]     = {20,20000},
+  ["morph_amount"] = {0, 100},
 }
 
 local randomize_param_ranges = {
