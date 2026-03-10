@@ -30,7 +30,6 @@ local PARAM_MATCHERS = {
 }
 local PARAM_DELAYS = { 0.02, 0.03, 0.03, 0.03, 0, 0.03 }
 
-local function fmt_preset(n, w) return string.format("%02d", math.min(n, 99) < 10 and n or n) .. " " .. w end
 local function format_number(n) return n >= 100 and tostring(n) or string.format("%02d", n) end
 local function fmt_name(n, w)   return format_number(n) .. " " .. w end
 
@@ -102,11 +101,19 @@ function presets.list_presets()
     return list
 end
 
+local SYSTEM_PARAMS_EXCLUDE = {
+    reverb=true, reverb_eng_cut=true, reverb_eng_dry=true,
+    monitor_level=true, input_level=true, input_level_l=true, input_level_r=true,
+    output_level=true, headphone_level=true, screen_brightness=true,
+    clock_source=true, clock_tempo=true, clock_crow_in_div=true,
+    clock_crow_out_div=true, clock_link_quantum=true, clock_link_start_stop_sync=true,
+    midi_out_clock=true, midi_in_clock=true,
+    enc_sens_default=true, key_repeat_initial=true, key_repeat_period=true,
+}
+
 local function params_snapshot()
     local state = {}
-    for id in pairs(params.lookup) do
-        state[id] = params:get(id)
-    end
+    for id in pairs(params.lookup) do if not SYSTEM_PARAMS_EXCLUDE[id] then state[id] = params:get(id) end end
     return state
 end
 
@@ -130,7 +137,7 @@ local function get_mtime(path)
     local t = f:read("*n"); f:close(); return t or 0
 end
 
-function presets.save_complete_preset(name, scene_data, update_pan, audio_active, active_mode, active_filter_mode)
+function presets.save_complete_preset(name, scene_data, active_mode, active_filter_mode)
     local ok, err = pcall(function()
         if not name or name == "" then
             local existing = presets.list_presets()
@@ -213,9 +220,7 @@ function presets.load_complete_preset(name, scene_data, update_pan, audio_active
     local ok, data = pcall(chunk)
     if not ok or not data then print("✗ Parse error: " .. (data or "?")); return false end
     if data.version and data.version > PRESET_VERSION then print("⚠ Newer preset version") end
-    for i = 1, 2 do
-        if params.lookup[i .. "volume"] then params:set(i .. "volume", -70) end
-    end
+    for i = 1, 2 do if params.lookup[i .. "volume"] then params:set(i .. "volume", -70) end end
     _G.preset_loading = true
     cancel_loading_clock()
     loading_clock = clock.run(function()
@@ -301,9 +306,7 @@ end
 
 local function commit_pending(conf)
     if not conf.pending_char then return end
-    if conf.manual_cursor > #conf.manual_text then
-        conf.manual_text = pad_text(conf.manual_text, conf.manual_cursor)
-    end
+    if conf.manual_cursor > #conf.manual_text then conf.manual_text = pad_text(conf.manual_text, conf.manual_cursor) end
     conf.manual_text  = str_set_char(conf.manual_text, conf.manual_cursor, conf.pending_char)
     conf.pending_char = nil
 end
@@ -614,7 +617,7 @@ function presets.menu_key(n, z, scene_data, update_pan, audio_active, active_mod
             elseif conf.type == "save" then
                 local path  = _path.data .. PRESETS_DIR .. "/" .. conf.preset_name .. ".lua"
                 local mtime = get_mtime(path)
-                presets.save_complete_preset(conf.preset_name, scene_data, update_pan, audio_active, active_mode, active_filter_mode)
+                presets.save_complete_preset(conf.preset_name, scene_data, active_mode, active_filter_mode)
                 if mtime > 0 then os.execute('touch -m -d @' .. mtime .. ' "' .. path .. '"') end
                 presets.confirmation = nil
                 presets.menu_open    = false

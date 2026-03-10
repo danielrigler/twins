@@ -4,7 +4,7 @@ var dimensionEffect, haasEffect, bitcrushEffect, saturationEffect, delayEffect, 
 var <silentBuffer, <buffersL, <buffersR, wobbleBuffer, glitchBuffer, mixBus, postFxBus, shimmerBus, parallelBus, <voices, bufSine, pg, <liveInputBuffersL, <liveInputBuffersR, <liveInputRecorders, <liveRecPosBuses, o, o_rec, o_grain, o_voice_peak, mixToParallelRouter, parallelToPostFxRouter, finalOutputRouter;
 var liveBufferAllocGeneration = 0, grainEnvs, pitchScaleBuffers, pitchScaleLengths, nornsAddr, voicesUsingLiveBuffer, eqChain;
 var o_grain_r;
-var currentSpeed, currentJitter, currentSize, currentDensity, currentDensityModAmt, currentPitch, currentPan, currentSpread, currentVolume, currentGranularGain, currentCutoff, currentHpf, currentlpf_gain, currentSubharmonics1, currentSubharmonics2, currentSubharmonics3, currentOvertones1, currentOvertones2, currentPitchMode, currentTrigMode, currentDirectionMod, currentSizeVariation, currentSmoothbass, currentLowGain, currentMidGain, currentHighGain, currentProbability, liveBufferMix = 1.0, currentPitchRandomProb, currentPitchRandomScale, currentRatchetingProb, currentPitchLag, currentGlitchRatio = 0.0, currentGlitchMix = 0.0, currentStereoDetune, currentStereoTrigOffset, currentStereoIndependent;
+var currentSpeed, currentJitter, currentSize, currentDensity, currentDensityModAmt, currentPitch, currentPan, currentSpread, currentVolume, currentGranularGain, currentCutoff, currentHpf, currentlpf_gain, currentSubharmonics1, currentSubharmonics2, currentSubharmonics3, currentOvertones1, currentOvertones2, currentPitchMode, currentTrigMode, currentDirectionMod, currentSizeVariation, currentSmoothbass, currentLowGain, currentMidGain, currentHighGain, currentProbability, liveBufferMix = 1.0, currentPitchRandomProb, currentPitchRandomScale, currentRatchetingProb, currentPitchLag, currentGlitchRatio = 0.0, currentGlitchMix = 0.0, currentStereoTrigOffset, currentStereoIndependent;
 
 classvar pitchScales; *initClass {pitchScales = [[7, 12], [7, 12, 19, 24], [12], [12, 24], [1,2,3,4,5,6,7,8,9,10,11], [2,4,5,7,9,11], [2,3,5,7,8,10], [2,4,7,9], [2,4,6,8,10]];}
 
@@ -42,7 +42,7 @@ alloc {
         pitchScaleBuffers = pitchScales.collect { |scale| Buffer.sendCollection(context.server, scale, 1) };
         pitchScaleLengths = pitchScales.collect(_.size);
 
-        currentSpeed = [0.1, 0.1]; currentJitter = [0.25, 0.25]; currentSize = [0.1, 0.1]; currentDensity = [10, 10]; currentPitch = [1, 1]; currentPan = [0, 0]; currentSpread = [0, 0]; currentVolume = [1, 1]; currentGranularGain = [1, 1]; currentCutoff = [20000, 20000]; currentlpf_gain = [0.95, 0.95]; currentHpf = [20, 20]; currentSubharmonics1 = [0, 0]; currentSubharmonics2 = [0, 0]; currentSubharmonics3 = [0, 0]; currentOvertones1 = [0, 0]; currentOvertones2 = [0, 0]; currentPitchMode = [0, 0]; currentTrigMode = [0, 0]; currentDirectionMod = [0, 0]; currentSizeVariation = [0, 0]; currentSmoothbass = [1, 1]; currentDensityModAmt = [0, 0]; currentLowGain = [0, 0]; currentMidGain = [0, 0]; currentHighGain = [0, 0]; currentProbability = [100, 100]; liveBufferMix = 1.0; currentPitchRandomProb = [0, 0]; currentPitchRandomScale = [0, 0]; currentRatchetingProb = [0, 0]; currentPitchLag = [0, 0]; currentStereoDetune = [0, 0]; currentStereoTrigOffset = [0, 0]; currentStereoIndependent = [0, 0];
+        currentSpeed = [0.1, 0.1]; currentJitter = [0.25, 0.25]; currentSize = [0.1, 0.1]; currentDensity = [10, 10]; currentPitch = [1, 1]; currentPan = [0, 0]; currentSpread = [0, 0]; currentVolume = [1, 1]; currentGranularGain = [1, 1]; currentCutoff = [20000, 20000]; currentlpf_gain = [0.95, 0.95]; currentHpf = [20, 20]; currentSubharmonics1 = [0, 0]; currentSubharmonics2 = [0, 0]; currentSubharmonics3 = [0, 0]; currentOvertones1 = [0, 0]; currentOvertones2 = [0, 0]; currentPitchMode = [0, 0]; currentTrigMode = [0, 0]; currentDirectionMod = [0, 0]; currentSizeVariation = [0, 0]; currentSmoothbass = [1, 1]; currentDensityModAmt = [0, 0]; currentLowGain = [0, 0]; currentMidGain = [0, 0]; currentHighGain = [0, 0]; currentProbability = [100, 100]; liveBufferMix = 1.0; currentPitchRandomProb = [0, 0]; currentPitchRandomScale = [0, 0]; currentRatchetingProb = [0, 0]; currentPitchLag = [0, 0]; currentStereoTrigOffset = [0, 0]; currentStereoIndependent = [0, 0];
 
         eqChain = { arg sig, low_gain, mid_gain, high_gain, hpf, cutoff, lpf_gain;
             var lagcutoff = Lag.kr(cutoff, 0.6);
@@ -57,7 +57,7 @@ alloc {
         context.server.sync;
 
         SynthDef(\synth1, {
-            arg out, voice, buf_l, buf_r, pos, speed, jitter, size, density, density_mod_amt, pitch_offset, pan, spread, gain, t_reset_pos, granular_gain, pitch_mode, trig_mode, subharmonics_1, subharmonics_2, subharmonics_3, overtones_1, overtones_2, cutoff, hpf, hpfq, lpf_gain, direction_mod, size_variation, low_gain, mid_gain, high_gain, smoothbass, probability, env_select = 0, pitch_random_prob=0, pitch_random_scale_buf=0, pitch_random_scale_len=1, pitch_random_direction=1, ratcheting_prob=0, pitch_lag_time, rec_pos_bus = -1, stereo_detune = 0, stereo_trig_offset = 0, stereo_independent = 0;
+            arg out, voice, buf_l, buf_r, pos, speed, jitter, size, density, density_mod_amt, pitch_offset, pan, spread, gain, t_reset_pos, granular_gain, pitch_mode, trig_mode, subharmonics_1, subharmonics_2, subharmonics_3, overtones_1, overtones_2, cutoff, hpf, hpfq, lpf_gain, direction_mod, size_variation, low_gain, mid_gain, high_gain, smoothbass, probability, env_select = 0, pitch_random_prob=0, pitch_random_scale_buf=0, pitch_random_scale_len=1, pitch_random_direction=1, ratcheting_prob=0, pitch_lag_time, rec_pos_bus = -1, stereo_trig_offset = 0, stereo_independent = 0;
             var grain_trig, grain_trig_r, jitter_sig, pan_sig, buf_pos, sig_mix, density_mod, density_mod_r, dry_sig, granular_sig, base_pitch, grain_pitch, grain_size;
             var main_vol = 1 / (1 + subharmonics_1 + subharmonics_2 + subharmonics_3 + overtones_1 + overtones_2);
             var subharmonic_1_vol = subharmonics_1 * main_vol * 2;
@@ -66,7 +66,7 @@ alloc {
             var overtone_1_vol = overtones_1 * main_vol * 1.5;
             var overtone_2_vol = overtones_2 * main_vol * 1.5;
             var trigger60 = Impulse.kr(60);
-            var grain_direction, base_trig, base_grain_trig, rand_val, rand_val2, rand_val_r, random_interval, ratchet_gate, extra_trig, signal, stepIndex, actualStep, direction, totalStep, scaleDegree, octaveShift, semitones, grain_pan, envBuf, randomEnv, harmonics, volumes, l_harmonics, r_harmonics, vol, size_mults, rand_detune_l, rand_detune_r, density_mod_recip, jitter_range, buf_frames_l, buf_frames_r, buf_dur_recip, wrapped_grain_pos;
+            var grain_direction, base_trig, base_grain_trig, rand_val, rand_val2, rand_val_r, random_interval, ratchet_gate, extra_trig, signal, stepIndex, actualStep, direction, totalStep, scaleDegree, octaveShift, semitones, grain_pan, envBuf, randomEnv, harmonics, volumes, l_harmonics, r_harmonics, vol, size_mults, density_mod_recip, jitter_range, buf_frames_l, buf_frames_r, buf_dur_recip, wrapped_grain_pos;
 
             speed = Lag.kr(speed, 1);
             density_mod = density * (2**(LFNoise1.kr(density).range(0, 1) * density_mod_amt));
@@ -112,10 +112,8 @@ alloc {
             harmonics = [1, 1/2, 1/4, 1/8, 2, 4];
             volumes = [main_vol, subharmonic_1_vol, subharmonic_2_vol, subharmonic_3_vol, overtone_1_vol, overtone_2_vol];
             size_mults = [1, smoothbass, smoothbass, smoothbass, 1, 1];
-            rand_detune_l = TRand.kr(trig: grain_trig, lo: 0, hi: 1) * stereo_detune;
-            rand_detune_r = TRand.kr(trig: grain_trig_r, lo: 0, hi: 1) * stereo_detune;
-            l_harmonics = harmonics.collect { |harmonic, i| var active_trig = grain_trig * (volumes[i] > 0); var grain_pan_l = (grain_pan - 0.75).clip(-1, 1); GrainBuf.ar(numChannels: 2, trigger: active_trig, dur: grain_size * size_mults[i], sndbuf: buf_l, rate: grain_pitch * harmonic * grain_direction * (1 + rand_detune_l), pos: buf_pos + jitter_sig, interp: 4, pan: grain_pan_l, envbufnum: envBuf, mul: volumes[i]); };
-            r_harmonics = harmonics.collect { |harmonic, i| var active_trig = grain_trig_r * (volumes[i] > 0); var grain_pan_r = (grain_pan + 0.75).clip(-1, 1); GrainBuf.ar(numChannels: 2, trigger: active_trig, dur: grain_size * size_mults[i], sndbuf: buf_r, rate: grain_pitch * harmonic * grain_direction * (1 - rand_detune_r), pos: buf_pos + jitter_sig, interp: 4, pan: grain_pan_r, envbufnum: envBuf, mul: volumes[i]); };
+            l_harmonics = harmonics.collect { |harmonic, i| var active_trig = grain_trig * (volumes[i] > 0); GrainBuf.ar(numChannels: 2, trigger: active_trig, dur: grain_size * size_mults[i], sndbuf: buf_l, rate: grain_pitch * harmonic * grain_direction, pos: buf_pos + jitter_sig, interp: 4, pan: grain_pan, envbufnum: envBuf, mul: volumes[i]); };
+            r_harmonics = harmonics.collect { |harmonic, i| var active_trig = grain_trig_r * (volumes[i] > 0); GrainBuf.ar(numChannels: 2, trigger: active_trig, dur: grain_size * size_mults[i], sndbuf: buf_r, rate: grain_pitch * harmonic * grain_direction, pos: buf_pos + jitter_sig, interp: 4, pan: grain_pan, envbufnum: envBuf, mul: volumes[i]); };
             granular_sig = Mix.ar(l_harmonics) + Mix.ar(r_harmonics);
             sig_mix = dry_sig * (1 - granular_gain) + (granular_sig * granular_gain);
             sig_mix = eqChain.(sig_mix, low_gain, mid_gain, high_gain, hpf, cutoff, lpf_gain);
@@ -127,7 +125,7 @@ alloc {
             SendReply.kr(grain_trig, '/grain_pos', [voice, wrapped_grain_pos, grain_size, rand_val]);
             SendReply.kr(grain_trig_r, '/grain_pos_r', [voice, wrapped_grain_pos, grain_size, rand_val_r]);
             SendReply.kr(trigger60, '/voice_peak', [voice, Peak.kr(signal[0], trigger60), Peak.kr(signal[1], trigger60)]);
-            Out.ar(out, signal * 1.25);
+            Out.ar(out, signal * 1.2);
         }).add;
 
         context.server.sync;
@@ -154,7 +152,7 @@ alloc {
             sig = Balance2.ar(sig[0], sig[1], pan);
             sig = sig * Lag.kr(gain);
             SendReply.kr(trigger60, '/voice_peak', [voice, Peak.kr(sig[0], trigger60), Peak.kr(sig[1], trigger60)]);
-            Out.ar(out, sig * 1.25);
+            Out.ar(out, sig * 1.2);
         }).add;
         
         SynthDef(\liveInputRecorder, {
@@ -177,13 +175,14 @@ alloc {
         SynthDef(\delay, {
             arg inBus, outBus, mix=0.0, delay=0.5, fb_amt=0.3, dhpf=20, lpf=20000, w_rate=0.0, w_depth=0.0, stereo=0.2;
             var input, local, fb, delayed, wet, combinedMod, lfo2Rate, lfo3Rate;
+            var baseLFO, drift, wobble, steps;
             lfo2Rate = w_rate * (1 + LFNoise1.kr(0.13, 0.18));
             lfo3Rate = w_rate * 0.71;
-            combinedMod = w_depth * (
-                (LFNoise2.kr(w_rate * 0.17) * 0.4) +
-                ((LFTri.kr(lfo2Rate) + (LFNoise1.kr(lfo2Rate * 2.3) * 0.45)) * 0.35) +
-                ((SinOsc.kr(lfo3Rate) * LFNoise2.kr(lfo3Rate * 0.3).madd(0.6, 0.7) + (LFNoise2.kr(lfo3Rate * 1.41) * 0.4)) * 0.25) +
-                (Latch.kr(LFNoise0.kr(w_rate * 6.3), Dust.kr(w_rate * 4.7)) * 0.08));
+            baseLFO = SinOsc.kr(w_rate * [0.6, 0.63]).sum * 0.5;
+            drift = LFNoise2.kr(w_rate * 0.15) * 0.35;
+            wobble = SinOsc.kr(lfo2Rate + (drift * 0.6)) * LFNoise2.kr(lfo3Rate * 0.25).range(0.5, 1.2) * 0.25;
+            steps = Latch.kr(LFNoise0.kr(w_rate * 6.3), Dust.kr(w_rate * 4.7)) * 0.08;
+            combinedMod = w_depth * Mix([baseLFO * 0.4, drift, wobble, steps]);
             input = In.ar(inBus, 2);
             local = LocalIn.ar(2);
             fb = LPF.ar(HPF.ar(local, dhpf), lpf);
@@ -499,7 +498,6 @@ alloc {
         this.addCommand("rspeed", "f", { arg msg; rotateEffect.set(\rspeed, msg[1]); rotateEffect.run(msg[1] > 0); });
         this.addCommand("haas", "i", { arg msg; haasEffect.set(\haas, msg[1]); haasEffect.run(msg[1] > 0); });
         this.addCommand("pitch_lag", "if", { arg msg; var voice = msg[1] - 1; currentPitchLag[voice] = msg[2]; voices[voice].set(\pitch_lag_time, msg[2]); });
-        this.addCommand("stereo_detune", "if", { arg msg; var voice = msg[1] - 1; currentStereoDetune[voice] = msg[2]; voices[voice].set(\stereo_detune, msg[2]); });
         this.addCommand("stereo_trig_offset", "if", { arg msg; var voice = msg[1] - 1; currentStereoTrigOffset[voice] = msg[2]; voices[voice].set(\stereo_trig_offset, msg[2]); });
         this.addCommand("stereo_independent", "ii", { arg msg; var voice = msg[1] - 1; currentStereoIndependent[voice] = msg[2]; voices[voice].set(\stereo_independent, msg[2]); });
 

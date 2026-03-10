@@ -11,17 +11,15 @@ local evolvable_params_cache   = {}
 local cache_dirty              = true
 local evolution_symmetry_state = false
 
-local function random_float(l, h) return l + math.random() * (h - l) end
+local utils = include("lib/utils")
+local random_float    = utils.random_float
+local stop_metro_safe = utils.stop_metro_safe
 
 local function clear_table(t) for k in pairs(t) do t[k] = nil end end
 
 local function interpolate(current, target, threshold, factor)
   if math.abs(current - target) < threshold then return target end
   return current + (target - current) * (1 - math.exp(-4 * factor))
-end
-
-local function stop_metro_safe(m)
-  if m then pcall(function() m:stop() end); m.event = nil end
 end
 
 local function mirror_param_name(param)
@@ -40,7 +38,7 @@ local PARAM_SPECS = {
   ["1overtones_1"]        = {1,   {0,1},     "granular"}, ["2overtones_1"]     = {1,   {0,1},     "granular"},
   ["1overtones_2"]        = {1,   {0,1},     "granular"}, ["2overtones_2"]     = {1,   {0,1},     "granular"},
   ["1ratcheting_prob"]    = {25,  {0,100},   "granular"}, ["2ratcheting_prob"] = {25,  {0,100},   "granular"},
-  ["1stereo_trig_offset"] = {25,  {0,100},   "granular"}, ["2stereo_trig_offset"] = {25,  {0,100},   "granular"},
+  ["1stereo_trig_offset"] = {50,  {0,50},   "granular"}, ["2stereo_trig_offset"] = {50,  {0,50},   "granular"},
   ["delay_feedback"]      = {100, {0,100},   "delay"},
   ["delay_time"]          = {2,   {0,2},     "delay"},
   ["stereo"]              = {50,  {0,100},   "delay"},
@@ -122,14 +120,10 @@ local function init_evolution_state(name)
 end
 
 local function evolve_parameter(name, state)
-  if math.random() < state.direction_change_prob then
-    state.velocity = random_float(-state.max_drift_range / 50, state.max_drift_range / 50)
-  end
+  if math.random() < state.direction_change_prob then state.velocity = random_float(-state.max_drift_range / 50, state.max_drift_range / 50) end
   state.velocity      = state.velocity * state.momentum_decay
                       + random_float(-1, 1) * (state.max_drift_range / 30)
-  state.current_drift = util.clamp(state.current_drift + state.velocity,
-                                   -state.max_drift_range, state.max_drift_range)
-
+  state.current_drift = util.clamp(state.current_drift + state.velocity, -state.max_drift_range, state.max_drift_range)
   local new_value = state.center_value + state.current_drift
   local spec = PARAM_SPECS[name]
   local bounds = spec and spec[2]
@@ -151,17 +145,14 @@ local function evolution_update()
   if not evolution_active then return end
   build_evolvable_params_cache()
   if #evolvable_params_cache == 0 then return end
-
   local symmetry = evolution_symmetry_state
   local updated  = {}
-
   for _, name in ipairs(evolvable_params_cache) do
     if params.lookup[name] and not updated[name] then
       init_evolution_state(name)
       local new_value = evolve_parameter(name, evolution_states[name])
       params:set(name, new_value)
       updated[name] = true
-
       if symmetry and name:match("^%d") then
         local mirror = mirror_param_name(name)
         if params.lookup[mirror] and not updated[mirror] then
@@ -299,28 +290,28 @@ local param_configs = {
     {name="highcut",        prob=0.6,  default=2000, random=function() return math.random(1500,3500)     end},
   }},
   shimmer = { lock_param = "lock_shimmer", params = {
-    {name="shimmer_oct1", prob=0.15, default=4,   random=function() return math.random(3,5)         end, direct_set=true},
-    {name="pitchv1",      prob=0.5,  default=0,   random=function() return math.random(0,3)         end, direct_set=true},
-    {name="lowpass1",     prob=0.5,  default=13000,random=function() return math.random(6000,15000)  end},
-    {name="hipass1",      prob=0.5,  default=1300, random=function() return math.random(400,1500)   end},
-    {name="fb1",          prob=0.3,  default=15,   random=function() return math.random(10,35)      end},
-    {name="fbDelay1",     prob=0.3,  default=0.2,  random=function() return random_float(0.15,0.35) end},
+    {name="shimmer_oct1", prob=0.15, default=4,    random=function() return math.random(3,5)         end, direct_set=true},
+    {name="pitchv1",      prob=0.5,  default=0,    random=function() return math.random(0,3)         end, direct_set=true},
+    {name="lowpass1",     prob=0.5,  default=13000,random=function() return math.random(5000,15000)  end},
+    {name="hipass1",      prob=0.5,  default=1300, random=function() return math.random(300,1600 )   end},
+    {name="fb1",          prob=0.3,  default=15,   random=function() return math.random(10,35)       end},
+    {name="fbDelay1",     prob=0.3,  default=0.2,  random=function() return random_float(0.1,0.3)    end},
   }},
   delay = { lock_param = "lock_delay", params = {
-    {name="delay_time",     prob=0.3, default=0.5,   random=function() return random_float(0.1,1)        end, direct_set=true},
-    {name="delay_feedback", prob=1,   default=30,    random=function() return math.random(10,80)         end},
+    {name="delay_time",     prob=0.5, default=0.5,   random=function() return random_float(0.1,1)        end, direct_set=true},
+    {name="delay_feedback", prob=1.0, default=30,    random=function() return math.random(10,80)         end},
     {name="stereo",         prob=0.5, default=20,    random=function() return math.random(0,100)         end},
-    {name="delay_lowpass",  prob=0.6, default=12000, random=function() return math.random(500,20000)     end},
-    {name="delay_highpass", prob=0.6, default=150,   random=function() return math.random(20,800)        end},
-    {name="wiggle_depth",   prob=0.4, default=5,     random=function() return math.random(0,50)          end, direct_set=true},
-    {name="wiggle_rate",    prob=0.5, default=2,     random=function() return random_float(0.4,5)        end},
+    {name="delay_lowpass",  prob=0.6, default=7500, random=function() return math.random(500,20000)     end},
+    {name="delay_highpass", prob=0.6, default=200,   random=function() return math.random(20,800)        end},
+    {name="wiggle_depth",   prob=0.5, default=25,    random=function() return math.random(0,100)         end, direct_set=true},
+    {name="wiggle_rate",    prob=0.5, default=2,     random=function() return random_float(0.4,6)        end},
   }},
   tape = { lock_param = "lock_tape", params = {
-    {name="wobble_amp",  prob=0.4, default=10, random=function() return math.random(1,15) end},
+    {name="wobble_amp",  prob=0.4, default=10, random=function() return math.random(1,15)  end},
     {name="wobble_rpm",  prob=0.4, default=33, random=function() return math.random(30,70) end},
-    {name="flutter_amp", prob=0.4, default=15, random=function() return math.random(1,30) end},
-    {name="flutter_freq",prob=0.4, default=6,  random=function() return math.random(2,10) end},
-    {name="flutter_var", prob=0.4, default=2,  random=function() return math.random(1,5)  end},
+    {name="flutter_amp", prob=0.4, default=15, random=function() return math.random(1,30)  end},
+    {name="flutter_freq",prob=0.4, default=6,  random=function() return math.random(2,10)  end},
+    {name="flutter_var", prob=0.4, default=2,  random=function() return math.random(1,5)   end},
   }},
   pitch = { lock_param = "lock_pitch", params = {
     {name="pitch_quantize_scale", prob=0.3, default=2, direct_set=true,
@@ -340,7 +331,7 @@ local track_param_configs = {
     {name=track.."overtones_1",      prob=0.5, default=0, random=function() return random_float(0,0.4)     end},
     {name=track.."overtones_2",      prob=0.5, default=0, random=function() return random_float(0,0.4)     end},
     {name=track.."env_select",       prob=0.5, default=1, random=function() return math.random(1,6)        end},
-    {name=track.."ratcheting_prob",  prob=0.2, default=0, random=function() return math.random(1,25)      end},
+    {name=track.."ratcheting_prob",  prob=0.2, default=0, random=function() return math.random(1,25)       end},
     {name=track.."stereo_trig_offset",  prob=0.5, default=0, random=function() return math.random(1,50)    end},
     {name=track.."stereo_independent", prob=0.5, default=1, random=function() return 2                     end, direct_set=true},
   }} end,
@@ -357,7 +348,6 @@ local track_param_configs = {
 
 local function randomize_track(track, steps, group_fns)
   for _, fn in ipairs(group_fns) do randomize_param_group(fn(track)) end
-  start_interpolation(steps, params:get("symmetry") == 1)
 end
 
 local function randomize_params(steps, track_num)

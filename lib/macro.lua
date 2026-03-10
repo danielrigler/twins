@@ -1,4 +1,5 @@
 local macro = {}
+local utils = include("lib/utils")
 
 local TARGET_DEPTH_PERCENT = 15
 
@@ -12,12 +13,6 @@ local TARGET_DEPTH_FACTOR = TARGET_DEPTH_PERCENT * 0.01
 local PARAMS_TO_ADJUST = {"speed", "size", "jitter", "density"}
 local NUM_TRACKS = 2
 
-local _LFO_KEYS, _TARGET_KEYS = {}, {}
-for _i = 1, 16 do
-  _LFO_KEYS[_i]    = _i .. "lfo"
-  _TARGET_KEYS[_i] = _i .. "lfo_target"
-end
-
 local lock_params = {}
 for i = 1, NUM_TRACKS do
     lock_params[i] = {}
@@ -26,34 +21,11 @@ end
 
 local lfo_ref = nil
 local randomize_metro = metro.init()
-local lfo_cache = {}
 
 local function clear_table(t) for k in pairs(t) do t[k] = nil end end
 
 function macro.set_lfo_reference(lfo_module)
     lfo_ref = lfo_module
-    clear_table(lfo_cache)
-end
-
-local function get_lfo_for_param(param_name)
-    if not lfo_ref then return false, nil end
-    local cached = lfo_cache[param_name]
-    if cached ~= nil then
-        if cached == false then return false, nil end
-        if type(cached) == "table" and cached.lfo_index then
-            if params:get(_LFO_KEYS[cached.lfo_index]) == 2 then return true, cached.lfo_index
-            else
-                lfo_cache[param_name] = false
-                return false, nil
-            end
-        end
-    end
-    local lfo_targets = lfo_ref.lfo_targets
-    for i = 1, 16 do
-        if lfo_targets[params:get(_TARGET_KEYS[i])] == param_name and params:get(_LFO_KEYS[i]) == 2 then lfo_cache[param_name] = {lfo_index = i} return true, i end
-    end
-    lfo_cache[param_name] = false
-    return false, nil
 end
 
 local function process_lfo_param(param, target, factor, lfo_index)
@@ -84,17 +56,11 @@ local function get_param_range(param_suffix)
     return param_ranges[param_suffix] or {min = 0, max = 100}
 end
 
-local function stop_metro_safe(m)
-    if m then
-        pcall(function() m:stop() end)
-        if m then m.event = nil end
-    end
-end
+local stop_metro_safe = utils.stop_metro_safe
 
 local function adjust_params(multiplier)
     pcall(function() randomize_metro:stop() end)
     randomize_metro.event = nil
-    clear_table(lfo_cache)
     local upper_multiplier = 0.95
     local lower_multiplier = 1.05
     local targets = {}
@@ -124,8 +90,8 @@ local function adjust_params(multiplier)
             local factor = count / steps
             local all_done = true
             for param, target in pairs(targets) do
-                local has_lfo, lfo_index = get_lfo_for_param(param)
-                if has_lfo then
+                local lfo_index = lfo_ref and lfo_ref.get_lfo_for_param(param)
+                if lfo_index then
                     all_done = process_lfo_param(param, target, factor, lfo_index) and all_done
                 else
                     local current = params:get(param)

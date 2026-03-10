@@ -15,7 +15,6 @@ local DRY_VALUES = {
     tape_mix = 1,
     drive = 0,
     Width = 100,
-    stereo_detune = 0,
     monobass_mix = 1,
     wobble_mix = 0,
     chew_depth = 0,
@@ -40,7 +39,7 @@ local DRY_VALUES_STEREO = {
 
 local STEREO_PARAMS = {"granular_gain", "speed", "eq_low_gain", "eq_mid_gain", "eq_high_gain", "cutoff", "hpf", "lpf_gain", "pan"}
 local MONO_PARAMS = {"reverb_mix", "delay_mix", "bitcrush_mix", "glitch_ratio", "glitch_mix", "shimmer_mix1", "tape_mix", 
-                     "drive", "Width", "stereo_detune", "monobass_mix", "sine_drive_wet", "wobble_mix", "chew_depth", "lossdegrade_mix", 
+                     "drive", "Width", "monobass_mix", "sine_drive_wet", "wobble_mix", "chew_depth", "lossdegrade_mix", 
                      "rspeed", "haas", "dimension_mix"}
 
 local SEEK_PARAMS = {"1seek", "2seek"}

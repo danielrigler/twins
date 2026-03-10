@@ -85,12 +85,14 @@ function lfo.set_walk_all(enabled)
       if params.lookup and params.lookup[LFO_KEYS[i]] and pget(LFO_KEYS[i]) == 2 then
         saved_shapes[i] = pget(SHAPE_KEYS[i])
         pset(SHAPE_KEYS[i], 4)
+        lfo[i].shape_int = 4
       end
     end
   else
     for i, shape_idx in pairs(saved_shapes) do
       if params.lookup and params.lookup[SHAPE_KEYS[i]] then
         pset(SHAPE_KEYS[i], shape_idx)
+        lfo[i].shape_int = shape_idx
       end
     end
     saved_shapes = {}
@@ -99,7 +101,7 @@ end
 
 for i = 1, number_of_outputs do
   lfo[i] = {
-    freq = 0.05, phase = 0, waveform = "sine",
+    freq = 0.05, phase = 0, waveform = "sine", shape_int = 1,
     slope = 0, depth = 50, offset = 0,
     prev = 0, walk_value = 0, walk_velocity = 0,
     sync_to = nil
@@ -171,7 +173,7 @@ function lfo.get_parameter_range(param_name, for_randomize)
   return 0, 100
 end
 
-function lfo.clear_range_cache()
+function lfo.clear_scale_cache()
   scale_array_cache = {}
 end
 
@@ -185,9 +187,9 @@ function lfo.clearLFOs(track, param_type)
     elseif track then return target:match("^" .. track)
     else return true end
   end
-  for target in pairs(assigned_params) do
-    if matches(target) then assigned_params[target] = nil end
-  end
+  local to_clear = {}
+  for target in pairs(assigned_params) do if matches(target) then to_clear[#to_clear + 1] = target end end
+  for _, t in ipairs(to_clear) do assigned_params[t] = nil end
   for i = 1, number_of_outputs do
     if params.lookup[LFO_KEYS[i]] and params.lookup[TARGET_KEYS[i]] then
       local target = lfo.lfo_targets[pget(TARGET_KEYS[i])]
@@ -208,14 +210,13 @@ function lfo.clearLFOs(track, param_type)
       pset("1pan", 0); pset("2pan", 0)
     end
   end
+  lfo.invalidate_lfo_param_cache()
 end
 
 local function randomize_lfo(i, target)
   if assigned_params[target] or not lfo.target_ranges[target] then return end
   if target:match("seek$") and pget(target:sub(1,1) .. "granular_gain") < 100 then return end
-  for j = 1, number_of_outputs do
-    if j ~= i and params.lookup[LFO_KEYS[j]] and pget(LFO_KEYS[j]) == 2 and lfo.lfo_targets[pget(TARGET_KEYS[j])] == target then return end
-  end
+  for j = 1, number_of_outputs do if j ~= i and params.lookup[LFO_KEYS[j]] and pget(LFO_KEYS[j]) == 2 and lfo.lfo_targets[pget(TARGET_KEYS[j])] == target then return end end
   local target_index = LFO_TARGET_REVERSE[target]
   if not target_index then return end
   local ranges   = lfo.target_ranges[target]
@@ -250,18 +251,21 @@ local function randomize_lfo(i, target)
   pset(FREQ_KEYS[i], freq)
   local wf    = ranges.waveform[math.random(#ranges.waveform)]
   if lfo.walk_all then wf = "walk" end
-  lfo[i].waveform = wf
+  lfo[i].waveform  = wf
+  lfo[i].shape_int = LFO_SHAPE_REVERSE[wf] or 1
   local shape_idx = LFO_SHAPE_REVERSE[wf]
   if shape_idx then pset(SHAPE_KEYS[i], shape_idx) end
   pset(TARGET_KEYS[i], target_index)
   pset(LFO_KEYS[i], 2)
   assigned_params[target] = true
+  lfo.invalidate_lfo_param_cache()
 end
 
 local function mirror_lfo(dst, src, is_pan)
   local obj_s, obj_d = lfo[src], lfo[dst]
   obj_d.freq         = obj_s.freq
   obj_d.waveform     = obj_s.waveform
+  obj_d.shape_int    = obj_s.shape_int
   obj_d.depth        = obj_s.depth
   obj_d.walk_value   = obj_s.walk_value
   obj_d.walk_velocity= obj_s.walk_velocity
@@ -384,12 +388,29 @@ function lfo.randomize_lfos(track, allow_volume_lfos)
     end
   end
 end
-function lfo.get_lfo_for_param(param_name)
+
+local _lfo_param_cache       = {}
+local _lfo_param_cache_dirty = true
+
+function lfo.invalidate_lfo_param_cache() _lfo_param_cache_dirty = true end
+
+local function rebuild_lfo_param_cache()
+  for k in pairs(_lfo_param_cache) do _lfo_param_cache[k] = nil end
+  if not params or not params.lookup then _lfo_param_cache_dirty = false; return end
   for i = 1, number_of_outputs do
-    if params.lookup[LFO_KEYS[i]] and pget(LFO_KEYS[i]) == 2 then
-      if lfo.lfo_targets[pget(TARGET_KEYS[i])] == param_name then return i end
+    if params.lookup[LFO_KEYS[i]] and params.lookup[TARGET_KEYS[i]] then
+      if params:get(LFO_KEYS[i]) == 2 then
+        local t = lfo.lfo_targets[params:get(TARGET_KEYS[i])]
+        if t and t ~= "none" then _lfo_param_cache[t] = i end
+      end
     end
   end
+  _lfo_param_cache_dirty = false
+end
+
+function lfo.get_lfo_for_param(param_name)
+  if _lfo_param_cache_dirty then rebuild_lfo_param_cache() end
+  return _lfo_param_cache[param_name]
 end
 
 function lfo.process()
@@ -403,15 +424,15 @@ function lfo.process()
     obj.phase = (old_phase + obj.freq * PHASE_INCREMENT) % 1.0
     local wrapped = obj.phase < old_phase
     local slope
-    local wf = obj.waveform
-    if wf == "sine" then
+    local shape = obj.shape_int
+    if shape == 1 then
       slope = math.sin(obj.phase * TWO_PI)
-    elseif wf == "square" then
+    elseif shape == 3 then
       slope = obj.phase < 0.5 and 1 or -1
-    elseif wf == "random" then
+    elseif shape == 2 then
       if wrapped then obj.prev = math.random() * 2 - 1 end
       slope = obj.prev
-    elseif wf == "walk" then
+    elseif shape == 4 then
       local src = obj.sync_to and lfo[obj.sync_to]
       if src then
         obj.walk_value    = src.walk_value
@@ -445,6 +466,7 @@ function lfo.process()
       if params:get(target) ~= value then params:set(target, value) end
     else
       params:set(LFO_KEYS[i], 1)
+      lfo.invalidate_lfo_param_cache()
       if lfo.on_state_change then lfo.on_state_change() end
     end
     ::continue::
@@ -457,11 +479,11 @@ function lfo.init()
   for i = 1, number_of_outputs do
     params:add_separator("LFO " .. i)
     params:add_option(LFO_KEYS[i],    i .. " LFO",    { "off", "on" }, 1)
-    params:set_action(LFO_KEYS[i],    function() if lfo.on_state_change then lfo.on_state_change() end end)
+    params:set_action(LFO_KEYS[i],    function() lfo.invalidate_lfo_param_cache(); if lfo.on_state_change then lfo.on_state_change() end end)
     params:add_option(TARGET_KEYS[i], i .. " target",  lfo.lfo_targets, 1)
-    params:set_action(TARGET_KEYS[i], function() if lfo.on_state_change then lfo.on_state_change() end end)
+    params:set_action(TARGET_KEYS[i], function() lfo.invalidate_lfo_param_cache(); if lfo.on_state_change then lfo.on_state_change() end end)
     params:add_option(SHAPE_KEYS[i],  i .. " shape",   options.lfotypes, 1)
-    params:set_action(SHAPE_KEYS[i],  function(v) lfo[i].waveform = options.lfotypes[v] end)
+    params:set_action(SHAPE_KEYS[i],  function(v) lfo[i].waveform = options.lfotypes[v]; lfo[i].shape_int = v end)
     params:add_number(DEPTH_KEYS[i],  i .. " depth",   0, 100, 50)
     params:set_action(DEPTH_KEYS[i],  function(v) lfo[i].depth = v end)
     params:add_control(OFFSET_KEYS[i], i .. " offset", controlspec.new(-0.99, 0.99, "lin", 0.001, 0, ""))

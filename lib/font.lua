@@ -80,7 +80,6 @@ font.micro_font = {
 
 local fx_cache = {
   delay_mix = 0,
-  stereo_detune = 0,
   reverb_mix = 0,
   shimmer_mix1 = 0,
   tape_mix = 1,
@@ -189,7 +188,7 @@ function font.draw_fx_status_bucketed(P_func)
     x = x + 4
   end  
   
-  if ((fx_cache.Width ~= 100) or (fx_cache.dimension_mix > 0) or (fx_cache.haas == 2) or (fx_cache.rspeed > 0) or (fx_cache.stereo_detune > 0) or (fx_cache.monobass_mix == 2)) then
+  if ((fx_cache.Width ~= 100) or (fx_cache.dimension_mix > 0) or (fx_cache.haas == 2) or (fx_cache.rspeed > 0) or (fx_cache.monobass_mix == 2)) then
     font.draw_micro_text_bucketed(P_func, x, y, "Z", 1)
     x = x + 6
   end  
