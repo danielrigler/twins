@@ -22,6 +22,15 @@ for i = 1, number_of_outputs do
   OFFSET_KEYS[i] = i .. "offset"
 end
 
+lfo.keys = {
+  lfo    = LFO_KEYS,
+  target = TARGET_KEYS,
+  shape  = SHAPE_KEYS,
+  freq   = FREQ_KEYS,
+  depth  = DEPTH_KEYS,
+  offset = OFFSET_KEYS,
+}
+
 local MusicUtil = require("musicutil")
 local scale_array_cache = {}
 
@@ -45,6 +54,12 @@ local function quantize_pitch_to_scale(value, scale_name)
   if not arr then return value end
   return MusicUtil.snap_note_to_array(60 + value, arr) - 60
 end
+
+lfo.scale_utils = {
+  normalize = normalize_scale_name,
+  get_array = get_scale_array,
+  quantize  = quantize_pitch_to_scale,
+}
 
 local function pget(k)
   if not params or not params.lookup or not params.lookup[k] then return nil end
@@ -104,7 +119,7 @@ lfo.lfo_targets = {
   "none", "1pan", "2pan", "1seek", "2seek", "1jitter", "2jitter",
   "1spread", "2spread", "1size", "2size", "1density", "2density",
   "1volume", "2volume", "1pitch", "2pitch", "1cutoff", "2cutoff",
-  "1hpf", "2hpf", "1speed", "2speed", "morph_amount"}
+  "1hpf", "2hpf", "1speed", "2speed"}
 
 local LFO_TARGET_REVERSE = {}
 for i, t in ipairs(lfo.lfo_targets) do LFO_TARGET_REVERSE[t] = i end
@@ -141,7 +156,6 @@ local param_ranges = {
   ["1pitch"]   = {-48,48},   ["2pitch"]   = {-48,48},
   ["1cutoff"]  = {20,20000}, ["2cutoff"]  = {20,20000},
   ["1hpf"]     = {20,20000}, ["2hpf"]     = {20,20000},
-  ["morph_amount"] = {0, 100},
 }
 
 local randomize_param_ranges = {
@@ -411,7 +425,7 @@ function lfo.process()
         val = util.clamp(val, -1, 1)
         obj.walk_velocity = vel
         obj.walk_value    = val
-        obj.prev          = obj.prev * 0.80 + val * 0.20
+        obj.prev          = obj.prev * 0.90 + val * 0.10
       end
       slope = obj.prev
     else

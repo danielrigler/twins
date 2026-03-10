@@ -118,8 +118,7 @@ local function init_evolution_state(name)
     velocity             = 0,
     momentum_decay       = random_float(0.92, 0.98),
     direction_change_prob= random_float(0.03, 0.08),
-    max_drift_range      = max_range * evolution_range,
-  }
+    max_drift_range      = max_range * evolution_range}
 end
 
 local function evolve_parameter(name, state)
@@ -219,9 +218,7 @@ end
 
 local function set_param(name, prob, default, random_fn, direct, condition)
   if condition and not condition() then return end
-  local val = (math.random() > prob)
-               and (type(default) == "function" and default() or default)
-               or random_fn()
+  local val = (math.random() > prob) and (type(default) == "function" and default() or default) or random_fn()
   if direct then
     params:set(name, val)
     local st = evolution_states[name]
@@ -242,21 +239,17 @@ end
 local function start_interpolation(steps, symmetry)
   if not next(targets) then return end
   steps = math.max(1, steps or 30)
-
   randomize_metro.time  = interpolation_speed
   randomize_metro.count = -1
   randomize_metro.event = function(count)
     local factor   = count / steps
     local all_done = true
-
     for param, data in pairs(targets) do
       if not active_interpolations[param] then goto next_param end
-
       local new_value = interpolate(params:get(param), data.target, data.threshold, factor)
       params:set(param, new_value)
       local st = evolution_states[param]
       if st then st.center_value = new_value; st.current_drift = 0 end
-
       if symmetry and param:match("^%d") then
         local mirror = mirror_param_name(param)
         if params.lookup[mirror] then
@@ -268,16 +261,13 @@ local function start_interpolation(steps, symmetry)
           if math.abs(mnew - mdata.target) > mdata.threshold then all_done = false end
         end
       end
-
       if math.abs(new_value - data.target) > data.threshold then
         all_done = false
       else
         active_interpolations[param] = nil
       end
-
       ::next_param::
     end
-
     if all_done then
       stop_metro_safe(randomize_metro)
       clear_table(targets)
@@ -288,9 +278,7 @@ local function start_interpolation(steps, symmetry)
 end
 
 local function pitch_scale_allowed()
-  for _, key in ipairs({ "lock_pitch", "1lock_pitch", "2lock_pitch" }) do
-    if params.lookup[key] and params:get(key) == 2 then return false end
-  end
+  for _, key in ipairs({ "lock_pitch", "1lock_pitch", "2lock_pitch" }) do if params.lookup[key] and params:get(key) == 2 then return false end end
   return true
 end
 
@@ -343,27 +331,27 @@ local param_configs = {
 
 local track_param_configs = {
   granular = function(track) return { lock_param = "lock_granular", params = {
-    {name=track.."direction_mod",    prob=0.5, default=0, random=function() return math.random(0,20)       end},
-    {name=track.."size_variation",   prob=0.4, default=0, random=function() return math.random(0,40)       end},
-    {name=track.."density_mod_amt",  prob=0.5, default=0, random=function() return math.random(0,50)       end},
+    {name=track.."direction_mod",    prob=0.4, default=0, random=function() return math.random(0,40)       end},
+    {name=track.."size_variation",   prob=0.4, default=0, random=function() return math.random(0,50)       end},
+    {name=track.."density_mod_amt",  prob=0.4, default=0, random=function() return math.random(0,80)       end},
     {name=track.."subharmonics_1",   prob=0.5, default=0, random=function() return random_float(0,0.4)     end},
     {name=track.."subharmonics_2",   prob=0.5, default=0, random=function() return random_float(0,0.4)     end},
     {name=track.."subharmonics_3",   prob=0.5, default=0, random=function() return random_float(0,0.4)     end},
     {name=track.."overtones_1",      prob=0.5, default=0, random=function() return random_float(0,0.4)     end},
     {name=track.."overtones_2",      prob=0.5, default=0, random=function() return random_float(0,0.4)     end},
     {name=track.."env_select",       prob=0.5, default=1, random=function() return math.random(1,6)        end},
-    {name=track.."ratcheting_prob",  prob=0.25, default=0, random=function() return math.random(0,30)      end},
-    {name=track.."stereo_trig_offset",  prob=0.5, default=0, random=function() return math.random(0,50)    end},
-    {name=track.."stereo_independent", prob=0.5, default=0, random=function() return 1                     end, direct_set=true},
+    {name=track.."ratcheting_prob",  prob=0.2, default=0, random=function() return math.random(1,25)      end},
+    {name=track.."stereo_trig_offset",  prob=0.5, default=0, random=function() return math.random(1,50)    end},
+    {name=track.."stereo_independent", prob=0.5, default=1, random=function() return 2                     end, direct_set=true},
   }} end,
   pitch = function(track) return { lock_param = track.."lock_pitch", params = {
-    {name=track.."pitch_random_prob",       prob=0.25, default=0, random=function() return math.random(0,60) end},
+    {name=track.."pitch_random_prob",       prob=0.2, default=0, random=function() return math.random(10,75) end},
     {name=track.."pitch_random_scale_type", prob=1.0,  default=1, condition=pitch_scale_allowed, random=function() return math.random(1,9) end},
   }} end,
   eq = function(track) return { lock_param = "lock_eq", params = {
-    {name=track.."eq_low_gain",  prob=0.4, default=0,    random=function() return random_float(-0.2,0.2) end},
-    {name=track.."eq_mid_gain",  prob=0.4, default=0,    random=function() return random_float(-0.1,0.1) end},
-    {name=track.."eq_high_gain", prob=0.4, default=0.25, random=function() return random_float(0,0.4)    end},
+    {name=track.."eq_low_gain",  prob=0.5, default=0,    random=function() return random_float(-0.2,0.2) end},
+    {name=track.."eq_mid_gain",  prob=0.5, default=0,    random=function() return random_float(-0.1,0.1) end},
+    {name=track.."eq_high_gain", prob=0.5, default=0.25, random=function() return random_float(0,0.4)    end},
   }} end,
 }
 
@@ -377,17 +365,9 @@ local function randomize_params(steps, track_num)
   stop_metro_safe(randomize_metro)
   clear_table(targets)
   clear_table(active_interpolations)
-
   local symmetry = params:get("symmetry") == 1
-
-  for _, group in ipairs({ param_configs.tape, param_configs.delay,
-                            param_configs.jpverb, param_configs.shimmer,
-                            param_configs.pitch }) do
-    randomize_param_group(group)
-  end
-
+  for _, group in ipairs({ param_configs.tape, param_configs.delay, param_configs.jpverb, param_configs.shimmer, param_configs.pitch }) do randomize_param_group(group) end
   local track_fns = { track_param_configs.eq, track_param_configs.granular, track_param_configs.pitch }
-
   if symmetry then
     randomize_track(1, steps, track_fns)
     for param, data in pairs(targets) do
@@ -402,7 +382,6 @@ local function randomize_params(steps, track_num)
   else
     randomize_track(track_num, steps, track_fns)
   end
-
   start_interpolation(steps, symmetry)
 end
 

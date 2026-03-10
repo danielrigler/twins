@@ -58,7 +58,7 @@ alloc {
 
         SynthDef(\synth1, {
             arg out, voice, buf_l, buf_r, pos, speed, jitter, size, density, density_mod_amt, pitch_offset, pan, spread, gain, t_reset_pos, granular_gain, pitch_mode, trig_mode, subharmonics_1, subharmonics_2, subharmonics_3, overtones_1, overtones_2, cutoff, hpf, hpfq, lpf_gain, direction_mod, size_variation, low_gain, mid_gain, high_gain, smoothbass, probability, env_select = 0, pitch_random_prob=0, pitch_random_scale_buf=0, pitch_random_scale_len=1, pitch_random_direction=1, ratcheting_prob=0, pitch_lag_time, rec_pos_bus = -1, stereo_detune = 0, stereo_trig_offset = 0, stereo_independent = 0;
-            var grain_trig, grain_trig_r, jitter_sig, buf_dur, pan_sig, buf_pos, sig_mix, density_mod, density_mod_r, dry_sig, granular_sig, base_pitch, grain_pitch, grain_size;
+            var grain_trig, grain_trig_r, jitter_sig, pan_sig, buf_pos, sig_mix, density_mod, density_mod_r, dry_sig, granular_sig, base_pitch, grain_pitch, grain_size;
             var main_vol = 1 / (1 + subharmonics_1 + subharmonics_2 + subharmonics_3 + overtones_1 + overtones_2);
             var subharmonic_1_vol = subharmonics_1 * main_vol * 2;
             var subharmonic_2_vol = subharmonics_2 * main_vol * 2;
@@ -66,34 +66,37 @@ alloc {
             var overtone_1_vol = overtones_1 * main_vol * 1.5;
             var overtone_2_vol = overtones_2 * main_vol * 1.5;
             var trigger60 = Impulse.kr(60);
-            var lagcutoff = Lag.kr(cutoff, 0.6);
-            var grain_direction, base_trig, base_grain_trig, rand_val, rand_val2, rand_val_r, random_interval, ratchet_gate, extra_trig, signal, stepIndex, actualStep, direction, totalStep, scaleDegree, octaveShift, semitones, grain_pan, envBuf, randomEnv, harmonics, volumes, l_harmonics, r_harmonics, vol, size_mults, rand_detune_l, rand_detune_r;
+            var grain_direction, base_trig, base_grain_trig, rand_val, rand_val2, rand_val_r, random_interval, ratchet_gate, extra_trig, signal, stepIndex, actualStep, direction, totalStep, scaleDegree, octaveShift, semitones, grain_pan, envBuf, randomEnv, harmonics, volumes, l_harmonics, r_harmonics, vol, size_mults, rand_detune_l, rand_detune_r, density_mod_recip, jitter_range, buf_frames_l, buf_frames_r, buf_dur_recip, wrapped_grain_pos;
 
             speed = Lag.kr(speed, 1);
             density_mod = density * (2**(LFNoise1.kr(density).range(0, 1) * density_mod_amt));
             density_mod_r = density * (2**(LFNoise1.kr(density).range(0, 1) * density_mod_amt));
+            density_mod_recip = density_mod.reciprocal;
             base_trig = Select.kr(trig_mode, [Impulse.kr(density_mod), Dust.kr(density_mod)]);
-            ratchet_gate = base_trig * (TRand.kr(trig: base_trig, lo: 0, hi: 1) < ratcheting_prob);
-            extra_trig = TDelay.kr(ratchet_gate, density_mod.reciprocal * 0.5);
+            ratchet_gate = CoinGate.kr(ratcheting_prob, base_trig);
+            extra_trig = TDelay.kr(ratchet_gate, density_mod_recip * 0.5, 2.0);
             base_grain_trig = base_trig + extra_trig;
             grain_trig = CoinGate.kr(probability, base_grain_trig);
-            grain_trig_r = Select.kr((stereo_trig_offset > 0) * (stereo_trig_offset < 1), [grain_trig, TDelay.kr(grain_trig, density_mod.reciprocal * stereo_trig_offset)]);
-            grain_trig_r = Select.kr(stereo_independent, [grain_trig_r, CoinGate.kr(probability, Select.kr(trig_mode, [Impulse.kr(density_mod_r, Rand(0.1, 0.9)), Dust.kr(density_mod_r)]))]);
+            grain_trig_r = Select.kr((stereo_trig_offset > 0) * (stereo_trig_offset < 1), [grain_trig, TDelay.kr(grain_trig, density_mod_recip * stereo_trig_offset)]);
+            grain_trig_r = Select.kr(stereo_independent, [grain_trig_r, CoinGate.kr(probability, Select.kr(trig_mode, [Impulse.kr(density_mod_r, stereo_trig_offset), Dust.kr(density_mod_r)]))]);
             rand_val = TRand.kr(trig: grain_trig, lo: 0, hi: 1);
             rand_val2 = TRand.kr(trig: grain_trig, lo: 0, hi: 1);
             rand_val_r = TRand.kr(trig: grain_trig_r, lo: 0, hi: 1);
             grain_size = size * (1 + TRand.kr(trig: grain_trig, lo: size_variation.neg, hi: size_variation));
             grain_direction = Select.kr(pitch_mode, [1, Select.kr(speed.abs > 0.001, [1, speed.sign])]) * Select.kr((rand_val < direction_mod), [1, -1]);
-            buf_dur = BufDur.kr(buf_l);
-            jitter_sig = TRand.kr(trig: grain_trig, lo: buf_dur.reciprocal.neg * jitter, hi: buf_dur.reciprocal * jitter);  
-            buf_pos = Phasor.kr(trig: t_reset_pos, rate: buf_dur.reciprocal / ControlRate.ir * speed, start: 0, end: 1, resetPos: pos);
-            dry_sig = [PlayBuf.ar(1, buf_l, speed, startPos: pos * BufFrames.kr(buf_l), trigger: t_reset_pos, loop: 1), PlayBuf.ar(1, buf_r, speed, startPos: pos * BufFrames.kr(buf_r), trigger: t_reset_pos, loop: 1)];
+            buf_frames_l = BufFrames.kr(buf_l);
+            buf_frames_r = BufFrames.kr(buf_r);
+            buf_dur_recip = SampleRate.ir / buf_frames_l;
+            jitter_range = buf_dur_recip * jitter;
+            jitter_sig = TRand.kr(trig: grain_trig, lo: jitter_range.neg, hi: jitter_range);
+            buf_pos = Phasor.kr(trig: t_reset_pos, rate: buf_dur_recip / ControlRate.ir * speed, start: 0, end: 1, resetPos: pos);
+            dry_sig = [PlayBuf.ar(1, buf_l, speed, startPos: pos * buf_frames_l, trigger: t_reset_pos, loop: 1), PlayBuf.ar(1, buf_r, speed, startPos: pos * buf_frames_r, trigger: t_reset_pos, loop: 1)];
 
             {
                 var recPos = In.kr(rec_pos_bus);
                 var diff = (buf_pos - recPos.max(0)).abs;
                 var wrappedDist = diff.min(1.0 - diff);
-                var fadeZoneNorm = (0.03 * SampleRate.ir) / BufFrames.kr(buf_l);
+                var fadeZoneNorm = (0.03 * SampleRate.ir) / buf_frames_l;
                 var liveDryFade = (wrappedDist / fadeZoneNorm).clip(0, 1);
                 var dryFade = Select.kr((recPos >= 0), [1.0, liveDryFade]);
                 dry_sig = dry_sig * dryFade;
@@ -119,9 +122,10 @@ alloc {
             sig_mix = Balance2.ar(sig_mix[0], sig_mix[1], pan);
             signal = sig_mix * Lag.kr(gain);
 
+            wrapped_grain_pos = Wrap.kr(buf_pos + jitter_sig);
             SendReply.kr(trigger60, '/buf_pos', [voice, buf_pos]);
-            SendReply.kr(grain_trig, '/grain_pos', [voice, Wrap.kr(buf_pos + jitter_sig), grain_size, rand_val]);
-            SendReply.kr(grain_trig_r, '/grain_pos_r', [voice, Wrap.kr(buf_pos + jitter_sig), grain_size, rand_val_r]);
+            SendReply.kr(grain_trig, '/grain_pos', [voice, wrapped_grain_pos, grain_size, rand_val]);
+            SendReply.kr(grain_trig_r, '/grain_pos_r', [voice, wrapped_grain_pos, grain_size, rand_val_r]);
             SendReply.kr(trigger60, '/voice_peak', [voice, Peak.kr(signal[0], trigger60), Peak.kr(signal[1], trigger60)]);
             Out.ar(out, signal * 1.25);
         }).add;
@@ -172,21 +176,18 @@ alloc {
 
         SynthDef(\delay, {
             arg inBus, outBus, mix=0.0, delay=0.5, fb_amt=0.3, dhpf=20, lpf=20000, w_rate=0.0, w_depth=0.0, stereo=0.2;
-            var input, local, fb, delayed, wet;
-            var combinedMod;
-            var lfo1Rate, lfo2Rate, lfo3Rate;
-            var drift, microWobble, macroWobble;
+            var input, local, fb, delayed, wet, combinedMod, lfo2Rate, lfo3Rate;
+            lfo2Rate = w_rate * (1 + LFNoise1.kr(0.13, 0.18));
+            lfo3Rate = w_rate * 0.71;
+            combinedMod = w_depth * (
+                (LFNoise2.kr(w_rate * 0.17) * 0.4) +
+                ((LFTri.kr(lfo2Rate) + (LFNoise1.kr(lfo2Rate * 2.3) * 0.45)) * 0.35) +
+                ((SinOsc.kr(lfo3Rate) * LFNoise2.kr(lfo3Rate * 0.3).madd(0.6, 0.7) + (LFNoise2.kr(lfo3Rate * 1.41) * 0.4)) * 0.25) +
+                (Latch.kr(LFNoise0.kr(w_rate * 6.3), Dust.kr(w_rate * 4.7)) * 0.08));
             input = In.ar(inBus, 2);
             local = LocalIn.ar(2);
             fb = LPF.ar(HPF.ar(local, dhpf), lpf);
             fb = (1.35 * (1 - (stereo * 0.35)) * fb_amt * [fb[1], fb[0]]).softclip;
-            lfo1Rate = w_rate * 0.17;
-            lfo2Rate = w_rate * (1 + LFNoise1.kr(0.13, 0.18));
-            lfo3Rate = w_rate * 0.71;
-            drift = LFNoise2.kr(lfo1Rate) * w_depth * 0.4;
-            microWobble = (LFTri.kr(lfo2Rate) + (LFNoise1.kr(lfo2Rate * 2.3) * 0.45)) * w_depth * 0.35;
-            macroWobble = ((SinOsc.kr(lfo3Rate) * LFNoise2.kr(lfo3Rate * 0.3).madd(0.6, 0.7)) + (LFNoise2.kr(lfo3Rate * 1.41) * 0.4)) * w_depth * 0.25;
-            combinedMod = drift + microWobble + macroWobble + (Latch.kr(LFNoise0.kr(w_rate * 6.3), Dust.kr(w_rate * 4.7)) * w_depth * 0.08);
             delayed = DelayC.ar(input + fb, 2, Lag.kr(delay, 0.7) + combinedMod);
             wet = Balance2.ar(delayed[0], delayed[1], (SinOsc.kr(delay.max(0.1).reciprocal * 0.5) + (LFNoise2.kr(0.4) * 0.3)) * (stereo / 1.3));
             LocalOut.ar(wet);
@@ -206,7 +207,7 @@ alloc {
             reverb_input = combined + (pitch_feedback * shimmer_mix);
             reverb_output = JPverb.ar(reverb_input, t60, damp, rsize, earlyDiff, modDepth, modFreq, low, mid, high, lowcut, highcut);
             LocalOut.ar(reverb_output);
-            Out.ar(outBus, reverb_output * mix);
+            Out.ar(outBus, reverb_output * mix * 1.2);
         }).add;
 
         SynthDef(\shimmer, {
