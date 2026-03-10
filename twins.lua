@@ -436,7 +436,8 @@ local function apply_morph()
     if skip_param_set[fparam]or not p_lookup[fparam]then return end
     if not valA and not valB then return end
     if not valA then p_set(params,fparam,valB)return end
-    if not valB or valA==valB then p_set(params,fparam,valA)return end
+    if not valB then p_set(params,fparam,valA)return end
+    if valA==valB then return end
     local temp=morph_temp_scene[fparam]
     local new_val
     if not temp then
