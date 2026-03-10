@@ -119,6 +119,7 @@ alloc {
             sig_mix = eqChain.(sig_mix, low_gain, mid_gain, high_gain, hpf, cutoff, lpf_gain);
             sig_mix = Balance2.ar(sig_mix[0], sig_mix[1], pan);
             signal = sig_mix * Lag.kr(gain);
+            signal = { var stereo_width = 1.0 + spread; var mid = (signal[0] + signal[1]) * 0.5; var side = (signal[0] - signal[1]) * 0.5 * stereo_width; [mid + side, mid - side]; }.value;
 
             wrapped_grain_pos = Wrap.kr(buf_pos + jitter_sig);
             SendReply.kr(trigger60, '/buf_pos', [voice, buf_pos]);
