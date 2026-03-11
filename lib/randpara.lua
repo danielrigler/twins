@@ -38,7 +38,6 @@ local PARAM_SPECS = {
   ["1overtones_1"]        = {1,   {0,1},     "granular"}, ["2overtones_1"]     = {1,   {0,1},     "granular"},
   ["1overtones_2"]        = {1,   {0,1},     "granular"}, ["2overtones_2"]     = {1,   {0,1},     "granular"},
   ["1ratcheting_prob"]    = {25,  {0,100},   "granular"}, ["2ratcheting_prob"] = {25,  {0,100},   "granular"},
-  ["1stereo_trig_offset"] = {50,  {0,50},   "granular"}, ["2stereo_trig_offset"] = {50,  {0,50},   "granular"},
   ["delay_feedback"]      = {100, {0,100},   "delay"},
   ["delay_time"]          = {2,   {0,2},     "delay"},
   ["stereo"]              = {50,  {0,100},   "delay"},
@@ -332,8 +331,6 @@ local track_param_configs = {
     {name=track.."overtones_2",      prob=0.5, default=0, random=function() return random_float(0,0.4)     end},
     {name=track.."env_select",       prob=0.5, default=1, random=function() return math.random(1,6)        end},
     {name=track.."ratcheting_prob",  prob=0.2, default=0, random=function() return math.random(1,25)       end},
-    {name=track.."stereo_trig_offset",  prob=0.5, default=0, random=function() return math.random(1,50)    end},
-    {name=track.."stereo_independent", prob=0.5, default=1, random=function() return 2                     end, direct_set=true},
   }} end,
   pitch = function(track) return { lock_param = track.."lock_pitch", params = {
     {name=track.."pitch_random_prob",       prob=0.2, default=0, random=function() return math.random(10,75) end},

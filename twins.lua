@@ -51,7 +51,7 @@ local font = include("lib/font")
 local presets = include("lib/presets")
 local randpara = include("lib/randpara")
 local lfo = include("lib/lfo")
-local morph_voice_params={"speed","pitch","jitter","size","density","spread","pan","seek","cutoff","hpf","lpf_gain","granular_gain","subharmonics_3","subharmonics_2","subharmonics_1","overtones_1","overtones_2","smoothbass","ratcheting_prob","size_variation","direction_mod","density_mod_amt","pitch_random_scale_type","pitch_random_prob","pitch_mode","trig_mode","probability","eq_low_gain","eq_mid_gain","eq_high_gain","env_select","volume","stereo_trig_offset","stereo_independent"}
+local morph_voice_params={"speed","pitch","jitter","size","density","spread","pan","seek","cutoff","hpf","lpf_gain","granular_gain","subharmonics_3","subharmonics_2","subharmonics_1","overtones_1","overtones_2","smoothbass","ratcheting_prob","size_variation","direction_mod","density_mod_amt","pitch_random_scale_type","pitch_random_prob","pitch_mode","probability","eq_low_gain","eq_mid_gain","eq_high_gain","env_select","volume"}
 local morph_global_params={"delay_mix","delay_time","delay_feedback","delay_lowpass","delay_highpass","wiggle_depth","wiggle_rate","stereo","reverb_mix","t60","damp","rsize","earlyDiff","modDepth","modFreq","low","mid","high","lowcut","highcut","shimmer_mix","shimmer_preset","lock_shimmer","tape_mix","sine_drive_wet","drive","wobble_mix","wobble_amp","wobble_rpm","flutter_amp","flutter_freq","flutter_var","chew_depth","chew_freq","chew_variance","lossdegrade_mix","Width","dimension_mix","haas","rspeed","monobass_mix","bitcrush_mix","bitcrush_rate","bitcrush_bits","evolution","evolution_range","evolution_rate","lock_eq","lock_tape","lock_reverb","lock_delay","global_lfo_freq_scale","pitch_quantize_scale","pitch_lag","shimmer_mix1","shimmer_oct1","pitchv1","lowpass1","hipass1","fbDelay1","fb1", "glitch_probability", "glitch_ratio", "glitch_mix", "glitch_min_length", "glitch_max_length", "glitch_reverse", "glitch_pitch" }
 local osc_positions = {[1] = 0, [2] = 0}
 local Mirror = include("lib/mirror") Mirror.init(osc_positions, lfo, morph_voice_params)
@@ -94,7 +94,6 @@ local scene_data = {[1] = {[1] = {}, [2] = {}}, [2] = {[1] = {}, [2] = {}}}
 local morph_temp_scene = {}
 local last_morph_amount = 0 
 local grain_positions = {[1] = {}, [2] = {}}
-local grain_positions_r = {[1] = {}, [2] = {}}
 local rec_positions = {[1] = 0, [2] = 0}
 local cached_buffer_durations = {[1] = 1, [2] = 1}
 local voice_peak_amplitudes = {[1] = {l = 0, r = 0}, [2] = {l = 0, r = 0}}
@@ -117,7 +116,7 @@ local param_modes = {
     pitch = {param = "pitch", delta = 1, engine = true, has_lock = true, y = 41, label = "pitch:", st = true},
     spread = {param = "spread", delta = 2, engine = true, has_lock = true, y = 51, label = "spread:"},
     volume = {param = "volume", engine = true}}
-local param_rows = {} for mode, config in pairs(param_modes) do if config.y then local lbl = config.label table.insert(param_rows, {y = config.y, label = lbl, label_upper = lbl:upper(), name = lbl:match("%a+"), mode = mode, param1 = "1" .. config.param, param2 = "2" .. config.param, hz = config.hz, st = config.st}) end end table.sort(param_rows, function(a, b) return a.y < b.y end)
+local param_rows = {} for mode, config in pairs(param_modes) do if config.y then local lbl = config.label local nm = lbl:match("%a+") table.insert(param_rows, {y = config.y, label = lbl, label_upper = lbl:upper(), name = nm, mode = mode, param1 = "1" .. config.param, param2 = "2" .. config.param, hz = config.hz, st = config.st, fmt_key = config.hz and "hz" or config.st and "st" or nm}) end end table.sort(param_rows, function(a, b) return a.y < b.y end)
 local LIMITS = {size={min=20,max=4999},density={min=0.1,max=50},pitch={min=-48,max=48}}
 local normalize_scale_name    = lfo.scale_utils.normalize
 local get_scale_array         = lfo.scale_utils.get_array
@@ -625,7 +624,7 @@ local function setup_params()
     params:add{type = "trigger", id = "load_preset_menu", name = "Preset Browser", action = function() presets.open_menu() end}
 
     params:add_separator("Settings")
-    params:add_group("GRANULAR", 43)
+    params:add_group("GRANULAR", 37)
     for i = 1, 2 do
       params:add_separator("SAMPLE "..i)
       params:add_control(i.. "granular_gain", i.. " Mix", controlspec.new(0, 100, "lin", 1, 100, "%")) params:set_action(i.. "granular_gain", function(value) engine.granular_gain(i, value * 0.01) if value < 100 then lfo.clearLFOs(i, "seek") end end)
@@ -644,11 +643,8 @@ local function setup_params()
       params:add_option(i.."env_select", i.." Grain Envelope", {"Hann", "Tukey", "Perc.", "Rev. Perc.", "ADSR", "Random"}, 1) params:set_action(i.."env_select", function(value) engine.env_select(i, value - 1) end)
       params:add_control(i.. "size_variation", i.. " Size Variation", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.. "size_variation", function(value) engine.size_variation(i, value * 0.01) end)
       params:add_control(i.. "direction_mod", i.. " Reverse", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.. "direction_mod", function(value) engine.direction_mod(i, value * 0.01) end)
-      params:add_option(i.. "trig_mode", i.. " Trigger Mode", {"impulse", "dust"}, 1) params:set_action(i.."trig_mode", function(value) engine.trig_mode(i, value-1) end)
       params:add_control(i.."probability", i.." Trigger Probability", controlspec.new(0, 100, "lin", 1, 100, "%")) params:set_action(i.."probability", function(value) engine.probability(i, value * 0.01) end)
       params:add_control(i.. "density_mod_amt", i.. " Density Mod", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.. "density_mod_amt", function(value) engine.density_mod_amt(i, value * 0.01) end)      
-      params:add_option(i.. "stereo_independent", i.." Independent Trig", {"off", "on"}, 1) params:set_action(i.. "stereo_independent", function(value) engine.stereo_independent(i, value-1) end)
-      params:add_control(i.."stereo_trig_offset", i.." Trig Offset", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.."stereo_trig_offset", function(value) engine.stereo_trig_offset(i, value * 0.01) end)
       params:add_option(i.. "pitch_mode", i.. " Pitch Mode", {"match speed", "independent"}, 2) params:set_action(i.. "pitch_mode", function(value) engine.pitch_mode(i, value - 1) end)
     end
     params:add_separator(" ")
@@ -1468,9 +1464,28 @@ local SIZE_LINK_OFFSETS = {1,3,5,7,9,11,13,15}
 local function draw_size_link(x,y) for _,offset in ipairs(SIZE_LINK_OFFSETS) do local center = 8 local distance = math.abs(offset - center) local level = math.floor(10 * (1 - distance / center)) P(level, x-4, y+offset) end end
 local function flush() for l=1,15 do local b=buckets[l] if #b.r>0 or #b.p>0 or #b.t>0 then screen.level(l) for _,r in ipairs(b.r) do screen.rect(r[1],r[2],r[3],r[4]); screen.fill() end for _,p in ipairs(b.p) do screen.pixel(p[1],p[2]); screen.fill() end for _,t in ipairs(b.t) do screen.move(t[1],t[2]); if t[4]=="center" then screen.text_center(t[3]) else screen.text(t[3]) end end end end end
 local SYM_CACHE = {}
-for sy = 4, 64, 2 do SYM_CACHE[sy] = math.max(1, math.floor(10 * (1 - math.abs(sy - 34) / 32))) end
+for sy = 4, 64, 2 do local lvl = math.max(1, math.floor(10 * (1 - math.abs(sy - 34) / 32))); SYM_CACHE[#SYM_CACHE+1] = sy; SYM_CACHE[#SYM_CACHE+1] = lvl end
+local _LOG_FILTER_INV = 1.0 / math.log(20000 / 20)
+local _VOL_LINLIN_MUL = 64.0 / 80.0
 local LABEL_CACHE, LABEL_UPPER_CACHE = {}, {}
 for _, m in ipairs({"spread","pitch","density","size","jitter","lpf","hpf","pan","speed","seek"}) do local pad = (m == "lpf" or m == "hpf") and "       " or "      " LABEL_CACHE[m] = m .. ":" .. pad LABEL_UPPER_CACHE[m] = string.upper(m) .. ":" .. pad end
+local _GLUT_N = 256
+local _GLUT_NM = _GLUT_N - 1
+local _ENV_LUT, _FADE_LUT = {}, {}
+do
+  local sin,cos,exp,abs,pi=math.sin,math.cos,math.exp,math.abs,math.pi
+  local lv_scale = LEVEL.hi - 1
+  local function bld(fn) local t={} for i=0,_GLUT_N-1 do t[i]=fn((i+0.5)/_GLUT_N)*lv_scale end return t end
+  for i=0,_GLUT_N-1 do _FADE_LUT[i]=sin(pi*(i+0.5)/_GLUT_N) end
+  _ENV_LUT[1]=bld(function(p) return sin(pi*p) end)
+  _ENV_LUT[2]=bld(function(p) if p<0.25 then return 0.5*(1-cos(pi*p*4)) elseif p>0.75 then return 0.5*(1-cos(pi*(1-p)*4)) else return 1.0 end end)
+  _ENV_LUT[3]=bld(function(p) if p<0.08 then return p*12.5 else return exp(-4*(p-0.08)/0.92) end end)
+  _ENV_LUT[4]=bld(function(p) local r=1-p if r<0.08 then return r*12.5 else return exp(-4*(r-0.08)/0.92) end end)
+  _ENV_LUT[5]=bld(function(p) if p<0.1 then return p*10 elseif p<0.3 then return 1-1.75*(p-0.1) elseif p<0.75 then return 0.65 else return 0.65*(1-(p-0.75)*4) end end)
+  _ENV_LUT[6]=bld(function(p) return abs(sin(pi*p))*(0.6+0.4*sin(p*11.3+2.7)) end)
+end
+local _GPAR_DM = {"1direction_mod","2direction_mod"}
+local _GPAR_ES = {"1env_select","2env_select"}
 
 function redraw()
   if not installer:ready() then installer:redraw() return end
@@ -1480,6 +1495,7 @@ function redraw()
   screen.save()
   screen.translate(0, animation_y)
   clear_ops()
+  local _floor, _abs, _log, _max, _min, _sqrt, _ceil = math.floor, math.abs, math.log, math.max, math.min, math.sqrt, math.ceil
   local C = {
     vol  = {params:get("1volume"), params:get("2volume")},
     pan  = {params:get("1pan"),    params:get("2pan")},
@@ -1488,7 +1504,8 @@ function redraw()
     hpf  = {params:get("1hpf"),    params:get("2hpf")},
     size = {params:get("1size"),   params:get("2size")},
     gran = {params:get("1granular_gain"), params:get("2granular_gain")},
-    live = {in_  = {params:get("1live_input"),  params:get("2live_input")}, dir_ = {params:get("1live_direct"), params:get("2live_direct")}},
+    in_  = {params:get("1live_input"),  params:get("2live_input")},
+    dir_ = {params:get("1live_direct"), params:get("2live_direct")},
     link = params:get("global_pitch_size_density_link") == 1,
     dry  = params:get("dry_mode") == 1,
     sym  = params:get("symmetry") == 1,
@@ -1514,65 +1531,85 @@ function redraw()
       if is_param_locked(t, name) then draw_lock(x, y-1) end
       local is_lfo, _ = is_lfo_active_for_param(param)
       local val = params:get(param)
-      local fmt = FORMAT[row.hz and "hz" or row.st and "st" or name]
+      local fmt = FORMAT[row.fmt_key]
       local txt = fmt and fmt(val, t) or params:string(param)
       T(flash_level(t, hi and LEVEL.hi or LEVEL.val), x, y, txt)
       if is_lfo then
         local a, b = lfo.get_parameter_range(param, true)
-        local bar_w = util.clamp(math.floor(util.linlin(a, b, 0, BAR_W, val)), 0, BAR_W)
+        local bar_w = util.clamp(_floor(util.linlin(a, b, 0, BAR_W, val)), 0, BAR_W)
         R(LEVEL.dim+2, x, y + 1, bar_w, 1)
         local _, fb = lfo.get_parameter_range(param, false)
         if val > b and fb > b then
           local overflow_ratio = util.clamp((val - b) / (fb - b), 0, 1)
-          local overflow_w = math.max(1, math.floor(math.sqrt(overflow_ratio) * BAR_W))
+          local overflow_w = _max(1, _floor(_sqrt(overflow_ratio) * BAR_W))
           R(LEVEL.hi, x, y + 1, overflow_w, 1)
         end
       end
     end
   end
   local function draw_seek_bar_viz(t, x)
-    local dir_t, in_t, spd_t = C.live.dir_[t], C.live.in_[t], C.spd[t]
+    local dir_t, in_t, spd_t = C.dir_[t], C.in_[t], C.spd[t]
     local loaded = audio_active[t] or in_t == 1 or dir_t == 1
     local mode = UPPER[cur_mode] and "seek" or cur_mode
     if mode == "speed" then
       R(1, x, Y.seek, BAR_W, 1)
-      local half_w = math.floor(BAR_W / 2)
-      if loaded then R(LEVEL.hi, x + half_w + math.floor(util.clamp(spd_t / 2, -1, 1) * half_w), Y.seek - 1, 1, 2) end
+      local half_w = _floor(BAR_W / 2)
+      if loaded then R(LEVEL.hi, x + half_w + _floor(util.clamp(spd_t / 2, -1, 1) * half_w), Y.seek - 1, 1, 2) end
     else
-      local animated_bar_w = math.floor(BAR_W * seek_bar_width)
+      local animated_bar_w = _floor(BAR_W * seek_bar_width)
       if dir_t ~= 1 then R(1, x, Y.seek, animated_bar_w, 1) end
       if C.gran[t] > 0 then
         local grains = grain_positions[t]
-        local grains_r = grain_positions_r[t]
         if grains then
+          local bar_w, seek_y = BAR_W, Y.seek
           local dur, keep, drawn = cached_buffer_durations[t], 0, 0
           local spd_fwd = spd_t >= -0.01
-          local dir_mod = params:get(t.."direction_mod") * 0.01
-          local x_end = x + BAR_W - 1
-          local function draw_grain(g, is_r)
+          local dir_mod = params:get(_GPAR_DM[t]) * 0.01
+          local lut = _ENV_LUT[params:get(_GPAR_ES[t])] or _ENV_LUT[1]
+          local lut_n, lut_nm = _GLUT_N, _GLUT_NM
+          local inv_bar_w = 1.0 / bar_w
+          local seg_fade, seg_fwd, seg_grain_start, seg_grain_inv_sz
+          local function draw_seg(a, b)
+            local dl = _floor(a * bar_w); if dl < 0 then dl = 0 end
+            local dr = _ceil(b * bar_w) - 1; if dr >= bar_w then dr = bar_w - 1 end
+            if dr < dl then return end
+            local n = dr - dl + 1
+            local ox = x + dl
+            local inv_gsz = seg_grain_inv_sz
+            local sp_dt = inv_gsz * inv_bar_w
+            local tf = seg_fade
+            local sp
+            if seg_fwd then sp = ((dl + 0.5) * inv_bar_w - seg_grain_start) * inv_gsz
+            else sp = 1.0 - ((dl + 0.5) * inv_bar_w - seg_grain_start) * inv_gsz; sp_dt = -sp_dt end
+            for i = 0, n - 1 do
+              local idx = _floor(sp * lut_n)
+              if idx < 0 then idx = 0 elseif idx > lut_nm then idx = lut_nm end
+              local lv = _ceil(lut[idx] * tf)
+              if lv < 1 then lv = 1 end
+              P(lv, ox + i, seek_y)
+              sp = sp + sp_dt
+            end
+            drawn = drawn + 1
+          end
+          local function draw_grain(g)
             local age = now - g.t
-            local gsize = g.size or 0.1
+            local gsize = g.size
             if age <= gsize then
               if drawn < 25 then
-                local gpos = g.pos or 0
                 local gsz = gsize / dur
-                local rv = g.rv or 0.5
-                local grain_fwd = spd_fwd ~= (rv < dir_mod)
-                local base_level = is_r and (LEVEL.hi - 3) or (LEVEL.hi - 1)
-                local env_phase = age / gsize
-                local envelope = math.sin(math.pi * env_phase)
-                local level = math.max(1, math.ceil(base_level * envelope))
-                local function draw_seg(a, b)
-                  local dl = math.max(x + math.floor(a * BAR_W), x)
-                  local dr = math.min(x + math.ceil(b * BAR_W) - 1, x_end)
-                  if dr >= dl then R(level, dl, Y.seek, dr - dl + 1, 1) drawn = drawn + 1 end
-                end
-                if grain_fwd then
+                seg_grain_inv_sz = 1.0 / gsz
+                seg_fwd = spd_fwd ~= (g.rv < dir_mod)
+                local fi = _floor(age / gsize * lut_n); if fi > lut_nm then fi = lut_nm end
+                seg_fade = _FADE_LUT[fi]
+                local gpos = g.pos
+                if seg_fwd then
                   local e = gpos + gsz
-                  if e > 1 then draw_seg(gpos, 1.0) draw_seg(0, e - 1.0) else draw_seg(gpos, e) end
+                  if e > 1 then seg_grain_start=gpos; draw_seg(gpos,1.0); seg_grain_start=gpos-1.0; draw_seg(0,e-1.0)
+                  else seg_grain_start=gpos; draw_seg(gpos,e) end
                 else
                   local s = gpos - gsz
-                  if s < 0 then draw_seg(s + 1.0, 1.0) draw_seg(0, gpos) else draw_seg(s, gpos) end
+                  if s < 0 then seg_grain_start=gpos-gsz+1.0; draw_seg(s+1.0,1.0); seg_grain_start=gpos-gsz; draw_seg(0,gpos)
+                  else seg_grain_start=gpos-gsz; draw_seg(s,gpos) end
                 end
               end
               return true
@@ -1581,22 +1618,15 @@ function redraw()
           end
           for i = 1, #grains do
             local g = grains[i]
-            if draw_grain(g, false) then keep = keep + 1; grains[keep] = g end
+            if draw_grain(g) then keep = keep + 1; grains[keep] = g end
           end
           for i = keep + 1, #grains do grains[i] = nil end
-          local keep_r = 0
-          for i = 1, #grains_r do
-            local g = grains_r[i]
-            if draw_grain(g, true) then keep_r = keep_r + 1; grains_r[keep_r] = g end
-          end
-          for i = keep_r + 1, #grains_r do grains_r[i] = nil end
         end
       else
         grain_positions[t] = {}
-        grain_positions_r[t] = {}
       end
-      if loaded and dir_t ~= 1 then R(LEVEL.hi, x + math.floor(osc_positions[t] * animated_bar_w), Y.seek - 1, 1, 2) end
-      if in_t == 1 then R(LEVEL.hi, x + math.floor(rec_positions[t] * BAR_W), Y.seek - 1, 2, 2) end
+      if loaded and dir_t ~= 1 then R(LEVEL.hi, x + _floor(osc_positions[t] * animated_bar_w), Y.seek - 1, 1, 2) end
+      if in_t == 1 then R(LEVEL.hi, x + _floor(rec_positions[t] * BAR_W), Y.seek - 1, 2, 2) end
     end
   end
   local upper = UPPER[cur_mode]
@@ -1613,7 +1643,7 @@ function redraw()
     local vL = active and LEVEL.hi or LEVEL.val
     if mode == "seek" then
       if is_param_locked(t, "seek") then draw_lock(x, y_bot) end
-      local txt = C.live.in_[t] == 1 and "live" or C.live.dir_[t] == 1 and "direct" or string.format("%.0f%%", osc_positions[t] * 100)
+      local txt = C.in_[t] == 1 and "live" or C.dir_[t] == 1 and "direct" or string.format("%.0f%%", osc_positions[t] * 100)
       T(flash_level(t, vL), x, y_bot + 1, txt)
     elseif mode == "speed" then
       if is_param_locked(t, "speed") then draw_lock(x, y_bot) end
@@ -1621,28 +1651,28 @@ function redraw()
     elseif mode == "pan" then
       if is_param_locked(t, "pan") then draw_lock(x, y_bot) end
       local p = C.pan[t]
-      T(flash_level(t, LEVEL.hi), x, y_bot + 1, math.abs(p) < 0.5 and "0%" or string.format("%.0f%%", p))
+      T(flash_level(t, LEVEL.hi), x, y_bot + 1, _abs(p) < 0.5 and "0%" or string.format("%.0f%%", p))
     else
       local v = cur_filter == "lpf" and C.cut[t] or C.hpf[t]
       T(flash_level(t, LEVEL.hi), x, y_bot + 1, string.format("%.0f", v))
     end
     if (mode == "seek" or mode == "speed") then
-      local audio_loaded = audio_active[t] or C.live.in_[t] == 1 or C.live.dir_[t] == 1
-      if audio_loaded and C.live.dir_[t] ~= 1 then
+      local audio_loaded = audio_active[t] or C.in_[t] == 1 or C.dir_[t] == 1
+      if audio_loaded and C.dir_[t] ~= 1 then
         local s = C.spd[t]
-        local icon = math.abs(s) < 0.01 and "⏸" or (s > 0 and "▶" or "◀")
+        local icon = _abs(s) < 0.01 and "⏸" or (s > 0 and "▶" or "◀")
         T(vL, t == 1 and 77 or 118, y_bot+1, icon)
       end
     end
     if mode == "seek" or mode == "speed" then draw_seek_bar_viz(t, x) end
   end
   for t=1,2 do
-    local h = util.linlin(-70, 10, 0, 64, C.vol[t])
+    local h = (C.vol[t] + 70) * _VOL_LINLIN_MUL; if h < 0 then h = 0 elseif h > 64 then h = 64 end
     R(LEVEL.dim-3, VOL_X[t], 64 - h + volume_bar_y[t], 2, h)
-    local peak_amp = (audio_active[t] or C.live.in_[t] == 1 or C.live.dir_[t] == 1) and math.max(voice_peak_amplitudes[t].l, voice_peak_amplitudes[t].r) or 0
+    local peak_amp = (audio_active[t] or C.in_[t] == 1 or C.dir_[t] == 1) and _max(voice_peak_amplitudes[t].l, voice_peak_amplitudes[t].r) or 0
     if peak_amp > 0.000316 then
-      local peak_db = util.clamp(20 * math.log(peak_amp, 10), -70, 10)
-      local peak_h = math.min(util.linlin(-70, 10, 0, 64, peak_db), h)
+      local peak_db = 20 * _log(peak_amp, 10); if peak_db < -70 then peak_db = -70 elseif peak_db > 10 then peak_db = 10 end
+      local peak_h = (peak_db + 70) * _VOL_LINLIN_MUL; if peak_h > h then peak_h = h end
       if peak_h > 0 then R(LEVEL.hi-1, VOL_X[t], 64 - peak_h + volume_bar_y[t], 2, peak_h) end
     end
     local pan_pos = util.linlin(-100, 100, PAN_X[t], PAN_X[t] + 25, C.pan[t])
@@ -1653,16 +1683,16 @@ function redraw()
       local x = TRACK_X[t]
       R(1, x, Y.seek, BAR_W, 1)
       local filter_val = cur_filter == "lpf" and C.cut[t] or C.hpf[t]
-      local log_normalized = util.clamp(math.log(filter_val / 20) / math.log(20000 / 20), 0, 1)
-      local bar_width = math.max(1, math.floor(log_normalized * BAR_W))
+      local log_normalized = _log(filter_val / 20) * _LOG_FILTER_INV; if log_normalized < 0 then log_normalized = 0 elseif log_normalized > 1 then log_normalized = 1 end
+      local bar_width = _floor(log_normalized * BAR_W); if bar_width < 1 then bar_width = 1 end
       R(LEVEL.hi, x, Y.seek, bar_width, 1)
     end
   end
   if C.dry then for x=7,15,4 do P(LEVEL.hi, x, 0) end end
-  if C.sym then for sy, lvl in pairs(SYM_CACHE) do P(lvl, 85, sy) end end
-  if C.evo then 
-    local t = now * 4
-    for i=0,2 do P(math.floor(8 + 7 * math.sin(t - i * 0.8)), (i * 2)+6, 63) end
+  if C.sym then local sc=SYM_CACHE for i=1,#sc,2 do P(sc[i+1], 85, sc[i]) end end
+  if C.evo then
+    local _sin, t2 = math.sin, now * 4
+    for i=0,2 do P(_floor(8 + 7 * _sin(t2 - i * 0.8)), (i * 2)+6, 63) end
   end
   if current_scene_mode == "on" then 
     R(1, 7, 1, 22, 1) 
@@ -1675,7 +1705,7 @@ function redraw()
     local pct = string.format("%.0f%%", fx_popup.value)
     local txt = fx_popup.label .. ": " .. pct
     local w = #txt * 5 + 8
-    R(1, 64 - math.floor(w/2), 27, w, 10)
+    R(1, 64 - _floor(w/2), 27, w, 10)
     T(LEVEL.hi, 64, 35, txt, "center")
   end
   flush()
@@ -1705,7 +1735,6 @@ local osc_handlers = {
         showing_save_message = false
     end}
 osc_handlers["/twins/grain_pos"]   = make_grain_handler(grain_positions)
-osc_handlers["/twins/grain_pos_r"] = make_grain_handler(grain_positions_r)
 local function setup_osc() osc.event = function(path, args) local handler = osc_handlers[path] if handler then handler(args) end end end
 
 function init()
