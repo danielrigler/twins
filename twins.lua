@@ -101,7 +101,7 @@ local link_base = {[1]={pitch=nil,size=nil,density=nil,product=nil}, [2]={pitch=
 local ui_metro = nil
 local lfo_cache = {}
 local lfo_cache_dirty = true
-local function invalidate_lfo_cache() lfo_cache_dirty = true end
+local function invalidate_lfo_cache() lfo_cache_dirty = true lfo.invalidate_lfo_param_cache() end
 local function rebuild_lfo_cache() for k in pairs(lfo_cache) do lfo_cache[k] = nil end local targets = lfo.lfo_targets if not targets or not params.lookup then lfo_cache_dirty = false; return end for i = 1, 16 do if params.lookup[MORPH_LFO_KEYS[i]] and params.lookup[MORPH_TARGET_KEYS[i]] then if params:get(MORPH_LFO_KEYS[i]) == 2 then local param_name = targets[params:get(MORPH_TARGET_KEYS[i])] if param_name and param_name ~= "none" then lfo_cache[param_name] = i end end end end lfo_cache_dirty = false end
 local shimmer_presets = {{oct = 0.25, lowpass = 4000, hipass = 60, fb = 0.4}, {oct = 0.5, lowpass = 6000, hipass = 80, fb = 0.4}, {oct = 1, lowpass = 20000, hipass = 20, fb = 0.4}, {oct = 2, lowpass = 14000, hipass = 300, fb = 0.4}, {oct = 4, lowpass = 14000, hipass = 300, fb = 0.4}}
 local param_modes = {
@@ -118,8 +118,8 @@ local param_modes = {
     volume = {param = "volume", engine = true}}
 local param_rows = {} for mode, config in pairs(param_modes) do if config.y then local lbl = config.label local nm = lbl:match("%a+") table.insert(param_rows, {y = config.y, label = lbl, label_upper = lbl:upper(), name = nm, mode = mode, param1 = "1" .. config.param, param2 = "2" .. config.param, hz = config.hz, st = config.st, fmt_key = config.hz and "hz" or config.st and "st" or nm}) end end table.sort(param_rows, function(a, b) return a.y < b.y end)
 local LIMITS = {size={min=20,max=4999},density={min=0.1,max=50},pitch={min=-48,max=48}}
-local normalize_scale_name    = lfo.scale_utils.normalize
-local get_scale_array         = lfo.scale_utils.get_array
+local normalize_scale_name = lfo.scale_utils.normalize
+local get_scale_array = lfo.scale_utils.get_array
 local quantize_pitch_to_scale = lfo.scale_utils.quantize
 local audio_files_cache = nil
 local scale_intervals_cache = {}
@@ -133,7 +133,7 @@ local randomize_flash = {[1] = 0, [2] = 0}
 local FLASH_INTENSITY = 8
 local FLASH_DECAY = 0.9
 local function flash_level(track, base_level) return math.min(base_level + math.floor(randomize_flash[track] * FLASH_INTENSITY), 15) end
-local random_float    = utils.random_float
+local random_float = utils.random_float
 local stop_metro_safe = utils.stop_metro_safe
 local function pause_voice_if_idle(i) if not audio_active[i] and params:get(i.."live_input") ~= 1 and params:get(i.."live_direct") ~= 1 then engine.pause_voice(i) osc_positions[i] = 0 end end
 local function tracked_clock_run(func) local co = clock.run(func) table.insert(active_clocks, co) return co end
@@ -844,7 +844,7 @@ local function setup_params()
       params:add_control(i.. "pitch", i.. " pitch", controlspec.new(-48, 48, "lin", 1, 0, "st")) params:set_action(i.. "pitch", function(value) local scale = params:string("pitch_quantize_scale") local quantized = quantize_pitch_to_scale(value, scale) engine.pitch_offset(i, math.pow(0.5, -quantized / 12)) end)
       params:add_taper(i.. "jitter", i.. " jitter", 0, 999900, 250, 10, "ms") params:set_action(i.. "jitter", function(value) engine.jitter(i, value * 0.001) end)
       params:add_taper(i.. "size", i.. " size", 20, 5000, 500, 1, "ms") params:set_action(i.. "size", function(value) engine.size(i, value * 0.001) end)
-      params:add_taper(i.. "spread", i.. " spread", 0, 100, 65, 0, "%") params:set_action(i.. "spread", function(value) engine.spread(i, value * 0.01) end)
+      params:add_taper(i.. "spread", i.. " spread", 0, 100, 75, 0, "%") params:set_action(i.. "spread", function(value) engine.spread(i, value * 0.01) end)
       params:add_control(i.. "seek", i.. " seek", controlspec.new(0, 100, "lin", 0.01, 0, "%")) params:set_action(i.. "seek", function(value) engine.seek(i, value * 0.01) end)
     end
     params:bang()
@@ -981,7 +981,7 @@ local function randomize(n)
                     end
                 end
             end
-            if all_done then stop_metro_safe(m_rand) end
+            if all_done then stop_metro_safe(m_rand) randomize_metro[n] = nil end
         end
         m_rand:start()
     end
@@ -1133,7 +1133,7 @@ end
 local function handle_randomize_track(n)
     if not key_state[1] then return end
     local track = n == 3 and 2 or 1
-    stop_metro_safe(randomize_metro[track])
+    stop_metro_safe(randomize_metro[track]) randomize_metro[track] = nil
     lfo.clearLFOs(tostring(track))
     lfo.randomize_lfos(tostring(track), params:get("allow_volume_lfos") == 2)
     invalidate_lfo_cache()
@@ -1379,6 +1379,7 @@ local function set_key_tracking(n, state)
     end
 end
 
+local handle_key_press, handle_key_release
 function key(n, z)
     if not installer:ready() then installer:key(n, z) return end
     if presets.is_menu_open() then
@@ -1395,7 +1396,7 @@ function key(n, z)
     if is_press then handle_key_press(n) else handle_key_release(n, both_keys_pressed) end
 end
 
-function handle_key_press(n)
+handle_key_press = function(n)
     if n <= 3 then set_key_tracking(n, "init") end
     if key_state[2] and key_state[3] then
         if not key_trackers[23] then key_trackers[23] = {press_time = nil, had_interaction = false, long_triggered = false} end
@@ -1410,7 +1411,7 @@ function handle_key_press(n)
     if n ~= 1 and key_state[1] then handle_randomize_track(n) end
 end
 
-function handle_key_release(n, both_keys_pressed)
+handle_key_release = function(n, both_keys_pressed)
     local tracker = key_trackers[n]
     if (n == 2 or n == 3) and key_trackers[23] and key_trackers[23].press_time then
         local combo_tracker = key_trackers[23]
@@ -1528,7 +1529,7 @@ function redraw()
       local param = t == 1 and row.param1 or row.param2
       if name == "size" and C.link then draw_size_link(x, y) end
       if is_param_locked(t, name) then draw_lock(x, y-1) end
-      local is_lfo, _ = is_lfo_active_for_param(param)
+      local is_lfo = is_lfo_active_for_param(param)
       local val = params:get(param)
       local fmt = FORMAT[row.fmt_key]
       local txt = fmt and fmt(val, t) or params:string(param)

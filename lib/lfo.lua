@@ -12,6 +12,10 @@ lfo.on_state_change = nil
 local TWO_PI = math.pi * 2
 local PHASE_INCREMENT = 1 / 30
 
+local math_sin = math.sin
+local math_random = math.random
+local util_clamp = util.clamp
+
 local LFO_KEYS, TARGET_KEYS, SHAPE_KEYS, FREQ_KEYS, DEPTH_KEYS, OFFSET_KEYS = {}, {}, {}, {}, {}, {}
 for i = 1, number_of_outputs do
   LFO_KEYS[i]    = i .. "lfo"
@@ -43,9 +47,7 @@ end
 local function get_scale_array(scale_name)
   scale_name = normalize_scale_name(scale_name)
   if scale_name == "none" then return nil end
-  if not scale_array_cache[scale_name] then
-    scale_array_cache[scale_name] = MusicUtil.generate_scale_of_length(60 - 48, scale_name, 97)
-  end
+  if not scale_array_cache[scale_name] then scale_array_cache[scale_name] = MusicUtil.generate_scale_of_length(60 - 48, scale_name, 97) end
   return scale_array_cache[scale_name]
 end
 
@@ -104,8 +106,25 @@ for i = 1, number_of_outputs do
     freq = 0.05, phase = 0, waveform = "sine", shape_int = 1,
     slope = 0, depth = 50, offset = 0,
     prev = 0, walk_value = 0, walk_velocity = 0,
-    sync_to = nil
+    sync_to = nil,
+    active = false, target_idx = 1, target_name = "none",
+    is_pitch = false, is_jitter = false, is_size = false,
+    track_num = "1", last_val = nil
   }
+end
+
+local active_lfos = {}
+local function update_active_lfos()
+  local count = 0
+  for i = 1, number_of_outputs do
+    if lfo[i].active and lfo[i].target_name and lfo[i].target_name ~= "none" then
+      count = count + 1
+      active_lfos[count] = i
+    end
+  end
+  for i = count + 1, #active_lfos do
+    active_lfos[i] = nil
+  end
 end
 
 local function is_audio_loaded(track)
@@ -166,20 +185,16 @@ local randomize_param_ranges = {
 }
 
 function lfo.get_parameter_range(param_name, for_randomize)
-  if param_name:match("jitter$") then return 0, pget(param_name:sub(1,1) .. "max_jitter") or 4999 end
-  if param_name:match("size$") then return 20, pget(param_name:sub(1,1) .. "max_size") or 599 end
+  if param_name:match("jitter$") then local p=param_name:sub(1,1) return 0, (p:match("%d") and pget(p.."max_jitter")) or 4999 end
+  if param_name:match("size$") then local p=param_name:sub(1,1) return 20, (p:match("%d") and pget(p.."max_size")) or 599 end
   local r = (for_randomize and randomize_param_ranges[param_name]) or param_ranges[param_name]
   if r then return r[1], r[2] end
   return 0, 100
 end
 
-function lfo.clear_scale_cache()
-  scale_array_cache = {}
-end
+function lfo.clear_scale_cache() scale_array_cache = {} end
 
-function lfo.scale(v, old_min, old_max, new_min, new_max)
-  return (v - old_min) * (new_max - new_min) / (old_max - old_min) + new_min
-end
+function lfo.scale(v, old_min, old_max, new_min, new_max) return (v - old_min) * (new_max - new_min) / (old_max - old_min) + new_min end
 
 function lfo.clearLFOs(track, param_type)
   local function matches(target)
@@ -216,7 +231,7 @@ end
 local function randomize_lfo(i, target)
   if assigned_params[target] or not lfo.target_ranges[target] then return end
   if target:match("seek$") and pget(target:sub(1,1) .. "granular_gain") < 100 then return end
-  for j = 1, number_of_outputs do if j ~= i and params.lookup[LFO_KEYS[j]] and pget(LFO_KEYS[j]) == 2 and lfo.lfo_targets[pget(TARGET_KEYS[j])] == target then return end end
+  if lfo.get_lfo_for_param(target) then return end
   local target_index = LFO_TARGET_REVERSE[target]
   if not target_index then return end
   local ranges   = lfo.target_ranges[target]
@@ -229,15 +244,15 @@ local function randomize_lfo(i, target)
   if is_pan then
     offset = 0
   elseif is_seek then
-    offset = (math.random() - 0.5)
+    offset = (math_random() - 0.5)
   else
     offset = lfo.scale(cur_val, rand_min, rand_max, -1, 1)
   end
-  local depth = math.random(ranges.depth[1], ranges.depth[2])
+  local depth = math_random(ranges.depth[1], ranges.depth[2])
   local narrow_range = rand_max - rand_min
   local full_range   = full_max - full_min
   local half_swing = (depth * 0.01) * narrow_range / 2
-  local center = util.clamp(lfo.scale(offset, -1, 1, rand_min, rand_max), rand_min + half_swing, rand_max - half_swing)
+  local center = util_clamp(lfo.scale(offset, -1, 1, rand_min, rand_max), rand_min + half_swing, rand_max - half_swing)
   local full_offset = lfo.scale(center, full_min, full_max, -1, 1)
   local full_depth  = depth * (narrow_range / full_range)
   lfo[i].depth  = full_depth
@@ -246,10 +261,10 @@ local function randomize_lfo(i, target)
   pset(OFFSET_KEYS[i], full_offset)
   local min_f = math.floor(ranges.frequency[1] * 100)
   local max_f = math.floor(ranges.frequency[2] * 100)
-  local freq  = math.random(min_f, max_f) / 100
+  local freq  = math_random(min_f, max_f) / 100
   lfo[i].freq = freq
   pset(FREQ_KEYS[i], freq)
-  local wf    = ranges.waveform[math.random(#ranges.waveform)]
+  local wf    = ranges.waveform[math_random(#ranges.waveform)]
   if lfo.walk_all then wf = "walk" end
   lfo[i].waveform  = wf
   lfo[i].shape_int = LFO_SHAPE_REVERSE[wf] or 1
@@ -286,11 +301,7 @@ end
 
 local function free_slots()
   local slots = {}
-  for i = 1, number_of_outputs do
-    if params.lookup[LFO_KEYS[i]] and pget(LFO_KEYS[i]) == 1 then
-      slots[#slots + 1] = i
-    end
-  end
+  for i = 1, number_of_outputs do if params.lookup[LFO_KEYS[i]] and pget(LFO_KEYS[i]) == 1 then slots[#slots + 1] = i end end
   return slots
 end
 
@@ -298,17 +309,14 @@ function lfo.assign_to_current_row(current_mode, current_filter_mode)
   local param_map = {
     seek = "seek", pan = "pan", jitter = "jitter",
     size = "size", density = "density", spread = "spread",
-    speed = "speed", pitch = "pitch"
-  }
+    speed = "speed", pitch = "pitch" }
   local param_name = param_map[current_mode]
   if not param_name then return end
   local symmetry = pget("symmetry") == 1
   lfo.clearLFOs("1", param_name)
   lfo.clearLFOs("2", param_name)
   local slots = free_slots()
-  if symmetry and not lfo.is_param_locked("1", param_name)
-              and not lfo.is_param_locked("2", param_name)
-              and #slots >= 2 then
+  if symmetry and not lfo.is_param_locked("1", param_name) and not lfo.is_param_locked("2", param_name) and #slots >= 2 then
     local s1 = table.remove(slots, 1)
     local s2 = table.remove(slots, 1)
     randomize_lfo(s1, "1" .. param_name)
@@ -316,12 +324,8 @@ function lfo.assign_to_current_row(current_mode, current_filter_mode)
     mirror_lfo(s2, s1, param_name == "pan")
     return
   end
-  if not lfo.is_param_locked("1", param_name) and #slots > 0 then
-    randomize_lfo(table.remove(slots, 1), "1" .. param_name)
-  end
-  if not lfo.is_param_locked("2", param_name) and #slots > 0 then
-    randomize_lfo(table.remove(slots, 1), "2" .. param_name)
-  end
+  if not lfo.is_param_locked("1", param_name) and #slots > 0 then randomize_lfo(table.remove(slots, 1), "1" .. param_name) end
+  if not lfo.is_param_locked("2", param_name) and #slots > 0 then randomize_lfo(table.remove(slots, 1), "2" .. param_name) end
 end
 
 function lfo.assign_volume_lfos()
@@ -357,10 +361,8 @@ function lfo.randomize_lfos(track, allow_volume_lfos)
     local ok = (symmetry and not target:match("volume$")) or target:match("^" .. track)
     if ok and not lfo.is_param_locked(tn, pn) and (not target:match("volume$") or allow_volume_lfos) then
       if target:match("seek$") then
-        if pget(tn .. "granular_gain") >= 100 and math.random() < ranges.chance then
-          candidates[#candidates + 1] = target
-        end
-      elseif math.random() < ranges.chance then
+        if pget(tn .. "granular_gain") >= 100 and math_random() < ranges.chance then candidates[#candidates + 1] = target end
+      elseif math_random() < ranges.chance then
         candidates[#candidates + 1] = target
       end
     end
@@ -368,17 +370,17 @@ function lfo.randomize_lfos(track, allow_volume_lfos)
   local slots = free_slots()
   local mirrored = {}
   while #candidates > 0 and #slots > 0 do
-    local idx    = math.random(#candidates)
+    local idx    = math_random(#candidates)
     local target = table.remove(candidates, idx)
     if not mirrored[target] then
-      local slot = table.remove(slots, math.random(#slots))
+      local slot = table.remove(slots, math_random(#slots))
       randomize_lfo(slot, target)
       if symmetry and not target:match("volume$") then
         local mirror_target = target:gsub("^(%d)(.*)", function(n, rest)
           return tostring((tonumber(n) % 2) + 1) .. rest
         end)
         if #slots > 0 then
-          local slot2 = table.remove(slots, math.random(#slots))
+          local slot2 = table.remove(slots, math_random(#slots))
           randomize_lfo(slot2, mirror_target)
           mirror_lfo(slot2, slot, target:match("pan$"))
           mirrored[mirror_target] = true
@@ -399,8 +401,8 @@ local function rebuild_lfo_param_cache()
   if not params or not params.lookup then _lfo_param_cache_dirty = false; return end
   for i = 1, number_of_outputs do
     if params.lookup[LFO_KEYS[i]] and params.lookup[TARGET_KEYS[i]] then
-      if params:get(LFO_KEYS[i]) == 2 then
-        local t = lfo.lfo_targets[params:get(TARGET_KEYS[i])]
+      if pget(LFO_KEYS[i]) == 2 then
+        local t = lfo.lfo_targets[pget(TARGET_KEYS[i])]
         if t and t ~= "none" then _lfo_param_cache[t] = i end
       end
     end
@@ -415,10 +417,8 @@ end
 
 function lfo.process()
   if lfo_paused or not params.lookup then return end
-  local targets  = lfo.lfo_targets
-  local get_range = lfo.get_parameter_range
-  for i = 1, number_of_outputs do
-    if params:get(LFO_KEYS[i]) ~= 2 then goto continue end
+  for idx = 1, #active_lfos do
+    local i = active_lfos[idx]
     local obj = lfo[i]
     local old_phase = obj.phase
     obj.phase = (old_phase + obj.freq * PHASE_INCREMENT) % 1.0
@@ -426,11 +426,11 @@ function lfo.process()
     local slope
     local shape = obj.shape_int
     if shape == 1 then
-      slope = math.sin(obj.phase * TWO_PI)
+      slope = math_sin(obj.phase * TWO_PI)
     elseif shape == 3 then
       slope = obj.phase < 0.5 and 1 or -1
     elseif shape == 2 then
-      if wrapped then obj.prev = math.random() * 2 - 1 end
+      if wrapped then obj.prev = math_random() * 2 - 1 end
       slope = obj.prev
     elseif shape == 4 then
       local src = obj.sync_to and lfo[obj.sync_to]
@@ -439,11 +439,11 @@ function lfo.process()
         obj.walk_velocity = src.walk_velocity
         obj.prev          = src.prev
       else
-        local vel = obj.walk_velocity * 0.92 + (math.random() - 0.5) * (obj.freq * 0.4)
+        local vel = obj.walk_velocity * 0.92 + (math_random() - 0.5) * (obj.freq * 0.4)
         local val = obj.walk_value + vel
         if     val >  0.75 then vel = vel - (val - 0.75) * 0.1
         elseif val < -0.75 then vel = vel - (val + 0.75) * 0.1 end
-        val = util.clamp(val, -1, 1)
+        val = util_clamp(val, -1, 1)
         obj.walk_velocity = vel
         obj.walk_value    = val
         obj.prev          = obj.prev * 0.90 + val * 0.10
@@ -454,22 +454,29 @@ function lfo.process()
     end
     local mod = slope * (obj.depth * 0.01) + obj.offset
     obj.slope = mod
-    local t_idx = params:get(TARGET_KEYS[i])
-    local target = t_idx and targets[t_idx]
-    if target and target ~= "none" and params.lookup[target] then
-      local mn, mx = get_range(target)
-      local value  = util.clamp(lfo.scale(mod, -1, 1, mn, mx), mn, mx)
-      if target:sub(-5) == "pitch" then
+    local target = obj.target_name
+    if params.lookup[target] then
+      local mn, mx
+      if obj.is_jitter then
+        mn, mx = 0, pget(obj.track_num .. "max_jitter") or 4999
+      elseif obj.is_size then
+        mn, mx = 20, pget(obj.track_num .. "max_size") or 599
+      else
+        local r = param_ranges[target]
+        if r then mn, mx = r[1], r[2] else mn, mx = 0, 100 end
+      end
+      local value = util_clamp(lfo.scale(mod, -1, 1, mn, mx), mn, mx)
+      if obj.is_pitch then
         local scale = params:string("pitch_quantize_scale")
         if scale then value = quantize_pitch_to_scale(value, scale) end
       end
-      if params:get(target) ~= value then params:set(target, value) end
+      local current_val = pget(target)
+      if current_val ~= value then 
+        params:set(target, value) 
+      end
     else
       params:set(LFO_KEYS[i], 1)
-      lfo.invalidate_lfo_param_cache()
-      if lfo.on_state_change then lfo.on_state_change() end
     end
-    ::continue::
   end
 end
 
@@ -478,19 +485,56 @@ local lfo_metro = nil
 function lfo.init()
   for i = 1, number_of_outputs do
     params:add_separator("LFO " .. i)
-    params:add_option(LFO_KEYS[i],    i .. " LFO",    { "off", "on" }, 1)
-    params:set_action(LFO_KEYS[i],    function() lfo.invalidate_lfo_param_cache(); if lfo.on_state_change then lfo.on_state_change() end end)
-    params:add_option(TARGET_KEYS[i], i .. " target",  lfo.lfo_targets, 1)
-    params:set_action(TARGET_KEYS[i], function() lfo.invalidate_lfo_param_cache(); if lfo.on_state_change then lfo.on_state_change() end end)
-    params:add_option(SHAPE_KEYS[i],  i .. " shape",   options.lfotypes, 1)
-    params:set_action(SHAPE_KEYS[i],  function(v) lfo[i].waveform = options.lfotypes[v]; lfo[i].shape_int = v end)
-    params:add_number(DEPTH_KEYS[i],  i .. " depth",   0, 100, 50)
-    params:set_action(DEPTH_KEYS[i],  function(v) lfo[i].depth = v end)
+    params:add_option(LFO_KEYS[i], i .. " LFO", { "off", "on" }, 1)
+    params:set_action(LFO_KEYS[i], function(v) 
+      lfo[i].active = (v == 2)
+      update_active_lfos()
+      lfo.invalidate_lfo_param_cache() 
+      if lfo.on_state_change then lfo.on_state_change() end 
+    end)
+    params:add_option(TARGET_KEYS[i], i .. " target", lfo.lfo_targets, 1)
+    params:set_action(TARGET_KEYS[i], function(v) 
+      lfo[i].target_idx = v
+      local tname = lfo.lfo_targets[v]
+      lfo[i].target_name = tname
+      if tname and tname ~= "none" then
+        lfo[i].is_pitch = (tname:sub(-5) == "pitch")
+        lfo[i].is_jitter = (tname:sub(-6) == "jitter")
+        lfo[i].is_size = (tname:sub(-4) == "size")
+        lfo[i].track_num = tname:sub(1, 1)
+      else
+        lfo[i].is_pitch = false
+        lfo[i].is_jitter = false
+        lfo[i].is_size = false
+        lfo[i].track_num = "1"
+      end
+      update_active_lfos()
+      lfo.invalidate_lfo_param_cache() 
+      if lfo.on_state_change then lfo.on_state_change() end 
+    end)
+    params:add_option(SHAPE_KEYS[i], i .. " shape", options.lfotypes, 1)
+    params:set_action(SHAPE_KEYS[i], function(v) lfo[i].waveform = options.lfotypes[v]; lfo[i].shape_int = v end)
+    params:add_number(DEPTH_KEYS[i], i .. " depth", 0, 100, 50)
+    params:set_action(DEPTH_KEYS[i], function(v) lfo[i].depth = v end)
     params:add_control(OFFSET_KEYS[i], i .. " offset", controlspec.new(-0.99, 0.99, "lin", 0.001, 0, ""))
     params:set_action(OFFSET_KEYS[i], function(v) lfo[i].offset = v end)
-    params:add_control(FREQ_KEYS[i],  i .. " freq",    controlspec.new(0.01, 10.00, "lin", 0.01, 0.05, ""))
-    params:set_action(FREQ_KEYS[i],   function(v) lfo[i].freq = v * params:get("global_lfo_freq_scale") end)
+    params:add_control(FREQ_KEYS[i], i .. " freq", controlspec.new(0.01, 10.00, "lin", 0.01, 0.05, ""))
+    params:set_action(FREQ_KEYS[i], function(v) lfo[i].freq = v * (pget("global_lfo_freq_scale") or 1) end)
   end
+  for i = 1, number_of_outputs do
+    lfo[i].active = pget(LFO_KEYS[i]) == 2
+    local t_idx = pget(TARGET_KEYS[i]) or 1
+    local tname = lfo.lfo_targets[t_idx]
+    lfo[i].target_idx = t_idx
+    lfo[i].target_name = tname
+    if tname and tname ~= "none" then
+      lfo[i].is_pitch = (tname:sub(-5) == "pitch")
+      lfo[i].is_jitter = (tname:sub(-6) == "jitter")
+      lfo[i].is_size = (tname:sub(-4) == "size")
+      lfo[i].track_num = tname:sub(1,1)
+    end
+  end
+  update_active_lfos()
   lfo_metro = metro.init()
   lfo_metro.time  = PHASE_INCREMENT
   lfo_metro.count = -1

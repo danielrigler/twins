@@ -220,6 +220,11 @@ function presets.load_complete_preset(name, scene_data, update_pan, audio_active
     local ok, data = pcall(chunk)
     if not ok or not data then print("✗ Parse error: " .. (data or "?")); return false end
     if data.version and data.version > PRESET_VERSION then print("⚠ Newer preset version") end
+    local saved_output_level
+    if params.lookup["output_level"] then
+        saved_output_level = params:get("output_level")
+        params:set("output_level", -math.huge)
+    end
     for i = 1, 2 do if params.lookup[i .. "volume"] then params:set(i .. "volume", -70) end end
     _G.preset_loading = true
     cancel_loading_clock()
@@ -260,7 +265,11 @@ function presets.load_complete_preset(name, scene_data, update_pan, audio_active
                 end
             end
         end
-        clock.sleep(0.1); redraw()
+        clock.sleep(0.1)
+        if saved_output_level ~= nil and params.lookup["output_level"] then
+            params:set("output_level", saved_output_level)
+        end
+        redraw()
         print("✓ Loaded: " .. name)
         loading_clock = nil
         if on_loaded then on_loaded(data.active_mode, data.active_filter_mode) end
