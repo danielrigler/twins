@@ -36,7 +36,7 @@ alloc {
         shimmerBus = Bus.audio(context.server, 2);
         parallelBus = Bus.audio(context.server, 2);
 
-        grainEnvs = [Env.new([0, 1, 1, 0], [0.15, 0.7, 0.15], [4, 0, -4]), Env.perc(0.01, 0.99, 1, -4), Env.perc(0.99, 0.01, 1, 4), Env.adsr(0.25, 0.15, 0.65, 1, 1, -4, 0)].collect { |env| Buffer.sendCollection(context.server, env.discretize) };
+        grainEnvs = [Env.new([0, 1, 1, 0], [0.15, 0.7, 0.15], [4, 0, -4]), Env.perc(0.01, 0.99, 1, -4), Env.adsr(0.25, 0.15, 0.65, 1, 1, -4, 0)].collect { |env| Buffer.sendCollection(context.server, env.discretize) };
         
         pitchScaleBuffers = pitchScales.collect { |scale| Buffer.sendCollection(context.server, scale, 1) };
         pitchScaleLengths = pitchScales.collect(_.size);
@@ -103,7 +103,7 @@ alloc {
             grain_pitch = grain_pitch * (((rand_val2 < pitch_random_prob) * random_interval * pitch_random_direction).midiratio);
             grain_pan_l = pan - TRand.kr(trig: grain_trig, lo: 0, hi: spread);
             grain_pan_r = pan + TRand.kr(trig: grain_trig, lo: 0, hi: spread);
-            randomEnv = TIRand.kr(0, 3, grain_trig);
+            randomEnv = TIRand.kr(0, 2, grain_trig);
             envBuf = Select.kr(env_select, [-1] ++ grainEnvs ++ [Select.kr(randomEnv, grainEnvs)]);
             harmonics = [1, 1/2, 1/4, 1/8, 2, 4];
             volumes = [main_vol, subharmonic_1_vol, subharmonic_2_vol, subharmonic_3_vol, overtone_1_vol, overtone_2_vol];

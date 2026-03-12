@@ -324,13 +324,13 @@ local track_param_configs = {
     {name=track.."direction_mod",    prob=0.4, default=0, random=function() return math.random(0,40)       end},
     {name=track.."size_variation",   prob=0.4, default=0, random=function() return math.random(0,50)       end},
     {name=track.."density_mod_amt",  prob=0.4, default=0, random=function() return math.random(0,80)       end},
-    {name=track.."subharmonics_1",   prob=0.5, default=0, random=function() return random_float(0,0.4)     end},
-    {name=track.."subharmonics_2",   prob=0.5, default=0, random=function() return random_float(0,0.4)     end},
-    {name=track.."subharmonics_3",   prob=0.5, default=0, random=function() return random_float(0,0.4)     end},
-    {name=track.."overtones_1",      prob=0.5, default=0, random=function() return random_float(0,0.4)     end},
-    {name=track.."overtones_2",      prob=0.5, default=0, random=function() return random_float(0,0.4)     end},
-    {name=track.."env_select",       prob=0.5, default=1, random=function() return math.random(1,6)        end},
-    {name=track.."ratcheting_prob",  prob=0.2, default=0, random=function() return math.random(1,25)       end},
+    {name=track.."subharmonics_1",   prob=0.4, default=0, random=function() return random_float(0,0.4)     end},
+    {name=track.."subharmonics_2",   prob=0.4, default=0, random=function() return random_float(0,0.4)     end},
+    {name=track.."subharmonics_3",   prob=0.4, default=0, random=function() return random_float(0,0.4)     end},
+    {name=track.."overtones_1",      prob=0.4, default=0, random=function() return random_float(0,0.4)     end},
+    {name=track.."overtones_2",      prob=0.4, default=0, random=function() return random_float(0,0.4)     end},
+    {name=track.."env_select",       prob=0.5, default=1, random=function() return math.random(1,5)        end},
+    {name=track.."ratcheting_prob",  prob=0.25, default=0, random=function() return math.random(1,25)       end},
   }} end,
   pitch = function(track) return { lock_param = track.."lock_pitch", params = {
     {name=track.."pitch_random_prob",       prob=0.2, default=0, random=function() return math.random(10,75) end},
@@ -339,7 +339,7 @@ local track_param_configs = {
   eq = function(track) return { lock_param = "lock_eq", params = {
     {name=track.."eq_low_gain",  prob=0.5, default=0,    random=function() return random_float(-0.2,0.2) end},
     {name=track.."eq_mid_gain",  prob=0.5, default=0,    random=function() return random_float(-0.1,0.1) end},
-    {name=track.."eq_high_gain", prob=0.5, default=0.25, random=function() return random_float(0,0.4)    end},
+    {name=track.."eq_high_gain", prob=0.5, default=0.25, random=function() return random_float(0,0.5)    end},
   }} end,
 }
 

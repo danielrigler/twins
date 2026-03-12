@@ -640,7 +640,7 @@ local function setup_params()
       params:add_control(i.."pitch_random_prob", i.." Pitch Randomize", controlspec.new(-100, 100, "lin", 1, 0, "%")) params:set_action(i.."pitch_random_prob", function(value) engine.pitch_random_prob(i, value) end)
       params:add_option(i.."pitch_random_scale_type", i.." Pitch Quantize", {"5th+oct", "5th+oct 2", "1 oct", "2 oct", "chrom", "maj", "min", "penta", "whole"}, 1) params:set_action(i.."pitch_random_scale_type", function(value) engine.pitch_random_scale_type(i, value - 1) end)
       params:add_control(i.."ratcheting_prob", i.." Ratcheting", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.."ratcheting_prob", function(value) engine.ratcheting_prob(i, value) end)
-      params:add_option(i.."env_select", i.." Grain Envelope", {"Hann", "Tukey", "Perc.", "Rev. Perc.", "ADSR", "Random"}, 1) params:set_action(i.."env_select", function(value) engine.env_select(i, value - 1) end)
+      params:add_option(i.."env_select", i.." Grain Envelope", {"Hann", "Tukey", "Perc.", "ADSR", "Random"}, 1) params:set_action(i.."env_select", function(value) engine.env_select(i, value - 1) end)
       params:add_control(i.. "size_variation", i.. " Size Variation", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.. "size_variation", function(value) engine.size_variation(i, value * 0.01) end)
       params:add_control(i.. "direction_mod", i.. " Reverse", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.. "direction_mod", function(value) engine.direction_mod(i, value * 0.01) end)
       params:add_control(i.."probability", i.." Trigger Probability", controlspec.new(0, 100, "lin", 1, 100, "%")) params:set_action(i.."probability", function(value) engine.probability(i, value * 0.01) end)
@@ -1554,7 +1554,13 @@ function redraw()
     if mode == "speed" then
       R(1, x, Y.seek, BAR_W, 1)
       local half_w = _floor(BAR_W / 2)
-      if loaded then R(LEVEL.hi, x + half_w + _floor(util.clamp(spd_t / 2, -1, 1) * half_w), Y.seek - 1, 1, 2) end
+      if loaded then
+        local cx = x + half_w
+        local off = _floor(util.clamp(spd_t / 2, -1, 1) * half_w)
+        local dir = off >= 0 and 1 or -1
+        for i = 0, math.abs(off) do P(4 + _floor((LEVEL.hi - 4) * (1 - i / math.max(math.abs(off), 1))), cx + dir * i, Y.seek) end
+        R(LEVEL.hi, cx + off, Y.seek - 1, 1, 2)
+      end
     else
       local animated_bar_w = _floor(BAR_W * seek_bar_width)
       if dir_t ~= 1 then R(1, x, Y.seek, animated_bar_w, 1) end
@@ -1595,8 +1601,8 @@ function redraw()
             local age = now - g.t
             local gsize = g.size
             if age <= gsize then
-              if drawn < 25 then
-                local gsz = gsize / dur
+              if drawn < 50 then
+                local gsz = math.min(gsize / dur, 1)
                 seg_grain_inv_sz = 1.0 / gsz
                 seg_fwd = spd_fwd ~= (g.rv < dir_mod)
                 local fi = _floor(age / gsize * lut_n); if fi > lut_nm then fi = lut_nm end
