@@ -1480,9 +1480,8 @@ do
   _ENV_LUT[1]=bld(function(p) return sin(pi*p) end)
   _ENV_LUT[2]=bld(function(p) if p<0.25 then return 0.5*(1-cos(pi*p*4)) elseif p>0.75 then return 0.5*(1-cos(pi*(1-p)*4)) else return 1.0 end end)
   _ENV_LUT[3]=bld(function(p) if p<0.08 then return p*12.5 else return exp(-4*(p-0.08)/0.92) end end)
-  _ENV_LUT[4]=bld(function(p) local r=1-p if r<0.08 then return r*12.5 else return exp(-4*(r-0.08)/0.92) end end)
-  _ENV_LUT[5]=bld(function(p) if p<0.1 then return p*10 elseif p<0.3 then return 1-1.75*(p-0.1) elseif p<0.75 then return 0.65 else return 0.65*(1-(p-0.75)*4) end end)
-  _ENV_LUT[6]=bld(function(p) return abs(sin(pi*p))*(0.6+0.4*sin(p*11.3+2.7)) end)
+  _ENV_LUT[4]=bld(function(p) if p<0.1 then return p*10 elseif p<0.3 then return 1-1.75*(p-0.1) elseif p<0.75 then return 0.65 else return 0.65*(1-(p-0.75)*4) end end)
+  _ENV_LUT[5]=bld(function(p) return abs(sin(pi*p))*(0.6+0.4*sin(p*11.3+2.7)) end)
 end
 local _GPAR_DM = {"1direction_mod","2direction_mod"}
 local _GPAR_ES = {"1env_select","2env_select"}
@@ -1571,10 +1570,12 @@ function redraw()
           local dur, keep, drawn = cached_buffer_durations[t], 0, 0
           local spd_fwd = spd_t >= -0.01
           local dir_mod = params:get(_GPAR_DM[t]) * 0.01
-          local lut = _ENV_LUT[params:get(_GPAR_ES[t])] or _ENV_LUT[1]
+          local env_sel = params:get(_GPAR_ES[t])
+          local lut_default = _ENV_LUT[env_sel] or _ENV_LUT[1]
+          local is_random_env = (env_sel == 5)
           local lut_n, lut_nm = _GLUT_N, _GLUT_NM
           local inv_bar_w = 1.0 / bar_w
-          local seg_fade, seg_fwd, seg_grain_start, seg_grain_inv_sz
+          local seg_fade, seg_fwd, seg_grain_start, seg_grain_inv_sz, seg_lut
           local function draw_seg(a, b)
             local dl = _floor(a * bar_w); if dl < 0 then dl = 0 end
             local dr = _ceil(b * bar_w) - 1; if dr >= bar_w then dr = bar_w - 1 end
@@ -1590,7 +1591,7 @@ function redraw()
             for i = 0, n - 1 do
               local idx = _floor(sp * lut_n)
               if idx < 0 then idx = 0 elseif idx > lut_nm then idx = lut_nm end
-              local lv = _ceil(lut[idx] * tf)
+              local lv = _ceil(seg_lut[idx] * tf)
               if lv < 1 then lv = 1 end
               P(lv, ox + i, seek_y)
               sp = sp + sp_dt
@@ -1605,6 +1606,7 @@ function redraw()
                 local gsz = math.min(gsize / dur, 1)
                 seg_grain_inv_sz = 1.0 / gsz
                 seg_fwd = spd_fwd ~= (g.rv < dir_mod)
+                seg_lut = is_random_env and (_ENV_LUT[math.floor(g.rv * 4) + 1] or _ENV_LUT[1]) or lut_default
                 local fi = _floor(age / gsize * lut_n); if fi > lut_nm then fi = lut_nm end
                 seg_fade = _FADE_LUT[fi]
                 local gpos = g.pos
