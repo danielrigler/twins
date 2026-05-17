@@ -1,106 +1,45 @@
 local font = {}
 
 font.micro_font = {
-  D = {
-    {1,1,0},
-    {1,0,1},
-    {1,1,0},
-  },
-  B = {
-    {1,0,0},
-    {1,1,1},
-    {1,1,1},
-  },
-  L = {
-    {1,0},
-    {1,0},
-    {1,1},
-  },
-  C = {
-    {1,1,1},
-    {1,0,0},
-    {1,1,1},
-  },
-  G = {
-    {1,1,0},
-    {1,0,1},
-    {1,1,1},
-  },
-  E = {
-    {1,1,1},
-    {1,1,0},
-    {1,1,1},
-  }, 
-  I = {
-    {1,0},
-    {1,0},
-    {1,0},
-  },
-  R = {
-    {1,1,1},
-    {1,1,0},
-    {1,0,1},
-  },
-  T = {
-    {1,1,1},
-    {0,1,0},
-    {0,1,0},
-  },
-  S = {
-    {0,1,1},
-    {0,1,0},
-    {1,1,0},
-  },
-  X = {
-    {0,1,1,1,0,1},
-    {0,1,0,1,1,1},
-    {1,1,0,1,0,1},
-  },
-  V = {
-    {1,0,1},
-    {1,0,1},
-    {0,1,0},
-  },
-  H = {
-    {1,0,1},
-    {1,1,1},
-    {1,0,1},
-  },
-  Z = {
-    {0,1,1,1,1},
-    {0,1,0,1,0},
-    {1,1,0,1,0},
-  },
-  F = {
-    {1,1,1},
-    {1,1,0},
-    {1,0,0},
-  }
+  D = {{1,1,0},{1,0,1},{1,1,0}},
+  B = {{1,0,0},{1,1,1},{1,1,1}},
+  L = {{1,0},{1,0},{1,1}},
+  C = {{1,1,1},{1,0,0},{1,1,1}},
+  G = {{1,1,0},{1,0,1},{1,1,1}},
+  E = {{1,1,1},{1,1,0},{1,1,1}},
+  I = {{1,0},{1,0},{1,0}},
+  R = {{1,1,1},{1,1,0},{1,0,1}},
+  T = {{1,1,1},{0,1,0},{0,1,0}},
+  S = {{0,1,1},{0,1,0},{1,1,0}},
+  X = {{0,1,1,1,0,1},{0,1,0,1,1,1},{1,1,0,1,0,1}},
+  V = {{1,0,1},{1,0,1},{0,1,0}},
+  H = {{1,0,1},{1,1,1},{1,0,1}},
+  Z = {{0,1,1,1,1},{0,1,0,1,0},{1,1,0,1,0}},
+  F = {{1,1,1},{1,1,0},{1,0,0}},
 }
 
 local fx_cache = {
-  delay_mix = 0,
-  reverb_mix = 0,
-  shimmer_mix1 = 0,
-  tape_mix = 1,
-  sine_drive_wet = 0,
-  drive = 0,
-  wobble_mix = 0,
-  chew_depth = 0,
+  delay_mix       = 0,
+  reverb_mix      = 0,
+  shimmer_mix1    = 0,
+  tape_mix        = 1,
+  sine_drive_wet  = 0,
+  drive           = 0,
+  wobble_mix      = 0,
+  chew_depth      = 0,
   lossdegrade_mix = 0,
-  Width = 100,
-  dimension_mix = 0,
-  haas = 1,
-  rspeed = 0,
-  monobass_mix = 1,
-  bitcrush_mix = 0,
-  glitch_ratio = 0,
-  glitch_mix = 0,
-  ["1cutoff"] = 20000,
-  ["2cutoff"] = 20000,
-  ["1hpf"] = 20,
-  ["2hpf"] = 20
-}
+  Width           = 100,
+  dimension_mix   = 0,
+  haas            = 1,
+  rspeed          = 0,
+  monobass_mix    = 1,
+  bitcrush_mix    = 0,
+  glitch_ratio    = 0,
+  glitch_mix      = 0,
+  ["1cutoff"]     = 20000,
+  ["2cutoff"]     = 20000,
+  ["1hpf"]        = 20,
+  ["2hpf"]        = 20}
 
 function font.update_fx_cache(param_name, value)
   if fx_cache[param_name] ~= nil then
@@ -109,7 +48,7 @@ function font.update_fx_cache(param_name, value)
 end
 
 function font.init_fx_cache()
-  for param_name, _ in pairs(fx_cache) do
+  for param_name in pairs(fx_cache) do
     if params:lookup_param(param_name) then
       fx_cache[param_name] = params:get(param_name)
     end
@@ -119,16 +58,16 @@ end
 function font.draw_micro_text_bucketed(P_func, x, y, text, level)
   local cursor_x = x
   for i = 1, #text do
-    local char = text:sub(i, i)
+    local char  = text:sub(i, i)
     local glyph = font.micro_font[char]
     if glyph then
       local w = #glyph[1]
-      for row = 1, 3 do 
-        for col = 1, w do 
-          if glyph[row][col] == 1 then 
+      for row = 1, 3 do
+        for col = 1, w do
+          if glyph[row][col] == 1 then
             P_func(level or 1, cursor_x + col - 1, y + row - 1)
-          end 
-        end 
+          end
+        end
       end
       cursor_x = cursor_x + w + 1
     else
@@ -137,12 +76,17 @@ function font.draw_micro_text_bucketed(P_func, x, y, text, level)
   end
 end
 
-local function is_locked(lock_param_name)
-  local success, param = pcall(function() return params:lookup_param(lock_param_name) end)
-  if success and param then
-    return params:get(lock_param_name) == 2
-  end
-  return false
+local LOCK_KEYS = {
+  delay   = "lock_delay",
+  reverb  = "lock_reverb",
+  shimmer = "lock_shimmer",
+  tape    = "lock_tape",
+  filter  = "lock_filter",
+  glitch  = "lock_glitch",
+}
+
+local function is_locked(lock_key)
+  return params.lookup[lock_key] and params:get(lock_key) == 2
 end
 
 local _lock_cache = {}
@@ -150,13 +94,13 @@ local _blink_level = 1
 
 local function refresh_draw_caches()
   local phase = (util.time() * 2) % 1
-  _blink_level = phase < 0.5 and 4 or 1
-  _lock_cache.delay   = is_locked("lock_delay")
-  _lock_cache.reverb  = is_locked("lock_reverb")
-  _lock_cache.shimmer = is_locked("lock_shimmer")
-  _lock_cache.tape    = is_locked("lock_tape")
-  _lock_cache.filter  = is_locked("lock_filter")
-  _lock_cache.glitch  = is_locked("lock_glitch")
+  _blink_level        = phase < 0.5 and 4 or 1
+  _lock_cache.delay   = is_locked(LOCK_KEYS.delay)
+  _lock_cache.reverb  = is_locked(LOCK_KEYS.reverb)
+  _lock_cache.shimmer = is_locked(LOCK_KEYS.shimmer)
+  _lock_cache.tape    = is_locked(LOCK_KEYS.tape)
+  _lock_cache.filter  = is_locked(LOCK_KEYS.filter)
+  _lock_cache.glitch  = is_locked(LOCK_KEYS.glitch)
 end
 
 function font.draw_fx_status_bucketed(P_func)
@@ -175,46 +119,43 @@ function font.draw_fx_status_bucketed(P_func)
     font.draw_micro_text_bucketed(P_func, x, y, "R", level)
     x = x + 4
   end
-  
+
   if fx_cache.shimmer_mix1 > 0 then
     local level = _lock_cache.shimmer and _blink_level or 1
     font.draw_micro_text_bucketed(P_func, x, y, "X", level)
     x = x + 7
   end
-  
-  if ((fx_cache.tape_mix == 2) or (fx_cache.sine_drive_wet > 0) or (fx_cache.drive > 0) or (fx_cache.wobble_mix > 0) or (fx_cache.chew_depth > 0) or (fx_cache.lossdegrade_mix > 0)) then
+
+  if fx_cache.tape_mix == 2 or fx_cache.sine_drive_wet > 0 or fx_cache.drive > 0
+     or fx_cache.wobble_mix > 0 or fx_cache.chew_depth > 0 or fx_cache.lossdegrade_mix > 0 then
     local level = _lock_cache.tape and _blink_level or 1
     font.draw_micro_text_bucketed(P_func, x, y, "T", level)
     x = x + 4
-  end  
-  
-  if ((fx_cache.Width ~= 100) or (fx_cache.dimension_mix > 0) or (fx_cache.haas == 2) or (fx_cache.rspeed > 0) or (fx_cache.monobass_mix == 2)) then
+  end
+
+  if fx_cache.Width ~= 100 or fx_cache.dimension_mix > 0
+     or fx_cache.haas == 2 or fx_cache.rspeed > 0 or fx_cache.monobass_mix == 2 then
     font.draw_micro_text_bucketed(P_func, x, y, "Z", 1)
     x = x + 6
-  end  
+  end
 
   if fx_cache.bitcrush_mix > 0 then
     font.draw_micro_text_bucketed(P_func, x, y, "B", 1)
     x = x + 4
   end
-  
-  if (
-    fx_cache["1cutoff"] < 19999 or
-    fx_cache["2cutoff"] < 19999 or
-    fx_cache["1hpf"] > 20.1 or
-    fx_cache["2hpf"] > 20.1
-  ) then
+
+  if fx_cache["1cutoff"] < 19999 or fx_cache["2cutoff"] < 19999
+     or fx_cache["1hpf"] > 20.1 or fx_cache["2hpf"] > 20.1 then
     local level = _lock_cache.filter and _blink_level or 1
     font.draw_micro_text_bucketed(P_func, x, y, "F", level)
     x = x + 4
   end
 
-  if ((fx_cache.glitch_ratio > 0) and (fx_cache.glitch_mix > 0)) then
+  if fx_cache.glitch_ratio > 0 and fx_cache.glitch_mix > 0 then
     local level = _lock_cache.glitch and _blink_level or 1
     font.draw_micro_text_bucketed(P_func, x, y, "G", level)
     x = x + 4
   end
-  
 end
 
 return font

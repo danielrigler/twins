@@ -388,7 +388,7 @@ local function draw_rename_manual(conf)
     local before  = text:sub(1, conf.manual_cursor - 1)
     local cur_ch  = conf.pending_char or text:sub(conf.manual_cursor, conf.manual_cursor)
     if cur_ch == "" then cur_ch = " " end
-    local after   = text:sub(conf.manual_cursor + 1):match("^(.-)%s*$") or text:sub(conf.manual_cursor + 1)
+    local after   = text:sub(conf.manual_cursor + 1)
     local pad        = 1
     local pipe_w     = screen.text_extents("|")
     local num_w      = screen.text_extents(num_str:match("^(.-)%s*$") or num_str)
