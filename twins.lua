@@ -930,8 +930,8 @@ local function randomize(n)
             local max_val = params:get(n .. "max_seek")
             local val = random_float(min_val, max_val)
             local val_norm = val * 0.01
-            params:set(n.."seek", val); engine.seek(n, val_norm); osc_positions[n] = val_norm
-            if symmetry then params:set(other_track.."seek", val); engine.seek(other_track, val_norm); osc_positions[other_track] = val_norm end
+            params:set(n.."seek", val); osc_positions[n] = val_norm
+            if symmetry then params:set(other_track.."seek", val); osc_positions[other_track] = val_norm end
         else
             local min_val = params:get(n .. "min_" .. key)
             local max_val = params:get(n .. "max_" .. key)
