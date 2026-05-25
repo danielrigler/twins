@@ -6,7 +6,7 @@ local lfo = {}
 local assigned_params = {}
 local lfo_paused = false
 local saved_shapes = {}
-lfo.walk_all = false
+lfo.sine_all = false
 lfo.on_state_change = nil
 
 local TWO_PI = math.pi * 2
@@ -79,15 +79,15 @@ end
 
 function lfo.set_pause(paused) lfo_paused = paused end
 
-function lfo.set_walk_all(enabled)
-  lfo.walk_all = enabled
+function lfo.set_sine_all(enabled)
+  lfo.sine_all = enabled
   if enabled then
     saved_shapes = {}
     for i = 1, number_of_outputs do
       if params.lookup and params.lookup[LFO_KEYS[i]] and pget(LFO_KEYS[i]) == 2 then
         saved_shapes[i] = pget(SHAPE_KEYS[i])
-        pset(SHAPE_KEYS[i], 4)
-        lfo[i].shape_int = 4
+        pset(SHAPE_KEYS[i], 1)
+        lfo[i].shape_int = 1
       end
     end
   else
@@ -103,7 +103,7 @@ end
 
 for i = 1, number_of_outputs do
   lfo[i] = {
-    freq = 0.05, phase = 0, waveform = "sine", shape_int = 1,
+    freq = 0.05, phase = 0, waveform = "walk", shape_int = 4,
     slope = 0, depth = 50, offset = 0,
     prev = 0, walk_value = 0, walk_velocity = 0,
     sync_to = nil,
@@ -146,24 +146,24 @@ local LFO_TARGET_REVERSE = {}
 for i, t in ipairs(lfo.lfo_targets) do LFO_TARGET_REVERSE[t] = i end
 
 lfo.target_ranges = {
-  ["1pan"]     = { depth = {25,90},  offset = {0,0},    frequency = {0.1,1},   waveform = {"sine"}, chance = 0.75 },
-  ["2pan"]     = { depth = {25,90},  offset = {0,0},    frequency = {0.1,1},   waveform = {"sine"}, chance = 0.75 },
-  ["1jitter"]  = { depth = {20,70},  offset = {-1,1},   frequency = {0.1,0.6}, waveform = {"sine"}, chance = 0.6  },
-  ["2jitter"]  = { depth = {20,70},  offset = {-1,1},   frequency = {0.1,0.6}, waveform = {"sine"}, chance = 0.6  },
-  ["1spread"]  = { depth = {10,30},  offset = {0,0.3},  frequency = {0.1,0.6}, waveform = {"sine"}, chance = 0.6  },
-  ["2spread"]  = { depth = {10,30},  offset = {0,0.3},  frequency = {0.1,0.6}, waveform = {"sine"}, chance = 0.6  },
-  ["1size"]    = { depth = {5,30},   offset = {0.1,1},  frequency = {0.1,0.6}, waveform = {"sine"}, chance = 0.6  },
-  ["2size"]    = { depth = {5,30},   offset = {0.1,1},  frequency = {0.1,0.6}, waveform = {"sine"}, chance = 0.6  },
-  ["1density"] = { depth = {5,40},   offset = {0,1},    frequency = {0.1,0.6}, waveform = {"sine"}, chance = 0.6  },
-  ["2density"] = { depth = {5,40},   offset = {0,1},    frequency = {0.1,0.6}, waveform = {"sine"}, chance = 0.6  },
-  ["1volume"]  = { depth = {2,3},    offset = {0,1},    frequency = {0.1,0.5}, waveform = {"sine"}, chance = 1.0  },
-  ["2volume"]  = { depth = {2,3},    offset = {0,1},    frequency = {0.1,0.5}, waveform = {"sine"}, chance = 1.0  },
-  ["1seek"]    = { depth = {0,100},  offset = {0,1},    frequency = {0.1,0.6}, waveform = {"sine"}, chance = 0.3  },
-  ["2seek"]    = { depth = {0,100},  offset = {0,1},    frequency = {0.1,0.6}, waveform = {"sine"}, chance = 0.3  },
-  ["1speed"]   = { depth = {10,50},  offset = {-1,1},   frequency = {0.1,0.6}, waveform = {"sine"}, chance = 0.3  },
-  ["2speed"]   = { depth = {10,50},  offset = {-1,1},   frequency = {0.1,0.6}, waveform = {"sine"}, chance = 0.3  },
-  ["1pitch"]   = { depth = {5,30},   offset = {-1,1},   frequency = {0.1,0.6}, waveform = {"sine"}, chance = 0.0  },
-  ["2pitch"]   = { depth = {5,30},   offset = {-1,1},   frequency = {0.1,0.6}, waveform = {"sine"}, chance = 0.0  },
+  ["1pan"]     = { depth = {25,90},  offset = {0,0},    frequency = {0.1,1},   waveform = {"walk"}, chance = 0.75 },
+  ["2pan"]     = { depth = {25,90},  offset = {0,0},    frequency = {0.1,1},   waveform = {"walk"}, chance = 0.75 },
+  ["1jitter"]  = { depth = {20,70},  offset = {-1,1},   frequency = {0.1,0.6}, waveform = {"walk"}, chance = 0.6  },
+  ["2jitter"]  = { depth = {20,70},  offset = {-1,1},   frequency = {0.1,0.6}, waveform = {"walk"}, chance = 0.6  },
+  ["1spread"]  = { depth = {10,30},  offset = {0,0.3},  frequency = {0.1,0.6}, waveform = {"walk"}, chance = 0.6  },
+  ["2spread"]  = { depth = {10,30},  offset = {0,0.3},  frequency = {0.1,0.6}, waveform = {"walk"}, chance = 0.6  },
+  ["1size"]    = { depth = {5,30},   offset = {0.1,1},  frequency = {0.1,0.6}, waveform = {"walk"}, chance = 0.6  },
+  ["2size"]    = { depth = {5,30},   offset = {0.1,1},  frequency = {0.1,0.6}, waveform = {"walk"}, chance = 0.6  },
+  ["1density"] = { depth = {5,40},   offset = {0,1},    frequency = {0.1,0.6}, waveform = {"walk"}, chance = 0.6  },
+  ["2density"] = { depth = {5,40},   offset = {0,1},    frequency = {0.1,0.6}, waveform = {"walk"}, chance = 0.6  },
+  ["1volume"]  = { depth = {2,3},    offset = {0,1},    frequency = {0.1,0.5}, waveform = {"walk"}, chance = 1.0  },
+  ["2volume"]  = { depth = {2,3},    offset = {0,1},    frequency = {0.1,0.5}, waveform = {"walk"}, chance = 1.0  },
+  ["1seek"]    = { depth = {0,100},  offset = {0,1},    frequency = {0.1,0.6}, waveform = {"walk"}, chance = 0.3  },
+  ["2seek"]    = { depth = {0,100},  offset = {0,1},    frequency = {0.1,0.6}, waveform = {"walk"}, chance = 0.3  },
+  ["1speed"]   = { depth = {10,50},  offset = {-1,1},   frequency = {0.1,0.6}, waveform = {"walk"}, chance = 0.3  },
+  ["2speed"]   = { depth = {10,50},  offset = {-1,1},   frequency = {0.1,0.6}, waveform = {"walk"}, chance = 0.3  },
+  ["1pitch"]   = { depth = {5,30},   offset = {-1,1},   frequency = {0.1,0.6}, waveform = {"walk"}, chance = 0.0  },
+  ["2pitch"]   = { depth = {5,30},   offset = {-1,1},   frequency = {0.1,0.6}, waveform = {"walk"}, chance = 0.0  },
 }
 
 local param_ranges = {
@@ -265,9 +265,9 @@ local function randomize_lfo(i, target)
   lfo[i].freq = freq
   pset(FREQ_KEYS[i], freq)
   local wf    = ranges.waveform[math_random(#ranges.waveform)]
-  if lfo.walk_all then wf = "walk" end
+  if lfo.sine_all then wf = "sine" end
   lfo[i].waveform  = wf
-  lfo[i].shape_int = LFO_SHAPE_REVERSE[wf] or 1
+  lfo[i].shape_int = LFO_SHAPE_REVERSE[wf] or 4
   local shape_idx = LFO_SHAPE_REVERSE[wf]
   if shape_idx then pset(SHAPE_KEYS[i], shape_idx) end
   pset(TARGET_KEYS[i], target_index)
@@ -512,7 +512,7 @@ function lfo.init()
       lfo.invalidate_lfo_param_cache() 
       if lfo.on_state_change then lfo.on_state_change() end 
     end)
-    params:add_option(SHAPE_KEYS[i], i .. " shape", options.lfotypes, 1)
+    params:add_option(SHAPE_KEYS[i], i .. " shape", options.lfotypes, 4)
     params:set_action(SHAPE_KEYS[i], function(v) lfo[i].waveform = options.lfotypes[v]; lfo[i].shape_int = v end)
     params:add_number(DEPTH_KEYS[i], i .. " depth", 0, 100, 50)
     params:set_action(DEPTH_KEYS[i], function(v) lfo[i].depth = v end)

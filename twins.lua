@@ -726,8 +726,8 @@ local function setup_params()
     params:add_group("LFO", 119)
     params:add_binary("randomize_lfos", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_lfos", function() lfo.clearLFOs() local allow_vol = params:get("allow_volume_lfos") == 2 for i = 1, 2 do lfo.randomize_lfos(i, allow_vol) end invalidate_lfo_cache() end)
     params:add_binary("lfo.assign_to_current_row", "Assign to Selection", "trigger", 0) params:set_action("lfo.assign_to_current_row", function() lfo.assign_to_current_row(current_mode, current_filter_mode) invalidate_lfo_cache() end)
-    params:add_control("global_lfo_freq_scale", "Freq Scale", controlspec.new(0.01, 10, "exp", 0.01, 1, "x")) params:set_action("global_lfo_freq_scale", function(value) local base_freq for i = 1, 16 do local phase = lfo[i].phase base_freq = params:get(i.."lfo_freq") or 0.05 lfo[i].base_freq = base_freq lfo[i].freq = base_freq * value lfo[i].phase = phase end end)
-    params:add_option("lfo_walk_all", "Random Walk LFOs", {"off", "on"}, 1) params:set_action("lfo_walk_all", function(v) lfo.set_walk_all(v == 2) end)
+    params:add_control("global_lfo_freq_scale", "Freq Scale", controlspec.new(0.01, 10, "exp", 0.01, 1, "x")) params:set_action("global_lfo_freq_scale", function(value) for i = 1, 16 do local base_freq = params:get(i.."lfo_freq") or 0.05 lfo[i].base_freq = base_freq lfo[i].freq = base_freq * value end end)
+    params:add_binary("sine_lfos", "Sine LFOs", "toggle", 0) params:set_action("sine_lfos", function(v) lfo.set_sine_all(v == 1) end)
     params:add_binary("lfo_pause", "Pause ⏸︎", "toggle", 0) params:set_action("lfo_pause", function(value) lfo.set_pause(value == 1) end)
     params:add_binary("ClearLFOs", "Clear All", "trigger", 0) params:set_action("ClearLFOs", function() lfo.clearLFOs() invalidate_lfo_cache() update_pan_positioning() end)
     params:add_option("allow_volume_lfos", "Allow Volume LFOs", {"no", "yes"}, 1) params:set_action("allow_volume_lfos", function(value) if value == 2 then lfo.clearLFOs("1", "volume") lfo.clearLFOs("2", "volume") lfo.assign_volume_lfos() else lfo.clearLFOs("1", "volume") lfo.clearLFOs("2", "volume") end invalidate_lfo_cache() end)
@@ -910,7 +910,7 @@ local function randomize_pitch(track, other_track, symmetry)
 end
 
 local function randomize(n)
-    if not randomize_metro[n] then randomize_metro[n] = metro.init() end
+    if randomize_metro[n] then stop_metro_safe(randomize_metro[n]) else randomize_metro[n] = metro.init() end
     local m_rand = randomize_metro[n]
     local symmetry = params:get("symmetry") == 1
     local other_track = 3 - n
@@ -920,6 +920,7 @@ local function randomize(n)
     for i = 1, #param_names do can_randomize[param_names[i]] = params:get(n .. "lock_" .. param_names[i]) == 1 end
     if can_randomize.pitch then randomize_pitch(n, other_track, symmetry) end
     local targets = {}
+    if not m_rand then print("Error: Hardware metro limit reached!") return end
     for i = 1, #param_names do
         local key = param_names[i]
         if key == "pitch" then goto continue end
@@ -981,7 +982,7 @@ local function randomize(n)
                     end
                 end
             end
-            if all_done then stop_metro_safe(m_rand) randomize_metro[n] = nil end
+            if all_done then stop_metro_safe(m_rand) end
         end
         m_rand:start()
     end
@@ -1133,7 +1134,7 @@ end
 local function handle_randomize_track(n)
     if not key_state[1] then return end
     local track = n == 3 and 2 or 1
-    stop_metro_safe(randomize_metro[track]) randomize_metro[track] = nil
+    stop_metro_safe(randomize_metro[track])
     lfo.clearLFOs(tostring(track))
     lfo.randomize_lfos(tostring(track), params:get("allow_volume_lfos") == 2)
     invalidate_lfo_cache()
@@ -1190,7 +1191,7 @@ local function find_or_create_lfo_for_param(track, param_name, only_existing, cr
                     params:set(MORPH_FREQ_KEYS[i], params:get(MORPH_FREQ_KEYS[source_lfo_idx]))
                     lfo[i].phase = lfo[source_lfo_idx].phase
                 else
-                    params:set(MORPH_SHAPE_KEYS[i], 1)
+                    params:set(MORPH_SHAPE_KEYS[i], 4)
                     params:set(MORPH_FREQ_KEYS[i], random_float(0.1, 0.7))
                 end
                 if lfo.walk_all then params:set(MORPH_SHAPE_KEYS[i], 4) end
