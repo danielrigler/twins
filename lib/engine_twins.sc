@@ -66,6 +66,7 @@ alloc {
             var overtone_2_vol = overtones_2 * main_vol * 1.5;
             var trigger60 = Impulse.kr(60);
             var grain_direction, speed_dir, base_trig, base_grain_trig, rand_val, rand_val2, random_interval, ratchet_gate, extra_trig, signal, grain_pan_l, grain_pan_r, envBuf, randomEnv, harmonics, volumes, l_harmonics, r_harmonics, size_mults, density_mod_recip, jitter_range, buf_frames_l, buf_dur_recip, wrapped_grain_pos, wrapped_grain_pos_r;
+            var dry_seek_trig, dry_mute_env, dry_seek_fade, delayed_dry_reset, dry_rate, dry_phase_l, dry_phase_r;
             speed = Lag.kr(speed, 1);
             density_mod = density * (2**(LFNoise1.kr(density).range(0, 1) * density_mod_amt));
             density_mod_recip = density_mod.reciprocal;
@@ -85,7 +86,14 @@ alloc {
             jitter_sig = TRand.kr(trig: grain_trig, lo: jitter_range.neg, hi: jitter_range);
             jitter_sig_r = TRand.kr(trig: grain_trig, lo: jitter_range.neg, hi: jitter_range);
             buf_pos = Phasor.kr(trig: t_reset_pos, rate: buf_dur_recip / ControlRate.ir * speed, start: 0, end: 1, resetPos: pos);
-            dry_sig = [PlayBuf.ar(1, buf_l, speed, startPos: pos * buf_frames_l, trigger: t_reset_pos, loop: 1), PlayBuf.ar(1, buf_r, speed, startPos: pos * buf_frames_l, trigger: t_reset_pos, loop: 1)];
+            dry_seek_trig     = K2A.ar(t_reset_pos);
+            dry_mute_env      = EnvGen.ar(Env([0, 1, 1, 0], [0.015, 0.005, 0.020], \sin), gate: dry_seek_trig);
+            dry_seek_fade     = 1.0 - dry_mute_env;
+            delayed_dry_reset = TDelay.ar(dry_seek_trig, 0.017);
+            dry_rate          = speed * BufRateScale.kr(buf_l);
+            dry_phase_l       = Phasor.ar(delayed_dry_reset, dry_rate, 0, buf_frames_l, pos * buf_frames_l);
+            dry_phase_r       = Phasor.ar(delayed_dry_reset, dry_rate, 0, buf_frames_l, pos * buf_frames_l);
+            dry_sig = [BufRd.ar(1, buf_l, dry_phase_l, loop: 1, interpolation: 4) * dry_seek_fade, BufRd.ar(1, buf_r, dry_phase_r, loop: 1, interpolation: 4) * dry_seek_fade];
 
             {
                 var recPos = In.kr(rec_pos_bus);
