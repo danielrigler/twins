@@ -78,6 +78,8 @@ local MORPH_FREQ_KEYS   = lfo.keys.freq
 local MORPH_DEPTH_KEYS  = lfo.keys.depth
 local MORPH_OFFSET_KEYS = lfo.keys.offset
 local key_trackers = {}
+local last_morph_update_time = 0
+local MORPH_THROTTLE_INTERVAL = 0.03
 for n = 1, 3 do key_trackers[n] = {press_time = nil, had_interaction = false, long_triggered = false} end
 local KEY_LONG_PRESS_THRESHOLD = 1
 local key_longpress_actions = {
@@ -337,6 +339,7 @@ end
 
 local function apply_morph()
   if not lfo or not lfo.get_parameter_range or not lfo.lfo_targets then return end
+  local current_time = util.time()
   local morph_direction=morph_amount-last_morph_amount
   last_morph_amount=morph_amount
   if morph_direction==0 and morph_amount>0 and morph_amount<100 then return end
@@ -359,6 +362,8 @@ local function apply_morph()
   local p_set=params.set
   local p_get=params.get
   local p_lookup=params.lookup
+  if (current_time - last_morph_update_time) < MORPH_THROTTLE_INTERVAL and morph_amount > 0 and morph_amount < 100 then return end
+  last_morph_update_time = current_time
   _get_range_ref=lfo.get_parameter_range
   _ms.t=t; _ms.t_inv=t_inv; _ms.morph_direction=morph_direction
   _ms.p_set=p_set; _ms.p_get=p_get; _ms.p_lookup=p_lookup
@@ -827,7 +832,7 @@ local function setup_params()
     
     params:add_group("MORPHING", 5)
     params:add_option("scene_mode", "Morph Mode", {"off", "on"}, 1) params:set_action("scene_mode", function(value) current_scene_mode = (value == 2) and "on" or "off" if current_scene_mode == "on" then local scenes_empty = true for track = 1, 2 do for scene = 1, 2 do if scene_data[track] and scene_data[track][scene] and next(scene_data[track][scene]) ~= nil then scenes_empty = false break end end if not scenes_empty then break end end if scenes_empty then initialize_scenes_with_current_params() end end end)
-    params:add_control("morph_amount", "Morph", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("morph_amount", function(value) morph_amount = value apply_morph() end)
+    params:add_control("morph_amount", "Morph", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("morph_amount", function(value) local prev = morph_amount if (prev == 0 or prev == 100) and value ~= prev then auto_save_to_scene() end morph_amount = value apply_morph() end)
     params:add{type = "trigger", id = "save_to_scene1", name = "Morph Target A", action = function() store_scene(1, 1) store_scene(2, 1) end}
     params:add{type = "trigger", id = "save_to_scene2", name = "Morph Target B", action = function() store_scene(1, 2) store_scene(2, 2) end}
     params:add{type = "trigger", id = "delete_morph_data", name = "Delete Morph Data", action = function() scene_data = {[1] = {[1] = {}, [2] = {}}, [2] = {[1] = {}, [2] = {}}} morph_amount = 0 params:set("morph_amount", 0) params:set("scene_mode", 1) current_scene_mode = "off" end}
