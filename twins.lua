@@ -103,7 +103,11 @@ local lfo_cache = {}
 local lfo_cache_dirty = true
 local function invalidate_lfo_cache() lfo_cache_dirty = true lfo.invalidate_lfo_param_cache() end
 local function rebuild_lfo_cache() for k in pairs(lfo_cache) do lfo_cache[k] = nil end local targets = lfo.lfo_targets if not targets or not params.lookup then lfo_cache_dirty = false; return end for i = 1, 16 do if params.lookup[MORPH_LFO_KEYS[i]] and params.lookup[MORPH_TARGET_KEYS[i]] then if params:get(MORPH_LFO_KEYS[i]) == 2 then local param_name = targets[params:get(MORPH_TARGET_KEYS[i])] if param_name and param_name ~= "none" then lfo_cache[param_name] = i end end end end lfo_cache_dirty = false end
-local shimmer_presets = {{oct = 0.25, lowpass = 4000, hipass = 60, fb = 0.4}, {oct = 0.5, lowpass = 6000, hipass = 80, fb = 0.4}, {oct = 1, lowpass = 20000, hipass = 20, fb = 0.4}, {oct = 2, lowpass = 14000, hipass = 300, fb = 0.4}, {oct = 4, lowpass = 14000, hipass = 300, fb = 0.4}}
+local shimmer_presets = {{oct = 0.25, lowpass = 6000, hipass = 80, fb = 0.4}, 
+                         {oct = 0.5, lowpass = 6000, hipass = 80, fb = 0.4}, 
+                         {oct = 1, lowpass = 20000, hipass = 20, fb = 0.4}, 
+                         {oct = 2, lowpass = 13000, hipass = 600, fb = 0.4}, 
+                         {oct = 4, lowpass = 13000, hipass = 900, fb = 0.4}}
 local param_modes = {
     speed = {param = "speed", delta = 1, engine = true, has_lock = true},
     seek = {param = "seek", delta = 1, engine = true, has_lock = true},
