@@ -6,7 +6,7 @@
 --            by: @dddstudio                       
 -- 
 --                          
---                           v0.55
+--                           v0.56
 -- E1: Master Volume
 -- K1+E2/E3: Volume
 -- K2/K3: Navigate
@@ -308,10 +308,10 @@ local function _interp_prebuilt(fparam, valA, valB, is_voice_pitch)
   if not valA and not valB then return end
   if not valA then s.p_set(s.params, fparam, valB) return end
   if not valB then s.p_set(s.params, fparam, valA) return end
-  if valA == valB then return end
   local temp = s.morph_temp[fparam]
   local new_val
   if not temp then
+    if valA == valB then return end
     new_val = valA * s.t_inv + valB * s.t
   else
     local md = s.morph_direction
@@ -394,8 +394,7 @@ local function apply_morph()
     local should_be_on=lfo_A_enabled or lfo_B_enabled
     if not should_be_on then
       if p_get(params,MORPH_LFO_KEYS[i])==2 then p_set(params,MORPH_LFO_KEYS[i],1)end
-      goto continue
-    end
+      goto continue end
     used_slots[i]=true
     local target_A=lfo_A_enabled and lfo_A.target and lfo_targets[lfo_A.target]
     local target_B=lfo_B_enabled and lfo_B.target and lfo_targets[lfo_B.target]
@@ -419,7 +418,7 @@ local function apply_morph()
     if not target or target=="none"then goto continue end
     _ensure_unique_assignment(target,i)
     skip_param_set[target]=true
-    morph_temp_scene[target]=nil
+    
     local lfo_enable_k  = MORPH_LFO_KEYS[i]
     local lfo_target_k  = MORPH_TARGET_KEYS[i]
     local lfo_shape_k   = MORPH_SHAPE_KEYS[i]
@@ -436,6 +435,18 @@ local function apply_morph()
       p_set(params,lfo_enable_k,depth_val>=DEPTH_THRESHOLD and 2 or 1)
     elseif lfo_A_enabled and target_A==target then
       local const_val=scene1_2[target]or scene2_2[target]
+      
+      local temp = morph_temp_scene[target]
+      if temp then
+        local is_forward = morph_direction > 0
+        local tgt_val = is_forward and const_val or (scene1_1[target] or scene2_1[target])
+        local dist = is_forward and (100 - morph_amount) or morph_amount
+        if dist > 0 then
+          local progress = math.min(math.abs(morph_direction) / dist, 1.0)
+          const_val = temp + (tgt_val - temp) * progress
+        end
+      end
+
       p_set(params,lfo_target_k,lfo_A.target)
       p_set(params,lfo_shape_k,lfo_A.shape)
       p_set(params,lfo_freq_k,lfo_A.freq)
@@ -447,6 +458,18 @@ local function apply_morph()
       local lfo_val=(lfo_B_enabled and lfo_B)or(lfo_A_enabled and lfo_A)
       if not lfo_val then goto continue end
       local const_val=scene1_1[target]or scene2_1[target]
+      
+      local temp = morph_temp_scene[target]
+      if temp then
+        local is_forward = morph_direction > 0
+        local tgt_val = is_forward and (scene1_2[target] or scene2_2[target]) or const_val
+        local dist = is_forward and (100 - morph_amount) or morph_amount
+        if dist > 0 then
+          local progress = math.min(math.abs(morph_direction) / dist, 1.0)
+          const_val = temp + (tgt_val - temp) * progress
+        end
+      end
+
       p_set(params,lfo_target_k,lfo_val.target)
       p_set(params,lfo_shape_k,lfo_val.shape)
       p_set(params,lfo_freq_k,lfo_val.freq)
@@ -471,9 +494,21 @@ local function apply_morph()
       if slot then
         _ensure_unique_assignment(m.param,slot)
         skip_param_set[m.param]=true
-        morph_temp_scene[m.param]=nil
+        
         local depth_val=m.lfo.depth*t
         local const_val=scene1_1[m.param]or scene2_1[m.param]
+        
+        local temp = morph_temp_scene[m.param]
+        if temp then
+          local is_forward = morph_direction > 0
+          local tgt_val = is_forward and (scene1_2[m.param] or scene2_2[m.param]) or const_val
+          local dist = is_forward and (100 - morph_amount) or morph_amount
+          if dist > 0 then
+            local progress = math.min(math.abs(morph_direction) / dist, 1.0)
+            const_val = temp + (tgt_val - temp) * progress
+          end
+        end
+
         p_set(params,MORPH_TARGET_KEYS[slot],m.lfo.target)
         p_set(params,MORPH_SHAPE_KEYS[slot],m.lfo.shape)
         p_set(params,MORPH_FREQ_KEYS[slot],m.lfo.freq)
@@ -503,7 +538,6 @@ local function apply_morph()
 end
 
 local function capture_to_temp_scene()
-  if current_scene_mode~="on"then return end
   if morph_amount==0 or morph_amount==100 then return end
   if lfo_cache_dirty then rebuild_lfo_cache() end
   local p_lookup=params.lookup
@@ -522,7 +556,6 @@ local function capture_to_temp_scene()
 end
 
 local function auto_save_to_scene()
-  if current_scene_mode~="on"then return end
   if next(morph_temp_scene)~=nil then return end
   local scene=(morph_amount==0 and 1) or (morph_amount==100 and 2)
   if scene then
@@ -995,7 +1028,7 @@ local function randomize(n)
         end
         m_rand:start()
     end
-    if current_scene_mode == "on" and morph_amount > 0 and morph_amount < 100 then capture_to_temp_scene() end
+    if morph_amount > 0 and morph_amount < 100 then capture_to_temp_scene() end
 end
 
 local function handle_volume_lfo(track, delta, crossfade_mode)
@@ -1270,8 +1303,8 @@ function enc(n, d)
     if not installer:ready() then return end
     if presets.is_menu_open() then presets.menu_enc(n, d) return end
     local k1, k2, k3 = key_state[1], key_state[2], key_state[3]
-    local should_auto_save = current_scene_mode == "on" and (morph_amount == 0 or morph_amount == 100)
-    local is_morphing = current_scene_mode == "on" and morph_amount > 0 and morph_amount < 100
+    local should_auto_save = morph_amount == 0 or morph_amount == 100
+    local is_morphing = morph_amount > 0 and morph_amount < 100
     local function mark_key_interaction()
         local function mark(n) key_trackers[n].had_interaction = true; key_trackers[n].long_triggered = true end
         if k1 then mark(1) end
@@ -1755,6 +1788,21 @@ local osc_handlers = {
     end}
 osc_handlers["/twins/grain_pos"]   = make_grain_handler(grain_positions)
 local function setup_osc() osc.event = function(path, args) local handler = osc_handlers[path] if handler then handler(args) end end end
+
+params.action_write = function(id, value)
+  if morph_amount == 0 or morph_amount == 100 then return end
+  if lfo_cache_dirty then rebuild_lfo_cache() end
+  if lfo_cache[id] then return end
+  local is_valid_target = false
+  for track = 1, 2 do
+    if id:sub(1,1) == tostring(track) then
+      local base_param = id:sub(2)
+      for i = 1, #morph_voice_params do if morph_voice_params[i] == base_param then is_valid_target = true break end end
+    end
+  end
+  if not is_valid_target then for i = 1, #morph_global_params do if morph_global_params[i] == id then is_valid_target = true break end end end
+  if is_valid_target then morph_temp_scene[id] = value end
+end
 
 function init()
     if not installer:ready() then tracked_clock_run(function() while true do redraw() clock.sleep(1 / 10) end end) do return end end
