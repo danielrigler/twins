@@ -52,7 +52,7 @@ local presets = include("lib/presets")
 local randpara = include("lib/randpara")
 local lfo = include("lib/lfo")
 local morph_voice_params={"speed","pitch","jitter","size","density","spread","pan","seek","cutoff","hpf","lpf_gain","granular_gain","subharmonics_3","subharmonics_2","subharmonics_1","overtones_1","overtones_2","smoothbass","ratcheting_prob","size_variation","direction_mod","density_mod_amt","pitch_random_scale_type","pitch_random_prob","pitch_mode","probability","eq_low_gain","eq_mid_gain","eq_high_gain","env_select","volume"}
-local morph_global_params={"delay_mix","delay_time","delay_feedback","delay_lowpass","delay_highpass","wiggle_depth","wiggle_rate","stereo","reverb_mix","t60","damp","rsize","earlyDiff","modDepth","modFreq","low","mid","high","lowcut","highcut","shimmer_mix","shimmer_preset","lock_shimmer","tape_mix","sine_drive_wet","drive","wobble_mix","wobble_amp","wobble_rpm","flutter_amp","flutter_freq","flutter_var","chew_depth","chew_freq","chew_variance","lossdegrade_mix","Width","dimension_mix","haas","rspeed","monobass_mix","bitcrush_mix","bitcrush_rate","bitcrush_bits","evolution","evolution_range","evolution_rate","lock_eq","lock_tape","lock_reverb","lock_delay","global_lfo_freq_scale","pitch_quantize_scale","pitch_lag","shimmer_mix1","shimmer_oct1","pitchv1","lowpass1","hipass1","fbDelay1","fb1", "glitch_probability", "glitch_ratio", "glitch_mix", "glitch_min_length", "glitch_max_length", "glitch_reverse", "glitch_pitch" }
+local morph_global_params={"delay_mix","delay_time","delay_feedback","delay_lowpass","delay_highpass","wiggle_depth","wiggle_rate","stereo","reverb_mix","t60","damp","rsize","earlyDiff","modDepth","modFreq","low","mid","high","lowcut","highcut","shimmer_mix","shimmer_preset","lock_shimmer","tape_mix","sine_drive_wet","drive","wobble_mix","wobble_amp","wobble_rpm","flutter_amp","flutter_freq","flutter_var","chew_depth","chew_freq","chew_variance","lossdegrade_mix","Width","dimension_mix","haas","rspeed","monobass_mix","bitcrush_mix","bitcrush_rate","bitcrush_bits","evolution","evolution_range","evolution_rate","lock_eq","lock_tape","lock_reverb","lock_delay","global_lfo_freq_scale","pitch_quantize_scale","pitch_lag","shimmer_mix1","shimmer_oct1","pitchv1","lowpass1","hipass1","fbDelay1","fb1", "glitch_probability", "glitch_ratio", "glitch_mix", "glitch_min_length", "glitch_max_length", "glitch_reverse", "glitch_pitch", "sine_lfos" }
 local osc_positions = {[1] = 0, [2] = 0}
 local Mirror = include("lib/mirror") Mirror.init(osc_positions, lfo, morph_voice_params)
 local macro = include("lib/macro") macro.set_lfo_reference(lfo)
@@ -187,7 +187,7 @@ local function setup_ui_metro()
         end
         redraw()
     end)
-    ui_metro.time = 1/60
+    ui_metro.time = 1/30
     ui_metro:start()
 end
 
@@ -432,7 +432,7 @@ local function apply_morph()
       local depth_val=lfo_A.depth*t_inv+lfo_B.depth*t
       p_set(params,lfo_depth_k,depth_val)
       p_set(params,offset_param_k,_morph_clamp(lfo_A.offset*t_inv+lfo_B.offset*t))
-      p_set(params,lfo_enable_k,depth_val>=DEPTH_THRESHOLD and 2 or 1)
+      p_set(params,lfo_enable_k,(depth_val>=DEPTH_THRESHOLD or (morph_amount>0 and morph_amount<100)) and 2 or 1)
     elseif lfo_A_enabled and target_A==target then
       local const_val=scene1_2[target]or scene2_2[target]
       
@@ -453,7 +453,7 @@ local function apply_morph()
       local depth_val=lfo_A.depth*t_inv
       p_set(params,lfo_depth_k,depth_val)
       p_set(params,offset_param_k,_compute_offset(lfo_A.offset,const_val,target,t_inv,t))
-      p_set(params,lfo_enable_k,depth_val>=DEPTH_THRESHOLD and 2 or 1)
+      p_set(params,lfo_enable_k,(depth_val>=DEPTH_THRESHOLD or (morph_amount>0 and morph_amount<100)) and 2 or 1)
     else
       local lfo_val=(lfo_B_enabled and lfo_B)or(lfo_A_enabled and lfo_A)
       if not lfo_val then goto continue end
@@ -476,7 +476,7 @@ local function apply_morph()
       local depth_val=lfo_val.depth*t
       p_set(params,lfo_depth_k,depth_val)
       p_set(params,offset_param_k,_compute_offset(lfo_val.offset,const_val,target,t,t_inv))
-      p_set(params,lfo_enable_k,depth_val>=DEPTH_THRESHOLD and 2 or 1)
+      p_set(params,lfo_enable_k,(depth_val>=DEPTH_THRESHOLD or (morph_amount>0 and morph_amount<100)) and 2 or 1)
     end
     ::continue::
   end
@@ -514,7 +514,7 @@ local function apply_morph()
         p_set(params,MORPH_FREQ_KEYS[slot],m.lfo.freq)
         p_set(params,MORPH_DEPTH_KEYS[slot],depth_val)
         p_set(params,MORPH_OFFSET_KEYS[slot],_compute_offset(m.lfo.offset,const_val,m.param,t,t_inv))
-        p_set(params,MORPH_LFO_KEYS[slot],depth_val>=DEPTH_THRESHOLD and 2 or 1)
+        p_set(params,MORPH_LFO_KEYS[slot],(depth_val>=DEPTH_THRESHOLD or (morph_amount>0 and morph_amount<100)) and 2 or 1)
       end
     end
   end
@@ -1818,6 +1818,7 @@ function init()
     init_longpress_checker()
     for i = 1, 2 do params:set(i.."sample", _path.tape, true) end
     for i = 1, 2 do engine.pause_voice(i) end
+    initialize_scenes_with_current_params()
 end
 
 function cleanup()

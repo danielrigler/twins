@@ -64,7 +64,7 @@ alloc {
             var subharmonic_3_vol = subharmonics_3 * main_vol * 2;
             var overtone_1_vol = overtones_1 * main_vol * 1.5;
             var overtone_2_vol = overtones_2 * main_vol * 1.5;
-            var trigger60 = Impulse.kr(60);
+            var trigger30 = Impulse.kr(30);
             var grain_direction, speed_dir, base_trig, base_grain_trig, rand_val, rand_val2, random_interval, ratchet_gate, extra_trig, signal, grain_pan_l, grain_pan_r, envBuf, randomEnv, harmonics, volumes, l_harmonics, r_harmonics, size_mults, density_mod_recip, jitter_range, buf_frames_l, buf_dur_recip, wrapped_grain_pos, wrapped_grain_pos_r;
             var dry_seek_trig, dry_mute_env, dry_seek_fade, delayed_dry_reset, dry_rate, dry_phase_l, dry_phase_r;
             speed = Lag.kr(speed, 1);
@@ -125,10 +125,10 @@ alloc {
 
             wrapped_grain_pos = Wrap.kr(buf_pos + jitter_sig);
             wrapped_grain_pos_r = Wrap.kr(buf_pos + jitter_sig_r);
-            SendReply.kr(trigger60, '/buf_pos', [voice, buf_pos]);
+            SendReply.kr(trigger30, '/buf_pos', [voice, buf_pos]);
             SendReply.kr(grain_trig, '/grain_pos', [voice, wrapped_grain_pos, grain_size, rand_val]);
             SendReply.kr(grain_trig, '/grain_pos', [voice, wrapped_grain_pos_r, grain_size, rand_val]);
-            SendReply.kr(trigger60, '/voice_peak', [voice, Peak.kr(signal[0], trigger60), Peak.kr(signal[1], trigger60)]);
+            SendReply.kr(trigger30, '/voice_peak', [voice, Peak.kr(signal[0], trigger30), Peak.kr(signal[1], trigger30)]);
             Out.ar(out, signal * 1.2);
         }).add;
 
@@ -149,13 +149,13 @@ alloc {
         SynthDef(\liveDirect, {
             arg out, pan, gain, cutoff, hpf, low_gain, mid_gain, high_gain, isMono, lpf_gain, voice;
             var sig = SoundIn.ar([0, 1]);
-            var trigger60 = Impulse.kr(60);
+            var trigger30 = Impulse.kr(30);
             var lagcutoff = Lag.kr(cutoff, 0.6);
             sig = Select.ar(isMono, [sig, [sig[0], sig[0]] ]);
             sig = eqChain.(sig, low_gain, mid_gain, high_gain, hpf, cutoff, lpf_gain);
             sig = Balance2.ar(sig[0], sig[1], pan);
             sig = sig * Lag.kr(gain);
-            SendReply.kr(trigger60, '/voice_peak', [voice, Peak.kr(sig[0], trigger60), Peak.kr(sig[1], trigger60)]);
+            SendReply.kr(trigger30, '/voice_peak', [voice, Peak.kr(sig[0], trigger30), Peak.kr(sig[1], trigger30)]);
             Out.ar(out, sig * 1.2);
         }).add;
         
