@@ -6,7 +6,7 @@
 --            by: @dddstudio                       
 -- 
 --                          
---                           v0.56
+--                           v0.57
 -- E1: Master Volume
 -- K1+E2/E3: Volume
 -- K2/K3: Navigate
@@ -31,7 +31,7 @@
 --
 --
 -- Thanks to:
--- @infinitedigits @cfdrake 
+-- @infinitedigits @cfdrake
 -- @justmat @artfwo @nzimas
 -- @sonoCircuit @graymazes
 -- @Higaru @NiklasKramer
@@ -1243,18 +1243,17 @@ local function draw_grains(t, x, now)
         local start_pos, end_pos
         if forward then start_pos = g.pos; end_pos = g.pos + gsz else start_pos = g.pos - gsz; end_pos = g.pos end
         local dl = floor(start_pos * BAR_W)
-        local dr = ceil(end_pos * BAR_W)
-        if dl < 0 then dl = 0 end
-        if dr > BAR_W then dr = BAR_W end
+        local dr = ceil(end_pos * BAR_W) - 1
         local sp
         if forward then sp = ((dl + 0.5) * inv_bar_w - start_pos) * inv_gsz else sp = 1 - (((dl + 0.5) * inv_bar_w - start_pos) * inv_gsz) end
         local sp_dt = inv_gsz * inv_bar_w
         if not forward then sp_dt = -sp_dt end
-        for px = dl, dr do
+        for px_unwrapped = dl, dr do
           local idx = floor(sp * lut_n)
           if idx < 0 then idx = 0 elseif idx > lut_nm then idx = lut_nm end
           local lv = ceil(lut[idx] * fade)
           if lv < 1 then lv = 1 end
+          local px = px_unwrapped % BAR_W
           P(lv, x + px, seek_y)
           sp = sp + sp_dt
         end
