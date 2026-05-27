@@ -129,8 +129,7 @@ local function stereo_intensity(cache)
   local dim = cache.dimension_mix / 100
   local haas_val = cache.haas == 2 and 1 or 0
   local rspeed_val = cache.rspeed
-  local mono_bass = cache.monobass_mix == 2 and 1 or 0
-  local maxv = math.max(width_dev, dim, haas_val, rspeed_val, mono_bass)
+  local maxv = math.max(width_dev, dim, haas_val, rspeed_val)
   return maxv * 100
 end
 
