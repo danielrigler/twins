@@ -43,7 +43,20 @@ function Mirror.copy_voice_params(from_track, to_track, mirror_pan)
             local t_index = safe_get(_TARGET_KEYS[lfo_num])
             if t_index > 0 then
                 local tname = lfo_targets[t_index]
-                if tname and tname:match(pattern) then params:set(_LFO_KEYS[lfo_num], 1) end
+                if tname and tname:match(pattern) then
+                    params:set(_LFO_KEYS[lfo_num], 1)
+                    local obj = Mirror.lfo[lfo_num]
+                    if obj then obj.sync_to = nil; obj.sync_invert = false end
+                end
+            end
+        end
+        for lfo_num = 1, 16 do
+            local obj = Mirror.lfo[lfo_num]
+            if obj and obj.sync_to then
+                local src = Mirror.lfo[obj.sync_to]
+                if src and src.target_name and src.target_name:match(pattern) then
+                    obj.sync_to = nil; obj.sync_invert = false
+                end
             end
         end
     end
@@ -115,6 +128,7 @@ function Mirror.copy_voice_params(from_track, to_track, mirror_pan)
                         safe_set(_OFFSET_KEYS[dest_lfo], src_offset)
                         safe_set(_LFO_KEYS[dest_lfo], 2)
                         local d_obj = Mirror.lfo[dest_lfo]
+                        local s_obj = Mirror.lfo[src_lfo]
                         if d_obj then
                             d_obj.target = dest_target_index
                             d_obj.shape = src_shape
@@ -123,6 +137,18 @@ function Mirror.copy_voice_params(from_track, to_track, mirror_pan)
                             d_obj.offset = src_offset
                             d_obj.phase = current_phase
                             d_obj.base_freq = src_freq
+                            local in_symmetry = params.lookup["symmetry"] and params:get("symmetry") == 1
+                            if in_symmetry and src_param_name ~= "volume" and s_obj then
+                                local is_pan = (src_param_name == "pan")
+                                d_obj.sync_to       = src_lfo
+                                d_obj.sync_invert   = is_pan
+                                d_obj.walk_value    = s_obj.walk_value
+                                d_obj.walk_velocity = s_obj.walk_velocity
+                                d_obj.prev          = is_pan and -s_obj.prev or s_obj.prev
+                            else
+                                d_obj.sync_to     = nil
+                                d_obj.sync_invert = false
+                            end
                         end
                     end
                 end

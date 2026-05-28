@@ -107,6 +107,7 @@ for i = 1, number_of_outputs do
     slope = 0, depth = 50, offset = 0,
     prev = 0, walk_value = 0, walk_velocity = 0,
     sync_to = nil,
+    sync_invert = false,
     active = false, target_idx = 1, target_name = "none",
     is_pitch = false, is_jitter = false, is_size = false,
     track_num = "1", last_val = nil
@@ -196,24 +197,30 @@ function lfo.clear_scale_cache() scale_array_cache = {} end
 
 function lfo.scale(v, old_min, old_max, new_min, new_max) return (v - old_min) * (new_max - new_min) / (old_max - old_min) + new_min end
 
-function lfo.clearLFOs(track, param_type)
+function lfo.clearLFOs(track, param_type, except_param)
   local function matches(target)
     if track and param_type then return target == track .. param_type
     elseif track then return target:match("^" .. track)
     else return true end
   end
+  local function excluded(target)
+    if not except_param then return false end
+    if track then return target == track .. except_param end
+    return target:sub(2) == except_param
+  end
   local to_clear = {}
-  for target in pairs(assigned_params) do if matches(target) then to_clear[#to_clear + 1] = target end end
+  for target in pairs(assigned_params) do if matches(target) and not excluded(target) then to_clear[#to_clear + 1] = target end end
   for _, t in ipairs(to_clear) do assigned_params[t] = nil end
   for i = 1, number_of_outputs do
     if params.lookup[LFO_KEYS[i]] and params.lookup[TARGET_KEYS[i]] then
       local target = lfo.lfo_targets[pget(TARGET_KEYS[i])]
-      if target and matches(target) then
+      if target and matches(target) and not excluded(target) then
         local tn, pn = target:sub(1,1), target:sub(2)
         if not lfo.is_param_locked(tn, pn) then
           pset(LFO_KEYS[i], 1)
           pset(TARGET_KEYS[i], 1)
           lfo[i].sync_to = nil
+          lfo[i].sync_invert = false
         end
       end
     end
@@ -285,6 +292,7 @@ local function mirror_lfo(dst, src, is_pan)
   obj_d.walk_value   = obj_s.walk_value
   obj_d.walk_velocity= obj_s.walk_velocity
   obj_d.sync_to      = src
+  obj_d.sync_invert  = is_pan and true or false
   if is_pan then
     obj_d.phase  = (obj_s.phase + 0.5) % 1.0
     obj_d.offset = -obj_s.offset
@@ -345,7 +353,7 @@ function lfo.randomize_lfos(track, allow_volume_lfos)
         local target = lfo.lfo_targets[t_idx]
         if target then
           local tn, pn = target:sub(1,1), target:sub(2)
-          local should_clear = (symmetry and not target:match("volume$") and target:match("^[12]")) or target:match("^" .. track)
+          local should_clear = (symmetry and not target:match("volume$") and target:match("^[12]")) or (target:match("^" .. track) and not target:match("volume$"))
           if should_clear and not lfo.is_param_locked(tn, pn) then
             pset(LFO_KEYS[i], 1)
             pset(TARGET_KEYS[i], 1)
@@ -437,7 +445,7 @@ function lfo.process()
       if src then
         obj.walk_value    = src.walk_value
         obj.walk_velocity = src.walk_velocity
-        obj.prev          = src.prev
+        obj.prev          = obj.sync_invert and -src.prev or src.prev
       else
         local vel = obj.walk_velocity * 0.92 + (math_random() - 0.5) * (obj.freq * 0.4)
         local val = obj.walk_value + vel

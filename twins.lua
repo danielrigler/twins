@@ -457,6 +457,47 @@ local function setup_params()
     
     params:add_group("SYMMETRY", 6)
     params:add_binary("symmetry", "Symmetry", "toggle", 0)
+    params:set_action("symmetry", function(value)
+        if value == 0 then
+            for i = 1, 16 do
+                lfo[i].sync_to = nil
+                lfo[i].sync_invert = false
+            end
+        else
+            -- Build a map: param_name -> lfo index, for all active LFOs
+            local active_map = {}
+            for i = 1, 16 do
+                if lfo[i].active and lfo[i].target_name and lfo[i].target_name ~= "none" then
+                    active_map[lfo[i].target_name] = i
+                end
+            end
+            -- For each active voice 1 LFO, find its voice 2 counterpart and sync it
+            -- Volume LFOs are always independent; clear any stale sync on them
+            for i = 1, 16 do
+                local obj = lfo[i]
+                if obj.active and obj.target_name and obj.target_name ~= "none" then
+                    local target = obj.target_name
+                    local track  = target:sub(1, 1)
+                    local pname  = target:sub(2)
+                    if pname == "volume" then
+                        obj.sync_to     = nil
+                        obj.sync_invert = false
+                    elseif track == "1" then
+                        local mirror_target = "2" .. pname
+                        local j = active_map[mirror_target]
+                        if j then
+                            local is_pan = (pname == "pan")
+                            lfo[j].sync_to       = i
+                            lfo[j].sync_invert   = is_pan
+                            lfo[j].walk_value    = obj.walk_value
+                            lfo[j].walk_velocity = obj.walk_velocity
+                            lfo[j].prev          = is_pan and -obj.prev or obj.prev
+                        end
+                    end
+                end
+            end
+        end
+    end)
     params:add_separator("Copy")
     params:add_binary("copy_1_to_2", "Params 1 → 2", "trigger", 0) params:set_action("copy_1_to_2", function() Mirror.copy_voice_params("1", "2", true) end)
     params:add_binary("copy_2_to_1", "Params 1 ← 2", "trigger", 0) params:set_action("copy_2_to_1", function() Mirror.copy_voice_params("2", "1", true) end)
@@ -828,7 +869,7 @@ local function handle_randomize_track(n)
     if not key_state[1] then return end
     local track = n == 3 and 2 or 1
     stop_metro_safe(randomize_metro[track])
-    lfo.clearLFOs(tostring(track))
+    lfo.clearLFOs(tostring(track), nil, "volume")
     lfo.randomize_lfos(tostring(track), params:get("allow_volume_lfos") == 2)
     invalidate_lfo_cache()
     randomize(track)
@@ -883,6 +924,14 @@ local function find_or_create_lfo_for_param(track, param_name, only_existing, cr
                     params:set(MORPH_SHAPE_KEYS[i], params:get(MORPH_SHAPE_KEYS[source_lfo_idx]))
                     params:set(MORPH_FREQ_KEYS[i], params:get(MORPH_FREQ_KEYS[source_lfo_idx]))
                     lfo[i].phase = lfo[source_lfo_idx].phase
+                    local is_pan    = param_name == "pan"
+                    local is_volume = param_name == "volume"
+                    if is_pan then
+                        lfo[i].sync_to = source_lfo_idx
+                        lfo[i].sync_invert = true
+                    elseif not is_volume then
+                        lfo[i].sync_to = source_lfo_idx
+                    end
                 else
                     params:set(MORPH_SHAPE_KEYS[i], 4)
                     params:set(MORPH_FREQ_KEYS[i], random_float(0.1, 0.7))
