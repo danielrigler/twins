@@ -226,6 +226,7 @@ function presets.load_complete_preset(name, scene_data, update_pan, audio_active
         params:set("output_level", -math.huge)
     end
     for i = 1, 2 do if params.lookup[i .. "volume"] then params:set(i .. "volume", -70) end end
+    engine.clear_fx()
     _G.preset_loading = true
     cancel_loading_clock()
     loading_clock = clock.run(function()
@@ -265,7 +266,7 @@ function presets.load_complete_preset(name, scene_data, update_pan, audio_active
                 end
             end
         end
-        clock.sleep(0.1)
+        clock.sleep(0.4)
         if saved_output_level ~= nil and params.lookup["output_level"] then
             params:set("output_level", saved_output_level)
         end

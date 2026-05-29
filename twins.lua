@@ -181,7 +181,7 @@ local function setup_ui_metro()
         redraw()
     end)
     ui_metro.time = 1/60
-    ui_metro:start()
+    utils.metro_start(ui_metro)
 end
 
 local function init_longpress_checker()
@@ -214,7 +214,7 @@ local function init_longpress_checker()
             end
         end
     end
-    longpress_metro:start()
+    utils.metro_start(longpress_metro)
 end
 
 local function disable_lfos_for_param(param_name, only_self)
@@ -718,7 +718,7 @@ local function randomize(n)
             end
             if all_done then stop_metro_safe(m_rand) end
         end
-        m_rand:start()
+        utils.metro_start(m_rand)
     end
     if morph.amount > 0 and morph.amount < 100 then do_capture_temp_scene() end
 end
@@ -785,7 +785,7 @@ local function handle_pitch_size_density_link(track, config, delta)
             new_size = util.clamp(old_size + delta * delta_mult, LIMITS.size.min, LIMITS.size.max)
             new_den = util.clamp(size_den_prod / new_size, LIMITS.density.min, LIMITS.density.max)
             local den_min, den_max = LIMITS.density.min, LIMITS.density.max
-            if new_den == den_min or new_den == den_max then new_size = util.clamp(size_den_prod / new_den, LIMITS.size.min, LIMITS.size.max) end
+            if new_den == den_min or new_den == max then new_size = util.clamp(size_den_prod / new_den, LIMITS.size.min, LIMITS.size.max) end
             new_pitch = base_pitch
         else
             local old_den = params:get(tr.."density")
@@ -910,7 +910,7 @@ local function find_or_create_lfo_for_param(track, param_name, only_existing, cr
     for idx = 2, #lfo_targets do if lfo_targets[idx] == full_param then new_target_idx = idx break end end
     if not new_target_idx then return nil end
     local min_val, max_val = lfo.get_parameter_range(full_param)
-    if not min_val or not max_val or max_val <= min_val then return nil end
+    if not min_val or max_val <= min_val then return nil end
     local current_val = params:get(full_param)
     local offset = (current_val - min_val) / (max_val - min_val) * 2 - 1
     local conflicts = {}

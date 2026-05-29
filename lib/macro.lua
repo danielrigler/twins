@@ -116,7 +116,7 @@ local function adjust_params(multiplier)
 
         if all_done then stop_metro_safe(randomize_metro) end
     end
-    randomize_metro:start()
+    utils.metro_start(randomize_metro)
 end
 
 function macro.macro_more() adjust_params(1.5)  end

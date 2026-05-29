@@ -175,7 +175,7 @@ local function start_evolution()
   clear_table(evolution_states)
   evolution_metro.time  = evolution_update_rate
   evolution_metro.event = evolution_update
-  evolution_metro:start()
+  utils.metro_start(evolution_metro)
 end
 
 local function stop_evolution()
@@ -264,7 +264,7 @@ local function start_interpolation(steps, symmetry)
       clear_table(active_interpolations)
     end
   end
-  randomize_metro:start()
+  utils.metro_start(randomize_metro)
 end
 
 local function pitch_scale_allowed()
