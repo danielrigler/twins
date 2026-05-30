@@ -6,7 +6,7 @@
 --            by: @dddstudio                       
 -- 
 --                          
---                           v0.57
+--                           v0.58
 -- E1: Master Volume
 -- K1+E2/E3: Volume
 -- K2/K3: Navigate
@@ -57,6 +57,9 @@ local macro = include("lib/macro") macro.set_lfo_reference(lfo)
 local drymode = include("lib/drymode") drymode.set_lfo_reference(lfo)
 local randomize_metro = { [1] = nil, [2] = nil }
 local active_clocks = {}
+local euclid_clocks = {[1] = nil, [2] = nil}
+local euclid_steps = {[1] = 32, [2] = 32}
+local euclid_hits  = {[1] = 32,  [2] = 32}
 local key_state = {} for n = 1, 3 do key_state[n] = false end
 local current_mode = "seek"
 local current_filter_mode = "lpf"
@@ -292,6 +295,50 @@ local function register_tap()
     end
 end
 
+local function euclid_pattern(hits, steps)
+    if hits <= 0 then return {} end
+    hits = math.min(hits, steps)
+    local pattern = {}
+    local bucket = 0
+    for i = 1, steps do
+        bucket = bucket + hits
+        if bucket >= steps then
+            bucket = bucket - steps
+            pattern[i] = 1
+        else
+            pattern[i] = 0
+        end
+    end
+    return pattern
+end
+
+local function stop_euclid_clock(voice)
+    if euclid_clocks[voice] then
+        pcall(function() clock.cancel(euclid_clocks[voice]) end)
+        euclid_clocks[voice] = nil
+    end
+end
+
+local function start_euclid_clock(voice)
+    stop_euclid_clock(voice)
+    euclid_clocks[voice] = clock.run(function()
+        local step = 1
+        while true do
+            local density = params:get(voice .. "density")
+            local interval = 1.0 / math.max(density, 0.1)
+            local pattern = euclid_pattern(euclid_hits[voice], euclid_steps[voice])
+            local n = #pattern
+            if n > 0 then
+                if pattern[((step - 1) % n) + 1] == 1 then
+                    engine.euclid_trig(voice)
+                end
+                step = (step % n) + 1
+            end
+            clock.sleep(interval)
+        end
+    end)
+end
+
 local function setup_params()
     params:add_separator("Input")
     for i = 1, 2 do
@@ -317,27 +364,22 @@ local function setup_params()
     params:add{type = "trigger", id = "load_preset_menu", name = "Preset Browser", action = function() presets.open_menu() end}
 
     params:add_separator("Settings")
-    params:add_group("GRANULAR", 37)
+    params:add_group("GRANULAR", 41)
     for i = 1, 2 do
       params:add_separator("SAMPLE "..i)
       params:add_control(i.. "granular_gain", i.. " Mix", controlspec.new(0, 100, "lin", 1, 100, "%")) params:set_action(i.. "granular_gain", function(value) engine.granular_gain(i, value * 0.01) if value < 100 then lfo.clearLFOs(i, "seek") end end)
-      local HARMONIC_PARAMS = {
-        {"subharmonics_3","Subharmonics -3oct"},{"subharmonics_2","Subharmonics -2oct"},
-        {"subharmonics_1","Subharmonics -1oct"},{"overtones_1","Overtones +1oct"},{"overtones_2","Overtones +2oct"}}
-      for _, hp in ipairs(HARMONIC_PARAMS) do
-        local id, lbl = hp[1], hp[2]
-        params:add_control(i..id, i.." "..lbl, controlspec.new(0, 1, "lin", 0.01, 0))
-        params:set_action(i..id, function(v) engine[id](i, v) end)
-      end
+      local HARMONIC_PARAMS = {{"subharmonics_3","Subharmonics -3oct"},{"subharmonics_2","Subharmonics -2oct"}, {"subharmonics_1","Subharmonics -1oct"},{"overtones_1","Overtones +1oct"},{"overtones_2","Overtones +2oct"}} for _, hp in ipairs(HARMONIC_PARAMS) do local id, lbl = hp[1], hp[2] params:add_control(i..id, i.." "..lbl, controlspec.new(0, 1, "lin", 0.01, 0)) params:set_action(i..id, function(v) engine[id](i, v) end) end
       params:add_option(i.. "smoothbass", i.." Smooth Sub", {"off", "on"}, 1) params:set_action(i.. "smoothbass", function(x) local engine_value = (x == 2) and 2.5 or 1 engine.smoothbass(i, engine_value) end)
       params:add_control(i.."pitch_random_prob", i.." Pitch Randomize", controlspec.new(-100, 100, "lin", 1, 0, "%")) params:set_action(i.."pitch_random_prob", function(value) engine.pitch_random_prob(i, value) end)
       params:add_option(i.."pitch_random_scale_type", i.." Pitch Quantize", {"5th+oct", "5th+oct 2", "1 oct", "2 oct", "chrom", "maj", "min", "penta", "whole"}, 1) params:set_action(i.."pitch_random_scale_type", function(value) engine.pitch_random_scale_type(i, value - 1) end)
       params:add_control(i.."ratcheting_prob", i.." Ratcheting", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.."ratcheting_prob", function(value) engine.ratcheting_prob(i, value) end)
-      params:add_option(i.."env_select", i.." Grain Envelope", {"Hann", "Tukey", "Perc.", "ADSR", "Random"}, 1) params:set_action(i.."env_select", function(value) engine.env_select(i, value - 1) end)
+      params:add_option(i.."env_select", i.." Grain Envelope", {"Sine", "Tukey", "Perc.", "ADSR", "Random"}, 1) params:set_action(i.."env_select", function(value) engine.env_select(i, value - 1) end)
       params:add_control(i.. "size_variation", i.. " Size Variation", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.. "size_variation", function(value) engine.size_variation(i, value * 0.01) end)
       params:add_control(i.. "direction_mod", i.. " Reverse", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.. "direction_mod", function(value) engine.direction_mod(i, value * 0.01) end)
+      params:add_control(i.. "density_mod_amt", i.. " Density Mod", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.. "density_mod_amt", function(value) engine.density_mod_amt(i, value * 0.01) end)
+      params:add_control(i.."euclid_steps", i.." Euclid. Steps", controlspec.new(1, 32, "lin", 1, 8, "")) params:set_action(i.."euclid_steps", function(value) local s = math.floor(value) euclid_steps[i] = s local hits_param = params:lookup_param(i.."euclid_hits") if hits_param then hits_param.controlspec.maxval = s end if euclid_hits[i] > s then params:set(i.."euclid_hits", s) end end) 
+      params:add_control(i.."euclid_hits", i.." Euclid. Hits", controlspec.new(1, 32, "lin", 1, 8, "")) params:set_action(i.."euclid_hits", function(value) local clamped = math.min(math.floor(value), euclid_steps[i]) euclid_hits[i] = clamped if clamped ~= math.floor(value) then params:set(i.."euclid_hits", clamped, true) end end)      
       params:add_control(i.."probability", i.." Trigger Probability", controlspec.new(0, 100, "lin", 1, 100, "%")) params:set_action(i.."probability", function(value) engine.probability(i, value * 0.01) end)
-      params:add_control(i.. "density_mod_amt", i.. " Density Mod", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.. "density_mod_amt", function(value) engine.density_mod_amt(i, value * 0.01) end)      
       params:add_option(i.. "pitch_mode", i.. " Pitch Mode", {"match speed", "independent"}, 2) params:set_action(i.. "pitch_mode", function(value) engine.pitch_mode(i, value - 1) end)
     end
     params:add_separator(" ")
@@ -450,54 +492,23 @@ local function setup_params()
     params:add_separator("       ")
     params:add_binary("randomize_glitch", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_glitch", function() if params:get("lock_glitch") == 1 then params:set("glitch_probability", math.random(1, 150) / 10) params:set("glitch_min_length", math.random(10, 200)) params:set("glitch_max_length", math.random(100, 500)) params:set("glitch_reverse", math.random(0, 100)) params:set("glitch_pitch", math.random(0, 100)) end end)
 
-    params:add_group("EVOLVE", 3)
+    params:add_group("EVOLVE", 12)
     params:add_binary("evolution", "Evolve!", "toggle", 0) params:set_action("evolution", function(value) if value == 1 then randpara.reset_evolution_centers() randpara.start_evolution() else randpara.stop_evolution() end end)
     params:add_control("evolution_range", "Evolution Range", controlspec.new(0, 100, "lin", 1, 10, "%")) params:set_action("evolution_range", function(value) randpara.set_evolution_range(value) end)
     params:add_option("evolution_rate", "Evolution Rate", {"slowest", "slow", "moderate", "medium", "fast", "crazy"}, 2) params:set_action("evolution_rate", function(value) local rates = {1/0.5, 1/1.5, 1/4, 1/8, 1/15, 1/30} randpara.set_evolution_rate(rates[value]) end)
-    
+    params:add_separator("                               ")
+    params:add_option("evolve_granular", "Evolve Granular", {"off", "on"}, 2) params:set_action("evolve_granular", function(value) randpara.set_group_evolution("granular", value == 2) end)
+    params:add_option("evolve_delay", "Evolve Delay", {"off", "on"}, 1) params:set_action("evolve_delay", function(value) randpara.set_group_evolution("delay", value == 2) end)
+    params:add_option("evolve_reverb", "Evolve Reverb", {"off", "on"}, 1) params:set_action("evolve_reverb", function(value) randpara.set_group_evolution("reverb", value == 2) end)
+    params:add_option("evolve_tape", "Evolve Tape", {"off", "on"}, 2) params:set_action("evolve_tape", function(value) randpara.set_group_evolution("tape", value == 2) end)
+    params:add_option("evolve_shimmer", "Evolve Shimmer", {"off", "on"}, 2) params:set_action("evolve_shimmer", function(value) randpara.set_group_evolution("shimmer", value == 2) end)
+    params:add_option("evolve_eq", "Evolve EQ", {"off", "on"}, 2) params:set_action("evolve_eq", function(value) randpara.set_group_evolution("eq", value == 2) end)
+    params:add_option("evolve_bitcrush", "Evolve Bitcrush", {"off", "on"}, 2) params:set_action("evolve_bitcrush", function(value) randpara.set_group_evolution("bitcrush", value == 2) end)
+    params:add_option("evolve_glitch", "Evolve Glitch", {"off", "on"}, 2) params:set_action("evolve_glitch", function(value) randpara.set_group_evolution("glitch", value == 2) end)
+
     params:add_group("SYMMETRY", 6)
     params:add_binary("symmetry", "Symmetry", "toggle", 0)
-    params:set_action("symmetry", function(value)
-        if value == 0 then
-            for i = 1, 16 do
-                lfo[i].sync_to = nil
-                lfo[i].sync_invert = false
-            end
-        else
-            -- Build a map: param_name -> lfo index, for all active LFOs
-            local active_map = {}
-            for i = 1, 16 do
-                if lfo[i].active and lfo[i].target_name and lfo[i].target_name ~= "none" then
-                    active_map[lfo[i].target_name] = i
-                end
-            end
-            -- For each active voice 1 LFO, find its voice 2 counterpart and sync it
-            -- Volume LFOs are always independent; clear any stale sync on them
-            for i = 1, 16 do
-                local obj = lfo[i]
-                if obj.active and obj.target_name and obj.target_name ~= "none" then
-                    local target = obj.target_name
-                    local track  = target:sub(1, 1)
-                    local pname  = target:sub(2)
-                    if pname == "volume" then
-                        obj.sync_to     = nil
-                        obj.sync_invert = false
-                    elseif track == "1" then
-                        local mirror_target = "2" .. pname
-                        local j = active_map[mirror_target]
-                        if j then
-                            local is_pan = (pname == "pan")
-                            lfo[j].sync_to       = i
-                            lfo[j].sync_invert   = is_pan
-                            lfo[j].walk_value    = obj.walk_value
-                            lfo[j].walk_velocity = obj.walk_velocity
-                            lfo[j].prev          = is_pan and -obj.prev or obj.prev
-                        end
-                    end
-                end
-            end
-        end
-    end)
+  params:set_action("symmetry", function(value) if value == 0 then for i=1,16 do lfo[i].sync_to=nil; lfo[i].sync_invert=false end else local active_map={} for i=1,16 do if lfo[i].active and lfo[i].target_name and lfo[i].target_name~="none" then active_map[lfo[i].target_name]=i end end for i=1,16 do local obj=lfo[i] if obj.active and obj.target_name and obj.target_name~="none" then local target=obj.target_name local track=target:sub(1,1) local pname=target:sub(2) if pname=="volume" then obj.sync_to=nil; obj.sync_invert=false elseif track=="1" then local j=active_map["2"..pname] if j then local is_pan=(pname=="pan") lfo[j].sync_to=i; lfo[j].sync_invert=is_pan; lfo[j].walk_value=obj.walk_value; lfo[j].walk_velocity=obj.walk_velocity; lfo[j].prev=is_pan and -obj.prev or obj.prev end end end end end end)
     params:add_separator("Copy")
     params:add_binary("copy_1_to_2", "Params 1 → 2", "trigger", 0) params:set_action("copy_1_to_2", function() Mirror.copy_voice_params("1", "2", true) end)
     params:add_binary("copy_2_to_1", "Params 1 ← 2", "trigger", 0) params:set_action("copy_2_to_1", function() Mirror.copy_voice_params("2", "1", true) end)
@@ -573,7 +584,7 @@ local function setup_params()
     for i = 1, 2 do
       params:add_taper(i.. "volume", i.. " volume", -70, 10, -15, 0, "dB") params:set_action(i.. "volume", function(value) if value == -70 then engine.volume(i, 0) else engine.volume(i, math.pow(10, value / 20)) end end)
       params:add_taper(i.. "pan", i.. " pan", -100, 100, 0, 0, "%") params:set_action(i.. "pan", function(value) engine.pan(i, value * 0.01)  end)
-      params:add_taper(i.. "speed", i.. " speed", -2, 2, 0.10, 0) params:set_action(i.. "speed", function(value) if math.abs(value) < 0.01 then engine.speed(i, 0) else engine.speed(i, value) end end)
+      params:add_taper(i.. "speed", i.. " speed", -2, 2, 0, 0) params:set_action(i.. "speed", function(value) if math.abs(value) < 0.01 then engine.speed(i, 0) else engine.speed(i, value) end end)
       params:add_taper(i.. "density", i.. " density", 0.1, 250, 3.5, 5) params:set_action(i.. "density", function(value) engine.density(i, value) end)
       params:add_control(i.. "pitch", i.. " pitch", controlspec.new(-48, 48, "lin", 1, 0, "st")) params:set_action(i.. "pitch", function(value) local scale = params:string("pitch_quantize_scale") local quantized = quantize_pitch_to_scale(value, scale) engine.pitch_offset(i, math.pow(0.5, -quantized / 12)) end)
       params:add_taper(i.. "jitter", i.. " jitter", 0, 999900, 250, 10, "ms") params:set_action(i.. "jitter", function(value) engine.jitter(i, value * 0.001) end)
@@ -582,6 +593,7 @@ local function setup_params()
       params:add_control(i.. "seek", i.. " seek", controlspec.new(0, 100, "lin", 0.01, 0, "%")) params:set_action(i.. "seek", function(value) engine.seek(i, value * 0.01) end)
     end
     params:bang()
+    presets.record_defaults()
 end
 
 local function set_pitch(track, other_track, new_pitch, symmetry)
@@ -1503,6 +1515,7 @@ function init()
     init_longpress_checker()
     for i = 1, 2 do params:set(i.."sample", _path.tape, true) end
     for i = 1, 2 do engine.pause_voice(i) end
+    for i = 1, 2 do start_euclid_clock(i) end
     morph.initialize_scenes_with_current_params()
 end
 
@@ -1511,6 +1524,7 @@ function cleanup()
     stop_metro_safe(ui_metro)
     stop_metro_safe(longpress_metro)
     for i = 1, 2 do stop_metro_safe(randomize_metro[i]) end
+    for i = 1, 2 do stop_euclid_clock(i) end
     lfo.cleanup()
     lfo.on_state_change = nil
     randpara.cleanup()

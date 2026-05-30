@@ -117,6 +117,22 @@ local function params_snapshot()
     return state
 end
 
+presets.default_params = {}
+
+function presets.record_defaults()
+    for id in pairs(params.lookup) do
+        if not SYSTEM_PARAMS_EXCLUDE[id] then
+            local p_obj = params:lookup_param(id)
+            if p_obj and p_obj.t ~= 4 and p_obj.t ~= 6 and p_obj.t ~= 7 then
+                local ok, val = pcall(function() return params:get(id) end)
+                if ok and val ~= nil then
+                    presets.default_params[id] = val
+                end
+            end
+        end
+    end
+end
+
 local function serialize(tbl, indent)
     indent    = indent or ""
     local sub = indent .. "  "
@@ -185,7 +201,17 @@ end
 
 local function apply_params_ordered(p)
     local buckets = { {}, {}, {}, {}, {}, {} }
-    for id, value in pairs(p) do
+    local merged = {}
+    for id, def_val in pairs(presets.default_params) do
+        merged[id] = def_val
+    end
+    if p then
+        for id, val in pairs(p) do
+            merged[id] = val
+        end
+    end
+
+    for id, value in pairs(merged) do
         if params.lookup[id] and not id:match("^%d+sample$")
                 and not id:match("^%d+volume$") and not id:match("^%d+granular_gain$") then
             local placed = false
@@ -255,13 +281,14 @@ function presets.load_complete_preset(name, scene_data, update_pan, audio_active
         end
         update_pan()
         _G.preset_loading = false
-        if data.params then apply_params_ordered(data.params) end
+        apply_params_ordered(data.params or {})
         for i = 1, 2 do
             for _, suffix in ipairs({"volume", "granular_gain"}) do
                 local p = i .. suffix
                 if params.lookup[p] then
                     local saved = data.params and data.params[p]
-                    params:set(p, saved ~= nil and saved or params:get(p))
+                    local def = presets.default_params[p]
+                    params:set(p, saved ~= nil and saved or (def ~= nil and def or params:get(p)))
                 end
             end
         end

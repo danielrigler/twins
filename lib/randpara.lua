@@ -10,12 +10,32 @@ local evolution_update_rate    = 1 / 8
 local evolvable_params_cache   = {}
 local cache_dirty              = true
 local evolution_symmetry_state = false
-
+local evolution_group_enabled = {
+  granular = true,
+  delay    = true,
+  reverb   = true,
+  tape     = true,
+  shimmer  = true,
+  eq       = true,
+  glitch   = true,
+  bitcrush = true,
+}
 local utils = include("lib/utils")
 local random_float    = utils.random_float
 local stop_metro_safe = utils.stop_metro_safe
 
 local function clear_table(t) for k in pairs(t) do t[k] = nil end end
+
+local function set_group_evolution(group, enabled)
+  if evolution_group_enabled[group] ~= nil then
+    evolution_group_enabled[group] = enabled
+    cache_dirty = true
+  end
+end
+
+local function get_group_evolution(group)
+  return evolution_group_enabled[group] == true
+end
 
 local function interpolate(current, target, threshold, factor)
   if math.abs(current - target) < threshold then return target end
@@ -38,6 +58,8 @@ local PARAM_SPECS = {
   ["1overtones_1"]        = {1,   {0,1},     "granular"}, ["2overtones_1"]     = {1,   {0,1},     "granular"},
   ["1overtones_2"]        = {1,   {0,1},     "granular"}, ["2overtones_2"]     = {1,   {0,1},     "granular"},
   ["1ratcheting_prob"]    = {25,  {0,100},   "granular"}, ["2ratcheting_prob"] = {25,  {0,100},   "granular"},
+  ["1euclid_steps"]        = {4,   {4,16},   "granular"}, ["2euclid_steps"]     = {4,  {4,16},    "granular"},
+  ["1euclid_hits"]        = {5,   {1,16},     "granular"}, ["2euclid_hits"]     = {5,  {1,16},      "granular"},
   ["delay_feedback"]      = {100, {0,100},   "delay"},
   ["delay_time"]          = {2,   {0,2},     "delay"},
   ["stereo"]              = {50,  {0,100},   "delay"},
@@ -46,12 +68,12 @@ local PARAM_SPECS = {
   ["delay_lowpass"]       = {10000,{500,20000},"delay"},
   ["delay_highpass"]      = {250, {20,20000},"delay"},
   ["t60"]                 = {8,   {0.1,8},   "reverb"},
-  ["damp"]                = {100, {0,100},   "reverb"},
-  ["shimmer_mix"]         = {25,  {0,100},   "reverb"},
+  ["damp"]                = {50, {0,100},   "reverb"},
+  ["shimmer_mix"]         = {10,  {0,100},   "reverb"},
   ["shimmer_preset"]      = {2,   {1,5},     "reverb"},
   ["earlyDiff"]           = {100, {0,100},   "reverb"},
   ["modDepth"]            = {100, {0,100},   "reverb"},
-  ["rsize"]               = {0.4, {0.5,5},   "reverb"},
+  ["rsize"]               = {4, {1,2},   "reverb"},
   ["modFreq"]             = {5,   {0,5},     "reverb"},
   ["low"]                 = {1,   {0,1},     "reverb"},
   ["mid"]                 = {1,   {0,1},     "reverb"},
@@ -76,6 +98,13 @@ local PARAM_SPECS = {
   ["1eq_low_gain"]        = {0.2, {0,1},     "eq"}, ["2eq_low_gain"]  = {0.2,{0,1},"eq"},
   ["1eq_mid_gain"]        = {0.2, {0,1},     "eq"}, ["2eq_mid_gain"]  = {0.2,{0,1},"eq"},
   ["1eq_high_gain"]       = {0.2, {0,1},     "eq"}, ["2eq_high_gain"] = {0.2,{0,1},"eq"},
+  ["glitch_mix"]          = {40, {0,100},   "glitch"}, ["glitch_mix"] = {40, {0,100},"glitch"},
+  ["glitch_probability"]  = {5, {0.1,20},   "glitch"}, ["glitch_probability"] = {5, {0.1,20},"glitch"},
+  ["glitch_min_length"]   = {100, {10,150},   "glitch"}, ["glitch_min_length"] = {100, {10,150},"glitch"},
+  ["glitch_max_length"]   = {100, {50,300},   "glitch"}, ["glitch_max_length"] = {100, {50,300},"glitch"},
+  ["glitch_maxstutters"]  = {5, {2,20},   "glitch"}, ["glitch_maxstutters"] = {5, {2,20},"glitch"},
+  ["glitch_reverse"]  = {50, {0,100},   "glitch"}, ["glitch_reverse"] = {50, {0,100},"glitch"},
+  ["glitch_pitch"]  = {50, {0,100},   "glitch"}, ["glitch_pitch"] = {50, {0,100},"glitch"},
 }
 
 local GROUP_LOCK = {
@@ -89,12 +118,15 @@ local function build_evolvable_params_cache(force)
   if not cache_dirty and not force then return end
   local n = 0
   for param, spec in pairs(PARAM_SPECS) do
-    local lock = GROUP_LOCK[spec[3]]
+    local group = spec[3]
+    if not evolution_group_enabled[group] then goto continue end
+    local lock = GROUP_LOCK[group]
     local locked = lock and params.lookup[lock] and params:get(lock) == 2
     if params.lookup[param] and not locked then
       n = n + 1
       evolvable_params_cache[n] = param
     end
+    ::continue::
   end
   for i = n + 1, #evolvable_params_cache do evolvable_params_cache[i] = nil end
   local valid = {}
@@ -322,8 +354,8 @@ local param_configs = {
 local track_param_configs = {
   granular = function(track) return { lock_param = "lock_granular", params = {
     {name=track.."direction_mod",    prob=0.4, default=0,  random=function() return math.random(0,40)       end},
-    {name=track.."size_variation",   prob=0.4, default=0,  random=function() return math.random(0,50)       end},
-    {name=track.."density_mod_amt",  prob=0.4, default=0,  random=function() return math.random(0,80)       end},
+    {name=track.."size_variation",   prob=0.4, default=0,  random=function() return math.random(0,25)       end},
+    {name=track.."density_mod_amt",  prob=0.25, default=0,  random=function() return math.random(0,40)      end},
     {name=track.."subharmonics_1",   prob=0.4, default=0,  random=function() return random_float(0,0.4)     end},
     {name=track.."subharmonics_2",   prob=0.4, default=0,  random=function() return random_float(0,0.4)     end},
     {name=track.."subharmonics_3",   prob=0.4, default=0,  random=function() return random_float(0,0.4)     end},
@@ -411,4 +443,6 @@ return {
   set_evolution_rate      = set_evolution_rate,
   reset_evolution_centers = reset_evolution_centers,
   cleanup                 = cleanup,
+  set_group_evolution = set_group_evolution,
+  get_group_evolution = get_group_evolution,
 }
