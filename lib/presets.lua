@@ -11,6 +11,7 @@ presets.k2_mode        = "delete"
 _G.preset_loading = false
 
 local PRESETS_DIR         = "twins"
+local PRESETS_PATH        = _path.data .. PRESETS_DIR -- Cached path for performance
 local PRESET_VERSION      = 1
 local RENAME_CHARSET      = " abcdefghijklmnopqrstuvwxyz_0123456789"
 local RENAME_CHARSET_LEN  = #RENAME_CHARSET
@@ -77,24 +78,21 @@ local function is_valid_sample(p)
 end
 
 function presets.list_presets()
-    local dir  = _path.data .. PRESETS_DIR
-    util.make_dir(dir)
-    local list   = {}
-    local mtimes = {}
-    local f = io.popen('stat -c "%n %Y" "' .. dir .. '"/*.lua 2>/dev/null')
+    util.make_dir(PRESETS_PATH)
+    local list, mtimes = {}, {}
+    local f = io.popen('stat -c "%n %Y" "' .. PRESETS_PATH .. '"/*.lua 2>/dev/null')
     if f then
         for line in f:lines() do
             local name, t = line:match('([^/]+)%.lua (%d+)$')
             if name then
-                list[#list+1]  = name
-                mtimes[name]   = tonumber(t)
+                table.insert(list, name)
+                mtimes[name] = tonumber(t)
             end
         end
         f:close()
     end
     table.sort(list, function(a, b)
-        local na = parse_preset_name(a) or 0
-        local nb = parse_preset_name(b) or 0
+        local na, nb = parse_preset_name(a) or 0, parse_preset_name(b) or 0
         if na ~= nb then return na > nb end
         return (mtimes[a] or 0) > (mtimes[b] or 0)
     end)
@@ -125,9 +123,7 @@ function presets.record_defaults()
             local p_obj = params:lookup_param(id)
             if p_obj and p_obj.t ~= 4 and p_obj.t ~= 6 and p_obj.t ~= 7 then
                 local ok, val = pcall(function() return params:get(id) end)
-                if ok and val ~= nil then
-                    presets.default_params[id] = val
-                end
+                if ok and val ~= nil then presets.default_params[id] = val end
             end
         end
     end
@@ -158,8 +154,8 @@ function presets.save_complete_preset(name, scene_data, active_mode, active_filt
         if not name or name == "" then
             local existing = presets.list_presets()
             local max_n = 0
-            for i = 1, #existing do
-                local n = parse_preset_name(existing[i])
+            for _, v in ipairs(existing) do
+                local n = parse_preset_name(v)
                 if n and n > max_n then max_n = n end
             end
             name = format_number(max_n + 1) .. " " .. NameSizer.rnd(" ")
@@ -177,9 +173,8 @@ function presets.save_complete_preset(name, scene_data, active_mode, active_filt
             active_mode = active_mode,
             active_filter_mode = active_filter_mode,
         }
-        local presets_path = _path.data .. PRESETS_DIR
-        util.make_dir(presets_path)
-        local path = presets_path .. "/" .. name .. ".lua"
+        util.make_dir(PRESETS_PATH)
+        local path = PRESETS_PATH .. "/" .. name .. ".lua"
         local file, open_err = io.open(path, "w")
         if not file then error("Cannot write: " .. path .. " (" .. tostring(open_err) .. ")") end
         local header = string.format("-- Twins Preset\n-- Name: %s\n-- Saved: %s\n-- Version: %d\n\nreturn ", name, os.date("%Y-%m-%d %H:%M:%S"), PRESET_VERSION)
@@ -192,7 +187,7 @@ function presets.save_complete_preset(name, scene_data, active_mode, active_filt
 end
 
 function presets.delete_preset(name)
-    local path = _path.data .. PRESETS_DIR .. "/" .. name .. ".lua"
+    local path = PRESETS_PATH .. "/" .. name .. ".lua"
     if not util.file_exists(path) then print("✗ Not found: " .. name); return false end
     local ok, err = pcall(os.remove, path)
     if ok then print("✓ Deleted: " .. name) else print("✗ Delete error: " .. (err or "?")) end
@@ -202,33 +197,22 @@ end
 local function apply_params_ordered(p)
     local buckets = { {}, {}, {}, {}, {}, {} }
     local merged = {}
-    for id, def_val in pairs(presets.default_params) do
-        merged[id] = def_val
-    end
-    if p then
-        for id, val in pairs(p) do
-            merged[id] = val
-        end
-    end
+    for id, def_val in pairs(presets.default_params) do merged[id] = def_val end
+    if p then for id, val in pairs(p) do merged[id] = val end end
 
     for id, value in pairs(merged) do
-        if params.lookup[id] and not id:match("^%d+sample$")
-                and not id:match("^%d+volume$") and not id:match("^%d+granular_gain$") then
+        if params.lookup[id] and not id:match("^%d+sample$") and not id:match("^%d+volume$") and not id:match("^%d+granular_gain$") then
             local placed = false
             for i = 1, 3 do
                 if id:match(PARAM_MATCHERS[i]) then
-                    buckets[i][#buckets[i]+1] = { id=id, value=value }
+                    table.insert(buckets[i], { id=id, value=value })
                     placed = true; break
                 end
             end
             if not placed then
-                if id == "allow_volume_lfos" then
-                    buckets[4][#buckets[4]+1] = { id=id, value=value }
-                elseif id:match("^%d+lfo$") then
-                    buckets[5][#buckets[5]+1] = { id=id, value=value }
-                else
-                    buckets[6][#buckets[6]+1] = { id=id, value=value }
-                end
+                if id == "allow_volume_lfos" then table.insert(buckets[4], { id=id, value=value })
+                elseif id:match("^%d+lfo$") then table.insert(buckets[5], { id=id, value=value })
+                else table.insert(buckets[6], { id=id, value=value }) end
             end
         end
     end
@@ -239,13 +223,14 @@ local function apply_params_ordered(p)
 end
 
 function presets.load_complete_preset(name, scene_data, update_pan, audio_active, on_loaded)
-    local path = _path.data .. PRESETS_DIR .. "/" .. name .. ".lua"
+    local path = PRESETS_PATH .. "/" .. name .. ".lua"
     if not util.file_exists(path) then print("✗ Not found: " .. name); return false end
     local chunk, err = loadfile(path)
     if not chunk then print("✗ Load error: " .. (err or "?")); return false end
     local ok, data = pcall(chunk)
     if not ok or not data then print("✗ Parse error: " .. (data or "?")); return false end
     if data.version and data.version > PRESET_VERSION then print("⚠ Newer preset version") end
+    
     local saved_output_level
     if params.lookup["output_level"] then
         saved_output_level = params:get("output_level")
@@ -263,16 +248,11 @@ function presets.load_complete_preset(name, scene_data, update_pan, audio_active
                 scene_data[track][scene] = (src[track] and src[track][scene]) or {}
             end end
         end
-        if data.morph_amount then
-            morph_amount = data.morph_amount
-            if params.lookup["morph_amount"] then params:set("morph_amount", data.morph_amount) end
-        end
+        if data.morph_amount and params.lookup["morph_amount"] then params:set("morph_amount", data.morph_amount) end
         if data.params then
             for i = 1, 2 do
                 local sp = i .. "sample"
-                if params.lookup[sp] and is_valid_sample(data.params[sp]) then
-                    params:set(sp, data.params[sp])
-                end
+                if params.lookup[sp] and is_valid_sample(data.params[sp]) then params:set(sp, data.params[sp]) end
             end
         end
         for i = 1, 2 do
@@ -293,9 +273,7 @@ function presets.load_complete_preset(name, scene_data, update_pan, audio_active
             end
         end
         clock.sleep(0.4)
-        if saved_output_level ~= nil and params.lookup["output_level"] then
-            params:set("output_level", saved_output_level)
-        end
+        if saved_output_level ~= nil and params.lookup["output_level"] then params:set("output_level", saved_output_level) end
         redraw()
         print("✓ Loaded: " .. name)
         loading_clock = nil
@@ -336,7 +314,7 @@ local function available_numbers(current_name)
         if n and n ~= current_n then used[n] = true; if n > max_n then max_n = n end end
     end
     local avail = {}
-    for i = 1, max_n + 1 do if not used[i] then avail[#avail+1] = i end end
+    for i = 1, max_n + 1 do if not used[i] then table.insert(avail, i) end end
     return #avail > 0 and avail or {1}
 end
 
@@ -399,7 +377,7 @@ local function swap_preset_numbers(idx_a, idx_b)
     local na, wa = parse_preset_name(name_a)
     local nb, wb = parse_preset_name(name_b)
     if not (na and nb and wa and wb) then return nil end
-    local dir   = _path.data .. PRESETS_DIR .. "/"
+    local dir   = PRESETS_PATH .. "/"
     local new_a = fmt_name(nb, wa)
     os.rename(dir .. name_a .. ".lua", dir .. new_a .. ".lua")
     os.rename(dir .. name_b .. ".lua", dir .. fmt_name(na, wb) .. ".lua")
@@ -510,82 +488,82 @@ function presets.draw_menu()
     return true
 end
 
+local function handle_rename_manual(conf, n, d)
+    if n == 1 then
+        conf.erase_acc = (conf.erase_acc or 0) + math.abs(d)
+        if conf.erase_acc < 3 then return end
+        conf.erase_acc = 0; conf.pending_char = nil; cancel_rename_clock()
+        local t = conf.manual_text
+        if d < 0 then
+            if conf.manual_cursor > 1 then
+                conf.manual_text   = t:sub(1, conf.manual_cursor-2) .. t:sub(conf.manual_cursor)
+                conf.manual_cursor = conf.manual_cursor - 1
+            end
+        else
+            if conf.manual_cursor <= #t then
+                conf.manual_text = t:sub(1, conf.manual_cursor-1) .. t:sub(conf.manual_cursor+1)
+                conf.manual_cursor = #conf.manual_text == 0 and 1 or math.min(conf.manual_cursor, #conf.manual_text)
+            end
+        end
+        conf.manual_char_idx = char_to_charset_idx(conf.manual_text:sub(conf.manual_cursor, conf.manual_cursor))
+        update_suggested(conf); redraw()
+    elseif n == 2 then
+        cancel_rename_clock(); commit_pending(conf)
+        local trimmed_len = #(conf.manual_text:match("^(.-)%s*$") or conf.manual_text)
+        local new_cursor  = util.clamp(conf.manual_cursor + d, 1, math.min(trimmed_len + 2, RENAME_MAX_LEN))
+        if new_cursor ~= conf.manual_cursor then
+            if new_cursor > #conf.manual_text then conf.manual_text = conf.manual_text .. string.rep(" ", new_cursor - #conf.manual_text) end
+            conf.manual_cursor   = new_cursor
+            conf.manual_char_idx = char_to_charset_idx(conf.manual_text:sub(conf.manual_cursor, conf.manual_cursor))
+            update_suggested(conf)
+            if conf.manual_text:sub(conf.manual_cursor, conf.manual_cursor) == " " then conf.pending_char = " "; start_commit_clock(conf) end
+            redraw()
+        end
+    elseif n == 3 then
+        local trimmed_len = #(conf.manual_text:match("^(.-)%s*$") or conf.manual_text)
+        local is_new  = conf.manual_cursor > trimmed_len
+        local prev_ch = conf.manual_cursor > 1 and conf.manual_text:sub(conf.manual_cursor-1, conf.manual_cursor-1) or ""
+        local step    = d > 0 and 1 or -1
+        local new_idx, tries = conf.manual_char_idx, 0
+        repeat
+            new_idx = util.clamp(new_idx + step, 1, RENAME_CHARSET_LEN)
+            tries   = tries + 1
+            local c = RENAME_CHARSET:sub(new_idx, new_idx)
+            if not (c == " " and (conf.manual_cursor == 1 or prev_ch == " ")) then break end
+        until tries > RENAME_CHARSET_LEN or new_idx <= 1 or new_idx >= RENAME_CHARSET_LEN
+        conf.manual_char_idx = new_idx
+        local new_char = auto_case(RENAME_CHARSET:sub(new_idx, new_idx), conf.manual_text, conf.manual_cursor)
+        if is_new then
+            conf.pending_char = new_char; start_commit_clock(conf)
+        else
+            cancel_rename_clock(); conf.pending_char = nil
+            if conf.manual_cursor > #conf.manual_text then conf.manual_text = pad_text(conf.manual_text, conf.manual_cursor) end
+            conf.manual_text = str_set_char(conf.manual_text, conf.manual_cursor, new_char)
+            update_suggested(conf)
+        end
+        redraw()
+    end
+end
+
+local function handle_rename_random(conf, n, d)
+    if n == 2 then
+        conf.avail_index      = util.clamp(conf.avail_index + d, 1, #conf.available_numbers)
+        conf.suggested_number = conf.available_numbers[conf.avail_index]
+        conf.suggested_name   = fmt_name(conf.suggested_number, conf.suggested_word)
+        redraw()
+    elseif n == 3 then
+        conf.suggested_word = NameSizer.rnd(" ")
+        conf.suggested_name = fmt_name(conf.suggested_number, conf.suggested_word)
+        redraw()
+    end
+end
+
 function presets.menu_enc(n, d)
     if not presets.menu_open then return end
     local conf = presets.confirmation
     if conf and conf.type == "rename" then
-        if conf.rename_mode == "manual" then
-
-            if n == 1 then
-                conf.erase_acc = (conf.erase_acc or 0) + math.abs(d)
-                if conf.erase_acc < 3 then return end
-                conf.erase_acc = 0; conf.pending_char = nil; cancel_rename_clock()
-                local t = conf.manual_text
-                if d < 0 then
-                    if conf.manual_cursor > 1 then
-                        conf.manual_text   = t:sub(1, conf.manual_cursor-2) .. t:sub(conf.manual_cursor)
-                        conf.manual_cursor = conf.manual_cursor - 1
-                    end
-                else
-                    if conf.manual_cursor <= #t then
-                        conf.manual_text = t:sub(1, conf.manual_cursor-1) .. t:sub(conf.manual_cursor+1)
-                        if #conf.manual_text == 0 then
-                            conf.manual_cursor = 1
-                        else
-                            conf.manual_cursor = math.min(conf.manual_cursor, #conf.manual_text)
-                        end
-                    end
-                end
-                conf.manual_char_idx = char_to_charset_idx(conf.manual_text:sub(conf.manual_cursor, conf.manual_cursor))
-                update_suggested(conf); redraw()
-            elseif n == 2 then
-                cancel_rename_clock(); commit_pending(conf)
-                local trimmed_len = #(conf.manual_text:match("^(.-)%s*$") or conf.manual_text)
-                local new_cursor  = util.clamp(conf.manual_cursor + d, 1, math.min(trimmed_len + 2, RENAME_MAX_LEN))
-                if new_cursor ~= conf.manual_cursor then
-                    if new_cursor > #conf.manual_text then conf.manual_text = conf.manual_text .. string.rep(" ", new_cursor - #conf.manual_text) end
-                    conf.manual_cursor   = new_cursor
-                    conf.manual_char_idx = char_to_charset_idx(conf.manual_text:sub(conf.manual_cursor, conf.manual_cursor))
-                    update_suggested(conf)
-                    if conf.manual_text:sub(conf.manual_cursor, conf.manual_cursor) == " " then conf.pending_char = " "; start_commit_clock(conf) end
-                    redraw()
-                end
-            elseif n == 3 then
-                local trimmed_len = #(conf.manual_text:match("^(.-)%s*$") or conf.manual_text)
-                local is_new  = conf.manual_cursor > trimmed_len
-                local prev_ch = conf.manual_cursor > 1 and conf.manual_text:sub(conf.manual_cursor-1, conf.manual_cursor-1) or ""
-                local step    = d > 0 and 1 or -1
-                local new_idx, tries = conf.manual_char_idx, 0
-                repeat
-                    new_idx = util.clamp(new_idx + step, 1, RENAME_CHARSET_LEN)
-                    tries   = tries + 1
-                    local c = RENAME_CHARSET:sub(new_idx, new_idx)
-                    if not (c == " " and (conf.manual_cursor == 1 or prev_ch == " ")) then break end
-                until tries > RENAME_CHARSET_LEN or new_idx <= 1 or new_idx >= RENAME_CHARSET_LEN
-                conf.manual_char_idx = new_idx
-                local new_char = auto_case(RENAME_CHARSET:sub(new_idx, new_idx), conf.manual_text, conf.manual_cursor)
-                if is_new then
-                    conf.pending_char = new_char; start_commit_clock(conf)
-                else
-                    cancel_rename_clock(); conf.pending_char = nil
-                    if conf.manual_cursor > #conf.manual_text then conf.manual_text = pad_text(conf.manual_text, conf.manual_cursor) end
-                    conf.manual_text = str_set_char(conf.manual_text, conf.manual_cursor, new_char)
-                    update_suggested(conf)
-                end
-                redraw()
-            end
-        else
-            if n == 2 then
-                conf.avail_index      = util.clamp(conf.avail_index + d, 1, #conf.available_numbers)
-                conf.suggested_number = conf.available_numbers[conf.avail_index]
-                conf.suggested_name   = fmt_name(conf.suggested_number, conf.suggested_word)
-                redraw()
-            elseif n == 3 then
-                conf.suggested_word = NameSizer.rnd(" ")
-                conf.suggested_name = fmt_name(conf.suggested_number, conf.suggested_word)
-                redraw()
-            end
-        end
+        if conf.rename_mode == "manual" then handle_rename_manual(conf, n, d)
+        else handle_rename_random(conf, n, d) end
         return
     end
     if n == 1 then
@@ -645,13 +623,10 @@ function presets.menu_key(n, z, scene_data, update_pan, audio_active, active_mod
                 presets.delete_preset(conf.preset_name)
                 presets.preset_list  = presets.list_presets()
                 presets.confirmation = nil
-                if #presets.preset_list == 0 then
-                    presets.menu_open = false
-                else
-                    presets.selected_index = util.clamp(conf.preset_index, 1, #presets.preset_list)
-                end
+                if #presets.preset_list == 0 then presets.menu_open = false
+                else presets.selected_index = util.clamp(conf.preset_index, 1, #presets.preset_list) end
             elseif conf.type == "save" then
-                local path  = _path.data .. PRESETS_DIR .. "/" .. conf.preset_name .. ".lua"
+                local path  = PRESETS_PATH .. "/" .. conf.preset_name .. ".lua"
                 local mtime = get_mtime(path)
                 presets.save_complete_preset(conf.preset_name, scene_data, active_mode, active_filter_mode)
                 if mtime > 0 then os.execute('touch -m -d @' .. mtime .. ' "' .. path .. '"') end
@@ -661,7 +636,7 @@ function presets.menu_key(n, z, scene_data, update_pan, audio_active, active_mod
                 cancel_rename_clock()
                 local new_name = (conf.suggested_name or conf.preset_name):match("^(.-)%s*$") or conf.preset_name
                 if new_name ~= conf.preset_name then
-                    local dir = _path.data .. PRESETS_DIR .. "/"
+                    local dir = PRESETS_PATH .. "/"
                     os.rename(dir .. conf.preset_name .. ".lua", dir .. new_name .. ".lua")
                 end
                 presets.confirmation   = nil

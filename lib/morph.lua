@@ -1,13 +1,11 @@
 local morph = {}
-
 morph.voice_params = {"speed","pitch","jitter","size","density","spread","pan","seek","cutoff","hpf","lpf_gain","granular_gain","subharmonics_3","subharmonics_2","subharmonics_1","overtones_1","overtones_2","smoothbass","ratcheting_prob","size_variation","direction_mod","density_mod_amt","pitch_random_scale_type","pitch_random_prob","pitch_mode","probability","eq_low_gain","eq_mid_gain","eq_high_gain","env_select","volume", "euclid_steps", "euclid_hits"}
 morph.global_params = {"delay_mix","delay_time","delay_feedback","delay_lowpass","delay_highpass","wiggle_depth","wiggle_rate","stereo","reverb_mix","t60","damp","rsize","earlyDiff","modDepth","modFreq","low","mid","high","lowcut","highcut","shimmer_mix","shimmer_preset","lock_shimmer","tape_mix","sine_drive_wet","drive","wobble_mix","wobble_amp","wobble_rpm","flutter_amp","flutter_freq","flutter_var","chew_depth","chew_freq","chew_variance","lossdegrade_mix","Width","dimension_mix","haas","rspeed","monobass_mix","bitcrush_mix","bitcrush_rate","bitcrush_bits","evolution","evolution_range","evolution_rate","lock_eq","lock_tape","lock_reverb","lock_delay","global_lfo_freq_scale","pitch_quantize_scale","pitch_lag","shimmer_mix1","shimmer_oct1","pitchv1","lowpass1","hipass1","fbDelay1","fb1", "glitch_probability", "glitch_ratio", "glitch_mix", "glitch_min_length", "glitch_max_length", "glitch_reverse", "glitch_pitch", "sine_lfos"}
-
+local param_registry = {}
 morph.amount = 0
 morph.scene_mode = "off"
 morph.scene_data = {[1] = {[1] = {}, [2] = {}}, [2] = {[1] = {}, [2] = {}}}
 morph.temp_scene = {}
-
 local m_min, m_abs = math.min, math.abs
 local util_time = util.time
 local last_morph_amount = 0
@@ -15,26 +13,12 @@ local last_morph_update_time = 0
 local MORPH_THROTTLE_INTERVAL = 0.03
 local lfo_ref = nil
 local invalidate_lfo_cache_ref = nil
-local _p_set, _p_get, _p_lookup
-local MORPH_LFO_KEYS
-local MORPH_TARGET_KEYS
-local MORPH_SHAPE_KEYS
-local MORPH_FREQ_KEYS
-local MORPH_DEPTH_KEYS
-local MORPH_OFFSET_KEYS
-local morph_voice_params_count = #morph.voice_params
-local morph_global_params_count = #morph.global_params
+local _p_set, _p_get
+local MORPH_LFO_KEYS, MORPH_TARGET_KEYS, MORPH_SHAPE_KEYS, MORPH_FREQ_KEYS, MORPH_DEPTH_KEYS, MORPH_OFFSET_KEYS
 local skip_param_set = {}
 local used_slots = {}
 local pending = {}
-local morph_voice_params_full = {}
-for _track = 1, 2 do 
-    morph_voice_params_full[_track] = {} 
-    for _i = 1, morph_voice_params_count do 
-        morph_voice_params_full[_track][_i] = tostring(_track) .. morph.voice_params[_i] 
-    end 
-end
-local _t, _t_inv, _morph_dir, _pitch_scale
+local _t, _t_inv, _morph_dir, _pitch_scale, _get_range_ref
 local _has_lfo_tracking = nil
 
 function morph.init(lfo_module, invalidate_fn)
@@ -48,20 +32,23 @@ function morph.init(lfo_module, invalidate_fn)
     MORPH_OFFSET_KEYS = lfo_ref.keys.offset
     _p_set = params.set
     _p_get = params.get
-    _p_lookup = params.lookup
+    param_registry = {}
+    for track = 1, 2 do 
+        for _, p in ipairs(morph.voice_params) do 
+            table.insert(param_registry, {name = tostring(track) .. p, is_pitch = (p == "pitch")}) 
+        end 
+    end
+    for _, p in ipairs(morph.global_params) do 
+        table.insert(param_registry, {name = p, is_pitch = false}) 
+    end
 end
 
 function morph.store_scene(track, scene)
     morph.scene_data[track][scene] = {}
     local scene_params = morph.scene_data[track][scene]
-    for i = 1, morph_voice_params_count do
-        local param = morph.voice_params[i]
-        local full_param = track .. param
-        if _p_lookup[full_param] then scene_params[full_param] = _p_get(params, full_param) end
-    end
-    for i = 1, morph_global_params_count do
-        local param = morph.global_params[i]
-        if _p_lookup[param] then scene_params[param] = _p_get(params, param) end
+    for _, item in ipairs(param_registry) do
+        local param = item.name
+        if params.lookup[param] then scene_params[param] = _p_get(params, param) end
     end
     scene_params.lfo_data = {}
     for i = 1, 16 do
@@ -73,8 +60,7 @@ function morph.store_scene(track, scene)
                 shape = _p_get(params, MORPH_SHAPE_KEYS[i]),
                 freq = _p_get(params, MORPH_FREQ_KEYS[i]),
                 depth = _p_get(params, MORPH_DEPTH_KEYS[i]),
-                offset = _p_get(params, MORPH_OFFSET_KEYS[i])
-            }
+                offset = _p_get(params, MORPH_OFFSET_KEYS[i])}
         else
             scene_params.lfo_data[i] = {enabled = false}
         end
@@ -82,11 +68,11 @@ function morph.store_scene(track, scene)
 end
 
 function morph.recall_scene(track, scene)
-    if not morph.scene_data[track] or not morph.scene_data[track][scene] then return end
     local scene_params = morph.scene_data[track][scene]
+    if not scene_params then return end
     for i = 1, 16 do _p_set(params, MORPH_LFO_KEYS[i], 1) end
     for param_name, value in pairs(scene_params) do 
-        if param_name ~= "lfo_data" and _p_lookup[param_name] then _p_set(params, param_name, value) end 
+        if param_name ~= "lfo_data" and params.lookup[param_name] then _p_set(params, param_name, value) end 
     end
     if scene_params.lfo_data then
         for i = 1, 16 do
@@ -106,7 +92,6 @@ end
 
 local function _morph_clamp(x) return x < -1 and -1 or (x > 1 and 1 or x) end
 
-local _get_range_ref
 local function _compute_offset(lfo_offset, const_val, target, t_weight, const_weight)
     if not const_val then return _morph_clamp(lfo_offset * t_weight) end
     local min_val, max_val = _get_range_ref(target)
@@ -125,8 +110,9 @@ local function _ensure_unique_assignment(target, slot)
     lfo_ref.mark_param_assigned(target)
 end
 
-local function _interp_prebuilt(fparam, valA, valB, is_voice_pitch)
-    if skip_param_set[fparam] or not _p_lookup[fparam] then return end
+local function _interp_prebuilt(item, valA, valB)
+    local fparam = item.name
+    if skip_param_set[fparam] then return end
     if not valA and not valB then return end
     if not valA then _p_set(params, fparam, valB) return end
     if not valB then _p_set(params, fparam, valA) return end
@@ -148,12 +134,10 @@ local function _interp_prebuilt(fparam, valA, valB, is_voice_pitch)
         local progress = m_min(abs_dir / dist, 1.0)
         new_val = temp + (tgt - temp) * progress
     end
-    if is_voice_pitch then new_val = lfo_ref.scale_utils.quantize(new_val, _pitch_scale) end
+    if item.is_pitch then new_val = lfo_ref.scale_utils.quantize(new_val, _pitch_scale) end
     _p_set(params, fparam, new_val)
     if temp then
-        local is_forward = _morph_dir > 0
-        local tgt = is_forward and valB or valA
-        local diff = new_val - tgt
+        local diff = new_val - ( (_morph_dir > 0 and valB) or valA )
         morph.temp_scene[fparam] = (diff > -0.01 and diff < 0.01) and nil or new_val
     end
 end
@@ -170,31 +154,28 @@ function morph.apply()
         morph.temp_scene = {}
         return
     end
-    if (current_time - last_morph_update_time) < MORPH_THROTTLE_INTERVAL and morph.amount > 0 and morph.amount < 100 then return end
+    if (current_time - last_morph_update_time) < MORPH_THROTTLE_INTERVAL then return end
     last_morph_update_time = current_time
     _t = morph.amount * 0.01
     _t_inv = 1.0 - _t
     _morph_dir = morph_direction
     _pitch_scale = params:string("pitch_quantize_scale")
     _get_range_ref = lfo_ref.get_parameter_range
-    local scene1_1 = (morph.scene_data[1] and morph.scene_data[1][1]) or {}
-    local scene1_2 = (morph.scene_data[1] and morph.scene_data[1][2]) or {}
-    local scene2_1 = (morph.scene_data[2] and morph.scene_data[2][1]) or {}
-    local scene2_2 = (morph.scene_data[2] and morph.scene_data[2][2]) or {}
+    local s1 = morph.scene_data[1] or {}
+    local s2 = morph.scene_data[2] or {}
+    local scene1_1, scene1_2 = s1[1] or {}, s1[2] or {}
+    local scene2_1, scene2_2 = s2[1] or {}, s2[2] or {}
     local lfo_data_A = (scene1_1.lfo_data or scene2_1.lfo_data) or {}
     local lfo_data_B = (scene1_2.lfo_data or scene2_2.lfo_data) or {}
     local lfo_targets = lfo_ref.lfo_targets
     local lfo_targets_count = #lfo_targets
     if _has_lfo_tracking == nil then 
-        _has_lfo_tracking = lfo_ref.clear_param_assignment and lfo_ref.is_param_assigned and lfo_ref.mark_param_assigned and lfo_ref.get_lfo_for_param
-        _has_lfo_tracking = _has_lfo_tracking and true or false
+        _has_lfo_tracking = (lfo_ref.clear_param_assignment and true or false)
     end
     if _has_lfo_tracking then
         for i = 1, 16 do
-            local lfo_state = _p_get(params, MORPH_LFO_KEYS[i])
-            if lfo_state == 2 then
-                local target_idx = _p_get(params, MORPH_TARGET_KEYS[i])
-                local target_param = lfo_targets[target_idx]
+            if _p_get(params, MORPH_LFO_KEYS[i]) == 2 then
+                local target_param = lfo_targets[_p_get(params, MORPH_TARGET_KEYS[i])]
                 if target_param and target_param ~= "none" then lfo_ref.clear_param_assignment(target_param) end
             end
         end
@@ -204,24 +185,17 @@ function morph.apply()
     local pending_count = 0
     local DEPTH_THRESHOLD = 0.01
     for i = 1, 16 do
-        local lfo_A = lfo_data_A[i]
-        local lfo_B = lfo_data_B[i]
-        local lfo_A_enabled = lfo_A and lfo_A.enabled
-        local lfo_B_enabled = lfo_B and lfo_B.enabled
-        local should_be_on = lfo_A_enabled or lfo_B_enabled
-        if not should_be_on then
+        local lfo_A, lfo_B = lfo_data_A[i], lfo_data_B[i]
+        local lfo_A_enabled, lfo_B_enabled = (lfo_A and lfo_A.enabled), (lfo_B and lfo_B.enabled)
+        if not (lfo_A_enabled or lfo_B_enabled) then
             if _p_get(params, MORPH_LFO_KEYS[i]) == 2 then _p_set(params, MORPH_LFO_KEYS[i], 1) end
             goto continue 
         end
         used_slots[i] = true
         local target_A = lfo_A_enabled and lfo_A.target and lfo_targets[lfo_A.target]
         local target_B = lfo_B_enabled and lfo_B.target and lfo_targets[lfo_B.target]
-        if lfo_A_enabled and lfo_A.target then
-            if lfo_A.target < 1 or lfo_A.target > lfo_targets_count then lfo_A_enabled = false; target_A = nil end
-        end
-        if lfo_B_enabled and lfo_B.target then
-            if lfo_B.target < 1 or lfo_B.target > lfo_targets_count then lfo_B_enabled = false; target_B = nil end
-        end
+        if lfo_A_enabled and (lfo_A.target < 1 or lfo_A.target > lfo_targets_count) then lfo_A_enabled = false; target_A = nil end
+        if lfo_B_enabled and (lfo_B.target < 1 or lfo_B.target > lfo_targets_count) then lfo_B_enabled = false; target_B = nil end
         if lfo_A_enabled and lfo_B_enabled and target_A ~= target_B and target_B and target_B ~= "none" then
             pending_count = pending_count + 1
             pending[pending_count] = {lfo = lfo_B, param = target_B}
@@ -230,12 +204,7 @@ function morph.apply()
         if not target or target == "none" then goto continue end
         _ensure_unique_assignment(target, i)
         skip_param_set[target] = true
-        local lfo_enable_k   = MORPH_LFO_KEYS[i]
-        local lfo_target_k   = MORPH_TARGET_KEYS[i]
-        local lfo_shape_k    = MORPH_SHAPE_KEYS[i]
-        local lfo_freq_k     = MORPH_FREQ_KEYS[i]
-        local lfo_depth_k    = MORPH_DEPTH_KEYS[i]
-        local offset_param_k = MORPH_OFFSET_KEYS[i]
+        local lfo_enable_k, lfo_target_k, lfo_shape_k, lfo_freq_k, lfo_depth_k, offset_param_k = MORPH_LFO_KEYS[i], MORPH_TARGET_KEYS[i], MORPH_SHAPE_KEYS[i], MORPH_FREQ_KEYS[i], MORPH_DEPTH_KEYS[i], MORPH_OFFSET_KEYS[i]
         if lfo_A_enabled and lfo_B_enabled and target_A == target_B then
             _p_set(params, lfo_target_k, lfo_A.target)
             _p_set(params, lfo_shape_k, _t < 0.5 and lfo_A.shape or lfo_B.shape)
@@ -291,13 +260,7 @@ function morph.apply()
         for idx = 1, pending_count do
             local m = pending[idx]
             local slot
-            for i = 1, 16 do
-                if not used_slots[i] then
-                    slot = i
-                    used_slots[i] = true
-                    break
-                end
-            end
+            for i = 1, 16 do if not used_slots[i] then slot = i; used_slots[i] = true; break end end
             if slot then
                 _ensure_unique_assignment(m.param, slot)
                 skip_param_set[m.param] = true
@@ -322,39 +285,21 @@ function morph.apply()
             end
         end
     end
-    local pitch_idx_1 = morph_voice_params_full[1][2]
-    local pitch_idx_2 = morph_voice_params_full[2][2]
-    for track = 1, 2 do
-        local sA = track == 1 and scene1_1 or scene2_1
-        local sB = track == 1 and scene1_2 or scene2_2
-        local full = morph_voice_params_full[track]
-        for i = 1, morph_voice_params_count do
-            local fparam = full[i]
-            _interp_prebuilt(fparam, sA[fparam], sB[fparam], fparam == pitch_idx_1 or fparam == pitch_idx_2)
-        end
-    end
-    for i = 1, morph_global_params_count do
-        local pname = morph.global_params[i]
-        _interp_prebuilt(pname, scene1_1[pname], scene1_2[pname], false)
+    for _, item in ipairs(param_registry) do
+        local p = item.name
+        local sA = (string.sub(p, 1, 1) == "1" and scene1_1[p]) or (string.sub(p, 1, 1) == "2" and scene2_1[p]) or scene1_1[p] or scene2_1[p]
+        local sB = (string.sub(p, 1, 1) == "1" and scene1_2[p]) or (string.sub(p, 1, 1) == "2" and scene2_2[p]) or scene1_2[p] or scene2_2[p]
+        _interp_prebuilt(item, sA, sB)
     end
     if invalidate_lfo_cache_ref then invalidate_lfo_cache_ref() end
 end
 
 function morph.capture_to_temp_scene(lfo_cache)
     if morph.amount == 0 or morph.amount == 100 then return end
-    for track = 1, 2 do
-        for i = 1, morph_voice_params_count do
-            local param_name = morph.voice_params[i]
-            local full_param = track .. param_name
-            if _p_lookup[full_param] and (not lfo_cache or not lfo_cache[full_param]) then 
-                morph.temp_scene[full_param] = _p_get(params, full_param) 
-            end
-        end
-    end
-    for i = 1, morph_global_params_count do
-        local param = morph.global_params[i]
-        if _p_lookup[param] and (not lfo_cache or not lfo_cache[param]) then 
-            morph.temp_scene[param] = _p_get(params, param) 
+    for _, item in ipairs(param_registry) do
+        local p = item.name
+        if (not lfo_cache or not lfo_cache[p]) then 
+            morph.temp_scene[p] = _p_get(params, p) 
         end
     end
 end
