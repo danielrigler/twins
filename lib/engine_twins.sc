@@ -245,11 +245,12 @@ alloc {
         }).add;  
         
         SynthDef(\bitcrush, {
-            arg bus, mix=0.0, rate, bits;
+            arg bus, mix=0.0, rate, bits, mod_mix=0;
             var sig = In.ar(bus, 2);
             var mod = LFNoise1.kr(0.25).range(0.4, 1);
+            var actualMix = mix * Select.kr(mod_mix, [1.0, LFNoise1.kr(0.25).range(0.0, 1.0)]);
             var bit = LPF.ar(Decimator.ar(sig, Lag.kr(rate, 0.6) * mod, bits), 10000);
-            ReplaceOut.ar(bus, XFade2.ar(sig, bit, mix * 2 - 1));
+            ReplaceOut.ar(bus, XFade2.ar(sig, bit, actualMix * 2 - 1));
         }).add;
 
         SynthDef(\sine, {
@@ -387,7 +388,7 @@ alloc {
 
         context.server.sync;
         
-        bitcrushEffect = Synth.new(\bitcrush, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
+        bitcrushEffect = Synth.new(\bitcrush, [\bus, mixBus.index, \mix, 0.0, \mod_mix, 0], context.xg, 'addToTail');
         sineEffect = Synth.new(\sine, [\bus, mixBus.index, \sine_drive_wet, 0.0], context.xg, 'addToTail');
         glitchEffect = Synth.new(\glitch, [\bus, mixBus.index, \glitch_ratio, 0.0], context.xg, 'addToTail');
         tapeEffect = Synth.new(\tape, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');  
@@ -467,6 +468,7 @@ alloc {
         this.addCommand("bitcrush_mix", "f", { arg msg; bitcrushEffect.set(\mix, msg[1]); bitcrushEffect.run(msg[1] > 0); });
         this.addCommand("bitcrush_rate", "f", { arg msg; bitcrushEffect.set(\rate, msg[1]); });
         this.addCommand("bitcrush_bits", "f", { arg msg; bitcrushEffect.set(\bits, msg[1]); });
+        this.addCommand("bitcrush_mod", "i", { arg msg; bitcrushEffect.set(\mod_mix, msg[1]); });
         
         this.addCommand("read", "is", { arg msg; var voice = msg[1] - 1; this.readBuf(voice, msg[2]); });
         this.addCommand("seek", "if", { arg msg; var voice = msg[1] - 1; var pos = msg[2]; voices[voice].set(\pos, pos); voices[voice].set(\t_reset_pos, 1); });
