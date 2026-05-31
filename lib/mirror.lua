@@ -82,7 +82,7 @@ function Mirror.copy_voice_params(from_track, to_track, mirror_pan)
         "subharmonics_1","overtones_1","overtones_2","smoothbass","ratcheting_prob",
         "size_variation","direction_mod","density_mod_amt","pitch_random_scale_type","pitch_random_prob",
         "pitch_mode","trig_mode","probability","eq_low_gain","eq_mid_gain","eq_high_gain",
-        "env_select","volume","stereo_trig_offset","stereo_independent", "euclid_steps", "euclid_hits" }
+        "env_select","volume","stereo_trig_offset","stereo_independent" }
     for _, param in ipairs(static_params) do
         local value = safe_get(from_track .. param)
         if param == "pan" and mirror_pan then

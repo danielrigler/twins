@@ -56,7 +56,7 @@ alloc {
         context.server.sync;
 
         SynthDef(\synth1, {
-            arg out, voice, buf_l, buf_r, pos, speed, jitter, size, density, density_mod_amt, pitch_offset, pan, spread, gain, t_reset_pos, granular_gain, pitch_mode, subharmonics_1, subharmonics_2, subharmonics_3, overtones_1, overtones_2, cutoff, hpf, lpf_gain, direction_mod, size_variation, low_gain, mid_gain, high_gain, smoothbass, probability, env_select = 0, pitch_random_prob=0, pitch_random_scale_buf=0, pitch_random_scale_len=1, pitch_random_direction=1, ratcheting_prob=0, pitch_lag_time, rec_pos_bus = -1, t_euclid_trig=0;
+            arg out, voice, buf_l, buf_r, pos, speed, jitter, size, density, density_mod_amt, pitch_offset, pan, spread, gain, t_reset_pos, granular_gain, pitch_mode, subharmonics_1, subharmonics_2, subharmonics_3, overtones_1, overtones_2, cutoff, hpf, lpf_gain, direction_mod, size_variation, low_gain, mid_gain, high_gain, smoothbass, probability, env_select = 0, pitch_random_prob=0, pitch_random_scale_buf=0, pitch_random_scale_len=1, pitch_random_direction=1, ratcheting_prob=0, pitch_lag_time, rec_pos_bus = -1, base_trig;
             var grain_trig, jitter_sig, buf_pos, sig_mix, density_mod, dry_sig, granular_sig, base_pitch, grain_pitch, grain_size;
             var main_vol = 1 / (1 + subharmonics_1 + subharmonics_2 + subharmonics_3 + overtones_1 + overtones_2);
             var subharmonic_1_vol = subharmonics_1 * main_vol * 2;
@@ -65,14 +65,14 @@ alloc {
             var overtone_1_vol = overtones_1 * main_vol * 1.5;
             var overtone_2_vol = overtones_2 * main_vol * 1.5;
             var trigger30 = Impulse.kr(30);
-            var grain_direction, speed_dir, base_grain_trig, rand_val, rand_val2, random_interval, ratchet_gate, extra_trig, signal, envBuf, randomEnv, harmonics, volumes, l_harmonics, r_harmonics, size_mults, density_mod_recip, jitter_range, buf_frames_l, buf_dur_recip, wrapped_grain_pos, wrapped_grain_pos_r;
+            var grain_direction, speed_dir, base_grain_trig, rand_val, rand_val2, random_interval, ratchet_gate, extra_trig, signal, envBuf, randomEnv, harmonics, volumes, l_harmonics, r_harmonics, size_mults, jitter_range, buf_frames_l, buf_dur_recip, wrapped_grain_pos, wrapped_grain_pos_r;
             var dry_seek_trig, dry_mute_env, dry_seek_fade, delayed_dry_reset, dry_rate, dry_phase;
             speed = Lag.kr(speed, 1);
-            density_mod = Lag.kr(density.max(0.1), 0.03) * (2**(LFNoise1.kr(density).range(0, 1) * density_mod_amt));
-            density_mod_recip = density_mod.reciprocal;
-            ratchet_gate = CoinGate.kr(ratcheting_prob, t_euclid_trig);
-            extra_trig = TDelay.kr(ratchet_gate, density_mod_recip * 0.5, 2.0);
-            base_grain_trig = t_euclid_trig + extra_trig;
+            density_mod = density * (2**(LFNoise1.kr(density).range(0, 1) * density_mod_amt));
+            base_trig = Impulse.kr(density_mod);
+            ratchet_gate = CoinGate.kr(ratcheting_prob, base_trig);
+            extra_trig = TDelay.kr(ratchet_gate, density_mod.reciprocal * 0.5, 2.0);
+            base_grain_trig = base_trig + extra_trig;
             grain_trig = CoinGate.kr(probability, base_grain_trig);
             rand_val = TRand.kr(trig: grain_trig, lo: 0, hi: 1);
             rand_val2 = TRand.kr(trig: grain_trig, lo: 0, hi: 1);
@@ -167,7 +167,7 @@ alloc {
             sig = Balance2.ar(sig[0], sig[1], pan);
             sig = sig * Lag.kr(gain);
             SendReply.kr(trigger30, '/voice_peak', [voice, Peak.kr(sig[0], trigger30), Peak.kr(sig[1], trigger30)]);
-            Out.ar(out, sig * 1.2);
+            Out.ar(out, sig);
         }).add;
         
         SynthDef(\liveInputRecorder, {
@@ -203,9 +203,9 @@ alloc {
             fb = LPF.ar(HPF.ar(local, dhpf), lpf);
             fb = (1.35 * (1 - (stereo * 0.35)) * fb_amt * [fb[1], fb[0]]).softclip;
             delayed = DelayC.ar(input + fb, 2, Lag.kr(delay, 0.7) + combinedMod);
-            wet = Balance2.ar(delayed[0], delayed[1], (SinOsc.kr(delay.max(0.1).reciprocal * 0.5) + (LFNoise2.kr(0.4) * 0.3)) * (stereo / 1.3));
+            wet = Balance2.ar(delayed[0], delayed[1], (SinOsc.kr(delay.max(0.1).reciprocal * 0.5) + (LFNoise2.kr(0.4) * 0.3)) * (stereo * 0.77));
             LocalOut.ar(wet);
-            Out.ar(outBus, wet * mix * 1.6);
+            Out.ar(outBus, wet * mix * 1.2);
         }).add;
         
         SynthDef(\reverb, {
@@ -278,7 +278,7 @@ alloc {
         SynthDef(\tape, {
             arg bus, mix=0.0;
             var orig = In.ar(bus, 2);
-            var wet = AnalogTape.ar(orig, 1, 1, 1, 0, 0) * 0.86;
+            var wet = AnalogTape.ar(orig, 0.95, 0.95, 0.95, 0, 0) * 0.86;
             ReplaceOut.ar(bus, XFade2.ar(orig, wet, mix * 2 - 1));
         }).add;
         
@@ -474,7 +474,6 @@ alloc {
         this.addCommand("jitter", "if", { arg msg; var voice = msg[1] - 1; currentJitter[voice] = msg[2]; voices[voice].set(\jitter, msg[2] / 2); });
         this.addCommand("size", "if", { arg msg; var voice = msg[1] - 1; currentSize[voice] = msg[2]; voices[voice].set(\size, msg[2]); });
         this.addCommand("density", "if", { arg msg; var voice = msg[1] - 1; currentDensity[voice] = msg[2]; voices[voice].set(\density, msg[2]); });
-        this.addCommand("euclid_trig", "i", { arg msg; var voice = msg[1] - 1; voices[voice].set(\t_euclid_trig, 1); });
         this.addCommand("pan", "if", { arg msg; var voice = msg[1] - 1; currentPan[voice] = msg[2]; voices[voice].set(\pan, msg[2]); });
         this.addCommand("spread", "if", { arg msg; var voice = msg[1] - 1; currentSpread[voice] = msg[2]; voices[voice].set(\spread, msg[2]); });
         this.addCommand("volume", "if", { arg msg; var voice = msg[1] - 1; currentVolume[voice] = msg[2]; voices[voice].set(\gain, msg[2]); });
