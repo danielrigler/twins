@@ -140,7 +140,7 @@ alloc {
                 SendReply.kr(throttled_grain_trig, '/grain_pos', [voice, Latch.kr(wrapped_grain_pos, grain_trig), Latch.kr(grain_size, grain_trig), Latch.kr(rand_val, grain_trig)]);
             }.value;
             SendReply.kr(trigger30, '/voice_peak', [voice, Peak.kr(signal[0], trigger30), Peak.kr(signal[1], trigger30)]);
-            Out.ar(out, signal * 1.2);
+            Out.ar(out, signal);
         }).add;
 
         context.server.sync;
