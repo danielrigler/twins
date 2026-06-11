@@ -52,6 +52,7 @@ local presets = include("lib/presets")
 local randpara = include("lib/randpara")
 local lfo = include("lib/lfo")
 local morph = include("lib/morph")
+local osc_positions = {[1] = 0, [2] = 0}
 local Mirror = include("lib/mirror") Mirror.init(osc_positions, lfo, morph.voice_params)
 local macro = include("lib/macro") macro.set_lfo_reference(lfo)
 local drymode = include("lib/drymode") drymode.set_lfo_reference(lfo)
@@ -96,6 +97,39 @@ local lfo_cache = {}
 local lfo_cache_dirty = true
 local floor, abs, log, max, min, sqrt, ceil, sin = math.floor, math.abs, math.log, math.max, math.min, math.sqrt, math.ceil, math.sin
 local clamp = util.clamp
+local UI_FPS = 60
+local _param_obj = {}
+local function _pobj(id)
+    local o = _param_obj[id]
+    if o == nil then
+        local idx = params.lookup and params.lookup[id]
+        if not idx then return nil end
+        o = params.params[idx]
+        _param_obj[id] = o
+    end
+    return o
+end
+local function pget(id) local o = _pobj(id) if o then return o:get() end return nil end
+local function pset(id, v, silent) local o = _pobj(id) if o then o:set(v, silent) end end
+local TRACK_KEYS = {}
+for t = 1, 2 do
+    TRACK_KEYS[t] = {
+        volume = t.."volume", pan = t.."pan", speed = t.."speed",
+        cutoff = t.."cutoff", hpf = t.."hpf", size = t.."size",
+        granular_gain = t.."granular_gain", live_input = t.."live_input",
+        live_direct = t.."live_direct", seek = t.."seek",
+        direction_mod = t.."direction_mod", env_select = t.."env_select",
+        pitch_random_prob = t.."pitch_random_prob"}
+end
+local _lock_key_cache = {}
+local function lock_key(track_num, param)
+    local tk = _lock_key_cache[track_num]
+    if not tk then tk = {} _lock_key_cache[track_num] = tk end
+    local k = tk[param]
+    if not k then k = track_num .. "lock_" .. param tk[param] = k end
+    return k
+end
+local _grain_pool = {}
 local function invalidate_lfo_cache() lfo_cache_dirty = true lfo.invalidate_lfo_param_cache() end
 local function rebuild_lfo_cache() for k in pairs(lfo_cache) do lfo_cache[k] = nil end local targets = lfo.lfo_targets if not targets or not params.lookup then lfo_cache_dirty = false; return end for i = 1, 16 do if params.lookup[MORPH_LFO_KEYS[i]] and params.lookup[MORPH_TARGET_KEYS[i]] then if params:get(MORPH_LFO_KEYS[i]) == 2 then local param_name = targets[params:get(MORPH_TARGET_KEYS[i])] if param_name and param_name ~= "none" then lfo_cache[param_name] = i end end end end lfo_cache_dirty = false end
 local function do_capture_temp_scene() if lfo_cache_dirty then rebuild_lfo_cache() end morph.capture_to_temp_scene(lfo_cache) end
@@ -122,7 +156,6 @@ local normalize_scale_name = lfo.scale_utils.normalize
 local get_scale_array = lfo.scale_utils.get_array
 local quantize_pitch_to_scale = lfo.scale_utils.quantize
 local audio_files_cache = nil
-local osc_positions = {[1] = 0, [2] = 0}
 local scale_intervals_cache = {}
 local function get_scale_intervals(scale_name) scale_name = normalize_scale_name(scale_name) if scale_name == "none" then scale_name = "major" end if not scale_intervals_cache[scale_name] then scale_intervals_cache[scale_name] = MusicUtil.generate_scale(0, scale_name, 1) or MusicUtil.generate_scale(0, "major", 1) end return scale_intervals_cache[scale_name] end
 local function get_next_scale_note(pitch_value, scale_name, direction) local scale_array = get_scale_array(scale_name) if not scale_array then return pitch_value + direction end local midi_note = MusicUtil.snap_note_to_array(60 + pitch_value, scale_array) local current_idx for i, note in ipairs(scale_array) do if note == midi_note then current_idx = i break end end if not current_idx then return pitch_value end local next_idx = clamp(current_idx + (direction > 0 and 1 or -1), 1, #scale_array) return scale_array[next_idx] - 60 end
@@ -139,7 +172,7 @@ local stop_metro_safe = utils.stop_metro_safe
 local function pause_voice_if_idle(i) if not audio_active[i] and params:get(i.."live_input") ~= 1 and params:get(i.."live_direct") ~= 1 then engine.pause_voice(i) osc_positions[i] = 0 end end
 local function tracked_clock_run(func) local co = clock.run(func) table.insert(active_clocks, co) return co end
 local function cancel_all_clocks() for i = #active_clocks, 1, -1 do local co = active_clocks[i] if co then pcall(function() clock.cancel(co) end) end end active_clocks = {} end
-local function is_param_locked(track_num, param) return params:get(track_num .. "lock_" .. param) == 2 end
+local function is_param_locked(track_num, param) return pget(lock_key(track_num, param)) == 2 end
 local function is_lfo_active_for_param(param_name) if lfo_cache_dirty then rebuild_lfo_cache() end local idx = lfo_cache[param_name] return idx ~= nil, idx end
 local function update_pan_positioning() if _G.preset_loading then return end; local l1,l2=audio_active[1],audio_active[2]; local function ok(v,id) return v and not is_param_locked(id,"pan") and not is_lfo_active_for_param(id.."pan") end; if l1 and l2 then if ok(l1,1) then params:set("1pan",-25) end; if ok(l2,2) then params:set("2pan",25) end else if ok(l1,1) then params:set("1pan",0) end; if ok(l2,2) then params:set("2pan",0) end end end
 
@@ -186,7 +219,7 @@ local function setup_ui_metro()
         end
         redraw()
     end)
-    ui_metro.time = 1/60
+    ui_metro.time = 1 / UI_FPS
     utils.metro_start(ui_metro)
 end
 
@@ -1200,37 +1233,48 @@ do
   _ENV_LUT[4]=bld(function(p) if p<0.1 then return p*10 elseif p<0.3 then return 1-1.75*(p-0.1) elseif p<0.75 then return 0.65 else return 0.65*(1-(p-0.75)*4) end end)
   _ENV_LUT[5]=bld(function(p) return abs(sin(pi*p))*(0.6+0.4*sin(p*11.3+2.7)) end)
 end
-local _GPAR_DM = {"1direction_mod","2direction_mod"}
-local _GPAR_ES = {"1env_select","2env_select"}
 local PARAM_CACHE = { track = { {locked={},lfo_on={}}, {locked={},lfo_on={}} } }
 local _LOCK_PARAMS = {"jitter","size","density","spread","pitch","speed","seek","pan"}
+local _FULL_PARAM_KEYS = {{},{}}
+for t = 1, 2 do for i = 1, #_LOCK_PARAMS do _FULL_PARAM_KEYS[t][i] = t .. _LOCK_PARAMS[i] end end
 
+local _slow_refresh_countdown = 0
 local function refresh_redraw_cache()
-  PARAM_CACHE.link = params:get("global_pitch_size_density_link") == 1
-  PARAM_CACHE.dry = params:get("dry_mode") == 1
-  PARAM_CACHE.sym = params:get("symmetry") == 1
-  PARAM_CACHE.evo = params:get("evolution") == 1
   for t = 1,2 do
     local C = PARAM_CACHE.track[t]
-    C.vol = params:get(t .. "volume")
-    C.pan = params:get(t .. "pan")
-    C.spd = params:get(t .. "speed")
-    C.cut = params:get(t .. "cutoff")
-    C.hpf = params:get(t .. "hpf")
-    C.size = params:get(t .. "size")
-    C.gran = params:get(t .. "granular_gain")
-    C.in_ = params:get(t .. "live_input")
-    C.dir_ = params:get(t .. "live_direct")
-    C.dir_mod = params:get(_GPAR_DM[t]) * 0.01
-    C.env_sel = params:get(_GPAR_ES[t])
+    local K = TRACK_KEYS[t]
+    C.vol = pget(K.volume)
+    C.pan = pget(K.pan)
+    C.spd = pget(K.speed)
+    C.cut = pget(K.cutoff)
+    C.hpf = pget(K.hpf)
+  end
+  _slow_refresh_countdown = _slow_refresh_countdown - 1
+  if _slow_refresh_countdown > 0 then return end
+  _slow_refresh_countdown = 4
+  PARAM_CACHE.link = pget("global_pitch_size_density_link") == 1
+  PARAM_CACHE.dry = pget("dry_mode") == 1
+  PARAM_CACHE.sym = pget("symmetry") == 1
+  PARAM_CACHE.evo = pget("evolution") == 1
+  for t = 1,2 do
+    local C = PARAM_CACHE.track[t]
+    local K = TRACK_KEYS[t]
+    C.size = pget(K.size)
+    C.gran = pget(K.granular_gain)
+    C.in_ = pget(K.live_input)
+    C.dir_ = pget(K.live_direct)
+    C.dir_mod = (pget(K.direction_mod) or 0) * 0.01
+    C.env_sel = pget(K.env_select)
     local locked = C.locked
     local lfo_on = C.lfo_on
+    local fullkeys = _FULL_PARAM_KEYS[t]
     for i = 1, #_LOCK_PARAMS do
       local nm = _LOCK_PARAMS[i]
+      local fk = fullkeys[i]
       locked[nm] = is_param_locked(t, nm)
-      lfo_on[t .. nm] = is_lfo_active_for_param(t .. nm)
+      lfo_on[fk] = is_lfo_active_for_param(fk)
     end
-    C.pitch_rand = (params:get(t .. "pitch_random_prob") or 0) ~= 0
+    C.pitch_rand = (pget(K.pitch_random_prob) or 0) ~= 0
   end
 end
 local function fast_percent(v) return floor(v + 0.5) .. "%" end
@@ -1256,7 +1300,9 @@ local function draw_grains(t, x, now)
     local g = grains[gi]
     local age = now - g.t
     local gsize = g.size
-    if age <= gsize then
+    if age > gsize then
+      _grain_pool[#_grain_pool + 1] = g
+    else
       keep = keep + 1
       grains[keep] = g
       if drawn < 25 then
@@ -1308,10 +1354,16 @@ local function draw_seek_bar_viz(t, x, mode, now)
   end
   local animated_bar_w = floor(BAR_W * seek_bar_width)
   if C.dir_ ~= 1 then R(1, x, Y.seek, animated_bar_w, 1) end
-  if C.gran > 0 then draw_grains(t, x, now) else grain_positions[t] = {} end
+  if C.gran and C.gran > 0 then draw_grains(t, x, now)
+  else
+    local grains = grain_positions[t]
+    for i = #grains, 1, -1 do _grain_pool[#_grain_pool + 1] = grains[i] grains[i] = nil end
+  end
   if loaded and C.dir_ ~= 1 then R(LEVEL.hi, x + floor(osc_positions[t] * animated_bar_w), Y.seek - 1, 1, 2) end
   if C.in_ == 1 then R(LEVEL.hi, x + floor(rec_positions[t] * BAR_W), Y.seek - 1, 2, 2) end
 end
+
+local function get_offset(t) return (t == 1) and -anim_offset_x or anim_offset_x end
 
 function redraw()
   if not installer:ready() then installer:redraw(); return end
@@ -1328,7 +1380,6 @@ function redraw()
   screen.save()
   clear_ops()
   local left_slide = -anim_offset_x
-  local function get_offset(t) return (t == 1) and left_slide or anim_offset_x end
   for _, row in ipairs(param_rows) do
     local name = row.name
     local hi = cur_mode == row.mode
@@ -1346,7 +1397,7 @@ function redraw()
       local C = PARAM_CACHE.track[t]
       if name == "size" and PARAM_CACHE.link then draw_size_link(x, y) end
       if C.locked[name] then draw_lock(x, y - 1) end
-      local val = params:get(param)
+      local val = pget(param)
       local txt = fmt and fmt(val, t) or params:string(param)
       T(flash_level(t, hi and LEVEL.hi or LEVEL.val), x, y, txt)
       if C.lfo_on[param] then
@@ -1453,18 +1504,21 @@ function redraw()
   screen.update()
 end
 
-local function make_grain_handler(bucket) return function(args) local vid, pos, size, rv = args[1]+1, args[2], args[3], args[4] if audio_active[vid] then bucket[vid][#bucket[vid]+1] = {pos=pos, size=size, t=util.time(), rv=rv or 0.5} end end end
+local function make_grain_handler(bucket) return function(args) local vid = args[1]+1 if audio_active[vid] then local b = bucket[vid] local np = #_grain_pool local g if np > 0 then g = _grain_pool[np] _grain_pool[np] = nil else g = {} end g.pos, g.size, g.t, g.rv = args[2], args[3], util.time(), args[4] or 0.5 b[#b+1] = g end end end
+local SEEK_KEYS = {"1seek", "2seek"}
+local LIVE_IN_KEYS = {"1live_input", "2live_input"}
+local LIVE_DIR_KEYS = {"1live_direct", "2live_direct"}
 local osc_handlers = {
     ["/twins/buf_pos"] = function(args)
         local vid, pos = args[1] + 1, args[2]
-        if audio_active[vid] or params:get(vid.."live_input") == 1 or params:get(vid.."live_direct") == 1 then
+        if audio_active[vid] or pget(LIVE_IN_KEYS[vid]) == 1 or pget(LIVE_DIR_KEYS[vid]) == 1 then
             osc_positions[vid] = pos
-            params:set(vid.."seek", pos * 100, true)
+            pset(SEEK_KEYS[vid], pos * 100, true)
         end
     end,
     ["/twins/rec_pos"] = function(args)
         local vid, pos = args[1] + 1, args[2]
-        if params:get(vid.."live_input") == 1 then rec_positions[vid] = pos end
+        if pget(LIVE_IN_KEYS[vid]) == 1 then rec_positions[vid] = pos end
     end,
     ["/twins/voice_peak"] = function(args)
         local voice, peakL, peakR = args[1] + 1, args[2], args[3]
