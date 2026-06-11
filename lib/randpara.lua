@@ -65,19 +65,14 @@ local PARAM_SPECS = {
   ["wiggle_rate"]         = {6,   {0,6},     "delay"},
   ["delay_lowpass"]       = {10000,{500,20000},"delay"},
   ["delay_highpass"]      = {250, {20,20000},"delay"},
-  ["t60"]                 = {8,   {0.1,8},   "reverb"},
-  ["damp"]                = {50, {0,100},   "reverb"},
+  ["rev_decay"]           = {50,  {0,100},   "reverb"},
+  ["rev_damp"]            = {50,  {0,100},   "reverb"},
   ["shimmer_mix"]         = {10,  {0,100},   "reverb"},
   ["shimmer_preset"]      = {2,   {1,5},     "reverb"},
-  ["earlyDiff"]           = {100, {0,100},   "reverb"},
-  ["modDepth"]            = {100, {0,100},   "reverb"},
-  ["rsize"]               = {4, {1,2},   "reverb"},
-  ["modFreq"]             = {5,   {0,5},     "reverb"},
-  ["low"]                 = {1,   {0,1},     "reverb"},
-  ["mid"]                 = {1,   {0,1},     "reverb"},
-  ["high"]                = {1,   {0,1},     "reverb"},
-  ["lowcut"]              = {4000,{100,4000},"reverb"},
-  ["highcut"]             = {4000,{1000,4000},"reverb"},
+  ["rev_predelay"]        = {100, {0,500},   "reverb"},
+  ["rev_prefilter"]       = {50,  {0,100},   "reverb"},
+  ["rev_moddepth"]        = {100, {0,100},   "reverb"},
+  ["rev_modrate"]         = {3,   {0.1,3.6}, "reverb"},
   ["wobble_amp"]          = {100, {0,100},   "tape"},
   ["wobble_rpm"]          = {90,  {30,90},   "tape"},
   ["flutter_amp"]         = {100, {0,100},   "tape"},
@@ -96,13 +91,13 @@ local PARAM_SPECS = {
   ["1eq_low_gain"]        = {0.2, {0,1},     "eq"}, ["2eq_low_gain"]  = {0.2,{0,1},"eq"},
   ["1eq_mid_gain"]        = {0.2, {0,1},     "eq"}, ["2eq_mid_gain"]  = {0.2,{0,1},"eq"},
   ["1eq_high_gain"]       = {0.2, {0,1},     "eq"}, ["2eq_high_gain"] = {0.2,{0,1},"eq"},
-  ["glitch_mix"]          = {40, {0,100},   "glitch"}, ["glitch_mix"] = {40, {0,100},"glitch"},
-  ["glitch_probability"]  = {5, {0.1,20},   "glitch"}, ["glitch_probability"] = {5, {0.1,20},"glitch"},
-  ["glitch_min_length"]   = {100, {10,150},   "glitch"}, ["glitch_min_length"] = {100, {10,150},"glitch"},
-  ["glitch_max_length"]   = {100, {50,300},   "glitch"}, ["glitch_max_length"] = {100, {50,300},"glitch"},
-  ["glitch_maxstutters"]  = {5, {2,20},   "glitch"}, ["glitch_maxstutters"] = {5, {2,20},"glitch"},
-  ["glitch_reverse"]  = {50, {0,100},   "glitch"}, ["glitch_reverse"] = {50, {0,100},"glitch"},
-  ["glitch_pitch"]  = {50, {0,100},   "glitch"}, ["glitch_pitch"] = {50, {0,100},"glitch"},
+  ["glitch_mix"]          = {40,  {0,100},   "glitch"},
+  ["glitch_probability"]  = {5,   {0.1,20},  "glitch"},
+  ["glitch_min_length"]   = {100, {10,150},  "glitch"},
+  ["glitch_max_length"]   = {100, {50,300},  "glitch"},
+  ["glitch_maxstutters"]  = {5,   {2,20},    "glitch"},
+  ["glitch_reverse"]      = {50,  {0,100},   "glitch"},
+  ["glitch_pitch"]        = {50,  {0,100},   "glitch"},
 }
 
 local GROUP_LOCK = {
@@ -303,20 +298,15 @@ local function pitch_scale_allowed()
 end
 
 local param_configs = {
-  jpverb = { lock_param = "lock_reverb", params = {
+  dverb = { lock_param = "lock_reverb", params = {
     {name="shimmer_preset", prob=0.15, default=4,    random=function() return math.random(3,5)           end, direct_set=true},
     {name="shimmer_mix",    prob=0.3,  default=0,    random=function() return math.random(0,10)          end},
-    {name="t60",            prob=0.5,  default=4,    random=function() return random_float(0.8,6)        end},
-    {name="damp",           prob=0.4,  default=0,    random=function() return random_float(0,25)         end},
-    {name="rsize",          prob=0.3,  default=1.25, random=function() return random_float(1,4)          end, direct_set=true},
-    {name="earlyDiff",      prob=0.5,  default=70.7, random=function() return random_float(40.7,100)     end},
-    {name="modDepth",       prob=0.6,  default=10,   random=function() return math.random(0,100)         end},
-    {name="modFreq",        prob=0.6,  default=2,    random=function() return random_float(0.5,4)        end},
-    {name="low",            prob=0.6,  default=1,    random=function() return random_float(0.7,1)        end},
-    {name="mid",            prob=0.6,  default=1,    random=function() return random_float(0.7,1)        end},
-    {name="high",           prob=0.6,  default=1,    random=function() return random_float(0.7,1)        end},
-    {name="lowcut",         prob=0.6,  default=500,  random=function() return math.random(250,750)       end},
-    {name="highcut",        prob=0.6,  default=2000, random=function() return math.random(1500,3500)     end},
+    {name="rev_decay",      prob=0.5,  default=72,   random=function() return random_float(40,95)        end},
+    {name="rev_damp",       prob=0.4,  default=40,   random=function() return random_float(10,70)        end},
+    {name="rev_predelay",   prob=0.3,  default=30,   random=function() return math.random(0,120)         end, direct_set=true},
+    {name="rev_prefilter",  prob=0.4,  default=12,   random=function() return random_float(5,60)         end},
+    {name="rev_moddepth",   prob=0.6,  default=32,   random=function() return math.random(0,100)         end},
+    {name="rev_modrate",    prob=0.6,  default=1.2,  random=function() return random_float(0.3,3)        end},
   }},
   shimmer = { lock_param = "lock_shimmer", params = {
     {name="shimmer_oct1", prob=0.15, default=4,      random=function() return math.random(3,5)         end, direct_set=true},
@@ -383,7 +373,7 @@ local function randomize_params(steps, track_num)
   clear_table(targets)
   clear_table(active_interpolations)
   local symmetry = params:get("symmetry") == 1
-  for _, group in ipairs({ param_configs.tape, param_configs.delay, param_configs.jpverb, param_configs.shimmer, param_configs.pitch }) do randomize_param_group(group) end
+  for _, group in ipairs({ param_configs.tape, param_configs.delay, param_configs.dverb, param_configs.shimmer, param_configs.pitch }) do randomize_param_group(group) end
   local track_fns = { track_param_configs.eq, track_param_configs.granular, track_param_configs.pitch }
   if symmetry then
     randomize_track(1, steps, track_fns)
@@ -430,7 +420,7 @@ end
 
 return {
   randomize_params        = randomize_params,
-  randomize_jpverb_params = create_randomizer("jpverb"),
+  randomize_dverb_params  = create_randomizer("dverb"),
   randomize_delay_params  = create_randomizer("delay"),
   randomize_tape_params   = create_randomizer("tape"),
   randomize_granular_params = create_track_randomizer(track_param_configs.granular),

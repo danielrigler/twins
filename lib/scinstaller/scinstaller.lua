@@ -28,17 +28,6 @@ function Installer:split_path(path)
   return pathname,filename,ext
 end
 
-function Installer:list_folders(directory)
-  local i,t,popen=0,{},io.popen
-  local pfile=popen('ls -pL --group-directories-first "'..directory..'"')
-  for filename in pfile:lines() do
-    i=i+1
-    t[i]=filename
-  end
-  pfile:close()
-  return t
-end
-
 function Installer:list_files(dir)
   local delim="!"
   local file_list=util.os_capture(string.format("find %s -type f ",dir).."-printf '%p"..delim.."'")
@@ -61,18 +50,10 @@ function Installer:init()
   self.ready_to_restart=false
   self.satisfied=false
 
-  -- make sure all requirements are satisfied
   local has_requirements={}
-  for _,r in ipairs(self.requirements) do
-    has_requirements[r]=false
-  end
+  for _,r in ipairs(self.requirements) do has_requirements[r]=false end
 
-  -- find all the supercollider files
-  local folders_to_check={
-    "/usr/local/share/SuperCollider/Extensions",
-    "/home/we/dust/code",
-    "/home/we/.local/share/SuperCollider/Extensions",
-  }
+  local folders_to_check={"/usr/local/share/SuperCollider/Extensions","/home/we/dust/code","/home/we/.local/share/SuperCollider/Extensions"}
   for _,folder in ipairs(folders_to_check) do
     for _,file in ipairs(self:list_files(folder)) do
       if not string.find(file,"ignore") then
@@ -90,7 +71,6 @@ function Installer:init()
       end
     end
   end
-  -- create array of just the missing pieces
   self.missing_requirements={}
   for k,found in pairs(has_requirements) do
     if not found then
@@ -112,7 +92,6 @@ end
 
 function Installer:install()
   self.installing=true
-  -- download
   os.execute("mkdir -p /tmp/norns-installer/ignore")
   os.execute("mkdir -p /home/we/.local/share/SuperCollider/Extensions/supercollider-plugins")
   print(string.format("[installer] downloading %s",self.zip))
@@ -121,13 +100,11 @@ function Installer:install()
   print(string.format("[installer] unzipping %s",self.zip))
   self.message_progress="unzipping..."
   os.execute("cd /tmp/norns-installer/ignore/ && unzip -o -q bundle.zip")
-  -- find relevant files and copy them
   os.execute("mkdir -p /home/we/.local/share/SuperCollider/Extensions/supercollider-plugins")
   for _,file in ipairs(self:list_files("/tmp/norns-installer/ignore/")) do
     _,filename,_=self:split_path(file)
     for _,file_needed in ipairs(self.missing_requirements) do
       if string.find(filename,file_needed) then
-        -- copy it
         print("copying "..filename.." to Extensions...")
         self.message_progress="copying "..filename.."..."
         os.execute(string.format("cp %s /home/we/.local/share/SuperCollider/Extensions/supercollider-plugins/",file))

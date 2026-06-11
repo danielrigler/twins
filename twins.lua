@@ -6,7 +6,7 @@
 --            by: @dddstudio                       
 -- 
 --                          
---                           v0.58
+--                           v0.59
 -- E1: Master Volume
 -- K1+E2/E3: Volume
 -- K2/K3: Navigate
@@ -93,8 +93,6 @@ local cached_buffer_durations = {[1] = 1, [2] = 1}
 local voice_peak_amplitudes = {[1] = {l = 0, r = 0}, [2] = {l = 0, r = 0}}
 local link_base = {[1]={pitch=nil,size=nil,density=nil,product=nil}, [2]={pitch=nil,size=nil,density=nil,product=nil}}
 local ui_metro = nil
-local lfo_cache = {}
-local lfo_cache_dirty = true
 local floor, abs, log, max, min, sqrt, ceil, sin = math.floor, math.abs, math.log, math.max, math.min, math.sqrt, math.ceil, math.sin
 local clamp = util.clamp
 local UI_FPS = 60
@@ -130,9 +128,8 @@ local function lock_key(track_num, param)
     return k
 end
 local _grain_pool = {}
-local function invalidate_lfo_cache() lfo_cache_dirty = true lfo.invalidate_lfo_param_cache() end
-local function rebuild_lfo_cache() for k in pairs(lfo_cache) do lfo_cache[k] = nil end local targets = lfo.lfo_targets if not targets or not params.lookup then lfo_cache_dirty = false; return end for i = 1, 16 do if params.lookup[MORPH_LFO_KEYS[i]] and params.lookup[MORPH_TARGET_KEYS[i]] then if params:get(MORPH_LFO_KEYS[i]) == 2 then local param_name = targets[params:get(MORPH_TARGET_KEYS[i])] if param_name and param_name ~= "none" then lfo_cache[param_name] = i end end end end lfo_cache_dirty = false end
-local function do_capture_temp_scene() if lfo_cache_dirty then rebuild_lfo_cache() end morph.capture_to_temp_scene(lfo_cache) end
+local invalidate_lfo_cache = lfo.invalidate_lfo_param_cache
+local function do_capture_temp_scene() morph.capture_to_temp_scene(lfo.get_active_param_map()) end
 local shimmer_presets = {{oct = 0.25, lowpass = 6000, hipass = 80, fb = 0.4}, 
                          {oct = 0.5, lowpass = 6000, hipass = 80, fb = 0.4}, 
                          {oct = 1, lowpass = 20000, hipass = 20, fb = 0.4}, 
@@ -173,7 +170,7 @@ local function pause_voice_if_idle(i) if not audio_active[i] and params:get(i.."
 local function tracked_clock_run(func) local co = clock.run(func) table.insert(active_clocks, co) return co end
 local function cancel_all_clocks() for i = #active_clocks, 1, -1 do local co = active_clocks[i] if co then pcall(function() clock.cancel(co) end) end end active_clocks = {} end
 local function is_param_locked(track_num, param) return pget(lock_key(track_num, param)) == 2 end
-local function is_lfo_active_for_param(param_name) if lfo_cache_dirty then rebuild_lfo_cache() end local idx = lfo_cache[param_name] return idx ~= nil, idx end
+local function is_lfo_active_for_param(param_name) local idx = lfo.get_lfo_for_param(param_name) return idx ~= nil, idx end
 local function update_pan_positioning() if _G.preset_loading then return end; local l1,l2=audio_active[1],audio_active[2]; local function ok(v,id) return v and not is_param_locked(id,"pan") and not is_lfo_active_for_param(id.."pan") end; if l1 and l2 then if ok(l1,1) then params:set("1pan",-25) end; if ok(l2,2) then params:set("2pan",25) end else if ok(l1,1) then params:set("1pan",0) end; if ok(l2,2) then params:set("2pan",0) end end end
 
 local function setup_ui_metro()
@@ -390,23 +387,18 @@ local function setup_params()
     params:add_binary("randomize_delay_params", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_delay_params", function() randpara.randomize_delay_params(steps) end)
     params:add_option("lock_delay", "Lock Parameters", {"off", "on"}, 1)
 
-    params:add_group("R3VERB", 17)
-    params:add_taper("reverb_mix", "Mix", 0, 100, 0.0, 0, "%") params:set_action("reverb_mix", function(value) engine.reverb_mix(value * 0.01) font.update_fx_cache("reverb_mix", value) end)
+    params:add_group("R3VERB", 12)
+    params:add_taper("reverb_mix", "Mix", 0, 100, 0, 0, "%") params:set_action("reverb_mix", function(value) engine.reverb_mix(value * 0.01) font.update_fx_cache("reverb_mix", value) end)
     params:add_taper("shimmer_mix", "Shimmer", 0, 100, 0, 0, "%") params:set_action("shimmer_mix", function(value) engine.shimmer_mix(value * 0.01) end)
     params:add_option("shimmer_preset", "Pitch Shift", {"-2 oct", "-1 oct", "0", "+1 oct", "+2 oct"}, 4) params:set_action("shimmer_preset", function(idx) local preset = shimmer_presets[idx] engine.shimmer_oct(preset.oct) engine.shimmer_lowpass(preset.lowpass) engine.shimmer_hipass(preset.hipass) engine.shimmer_fb(preset.fb) end)
-    params:add_taper("t60", "Decay", 0.1, 60, 4, 5, "s") params:set_action("t60", function(value) engine.t60(value) end)
-    params:add_taper("damp", "Damping", 0, 100, 0, 0, "%") params:set_action("damp", function(value) engine.damp(value * 0.01) end)
-    params:add_taper("rsize", "Size", 0.5, 5, 1.25, 0, "") params:set_action("rsize", function(value) engine.rsize(value) end)
-    params:add_taper("earlyDiff", "Early Diffusion", 0, 100, 70.7, 0, "%") params:set_action("earlyDiff", function(value) engine.earlyDiff(value * 0.01) end)
-    params:add_taper("modDepth", "Mod Depth", 0, 100, 10, 0, "%") params:set_action("modDepth", function(value) engine.modDepth(value * 0.01) end)
-    params:add_taper("modFreq", "Mod Frequency", 0, 10, 0.2, 0, "Hz") params:set_action("modFreq", function(value) engine.modFreq(value) end)
-    params:add_control("low", "Low Decay", controlspec.new(0, 1, "lin", 0.01, 1, "x")) params:set_action("low", function(value) engine.low(value) end)
-    params:add_control("mid", "Mid Decay", controlspec.new(0, 1, "lin", 0.01, 1, "x")) params:set_action("mid", function(value) engine.mid(value) end)
-    params:add_control("high", "High Decay", controlspec.new(0, 1, "lin", 0.01, 1, "x")) params:set_action("high", function(value) engine.high(value) end)
-    params:add_taper("lowcut", "Low-Mid X", 100, 6000, 500, 2, "Hz") params:set_action("lowcut", function(value) engine.lowcut(value) end)
-    params:add_taper("highcut", "Mid-High X", 1000, 10000, 2000, 2, "Hz") params:set_action("highcut", function(value) engine.highcut(value) end)
+    params:add_taper("rev_decay", "Decay", 0, 100, 75, 0, "%") params:set_action("rev_decay", function(value) engine.rev_decay(value * 0.01) end)
+    params:add_taper("rev_damp", "Damping", 0, 100, 40, 0, "%") params:set_action("rev_damp", function(value) engine.rev_damp(value * 0.01) end)
+    params:add_taper("rev_predelay", "Pre Delay", 0, 500, 35, 0, "ms") params:set_action("rev_predelay", function(value) engine.rev_predelay(value) end)
+    params:add_taper("rev_prefilter", "Pre Filter", 0, 100, 10, 0, "%") params:set_action("rev_prefilter", function(value) engine.rev_prefilter(value * 0.01) end)
+    params:add_taper("rev_moddepth", "Mod Depth", 0, 100, 35, 0, "%") params:set_action("rev_moddepth", function(value) engine.rev_moddepth(value * 0.01) end)
+    params:add_taper("rev_modrate", "Mod Rate", 0.1, 3.6, 1.25, 0, "Hz") params:set_action("rev_modrate", function(value) engine.rev_modrate(value) end)
     params:add_separator("  ")
-    params:add_binary("randomize_jpverb", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_jpverb", function() randpara.randomize_jpverb_params(steps) end)
+    params:add_binary("randomize_dverb", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_dverb", function() randpara.randomize_dverb_params(steps) end)
     params:add_option("lock_reverb", "Lock Parameters", {"off", "on"}, 1)
 
     params:add_group("SHIMMER", 9)
@@ -1540,8 +1532,7 @@ function init()
     setup_ui_metro()
     setup_params()
     setup_osc()
-    morph.init(lfo, function() invalidate_lfo_cache() end)
-    lfo.on_state_change = invalidate_lfo_cache
+    morph.init(lfo, invalidate_lfo_cache)
     font.init_fx_cache()
     init_longpress_checker()
     for i = 1, 2 do params:set(i.."sample", _path.tape, true) end
@@ -1555,7 +1546,6 @@ function cleanup()
     stop_metro_safe(longpress_metro)
     for i = 1, 2 do stop_metro_safe(randomize_metro[i]) end
     lfo.cleanup()
-    lfo.on_state_change = nil
     randpara.cleanup()
     if initial_monitor_level then params:set('monitor_level', initial_monitor_level) end
     if initial_reverb_onoff then params:set('reverb', initial_reverb_onoff) end

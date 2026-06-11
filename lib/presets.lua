@@ -11,7 +11,7 @@ presets.k2_mode        = "delete"
 _G.preset_loading = false
 
 local PRESETS_DIR         = "twins"
-local PRESETS_PATH        = _path.data .. PRESETS_DIR -- Cached path for performance
+local PRESETS_PATH        = _path.data .. PRESETS_DIR
 local PRESET_VERSION      = 1
 local RENAME_CHARSET      = " abcdefghijklmnopqrstuvwxyz_0123456789"
 local RENAME_CHARSET_LEN  = #RENAME_CHARSET
@@ -68,7 +68,7 @@ end
 
 local function parse_preset_name(name)
     local n, word = name:match("^(%d+) (.+)$")
-    return tonumber(n), word
+    return tonumber(n), word, n
 end
 
 local function is_valid_sample(p)
@@ -76,6 +76,8 @@ local function is_valid_sample(p)
     if p == _path.tape or p == (_path.tape .. "live!") then return false end
     return util.file_exists(p)
 end
+
+local preset_mtimes = {}
 
 function presets.list_presets()
     util.make_dir(PRESETS_PATH)
@@ -96,6 +98,7 @@ function presets.list_presets()
         if na ~= nb then return na > nb end
         return (mtimes[a] or 0) > (mtimes[b] or 0)
     end)
+    preset_mtimes = mtimes
     return list
 end
 
@@ -141,12 +144,6 @@ local function serialize(tbl, indent)
     end
     out[#out+1] = indent .. "}"
     return table.concat(out)
-end
-
-local function get_mtime(path)
-    local f = io.popen('stat -c "%Y" "' .. path .. '" 2>/dev/null')
-    if not f then return 0 end
-    local t = f:read("*n"); f:close(); return t or 0
 end
 
 function presets.save_complete_preset(name, scene_data, active_mode, active_filter_mode)
@@ -461,7 +458,7 @@ function presets.draw_menu()
             local sel  = idx == presets.selected_index
             local y    = 11 + (i * 8)
             local name = presets.preset_list[idx]:gsub("twins_", "")
-            local n, word = name:match("^(%d+) (.+)$")
+            local _, word, n = parse_preset_name(name)
             screen.level(sel and 15 or 1)
             screen.move(2, y)
             screen.text(sel and (presets.k2_mode == "move" and "▶" or ">") or "")
@@ -627,7 +624,7 @@ function presets.menu_key(n, z, scene_data, update_pan, audio_active, active_mod
                 else presets.selected_index = util.clamp(conf.preset_index, 1, #presets.preset_list) end
             elseif conf.type == "save" then
                 local path  = PRESETS_PATH .. "/" .. conf.preset_name .. ".lua"
-                local mtime = get_mtime(path)
+                local mtime = preset_mtimes[conf.preset_name] or 0
                 presets.save_complete_preset(conf.preset_name, scene_data, active_mode, active_filter_mode)
                 if mtime > 0 then os.execute('touch -m -d @' .. mtime .. ' "' .. path .. '"') end
                 presets.confirmation = nil

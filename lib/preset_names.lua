@@ -6,13 +6,22 @@ preset_names.secondnames_path = _path.code.."twins/lib/secondnames.txt"
 
 local PREFIXES = { "Post-", "Anti-", "Proto-", "Neo-", "Meta-", "Turbo-", "Quasi-" }
 local SUFFIXES = { "Mk2", "Deluxe", "Final", "v2", "Pro", "Lite", "II" }
-
 local PREFIX_CHANCE = 0.1
 local SUFFIX_CHANCE = 0.05
+local name_cache = {}
+
+local function get_lines(path)
+    local lines = name_cache[path]
+    if not lines then
+        lines = {}
+        for line in io.lines(path) do lines[#lines + 1] = line end
+        name_cache[path] = lines
+    end
+    return lines
+end
 
 local function getRandNameFromFile(path)
-    local all_lines = {}
-    for line in io.lines(path) do all_lines[#all_lines + 1] = line end
+    local all_lines = get_lines(path)
     local s = all_lines[math.random(1, #all_lines)]
     return s:gsub('[%p%c%s]', '')
 end

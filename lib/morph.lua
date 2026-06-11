@@ -1,6 +1,6 @@
 local morph = {}
 morph.voice_params = {"speed","pitch","jitter","size","density","spread","pan","seek","cutoff","hpf","lpf_gain","granular_gain","subharmonics_3","subharmonics_2","subharmonics_1","overtones_1","overtones_2","smoothbass","ratcheting_prob","size_variation","direction_mod","density_mod_amt","pitch_random_scale_type","pitch_random_prob","pitch_mode","probability","eq_low_gain","eq_mid_gain","eq_high_gain","env_select","volume"}
-morph.global_params = {"delay_mix","delay_time","delay_feedback","delay_lowpass","delay_highpass","wiggle_depth","wiggle_rate","stereo","reverb_mix","t60","damp","rsize","earlyDiff","modDepth","modFreq","low","mid","high","lowcut","highcut","shimmer_mix","shimmer_preset","lock_shimmer","tape_mix","sine_drive_wet","drive","wobble_mix","wobble_amp","wobble_rpm","flutter_amp","flutter_freq","flutter_var","chew_depth","chew_freq","chew_variance","lossdegrade_mix","Width","dimension_mix","haas","rspeed","monobass_mix","bitcrush_mix","bitcrush_rate","bitcrush_bits","evolution","evolution_range","evolution_rate","lock_eq","lock_tape","lock_reverb","lock_delay","global_lfo_freq_scale","pitch_quantize_scale","pitch_lag","shimmer_mix1","shimmer_oct1","pitchv1","lowpass1","hipass1","fbDelay1","fb1", "glitch_probability", "glitch_ratio", "glitch_mix", "glitch_min_length", "glitch_max_length", "glitch_reverse", "glitch_pitch", "sine_lfos"}
+morph.global_params = {"delay_mix","delay_time","delay_feedback","delay_lowpass","delay_highpass","wiggle_depth","wiggle_rate","stereo","reverb_mix","rev_decay","rev_damp","rev_predelay","rev_prefilter","rev_moddepth","rev_modrate","shimmer_mix","shimmer_preset","lock_shimmer","tape_mix","sine_drive_wet","drive","wobble_mix","wobble_amp","wobble_rpm","flutter_amp","flutter_freq","flutter_var","chew_depth","chew_freq","chew_variance","lossdegrade_mix","Width","dimension_mix","haas","rspeed","monobass_mix","bitcrush_mix","bitcrush_rate","bitcrush_bits","evolution","evolution_range","evolution_rate","lock_eq","lock_tape","lock_reverb","lock_delay","global_lfo_freq_scale","pitch_quantize_scale","pitch_lag","shimmer_mix1","shimmer_oct1","pitchv1","lowpass1","hipass1","fbDelay1","fb1", "glitch_probability", "glitch_ratio", "glitch_mix", "glitch_min_length", "glitch_max_length", "glitch_reverse", "glitch_pitch", "sine_lfos"}
 local param_registry = {}
 morph.amount = 0
 morph.scene_mode = "off"
@@ -101,6 +101,8 @@ local function _compute_offset(lfo_offset, const_val, target, t_weight, const_we
     return _morph_clamp(lfo_offset * t_weight + tgt_off * const_weight)
 end
 
+local DEPTH_THRESHOLD = 0.01
+
 local function _ensure_unique_assignment(target, slot)
     if not _has_lfo_tracking or not target then return end
     if lfo_ref.is_param_assigned(target) then
@@ -108,6 +110,24 @@ local function _ensure_unique_assignment(target, slot)
         if other and other ~= slot then _p_set(params, MORPH_LFO_KEYS[other], 1) end
     end
     lfo_ref.mark_param_assigned(target)
+end
+
+local function chase_temp(temp, val_a, val_b)
+    local is_forward = _morph_dir > 0
+    local tgt = is_forward and val_b or val_a
+    local dist = is_forward and (100 - morph.amount) or morph.amount
+    if dist <= 0 then return tgt, true end
+    local progress = m_min(m_abs(_morph_dir) / dist, 1.0)
+    return temp + (tgt - temp) * progress, false
+end
+
+local function write_lfo_slot(slot, target, shape, freq, depth, offset)
+    _p_set(params, MORPH_TARGET_KEYS[slot], target)
+    _p_set(params, MORPH_SHAPE_KEYS[slot], shape)
+    _p_set(params, MORPH_FREQ_KEYS[slot], freq)
+    _p_set(params, MORPH_DEPTH_KEYS[slot], depth)
+    _p_set(params, MORPH_OFFSET_KEYS[slot], offset)
+    _p_set(params, MORPH_LFO_KEYS[slot], (depth >= DEPTH_THRESHOLD or (morph.amount > 0 and morph.amount < 100)) and 2 or 1)
 end
 
 local function _interp_prebuilt(item, valA, valB)
@@ -122,17 +142,13 @@ local function _interp_prebuilt(item, valA, valB)
         if valA == valB then return end
         new_val = valA * _t_inv + valB * _t
     else
-        local is_forward = _morph_dir > 0
-        local tgt = is_forward and valB or valA
-        local dist = is_forward and (100 - morph.amount) or morph.amount
-        if dist <= 0 then
+        local chased, done = chase_temp(temp, valA, valB)
+        if done then
             morph.temp_scene[fparam] = nil
-            _p_set(params, fparam, tgt)
+            _p_set(params, fparam, chased)
             return
         end
-        local abs_dir = is_forward and _morph_dir or -_morph_dir
-        local progress = m_min(abs_dir / dist, 1.0)
-        new_val = temp + (tgt - temp) * progress
+        new_val = chased
     end
     if item.is_pitch then new_val = lfo_ref.scale_utils.quantize(new_val, _pitch_scale) end
     _p_set(params, fparam, new_val)
@@ -183,7 +199,6 @@ function morph.apply()
     for k in pairs(skip_param_set) do skip_param_set[k] = nil end
     for i = 1, 16 do used_slots[i] = nil end
     local pending_count = 0
-    local DEPTH_THRESHOLD = 0.01
     for i = 1, 16 do
         local lfo_A, lfo_B = lfo_data_A[i], lfo_data_B[i]
         local lfo_A_enabled, lfo_B_enabled = (lfo_A and lfo_A.enabled), (lfo_B and lfo_B.enabled)
@@ -204,55 +219,32 @@ function morph.apply()
         if not target or target == "none" then goto continue end
         _ensure_unique_assignment(target, i)
         skip_param_set[target] = true
-        local lfo_enable_k, lfo_target_k, lfo_shape_k, lfo_freq_k, lfo_depth_k, offset_param_k = MORPH_LFO_KEYS[i], MORPH_TARGET_KEYS[i], MORPH_SHAPE_KEYS[i], MORPH_FREQ_KEYS[i], MORPH_DEPTH_KEYS[i], MORPH_OFFSET_KEYS[i]
         if lfo_A_enabled and lfo_B_enabled and target_A == target_B then
-            _p_set(params, lfo_target_k, lfo_A.target)
-            _p_set(params, lfo_shape_k, _t < 0.5 and lfo_A.shape or lfo_B.shape)
-            _p_set(params, lfo_freq_k, lfo_A.freq * _t_inv + lfo_B.freq * _t)
-            local depth_val = lfo_A.depth * _t_inv + lfo_B.depth * _t
-            _p_set(params, lfo_depth_k, depth_val)
-            _p_set(params, offset_param_k, _morph_clamp(lfo_A.offset * _t_inv + lfo_B.offset * _t))
-            _p_set(params, lfo_enable_k, (depth_val >= DEPTH_THRESHOLD or (morph.amount > 0 and morph.amount < 100)) and 2 or 1)
+            write_lfo_slot(i, lfo_A.target,
+                _t < 0.5 and lfo_A.shape or lfo_B.shape,
+                lfo_A.freq * _t_inv + lfo_B.freq * _t,
+                lfo_A.depth * _t_inv + lfo_B.depth * _t,
+                _morph_clamp(lfo_A.offset * _t_inv + lfo_B.offset * _t))
         elseif lfo_A_enabled and target_A == target then
             local const_val = scene1_2[target] or scene2_2[target]
             local temp = morph.temp_scene[target]
             if temp then
-                local is_forward = morph_direction > 0
-                local tgt_val = is_forward and const_val or (scene1_1[target] or scene2_1[target])
-                local dist = is_forward and (100 - morph.amount) or morph.amount
-                if dist > 0 then
-                    local progress = m_min(m_abs(morph_direction) / dist, 1.0)
-                    const_val = temp + (tgt_val - temp) * progress
-                end
+                const_val = chase_temp(temp, scene1_1[target] or scene2_1[target], const_val)
             end
-            _p_set(params, lfo_target_k, lfo_A.target)
-            _p_set(params, lfo_shape_k, lfo_A.shape)
-            _p_set(params, lfo_freq_k, lfo_A.freq)
-            local depth_val = lfo_A.depth * _t_inv
-            _p_set(params, lfo_depth_k, depth_val)
-            _p_set(params, offset_param_k, _compute_offset(lfo_A.offset, const_val, target, _t_inv, _t))
-            _p_set(params, lfo_enable_k, (depth_val >= DEPTH_THRESHOLD or (morph.amount > 0 and morph.amount < 100)) and 2 or 1)
+            write_lfo_slot(i, lfo_A.target, lfo_A.shape, lfo_A.freq,
+                lfo_A.depth * _t_inv,
+                _compute_offset(lfo_A.offset, const_val, target, _t_inv, _t))
         else
             local lfo_val = (lfo_B_enabled and lfo_B) or (lfo_A_enabled and lfo_A)
             if not lfo_val then goto continue end
             local const_val = scene1_1[target] or scene2_1[target]
             local temp = morph.temp_scene[target]
             if temp then
-                local is_forward = morph_direction > 0
-                local tgt_val = is_forward and (scene1_2[target] or scene2_2[target]) or const_val
-                local dist = is_forward and (100 - morph.amount) or morph.amount
-                if dist > 0 then
-                    local progress = m_min(m_abs(morph_direction) / dist, 1.0)
-                    const_val = temp + (tgt_val - temp) * progress
-                end
+                const_val = chase_temp(temp, const_val, scene1_2[target] or scene2_2[target])
             end
-            _p_set(params, lfo_target_k, lfo_val.target)
-            _p_set(params, lfo_shape_k, lfo_val.shape)
-            _p_set(params, lfo_freq_k, lfo_val.freq)
-            local depth_val = lfo_val.depth * _t
-            _p_set(params, lfo_depth_k, depth_val)
-            _p_set(params, offset_param_k, _compute_offset(lfo_val.offset, const_val, target, _t, _t_inv))
-            _p_set(params, lfo_enable_k, (depth_val >= DEPTH_THRESHOLD or (morph.amount > 0 and morph.amount < 100)) and 2 or 1)
+            write_lfo_slot(i, lfo_val.target, lfo_val.shape, lfo_val.freq,
+                lfo_val.depth * _t,
+                _compute_offset(lfo_val.offset, const_val, target, _t, _t_inv))
         end
         ::continue::
     end
@@ -264,24 +256,14 @@ function morph.apply()
             if slot then
                 _ensure_unique_assignment(m.param, slot)
                 skip_param_set[m.param] = true
-                local depth_val = m.lfo.depth * _t
                 local const_val = scene1_1[m.param] or scene2_1[m.param]
                 local temp = morph.temp_scene[m.param]
                 if temp then
-                    local is_forward = morph_direction > 0
-                    local tgt_val = is_forward and (scene1_2[m.param] or scene2_2[m.param]) or const_val
-                    local dist = is_forward and (100 - morph.amount) or morph.amount
-                    if dist > 0 then
-                        local progress = m_min(m_abs(morph_direction) / dist, 1.0)
-                        const_val = temp + (tgt_val - temp) * progress
-                    end
+                    const_val = chase_temp(temp, const_val, scene1_2[m.param] or scene2_2[m.param])
                 end
-                _p_set(params, MORPH_TARGET_KEYS[slot], m.lfo.target)
-                _p_set(params, MORPH_SHAPE_KEYS[slot], m.lfo.shape)
-                _p_set(params, MORPH_FREQ_KEYS[slot], m.lfo.freq)
-                _p_set(params, MORPH_DEPTH_KEYS[slot], depth_val)
-                _p_set(params, MORPH_OFFSET_KEYS[slot], _compute_offset(m.lfo.offset, const_val, m.param, _t, _t_inv))
-                _p_set(params, MORPH_LFO_KEYS[slot], (depth_val >= DEPTH_THRESHOLD or (morph.amount > 0 and morph.amount < 100)) and 2 or 1)
+                write_lfo_slot(slot, m.lfo.target, m.lfo.shape, m.lfo.freq,
+                    m.lfo.depth * _t,
+                    _compute_offset(m.lfo.offset, const_val, m.param, _t, _t_inv))
             end
         end
     end

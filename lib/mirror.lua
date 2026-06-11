@@ -76,13 +76,7 @@ function Mirror.copy_voice_params(from_track, to_track, mirror_pan)
         end
     end
     if not volume_has_lfo then safe_set(to_track .. "volume", safe_get(from_track .. "volume")) end
-    local static_params = Mirror.voice_params or {
-        "speed","pitch","jitter","size","density","spread","pan","seek",
-        "cutoff","hpf","lpf_gain","granular_gain","subharmonics_3","subharmonics_2",
-        "subharmonics_1","overtones_1","overtones_2","smoothbass","ratcheting_prob",
-        "size_variation","direction_mod","density_mod_amt","pitch_random_scale_type","pitch_random_prob",
-        "pitch_mode","trig_mode","probability","eq_low_gain","eq_mid_gain","eq_high_gain",
-        "env_select","volume","stereo_trig_offset","stereo_independent" }
+    local static_params = Mirror.voice_params or {}
     for _, param in ipairs(static_params) do
         local value = safe_get(from_track .. param)
         if param == "pan" and mirror_pan then

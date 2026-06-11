@@ -108,6 +108,21 @@ local function update_active_lfos()
     for i = count + 1, #active_lfos do active_lfos[i] = nil end
 end
 
+local function classify_target(i, target_idx)
+    local obj = lfo[i]
+    obj.target_idx = target_idx
+    local tname = lfo.lfo_targets[target_idx]
+    obj.target_name = tname
+    if tname and tname ~= "none" then
+        obj.is_pitch  = (tname:sub(-5) == "pitch")
+        obj.is_jitter = (tname:sub(-6) == "jitter")
+        obj.is_size   = (tname:sub(-4) == "size")
+        obj.track_num = tname:sub(1, 1)
+    else
+        obj.is_pitch, obj.is_jitter, obj.is_size, obj.track_num = false, false, false, "1"
+    end
+end
+
 local function is_audio_loaded(track)
     local p = pget(track .. "sample")
     return p and p ~= "" and p ~= "none" and p ~= "-"
@@ -382,10 +397,16 @@ function lfo.get_lfo_for_param(param_name)
     return _lfo_param_cache[param_name]
 end
 
+function lfo.get_active_param_map()
+    if _lfo_param_cache_dirty then rebuild_lfo_param_cache() end
+    return _lfo_param_cache
+end
+
+local tick_pitch_scale = nil
+local tick_max = {}
+
 function lfo.process()
     if lfo_paused or not params or not params.lookup then return end
-
-    -- Optimize by caching params functions and table lookups locally
     local pget = params.get
     local pset = params.set
     local params_table = params
@@ -396,6 +417,10 @@ function lfo.process()
     local phase_inc = PHASE_INCREMENT
     local two_pi = TWO_PI
     local ranges_table = param_ranges
+
+    tick_pitch_scale = nil
+    tick_max["1max_jitter"], tick_max["2max_jitter"] = nil, nil
+    tick_max["1max_size"], tick_max["2max_size"] = nil, nil
 
     for idx = 1, #active_lfos do
         local i = active_lfos[idx]
@@ -439,12 +464,23 @@ function lfo.process()
         obj.slope = mod
         local target = obj.target_name
 
-        -- Only process if target is valid
         local mn, mx
         if obj.is_jitter then
-            mn, mx = 0, pget(params_table, obj.track_num .. "max_jitter") or 4999
+            local key = obj.track_num .. "max_jitter"
+            local mxv = tick_max[key]
+            if mxv == nil then
+                mxv = pget(params_table, key) or 4999
+                tick_max[key] = mxv
+            end
+            mn, mx = 0, mxv
         elseif obj.is_size then
-            mn, mx = 20, pget(params_table, obj.track_num .. "max_size") or 599
+            local key = obj.track_num .. "max_size"
+            local mxv = tick_max[key]
+            if mxv == nil then
+                mxv = pget(params_table, key) or 599
+                tick_max[key] = mxv
+            end
+            mn, mx = 20, mxv
         else
             local r = ranges_table[target]
             mn, mx = r and r[1] or 0, r and r[2] or 100
@@ -452,8 +488,10 @@ function lfo.process()
 
         local value = clamp(lfo.scale(mod, -1, 1, mn, mx), mn, mx)
         if obj.is_pitch then
-            local scale = params_table:string("pitch_quantize_scale")
-            if scale then value = quantize_pitch_to_scale(value, scale) end
+            if tick_pitch_scale == nil then
+                tick_pitch_scale = params_table:string("pitch_quantize_scale") or false
+            end
+            if tick_pitch_scale then value = quantize_pitch_to_scale(value, tick_pitch_scale) end
         end
 
         if pget(params_table, target) ~= value then
@@ -469,7 +507,7 @@ function lfo.init()
         params:add_option(LFO_KEYS[i], i .. " LFO", {"off", "on"}, 1)
         params:set_action(LFO_KEYS[i], function(v) lfo[i].active = (v == 2) update_active_lfos() lfo.invalidate_lfo_param_cache() if lfo.on_state_change then lfo.on_state_change() end end)
         params:add_option(TARGET_KEYS[i], i .. " target", lfo.lfo_targets, 1)
-        params:set_action(TARGET_KEYS[i], function(v) lfo[i].target_idx = v local tname = lfo.lfo_targets[v] lfo[i].target_name = tname if tname and tname ~= "none" then lfo[i].is_pitch = (tname:sub(-5) == "pitch") lfo[i].is_jitter = (tname:sub(-6) == "jitter") lfo[i].is_size = (tname:sub(-4) == "size") lfo[i].track_num = tname:sub(1, 1) else lfo[i].is_pitch = false lfo[i].is_jitter = false lfo[i].is_size = false lfo[i].track_num = "1" end update_active_lfos() lfo.invalidate_lfo_param_cache() if lfo.on_state_change then lfo.on_state_change() end end)
+        params:set_action(TARGET_KEYS[i], function(v) classify_target(i, v) update_active_lfos() lfo.invalidate_lfo_param_cache() if lfo.on_state_change then lfo.on_state_change() end end)
         params:add_option(SHAPE_KEYS[i], i .. " shape", options.lfotypes, 4)
         params:set_action(SHAPE_KEYS[i], function(v) lfo[i].waveform = options.lfotypes[v] lfo[i].shape_int = v end)
         params:add_number(DEPTH_KEYS[i], i .. " depth", 0, 100, 50)
@@ -481,16 +519,7 @@ function lfo.init()
     end
     for i = 1, number_of_outputs do
         lfo[i].active = pget(LFO_KEYS[i]) == 2
-        local t_idx = pget(TARGET_KEYS[i]) or 1
-        local tname = lfo.lfo_targets[t_idx]
-        lfo[i].target_idx = t_idx
-        lfo[i].target_name = tname
-        if tname and tname ~= "none" then
-            lfo[i].is_pitch = (tname:sub(-5) == "pitch")
-            lfo[i].is_jitter = (tname:sub(-6) == "jitter")
-            lfo[i].is_size = (tname:sub(-4) == "size")
-            lfo[i].track_num = tname:sub(1, 1)
-        end
+        classify_target(i, pget(TARGET_KEYS[i]) or 1)
     end
     update_active_lfos()
     lfo_metro = metro.init()

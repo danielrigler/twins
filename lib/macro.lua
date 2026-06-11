@@ -3,7 +3,7 @@ local utils = include("lib/utils")
 
 local TARGET_DEPTH_PERCENT = 15
 
-local param_ranges = {
+local MACRO_RANGES = {
     speed   = {min = -1.99, max = 1.99},
     jitter  = {min = 0,     max = 1999},
     size    = {min = 150,   max = 599},
@@ -13,7 +13,7 @@ local TARGET_DEPTH_FACTOR = TARGET_DEPTH_PERCENT * 0.01
 local PARAMS_TO_ADJUST    = {"speed", "size", "jitter", "density"}
 local NUM_TRACKS          = 2
 local param_limits = {}
-for suffix, r in pairs(param_ranges) do
+for suffix, r in pairs(MACRO_RANGES) do
     local span   = r.max - r.min
     local margin = span * 0.05
     param_limits[suffix] = {
@@ -68,18 +68,24 @@ local function adjust_params(multiplier)
                 local param         = i .. param_suffix
                 local current_value = params:get(param)
                 local limits        = param_limits[param_suffix]
+                local lo, hi        = limits.lo, limits.hi
+                local lfo_min, lfo_max
+                if lfo_ref then
+                    lfo_min, lfo_max = lfo_ref.get_parameter_range(param)
+                    if lfo_min and lfo_min > lo then lo = lfo_min end
+                    if lfo_max and lfo_max < hi then hi = lfo_max end
+                end
                 local target_value
                 if going_up then
-                    target_value = math.min(current_value * multiplier, limits.hi)
+                    target_value = math.min(current_value * multiplier, hi)
                 else
-                    target_value = math.max(current_value * multiplier, limits.lo)
+                    target_value = math.max(current_value * multiplier, lo)
                 end
                 targets[param] = target_value
                 if lfo_ref then
                     local lfo_index = lfo_ref.get_lfo_for_param(param)
                     if lfo_index then
-                        local mn, mx = lfo_ref.get_parameter_range(param)
-                        lfo_ranges[param] = {lfo_index = lfo_index, min = mn, max = mx}
+                        lfo_ranges[param] = {lfo_index = lfo_index, min = lfo_min, max = lfo_max}
                     end
                 end
             end
