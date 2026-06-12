@@ -310,7 +310,7 @@ local param_configs = {
   }},
   shimmer = { lock_param = "lock_shimmer", params = {
     {name="shimmer_oct1", prob=0.15, default=4,      random=function() return math.random(3,5)         end, direct_set=true},
-    {name="pitchv1",      prob=0.5,  default=0,      random=function() return math.random(0,3)         end, direct_set=true},
+    {name="pitchv1",      prob=0.5,  default=0,      random=function() return math.random(0,2)         end, direct_set=true},
     {name="lowpass1",     prob=0.5,  default=13000,  random=function() return math.random(5000,15000)  end},
     {name="hipass1",      prob=0.5,  default=1300,   random=function() return math.random(300,1600 )   end},
     {name="fb1",          prob=0.3,  default=15,     random=function() return math.random(10,35)       end},

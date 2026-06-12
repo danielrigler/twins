@@ -288,7 +288,7 @@ alloc {
 
         SynthDef(\reverb, {
             arg inBus1, inBus2, outBus, mix=0.0,
-            pre_delay=35, pre_filter=0.1, decay=0.75, damp=0.40, mod_depth=0.35, mod_rate=1.25,
+            pre_delay=35, pre_filter=0.1, pre_hpf=60, decay=0.75, damp=0.40, mod_depth=0.35, mod_rate=1.25,
             shimmer_mix=0.0, shimmer_lowpass=8000, shimmer_fb=0.38, shimmer_hipass=600, shimmer_oct=2;
             var combined, reverb_input, pitch_shifted, pitch_feedback, limited_feedback;
             var localfb, tank_fb, shimmer_feedback;
@@ -324,6 +324,7 @@ alloc {
             decayRate = decay.linlin(0, 1, 0.01, 0.998);
             preTank = (reverb_input[0] + reverb_input[1]) * -6.dbamp;
             preTank = DelayN.ar(preTank, 0.5, pre_delay.clip(0, 500) * 0.001);
+            preTank = HPF.ar(preTank, Lag.kr(pre_hpf.clip(20, 1000), 0.1));
             preTank = OnePole.ar(preTank, preFilter);
             preTankVals.do({ arg pair; preTank = AllpassN.ar(preTank, pair[1], pair[1], gFacT60.value(pair[1], pair[0])); });
             tank = AllpassC.ar(preTank + (decayRate * tank_fb), maxdelaytime: (tankAP1Time + exMax) / dSR, delaytime: (tankAP1Time/dSR) + ((exMax/dSR) * SinOsc.ar(mod_rate, 0, mod_depth)), decaytime: gFacT60.value(tankAP1Time/dSR, tankAP1GFac));
@@ -356,16 +357,17 @@ alloc {
         }).add;
 
         SynthDef(\shimmer, {
-            arg inBus, outBus, reverbBus, mix=0.0, lowpass1=13000, hipass1=1400, pitchv1=0.02, fb1=0.0, fbDelay1=0.15, shimmer_oct1=2;
+            arg inBus, outBus, reverbBus, mix=0.0, lowpass1=13000, hipass1=1400, pitchv1=0.02, fb1=0.0, fbDelay1=0.15, shimmer_oct1=2, mod_mix=0;
             var input = In.ar(inBus, 2);
             var hpf = HPF.ar(input, hipass1);
             var pit = PitchShift.ar(hpf, 0.5, shimmer_oct1, pitchv1, 1, mul: 4);
             var fbSig = LocalIn.ar(2);
             var fbProcessed = fbSig * fb1;
+            var actualMix = mix * Select.kr(mod_mix, [1.0, LFNoise1.kr(0.25).range(0.0, 1.0)]);
             pit = LPF.ar((pit + fbProcessed), lowpass1);
             LocalOut.ar(DelayN.ar(pit, 0.5, fbDelay1));
-            Out.ar(reverbBus, pit * mix);
-            Out.ar(outBus, pit * mix * 1.4);
+            Out.ar(reverbBus, pit * actualMix);
+            Out.ar(outBus, pit * actualMix * 1.4);
         }).add;
 
         SynthDef(\monobass, {
@@ -528,7 +530,7 @@ alloc {
         lossdegradeEffect = Synth.newPaused(\lossdegrade, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
         saturationEffect = Synth.newPaused(\saturation, [\bus, mixBus.index, \drive, 0.0], context.xg, 'addToTail');
         delayEffect = Synth.newPaused(\delay, [\inBus, mixBus.index, \outBus, parallelBus.index, \mix, 0.0], context.xg, 'addToTail');
-        shimmerEffect = Synth.newPaused(\shimmer, [\inBus, mixBus.index, \outBus, parallelBus.index, \reverbBus, shimmerBus.index, \mix, 0.0], context.xg, 'addToTail');
+        shimmerEffect = Synth.newPaused(\shimmer, [\inBus, mixBus.index, \outBus, parallelBus.index, \reverbBus, shimmerBus.index, \mix, 0.0, \mod_mix, 0], context.xg, 'addToTail');
         reverbEffect = Synth.newPaused(\reverb, [\inBus1, mixBus.index, \inBus2, shimmerBus.index, \outBus, parallelBus.index, \mix, 0.0], context.xg, 'addToTail');
         mixToParallelRouter = Synth.new(\output, [\in, mixBus.index, \out, parallelBus.index], context.xg, 'addToTail');
         parallelToPostFxRouter = Synth.new(\output, [\in, parallelBus.index, \out, postFxBus.index], context.xg, 'addToTail');
@@ -556,12 +558,14 @@ alloc {
         this.addCommand("shimmer_oct", "f", { arg msg; reverbEffect.set(\shimmer_oct, msg[1]); });
         this.addCommand("rev_predelay", "f", { arg msg; reverbEffect.set(\pre_delay, msg[1]); });
         this.addCommand("rev_prefilter", "f", { arg msg; reverbEffect.set(\pre_filter, msg[1]); });
+        this.addCommand("rev_hpf", "f", { arg msg; reverbEffect.set(\pre_hpf, msg[1]); });
         this.addCommand("rev_decay", "f", { arg msg; reverbEffect.set(\decay, msg[1]); });
         this.addCommand("rev_damp", "f", { arg msg; reverbEffect.set(\damp, msg[1]); });
         this.addCommand("rev_moddepth", "f", { arg msg; reverbEffect.set(\mod_depth, msg[1]); });
         this.addCommand("rev_modrate", "f", { arg msg; reverbEffect.set(\mod_rate, msg[1]); });
 
         this.addCommand("shimmer_mix1", "f", { arg msg; shimmerEffect.set(\mix, msg[1]); shimmerEffect.run(msg[1] > 0); });
+        this.addCommand("shimmer_mod1", "i", { arg msg; shimmerEffect.set(\mod_mix, msg[1]); });
         this.addCommand("shimmer_oct1", "f", { arg msg; shimmerEffect.set(\shimmer_oct1, msg[1]); });
         this.addCommand("lowpass1", "f", { arg msg; shimmerEffect.set(\lowpass1, msg[1]); });
         this.addCommand("hipass1", "f", { arg msg; shimmerEffect.set(\hipass1, msg[1]); });
