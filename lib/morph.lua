@@ -43,6 +43,11 @@ function morph.init(lfo_module, invalidate_fn)
     end
 end
 
+function morph.sync_amount(v)
+    morph.amount = v
+    last_morph_amount = v
+end
+
 function morph.store_scene(track, scene)
     morph.scene_data[track][scene] = {}
     local scene_params = morph.scene_data[track][scene]

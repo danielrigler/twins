@@ -409,6 +409,12 @@ local function create_track_randomizer(fn)
   end
 end
 
+local function stop_interpolation()
+  stop_metro_safe(randomize_metro)
+  clear_table(targets)
+  clear_table(active_interpolations)
+end
+
 local function cleanup()
   stop_evolution()
   stop_metro_safe(randomize_metro)
@@ -432,6 +438,7 @@ return {
   set_evolution_rate      = set_evolution_rate,
   reset_evolution_centers = reset_evolution_centers,
   cleanup                 = cleanup,
+  stop_interpolation      = stop_interpolation,
   set_group_evolution = set_group_evolution,
   get_group_evolution = get_group_evolution,
 }

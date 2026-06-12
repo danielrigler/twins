@@ -14,6 +14,13 @@ function utils.stop_metro_safe(m)
     end
 end
 
+function utils.deep_copy(t)
+    if type(t) ~= "table" then return t end
+    local copy = {}
+    for k, v in pairs(t) do copy[k] = utils.deep_copy(v) end
+    return copy
+end
+
 function utils.random_float(l, h)
   return l + math.random() * (h - l)
 end

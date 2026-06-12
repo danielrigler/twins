@@ -27,6 +27,7 @@ readBuf { arg i, path;
                     voices[i].set(\buf_r, b);
                     buffersR[i] = b;
                     if (oldR !== oldL) { oldR.free };
+                    voices[i].set(\t_reset_pos, 1);
                     voices[i].run(true);
                 }, {
                     Buffer.readChannel(context.server, path, 0, -1, [1], { |b2|
@@ -34,6 +35,7 @@ readBuf { arg i, path;
                         voices[i].set(\buf_r, b2);
                         buffersR[i] = b2;
                         oldR.free;
+                        voices[i].set(\t_reset_pos, 1);
                         voices[i].run(true);
                     });
                 });

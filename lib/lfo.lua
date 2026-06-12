@@ -30,6 +30,7 @@ lfo.keys = {lfo = LFO_KEYS, target = TARGET_KEYS, shape = SHAPE_KEYS, freq = FRE
 
 local MusicUtil = require("musicutil")
 local scale_array_cache = {}
+local snap_lut_cache = {}
 
 local function normalize_scale_name(name)
     if name == "none" or name == "off" then return "none" end
@@ -49,7 +50,15 @@ end
 local function quantize_pitch_to_scale(value, scale_name)
     local arr = get_scale_array(scale_name)
     if not arr then return value end
-    return MusicUtil.snap_note_to_array(60 + value, arr) - 60
+    local lut = snap_lut_cache[scale_name]
+    if not lut then lut = {} snap_lut_cache[scale_name] = lut end
+    local key = math.floor((60 + value) * 4 + 0.5)
+    local out = lut[key]
+    if out == nil then
+        out = MusicUtil.snap_note_to_array(key * 0.25, arr) - 60
+        lut[key] = out
+    end
+    return out
 end
 
 lfo.scale_utils = {normalize = normalize_scale_name, get_array = get_scale_array, quantize = quantize_pitch_to_scale}
@@ -113,6 +122,8 @@ local function classify_target(i, target_idx)
     obj.target_idx = target_idx
     local tname = lfo.lfo_targets[target_idx]
     obj.target_name = tname
+    obj.pobj = nil
+    obj.last_val = nil
     if tname and tname ~= "none" then
         obj.is_pitch  = (tname:sub(-5) == "pitch")
         obj.is_jitter = (tname:sub(-6) == "jitter")
@@ -179,7 +190,7 @@ function lfo.get_parameter_range(param_name, for_randomize)
     return 0, 100
 end
 
-function lfo.clear_scale_cache() scale_array_cache = {} end
+function lfo.clear_scale_cache() scale_array_cache = {} snap_lut_cache = {} end
 function lfo.scale(v, old_min, old_max, new_min, new_max) return (v - old_min) * (new_max - new_min) / (old_max - old_min) + new_min end
 
 function lfo.clearLFOs(track, param_type, except_param)
@@ -407,9 +418,12 @@ local tick_max = {}
 
 function lfo.process()
     if lfo_paused or not params or not params.lookup then return end
+    if #active_lfos == 0 then return end
     local pget = params.get
     local pset = params.set
     local params_table = params
+    local lookup = params_table.lookup
+    local param_objs = params_table.params
     local lfo_table = lfo
     local clamp = util_clamp
     local sin = math_sin
@@ -485,17 +499,26 @@ function lfo.process()
             local r = ranges_table[target]
             mn, mx = r and r[1] or 0, r and r[2] or 100
         end
-
-        local value = clamp(lfo.scale(mod, -1, 1, mn, mx), mn, mx)
+        local value = (mod + 1) * 0.5 * (mx - mn) + mn
+        if value < mn then value = mn elseif value > mx then value = mx end
         if obj.is_pitch then
             if tick_pitch_scale == nil then
                 tick_pitch_scale = params_table:string("pitch_quantize_scale") or false
             end
             if tick_pitch_scale then value = quantize_pitch_to_scale(value, tick_pitch_scale) end
         end
-
-        if pget(params_table, target) ~= value then
-            pset(params_table, target, value)
+        if value ~= obj.last_val then
+            obj.last_val = value
+            local pobj = obj.pobj
+            if not pobj then
+                local pidx = lookup[target]
+                if pidx then pobj = param_objs[pidx] obj.pobj = pobj end
+            end
+            if pobj then
+                if pobj:get() ~= value then pobj:set(value) end
+            else
+                if pget(params_table, target) ~= value then pset(params_table, target, value) end
+            end
         end
     end
 end
@@ -505,7 +528,7 @@ function lfo.init()
     for i = 1, number_of_outputs do
         params:add_separator("LFO " .. i)
         params:add_option(LFO_KEYS[i], i .. " LFO", {"off", "on"}, 1)
-        params:set_action(LFO_KEYS[i], function(v) lfo[i].active = (v == 2) update_active_lfos() lfo.invalidate_lfo_param_cache() if lfo.on_state_change then lfo.on_state_change() end end)
+        params:set_action(LFO_KEYS[i], function(v) lfo[i].active = (v == 2) lfo[i].last_val = nil update_active_lfos() lfo.invalidate_lfo_param_cache() if lfo.on_state_change then lfo.on_state_change() end end)
         params:add_option(TARGET_KEYS[i], i .. " target", lfo.lfo_targets, 1)
         params:set_action(TARGET_KEYS[i], function(v) classify_target(i, v) update_active_lfos() lfo.invalidate_lfo_param_cache() if lfo.on_state_change then lfo.on_state_change() end end)
         params:add_option(SHAPE_KEYS[i], i .. " shape", options.lfotypes, 4)
