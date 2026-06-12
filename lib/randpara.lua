@@ -305,6 +305,7 @@ local param_configs = {
     {name="rev_damp",       prob=0.4,  default=40,   random=function() return random_float(10,70)        end},
     {name="rev_predelay",   prob=0.3,  default=30,   random=function() return math.random(0,120)         end, direct_set=true},
     {name="rev_prefilter",  prob=0.4,  default=12,   random=function() return random_float(5,60)         end},
+    {name="rev_hpf",        prob=0.3,  default=80,   random=function() return random_float(20,500)       end},
     {name="rev_moddepth",   prob=0.6,  default=32,   random=function() return math.random(0,100)         end},
     {name="rev_modrate",    prob=0.6,  default=1.2,  random=function() return random_float(0.3,3)        end},
   }},
