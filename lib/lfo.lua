@@ -102,7 +102,7 @@ function lfo.set_sine_all(enabled)
 end
 
 for i = 1, number_of_outputs do
-    lfo[i] = {freq = 0.05, phase = 0, waveform = "walk", shape_int = 4, slope = 0, depth = 50, offset = 0, prev = 0, walk_value = 0, walk_velocity = 0, sync_to = nil, sync_invert = false, active = false, target_idx = 1, target_name = "none", is_pitch = false, is_jitter = false, is_size = false, track_num = "1", last_val = nil}
+    lfo[i] = {freq = 0.05, phase = 0, waveform = "walk", shape_int = 4, slope = 0, depth = 50, offset = 0, prev = 0, walk_value = 0, walk_velocity = 0, sync_to = nil, sync_invert = false, active = false, target_idx = 1, target_name = "none", is_pitch = false, is_jitter = false, is_size = false, track_num = "1", last_val = nil, has_user_limits = false, min_key = nil, max_key = nil, def_min = 0, def_max = 100}
 end
 
 local active_lfos = {}
@@ -117,6 +117,21 @@ local function update_active_lfos()
     for i = count + 1, #active_lfos do active_lfos[i] = nil end
 end
 
+local USER_LIMIT_PARAMS = {
+    seek = true, jitter = true, spread = true, size = true,
+    density = true, pitch = true, speed = true,
+}
+
+local USER_LIMIT_DEFAULTS = {
+    jitter  = {0, 4999},
+    size    = {20, 999},
+    density = {0.1, 50},
+    spread  = {0, 100},
+    pitch   = {-48, 48},
+    speed   = {-2, 2},
+    seek    = {0, 100},
+}
+
 local function classify_target(i, target_idx)
     local obj = lfo[i]
     obj.target_idx = target_idx
@@ -129,8 +144,23 @@ local function classify_target(i, target_idx)
         obj.is_jitter = (tname:sub(-6) == "jitter")
         obj.is_size   = (tname:sub(-4) == "size")
         obj.track_num = tname:sub(1, 1)
+        local suffix = tname:sub(2)
+        if USER_LIMIT_PARAMS[suffix] then
+            local d = USER_LIMIT_DEFAULTS[suffix]
+            obj.has_user_limits = true
+            obj.limit_suffix = suffix
+            obj.min_key = obj.track_num .. "min_" .. suffix
+            obj.max_key = obj.track_num .. "max_" .. suffix
+            obj.def_min = d and d[1] or 0
+            obj.def_max = d and d[2] or 100
+        else
+            obj.has_user_limits = false
+            obj.min_key, obj.max_key = nil, nil
+        end
     else
         obj.is_pitch, obj.is_jitter, obj.is_size, obj.track_num = false, false, false, "1"
+        obj.has_user_limits = false
+        obj.min_key, obj.max_key = nil, nil
     end
 end
 
@@ -154,10 +184,10 @@ lfo.target_ranges = {
     ["2jitter"] = {depth = {20, 70}, offset = {-1, 1}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.7},
     ["1spread"] = {depth = {10, 30}, offset = {0, 0.3}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.7},
     ["2spread"] = {depth = {10, 30}, offset = {0, 0.3}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.7},
-    ["1size"] = {depth = {5, 30}, offset = {0.1, 1}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.7},
-    ["2size"] = {depth = {5, 30}, offset = {0.1, 1}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.7},
-    ["1density"] = {depth = {5, 40}, offset = {0, 1}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.7},
-    ["2density"] = {depth = {5, 40}, offset = {0, 1}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.7},
+    ["1size"] = {depth = {5, 40}, offset = {0.1, 1}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.7},
+    ["2size"] = {depth = {5, 40}, offset = {0.1, 1}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.7},
+    ["1density"] = {depth = {5, 50}, offset = {0, 1}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.7},
+    ["2density"] = {depth = {5, 50}, offset = {0, 1}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.7},
     ["1volume"] = {depth = {2, 3}, offset = {0, 1}, frequency = {0.1, 0.5}, waveform = {"walk"}, chance = 1.0},
     ["2volume"] = {depth = {2, 3}, offset = {0, 1}, frequency = {0.1, 0.5}, waveform = {"walk"}, chance = 1.0},
     ["1seek"] = {depth = {0, 100}, offset = {0, 1}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.3},
@@ -183,11 +213,29 @@ local param_ranges = {
 local randomize_param_ranges = {["1size"] = {20, 599}, ["2size"] = {20, 599}, ["1density"] = {1, 30}, ["2density"] = {1, 30}}
 
 function lfo.get_parameter_range(param_name, for_randomize)
-    if param_name:match("jitter$") then local p = param_name:sub(1, 1) return 0, (p:match("%d") and pget(p .. "max_jitter")) or 4999 end
-    if param_name:match("size$") then local p = param_name:sub(1, 1) return 20, (p:match("%d") and pget(p .. "max_size")) or 599 end
-    local r = (for_randomize and randomize_param_ranges[param_name]) or param_ranges[param_name]
-    if r then return r[1], r[2] end
-    return 0, 100
+    local track = param_name:sub(1, 1)
+    local suffix = param_name:sub(2)
+    local lo, hi
+    if track:match("%d") and USER_LIMIT_PARAMS[suffix] then
+        lo = pget(track .. "min_" .. suffix)
+        hi = pget(track .. "max_" .. suffix)
+        local d = USER_LIMIT_DEFAULTS[suffix]
+        if lo == nil then lo = d and d[1] or 0 end
+        if hi == nil then hi = d and d[2] or 100 end
+    else
+        local r = param_ranges[param_name]
+        if r then lo, hi = r[1], r[2] else lo, hi = 0, 100 end
+    end
+    if lo > hi then lo, hi = hi, lo end
+    if for_randomize then
+        local rr = randomize_param_ranges[param_name]
+        if rr then
+            local rlo = rr[1] > lo and rr[1] or lo
+            local rhi = rr[2] < hi and rr[2] or hi
+            if rlo <= rhi then return rlo, rhi end
+        end
+    end
+    return lo, hi
 end
 
 function lfo.clear_scale_cache() scale_array_cache = {} snap_lut_cache = {} end
@@ -414,7 +462,7 @@ function lfo.get_active_param_map()
 end
 
 local tick_pitch_scale = nil
-local tick_max = {}
+local tick_lim = {}
 
 function lfo.process()
     if lfo_paused or not params or not params.lookup then return end
@@ -433,8 +481,7 @@ function lfo.process()
     local ranges_table = param_ranges
 
     tick_pitch_scale = nil
-    tick_max["1max_jitter"], tick_max["2max_jitter"] = nil, nil
-    tick_max["1max_size"], tick_max["2max_size"] = nil, nil
+    for k in pairs(tick_lim) do tick_lim[k] = nil end
 
     for idx = 1, #active_lfos do
         local i = active_lfos[idx]
@@ -479,22 +526,20 @@ function lfo.process()
         local target = obj.target_name
 
         local mn, mx
-        if obj.is_jitter then
-            local key = obj.track_num .. "max_jitter"
-            local mxv = tick_max[key]
-            if mxv == nil then
-                mxv = pget(params_table, key) or 4999
-                tick_max[key] = mxv
+        if obj.has_user_limits then
+            local min_key, max_key = obj.min_key, obj.max_key
+            local lo = tick_lim[min_key]
+            if lo == nil then
+                lo = (lookup[min_key] and pget(params_table, min_key)) or obj.def_min
+                tick_lim[min_key] = lo
             end
-            mn, mx = 0, mxv
-        elseif obj.is_size then
-            local key = obj.track_num .. "max_size"
-            local mxv = tick_max[key]
-            if mxv == nil then
-                mxv = pget(params_table, key) or 599
-                tick_max[key] = mxv
+            local hi = tick_lim[max_key]
+            if hi == nil then
+                hi = (lookup[max_key] and pget(params_table, max_key)) or obj.def_max
+                tick_lim[max_key] = hi
             end
-            mn, mx = 20, mxv
+            if lo > hi then lo, hi = hi, lo end
+            mn, mx = lo, hi
         else
             local r = ranges_table[target]
             mn, mx = r and r[1] or 0, r and r[2] or 100
@@ -505,7 +550,10 @@ function lfo.process()
             if tick_pitch_scale == nil then
                 tick_pitch_scale = params_table:string("pitch_quantize_scale") or false
             end
-            if tick_pitch_scale then value = quantize_pitch_to_scale(value, tick_pitch_scale) end
+            if tick_pitch_scale then
+                value = quantize_pitch_to_scale(value, tick_pitch_scale)
+                if value < mn then value = mn elseif value > mx then value = mx end
+            end
         end
         if value ~= obj.last_val then
             obj.last_val = value

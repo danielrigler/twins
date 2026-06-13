@@ -333,7 +333,7 @@ end
 local function setup_params()
     params:add_separator("Input")
     for i = 1, 2 do
-      params:add_file(i.."sample","Sample "..i, _path.tape); params:set_action(i.."sample",function(f) if f~=nil and f~="" and f~="none" and f~="-" and f~=(_path.tape.."live!") and not f:match("/$") then if params:get(i.."live_input")==1 then engine.set_live_input(i,0) params:set(i.."live_input",0,true) end if params:get(i.."live_direct")==1 then engine.live_direct(i,0) params:set(i.."live_direct",0,true) end local jitter_locked=is_param_locked(i,"jitter"); if not jitter_locked then lfo.clearLFOs(tostring(i),"jitter"); end engine.read(i,f); if not _G.preset_loading then params:set(i.."seek",0) end; audio_active[i]=true; update_pan_positioning(); local is_live=params:get(i.."live_input")==1; local dur=is_live and params:get("live_buffer_length") or get_audio_duration(f); if dur then cached_buffer_durations[i]=dur; local ms=dur*1000; local max_jit=min(ms,99999); params:set(i.."max_jitter",max_jit); params:set(i.."min_jitter",0); params:set(i.."max_size", max(20, min(ms, 999))); if not _G.preset_loading and not jitter_locked then local jp=i.."jitter"; disable_lfos_for_param(jp); local jitter_val; if math.random()<0.75 then local upper_limit=min(500,dur*1000); jitter_val=clamp(math.random()*upper_limit,0,99999); else jitter_val=clamp(math.random()*dur*1000,0,99999); end params:set(jp,jitter_val); end else if not jitter_locked then lfo.clearLFOs(tostring(i),"jitter"); end audio_active[i]=false; osc_positions[i]=0; update_pan_positioning(); end end end)
+      params:add_file(i.."sample","Sample "..i, _path.tape); params:set_action(i.."sample",function(f) if f~=nil and f~="" and f~="none" and f~="-" and f~=(_path.tape.."live!") and not f:match("/$") then if params:get(i.."live_input")==1 then engine.set_live_input(i,0) params:set(i.."live_input",0,true) end if params:get(i.."live_direct")==1 then engine.live_direct(i,0) params:set(i.."live_direct",0,true) end local jitter_locked=is_param_locked(i,"jitter"); if not jitter_locked then lfo.clearLFOs(tostring(i),"jitter"); end engine.read(i,f); if not _G.preset_loading then params:set(i.."seek",0) end; audio_active[i]=true; update_pan_positioning(); local is_live=params:get(i.."live_input")==1; local dur=is_live and params:get("live_buffer_length") or get_audio_duration(f); if dur then cached_buffer_durations[i]=dur; local ms=dur*1000; local jit_ceiling=min(ms,99999); local cur_max_jit=params:get(i.."max_jitter") or jit_ceiling; local new_max_jit=min(cur_max_jit,jit_ceiling); params:set(i.."max_jitter",new_max_jit); local cur_min_jit=params:get(i.."min_jitter") or 0; params:set(i.."min_jitter",min(cur_min_jit,new_max_jit)); local size_ceiling=max(20,min(ms,999)); local cur_max_size=params:get(i.."max_size") or size_ceiling; local new_max_size=min(cur_max_size,size_ceiling); params:set(i.."max_size",new_max_size); local cur_min_size=params:get(i.."min_size") or 20; if cur_min_size>new_max_size then params:set(i.."min_size",new_max_size) end; if not _G.preset_loading and not jitter_locked then local jp=i.."jitter"; disable_lfos_for_param(jp); local jitter_val; if math.random()<0.75 then local upper_limit=min(500,dur*1000); jitter_val=clamp(math.random()*upper_limit,0,99999); else jitter_val=clamp(math.random()*dur*1000,0,99999); end params:set(jp,jitter_val); end else if not jitter_locked then lfo.clearLFOs(tostring(i),"jitter"); end audio_active[i]=false; osc_positions[i]=0; update_pan_positioning(); end end end)
     end
     params:add_binary("randomtapes", "Random Tapes", "trigger", 0) params:set_action("randomtapes", function() load_random_tape_file() end)
     
@@ -535,10 +535,10 @@ local function setup_params()
         params:add_separator("Voice "..i)
         params:add_taper(i.."min_jitter", i.." jitter (min)", 0, 999999, 0, 5, "ms")
         params:add_taper(i.."max_jitter", i.." jitter (max)", 0, 999999, 4999, 5, "ms")
-        params:add_taper(i.."min_size", i.." size (min)", 20, 999, 50, 5, "ms")
-        params:add_taper(i.."max_size", i.." size (max)", 20, 999, 599, 5, "ms")
-        params:add_taper(i.."min_density", i.." density (min)", 0.1, 50, 0.5, 5, "Hz")
-        params:add_taper(i.."max_density", i.." density (max)", 0.1, 50, 25, 5, "Hz")
+        params:add_taper(i.."min_size", i.." size (min)", 20, 999, 40, 5, "ms")
+        params:add_taper(i.."max_size", i.." size (max)", 20, 999, 999, 5, "ms")
+        params:add_taper(i.."min_density", i.." density (min)", 0.1, 50, 0.25, 5, "Hz")
+        params:add_taper(i.."max_density", i.." density (max)", 0.1, 50, 15, 5, "Hz")
         params:add_taper(i.."min_spread", i.." spread (min)", 0, 100, 0, 0, "%")
         params:add_taper(i.."max_spread", i.." spread (max)", 0, 100, 100, 0, "%")
         params:add_control(i.."min_pitch", i.." pitch (min)", controlspec.new(-48, 48, "lin", 1, -31, "st"))
@@ -1212,7 +1212,7 @@ end
 
 local function format_spread(v) return string.format("%.0f%%", v) end
 local function format_density(value) return string.format("%.1f Hz", value) end
-local function format_pitch(value, track) if not track then return value > 0 and string.format("+%.0f", value) or string.format("%.0f", value) end local pitch_random_enabled = PARAM_CACHE and PARAM_CACHE.track[track] and PARAM_CACHE.track[track].pitch_rand local suffix = pitch_random_enabled and ".. st" or " st" return value > 0 and string.format("+%.0f%s", value, suffix) or string.format("%.0f%s", value, suffix) end
+local function format_pitch(value, track, pitch_rand) if not track then return value > 0 and string.format("+%.0f", value) or string.format("%.0f", value) end local suffix = pitch_rand and ".. st" or " st" return value > 0 and string.format("+%.0f%s", value, suffix) or string.format("%.0f%s", value, suffix) end
 local function format_speed(s)
   local abs = abs(s)
   if abs < 0.01 then return ".00x" end
@@ -1318,7 +1318,7 @@ local _VAL_TXT = {}
 local function val_text(param, val, fmt, t, aux)
   local c = _VAL_TXT[param]
   if c and c.v == val and c.a == aux then return c.s end
-  local s = fmt(val, t)
+  local s = fmt(val, t, aux)
   if c then c.v, c.a, c.s = val, aux, s else _VAL_TXT[param] = {v = val, a = aux, s = s} end
   return s
 end
