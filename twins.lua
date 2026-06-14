@@ -169,7 +169,8 @@ local function flash_level(track, base_level) local f = randomize_flash[track] i
 local function midi_flash_level(track, base_level) local f = randomize_flash["held"..track] and 1 or randomize_flash["midi"..track] if f <= 0.001 then return base_level end return min(base_level + floor(f * FLASH_INTENSITY), 15) end
 local random_float = utils.random_float
 local stop_metro_safe = utils.stop_metro_safe
-local function pause_voice_if_idle(i) if not audio_active[i] and params:get(i.."live_input") ~= 1 and params:get(i.."live_direct") ~= 1 then engine.pause_voice(i) osc_positions[i] = 0 end end
+function is_voice_loaded(i) return audio_active[i] or params:get(i.."live_input") == 1 or params:get(i.."live_direct") == 1 end
+local function pause_voice_if_idle(i) if not is_voice_loaded(i) then engine.pause_voice(i) osc_positions[i] = 0 end end
 local function tracked_clock_run(func) local co = clock.run(func) table.insert(active_clocks, co) return co end
 local function cancel_all_clocks() for i = #active_clocks, 1, -1 do local co = active_clocks[i] if co then pcall(function() clock.cancel(co) end) end end active_clocks = {} end
 local function is_param_locked(track_num, param) return pget(lock_key(track_num, param)) == 2 end
@@ -494,7 +495,8 @@ local function setup_params()
     midi_input.add_params({
         set_pitch = set_midi_pitch,
         on_voice_trigger = function(v) randomize_flash["midi"..v] = 1; randomize_flash["held"..v] = true end,
-        on_voice_release = function(v) randomize_flash["held"..v] = false end
+        on_voice_release = function(v) randomize_flash["held"..v] = false end,
+        voice_loaded = is_voice_loaded
     })
     
     params:add_group("STEREO", 5)

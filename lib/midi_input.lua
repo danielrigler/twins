@@ -19,6 +19,7 @@ local CC1_PARAM  = { nil, "morph_amount", "reverb_mix", "delay_mix" }
 
 local on_voice_trigger = nil
 local on_voice_release = nil
+local voice_loaded     = function(_) return true end
 
 local set_pitch = function(v, p)
     local k = PITCH_KEY[v]
@@ -112,7 +113,16 @@ local function voice_holding(note)
     if voice_note[2] == note then return 2 end
 end
 
+local function solo_loaded_voice()
+    local l1, l2 = voice_loaded(1), voice_loaded(2)
+    if l1 and not l2 then return 1 end
+    if l2 and not l1 then return 2 end
+    return nil
+end
+
 local function alloc_voice()
+    local solo = solo_loaded_voice()
+    if solo then rr = solo; return solo end
     local v1 = rr % 2 + 1
     if not voice_note[v1] then rr = v1; return v1 end
     rr = v1 % 2 + 1
@@ -189,9 +199,14 @@ function midi_input.set_voice_mode()
     para_mode = params.lookup["midi_voice_mode"] and params:get("midi_voice_mode") == 2
     rr = 2; voice_note = { nil, nil }
     if para_mode then
-        local n = #held
-        if held[n]     then set_voice(alloc_voice(), held[n])     end
-        if held[n - 1] then set_voice(alloc_voice(), held[n - 1]) end
+        local solo = solo_loaded_voice()
+        if solo then
+            if held[#held] then set_voice(solo, held[#held]) end
+        else
+            local n = #held
+            if held[n]     then set_voice(alloc_voice(), held[n])     end
+            if held[n - 1] then set_voice(alloc_voice(), held[n - 1]) end
+        end
     else
         update_voices()
     end
@@ -211,6 +226,7 @@ function midi_input.add_params(opts)
     if opts.set_pitch then set_pitch = opts.set_pitch end
     if opts.on_voice_trigger then on_voice_trigger = opts.on_voice_trigger end
     if opts.on_voice_release then on_voice_release = opts.on_voice_release end
+    if opts.voice_loaded then voice_loaded = opts.voice_loaded end
     m = midi.connect()
     m.event = handle
 end
