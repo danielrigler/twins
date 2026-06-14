@@ -173,7 +173,9 @@ function lfo.is_param_assigned(name) return assigned_params[name] == true end
 function lfo.mark_param_assigned(name) if name then assigned_params[name] = true end end
 function lfo.clear_param_assignment(name) if name then assigned_params[name] = nil end end
 
-lfo.lfo_targets = {"none", "1pan", "2pan", "1seek", "2seek", "1jitter", "2jitter", "1spread", "2spread", "1size", "2size", "1density", "2density", "1volume", "2volume", "1pitch", "2pitch", "1cutoff", "2hpf", "1speed", "2speed"}
+-- "1hpf" and "2cutoff" appended (not inserted) to complete the filter set without
+-- shifting existing indices, since presets/morph store the target as an option index.
+lfo.lfo_targets = {"none", "1pan", "2pan", "1seek", "2seek", "1jitter", "2jitter", "1spread", "2spread", "1size", "2size", "1density", "2density", "1volume", "2volume", "1pitch", "2pitch", "1cutoff", "2hpf", "1speed", "2speed", "1hpf", "2cutoff"}
 local LFO_TARGET_REVERSE = {}
 for i, t in ipairs(lfo.lfo_targets) do LFO_TARGET_REVERSE[t] = i end
 
