@@ -226,7 +226,7 @@ alloc {
             delayed = DelayC.ar(input + fb, 2, Lag.kr(delay, 0.7) + combinedMod);
             wet = Balance2.ar(delayed[0], delayed[1], (SinOsc.kr(delay.max(0.1).reciprocal * 0.5) + (LFNoise2.kr(0.4) * 0.3)) * (stereo * 0.77));
             LocalOut.ar(wet);
-            Out.ar(outBus, wet * mix * 1.2);
+            Out.ar(outBus, wet * mix * 1.3);
         }).add;
 
         SynthDef(\reverb, {
@@ -296,7 +296,7 @@ alloc {
             wet = [wetL, wetR];
             wet = HPF.ar(wet, 60);
             LocalOut.ar([tank, wet[0], wet[1]]);
-            Out.ar(outBus, wet * mix * 1.2);
+            Out.ar(outBus, wet * mix * 1.3);
         }).add;
 
         SynthDef(\shimmer, {

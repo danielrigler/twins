@@ -998,7 +998,7 @@ local function find_or_create_lfo_for_param(track, param_name, only_existing, cr
                         lfo[i].sync_to = source_lfo_idx
                     end
                 else
-                    params:set(MORPH_SHAPE_KEYS[i], 4)
+                    params:set(MORPH_SHAPE_KEYS[i], param_name == "volume" and 1 or 4)
                     params:set(MORPH_FREQ_KEYS[i], random_float(0.1, 0.7))
                 end
                 if lfo.walk_all then params:set(MORPH_SHAPE_KEYS[i], 4) end
