@@ -162,11 +162,11 @@ local anim_offset_x = 128 local animation_complete = false local animation_start
 local pan_indicator_x = {[1] = -80, [2] = 80} local pan_indicators_visible = false local pan_slide_start_time = nil
 local volume_bar_y = {[1] = 120, [2] = 120} local volume_bars_visible = false
 local seek_bar_width = 0 local seek_bars_visible = false
-local randomize_flash = {[1] = 0, [2] = 0, held1 = false, held2 = false, midi1 = 0, midi2 = 0}
+local randomize_flash = {[1] = 0, [2] = 0, held = {false, false}, midi = {0, 0}}
 local FLASH_INTENSITY = 8
 local FLASH_DECAY = 0.9
-local function flash_level(track, base_level) local f = randomize_flash[track] if f <= 0.001 then return base_level end return min(base_level + floor(f * FLASH_INTENSITY), 15) end
-local function midi_flash_level(track, base_level) local f = randomize_flash["held"..track] and 1 or randomize_flash["midi"..track] if f <= 0.001 then return base_level end return min(base_level + floor(f * FLASH_INTENSITY), 15) end
+local function flash_level(track, base_level) local f = randomize_flash[track] local m = randomize_flash.held[track] and 1 or randomize_flash.midi[track] if m > f then f = m end if f <= 0.001 then return base_level end return min(base_level + floor(f * FLASH_INTENSITY), 15) end
+local midi_flash_level = flash_level
 local random_float = utils.random_float
 local stop_metro_safe = utils.stop_metro_safe
 function is_voice_loaded(i) return audio_active[i] or params:get(i.."live_input") == 1 or params:get(i.."live_direct") == 1 end
@@ -251,8 +251,8 @@ local function setup_ui_metro()
             if pan_indicators_visible and volume_bars_visible and seek_bars_visible then pan_slide_start_time = nil end
         end
         for i = 1, 2 do
-            if randomize_flash[i] > 0.001 and not randomize_flash["held"..i] then randomize_flash[i] = randomize_flash[i] * FLASH_DECAY end
-            if randomize_flash["midi"..i] > 0.001 and not randomize_flash["held"..i] then randomize_flash["midi"..i] = randomize_flash["midi"..i] * FLASH_DECAY end
+            if randomize_flash[i] > 0.001 and not randomize_flash.held[i] then randomize_flash[i] = randomize_flash[i] * FLASH_DECAY end
+            if randomize_flash.midi[i] > 0.001 and not randomize_flash.held[i] then randomize_flash.midi[i] = randomize_flash.midi[i] * FLASH_DECAY end
         end
         redraw()
     end)
@@ -492,13 +492,7 @@ local function setup_params()
     params:add_binary("ClearLFOs", "Clear All", "trigger", 0) params:set_action("ClearLFOs", function() undo.checkpoint() lfo.clearLFOs() invalidate_lfo_cache() update_pan_positioning() end)
     params:add_option("allow_volume_lfos", "Allow Volume LFOs", {"no", "yes"}, 1) params:set_action("allow_volume_lfos", function(value) if value == 2 then lfo.clearLFOs("1", "volume") lfo.clearLFOs("2", "volume") lfo.assign_volume_lfos() else lfo.clearLFOs("1", "volume") lfo.clearLFOs("2", "volume") end invalidate_lfo_cache() end)
     lfo.init()
-    midi_input.add_params({
-        set_pitch = set_midi_pitch,
-        on_voice_trigger = function(v) randomize_flash["midi"..v] = 1; randomize_flash["held"..v] = true end,
-        on_voice_release = function(v) randomize_flash["held"..v] = false end,
-        voice_loaded = is_voice_loaded
-    })
-    
+
     params:add_group("STEREO", 5)
     params:add_control("Width", "Stereo Width", controlspec.new(0, 200, "lin", 2, 100, "%")) params:set_action("Width", function(value) engine.width(value * 0.01) font.update_fx_cache("Width", value) end)
     params:add_control("dimension_mix", "Dimension", controlspec.new(0, 100, "lin", 2, 0, "%")) params:set_action("dimension_mix", function(value) engine.dimension_mix(value * 0.01) font.update_fx_cache("dimension_mix", value) end)
@@ -602,9 +596,10 @@ local function setup_params()
     params:add{type = "trigger", id = "delete_morph_data", name = "Delete Morph Data", action = function() morph.scene_data = {[1] = {[1] = {}, [2] = {}}, [2] = {[1] = {}, [2] = {}}} morph.amount = 0 params:set("morph_amount", 0) params:set("scene_mode", 1) morph.scene_mode = "off" end}
 
     params:add_group("PITCH/MIDI", 10)
+    midi_input.add_params({set_pitch = set_midi_pitch, on_voice_trigger = function(v) randomize_flash.midi[v] = 1; randomize_flash.held[v] = true end, on_voice_release = function(v) randomize_flash.held[v] = false end, voice_loaded = is_voice_loaded})
     params:add_option("pitch_quantize_scale", "Pitch Quantize", {"off", "major", "minor", "dorian", "phrygian", "lydian", "mixolydian", "locrian", "major pent.", "minor pent.", "blues", "whole tone"}, 2) params:set_action("pitch_quantize_scale", function(value) local scale = params:string("pitch_quantize_scale") if scale ~= "none" then for i = 1, 2 do local current_pitch = params:get(i.."pitch") local quantized = quantize_pitch_to_scale(current_pitch, scale) if current_pitch ~= quantized then params:set(i.."pitch", quantized) end end end end)
     params:add_option("midi_gate", "MIDI Trigger", { "off", "on" }, 1) params:set_action("midi_gate", function() if midi_input then midi_input.set_gate_mode() end end)
-    params:add_option("midi_voice_mode", "Voice Mode", { "unison", "paraphonic" }, 2) params:set_action("midi_voice_mode", function() if midi_input then midi_input.set_voice_mode() end end)
+    params:add_option("midi_voice_mode", "Voice Mode", { "unison", "paraphonic", "voice 1", "voice 2" }, 2) params:set_action("midi_voice_mode", function() if midi_input then midi_input.set_voice_mode() end end)
     params:add_control("midi_attack", "Attack", controlspec.new(0.001, 20, "exp", 0, 2.5, "s")) params:set_action("midi_attack", function() if midi_input then midi_input.push_ad() end end)
     params:add_control("midi_decay", "Release", controlspec.new(0.005, 20, "exp", 0, 5, "s")) params:set_action("midi_decay", function() if midi_input then midi_input.push_ad() end end)
     params:add_option("midi_velocity", "Velocity", { "off", "on" }, 2) params:set_action("midi_velocity", function(v) if midi_input and v == 1 then engine.vel_amp(1, 1); engine.vel_amp(2, 1) end end)
@@ -797,7 +792,6 @@ local function handle_volume_lfo(track, delta, crossfade_mode)
     end
 end
 
-local _LINK_PARAMS = {"pitch", "size", "density"}
 local _LINK_SPEED = {pitch = 1, size = 5, density = 0.5}
 local function handle_pitch_size_density_link(track, config, delta)
     local param = config.param
@@ -1281,23 +1275,23 @@ function key(n, z)
     end
 end
 
-local function format_spread(v) return string.format("%.0f%%", v) end
-local function format_density(value) return string.format("%.1f Hz", value) end
-local function format_pitch(value, track, pitch_rand) if not track then return value > 0 and string.format("+%.0f", value) or string.format("%.0f", value) end local suffix = pitch_rand and ".. st" or " st" return value > 0 and string.format("+%.0f%s", value, suffix) or string.format("%.0f%s", value, suffix) end
 local function format_speed(s)
   local abs = abs(s)
   if abs < 0.01 then return ".00x" end
   if abs < 1    then return string.format("%s.%02dx", s < 0 and "-" or "", floor(abs * 100)) end
   return string.format("%.2fx", s)
 end
-local function format_jitter(value) if value > 999 then return string.format("%.1f s", value / 1000) else return string.format("%.0f ms", value) end end
-local function format_size(value) if value > 999 then return string.format("%.2f s", value / 1000) else return string.format("%.0f ms", value) end end
 
 local LEVEL = {hi=15, dim=9, val=2}
 local TRACK_X, VOL_X, PAN_X = {51, 92}, {0,126}, {52,93}
 local BAR_W, Y = 30, {bottom=60, seek=63}
 local UPPER = {jitter=true, size=true, density=true, spread=true, pitch=true}
-local FORMAT = {hz=format_density, st=format_pitch, spread=format_spread, jitter=format_jitter, size=format_size}
+local FORMAT = {
+  hz = function(value) return string.format("%.1f Hz", value) end,
+  st = function(value, track, pitch_rand) if not track then return value > 0 and string.format("+%.0f", value) or string.format("%.0f", value) end local suffix = pitch_rand and ".. st" or " st" return value > 0 and string.format("+%.0f%s", value, suffix) or string.format("%.0f%s", value, suffix) end,
+  spread = function(v) return string.format("%.0f%%", v) end,
+  jitter = function(value) if value > 999 then return string.format("%.1f s", value / 1000) else return string.format("%.0f ms", value) end end,
+  size = function(value) if value > 999 then return string.format("%.2f s", value / 1000) else return string.format("%.0f ms", value) end end}
 local buckets = {}
 for _i = 1, 15 do buckets[_i] = {r={}, p={}, t={}, r_len=0, p_len=0, t_len=0} end
 local function clear_ops() for i=1,15 do local b=buckets[i] b.r_len, b.p_len, b.t_len = 0, 0, 0 end end
