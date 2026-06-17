@@ -6,7 +6,7 @@
 --            by: @dddstudio                       
 -- 
 --                          
---                           v0.60
+--                           v0.61
 -- E1: Master Volume
 -- K1+E2/E3: Volume
 -- K2/K3: Navigate
@@ -179,6 +179,7 @@ local function update_pan_positioning() if _G.preset_loading then return end; lo
 
 local function set_midi_pitch(voice, pitch_value)
     pitch_value = clamp(pitch_value, LIMITS.pitch.min, LIMITS.pitch.max)
+    pitch_value = quantize_pitch_to_scale(pitch_value, params:string("pitch_quantize_scale"))
     local function apply_val(p_name, val)
         local id = voice .. p_name
         local is_active, lfo_idx = is_lfo_active_for_param(id)
@@ -186,8 +187,7 @@ local function set_midi_pitch(voice, pitch_value)
             local min_v, max_v = lfo.get_parameter_range(id)
             if min_v and max_v and max_v > min_v then
                 local depth = pget(MORPH_DEPTH_KEYS[lfo_idx])
-                local offset = clamp((val - min_v) / (max_v - min_v) * 2 - 1,
-                                     depth * 0.01 - 1, 1 - depth * 0.01)
+                local offset = clamp((val - min_v) / (max_v - min_v) * 2 - 1, depth * 0.01 - 1, 1 - depth * 0.01)
                 pset(MORPH_OFFSET_KEYS[lfo_idx], offset)
                 lfo[lfo_idx].offset = offset
             end
@@ -195,10 +195,7 @@ local function set_midi_pitch(voice, pitch_value)
             params:set(id, val)
         end
     end
-    if params:get("global_pitch_size_density_link") ~= 1 then
-        apply_val("pitch", pitch_value)
-        return
-    end
+    if params:get("global_pitch_size_density_link") ~= 1 then apply_val("pitch", pitch_value) return end
     local lb = link_base[voice]
     if not (lb.pitch and lb.size and lb.density) then
         lb.pitch    = params:get(voice .. "pitch")
@@ -597,9 +594,9 @@ local function setup_params()
 
     params:add_group("PITCH/MIDI", 10)
     midi_input.add_params({set_pitch = set_midi_pitch, on_voice_trigger = function(v) randomize_flash.midi[v] = 1; randomize_flash.held[v] = true end, on_voice_release = function(v) randomize_flash.held[v] = false end, voice_loaded = is_voice_loaded})
+    params:add_option("midi_gate", "Drone Mode", { "off", "on" }, 2) params:set_action("midi_gate", function() if midi_input then midi_input.set_gate_mode() end end)
+    params:add_option("midi_voice_mode", "MIDI control", { "both", "paraphonic", "voice 1", "voice 2" }, 2) params:set_action("midi_voice_mode", function() if midi_input then midi_input.set_voice_mode() end end)
     params:add_option("pitch_quantize_scale", "Pitch Quantize", {"off", "major", "minor", "dorian", "phrygian", "lydian", "mixolydian", "locrian", "major pent.", "minor pent.", "blues", "whole tone"}, 2) params:set_action("pitch_quantize_scale", function(value) local scale = params:string("pitch_quantize_scale") if scale ~= "none" then for i = 1, 2 do local current_pitch = params:get(i.."pitch") local quantized = quantize_pitch_to_scale(current_pitch, scale) if current_pitch ~= quantized then params:set(i.."pitch", quantized) end end end end)
-    params:add_option("midi_gate", "MIDI Trigger", { "off", "on" }, 1) params:set_action("midi_gate", function() if midi_input then midi_input.set_gate_mode() end end)
-    params:add_option("midi_voice_mode", "Voice Mode", { "unison", "paraphonic", "voice 1", "voice 2" }, 2) params:set_action("midi_voice_mode", function() if midi_input then midi_input.set_voice_mode() end end)
     params:add_control("midi_attack", "Attack", controlspec.new(0.001, 20, "exp", 0, 2.5, "s")) params:set_action("midi_attack", function() if midi_input then midi_input.push_ad() end end)
     params:add_control("midi_decay", "Release", controlspec.new(0.005, 20, "exp", 0, 5, "s")) params:set_action("midi_decay", function() if midi_input then midi_input.push_ad() end end)
     params:add_option("midi_velocity", "Velocity", { "off", "on" }, 2) params:set_action("midi_velocity", function(v) if midi_input and v == 1 then engine.vel_amp(1, 1); engine.vel_amp(2, 1) end end)

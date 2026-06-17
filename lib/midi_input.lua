@@ -1,14 +1,15 @@
 local midi_input = {}
 
 local BASE_NOTE  = 60
-local SNAP_REL   = 0.003
+local SNAP_REL   = 0.002
 local floor      = math.floor
 local clamp      = util.clamp
 
 local m          = nil
-local key_trigger = false
+
+local pitch_v    = { false, false }
+local gate_v     = { false, false }
 local para_mode  = false
-local solo_mode  = 0
 
 local held       = {}
 local voice_note = { nil, nil }
@@ -63,6 +64,7 @@ local function retrigger(v, amp)
         engine.key_ad(v, a, d)
         engine.vel_amp(v, amp)
         engine.key_gate(v, 1)
+        if engine.key_grain then engine.key_grain(v) end
         retrig_clock[v] = nil
     end)
 end
@@ -72,7 +74,7 @@ local function set_voice(v, e)
         if voice_note[v] then
             voice_note[v] = nil
             if on_voice_release then on_voice_release(v) end
-            if key_trigger then
+            if gate_v[v] then
                 cancel_retrig(v)
                 push_ad()
                 engine.key_gate(v, 0)
@@ -82,13 +84,16 @@ local function set_voice(v, e)
     end
     if voice_note[v] == e.note then return end
     local was_sounding = voice_note[v] ~= nil
-    local off = e.note - BASE_NOTE
-    set_pitch(v, params:get(PITCH_KEY[v]) - applied[v] + off)
-    applied[v] = off
+    if pitch_v[v] then
+        local off  = e.note - BASE_NOTE
+        local base = params:get(PITCH_KEY[v]) - applied[v]
+        set_pitch(v, base + off)
+        applied[v] = params:get(PITCH_KEY[v]) - base
+    end
     local amp = (params:get("midi_velocity") == 2) and clamp((e.vel or 127) / 127, 0, 1) or 1
     voice_note[v] = e.note
     if on_voice_trigger then on_voice_trigger(v) end
-    if key_trigger then
+    if gate_v[v] then
         if not was_sounding then
             retrigger(v, amp)
         else
@@ -96,15 +101,23 @@ local function set_voice(v, e)
             engine.key_ad(v, params:get("midi_attack"), params:get("midi_decay"))
             engine.vel_amp(v, amp)
             engine.key_gate(v, 1)
+            if engine.key_grain then engine.key_grain(v) end
         end
     else
         engine.vel_amp(v, amp)
+        if engine.key_grain then engine.key_grain(v) end
     end
+end
+
+local function voice_takes_notes(v)
+    return pitch_v[v] or gate_v[v]
 end
 
 local function update_voices()
     local e = held[#held]
-    set_voice(1, e); set_voice(2, e)
+    for v = 1, 2 do
+        if voice_takes_notes(v) then set_voice(v, e) end
+    end
 end
 
 local rr = 2
@@ -159,11 +172,6 @@ local function all_off()
     engine.key_gate(1, 0); engine.key_gate(2, 0)
 end
 
-local function midi_controls_voice(v)
-    if solo_mode > 0 then return v == solo_mode end
-    return true
-end
-
 local function set_voice_free(v)
     cancel_retrig(v)
     engine.key_hold(v, 1)
@@ -179,56 +187,34 @@ local function set_voice_keyed(v)
 end
 
 local function apply_voice_gate(v)
-    if key_trigger and midi_controls_voice(v) then
-        set_voice_keyed(v)
+    if gate_v[v] then set_voice_keyed(v) else set_voice_free(v) end
+end
+
+local function recompute_routing()
+    local vmode = params.lookup["midi_voice_mode"] and params:get("midi_voice_mode") or 1
+    local drone = (params:get("midi_gate") == 2)
+    para_mode = (vmode == 2)
+
+    if vmode == 3 or vmode == 4 then
+        local s = (vmode == 3) and 1 or 2
+        local o = (s == 1) and 2 or 1
+        pitch_v[s] = true;  pitch_v[o] = false
+        gate_v[s]  = true
+        gate_v[o]  = not drone
     else
-        set_voice_free(v)
+        pitch_v[1] = true;  pitch_v[2] = true
+        gate_v[1]  = not drone
+        gate_v[2]  = not drone
     end
 end
 
-local function apply_gate_state()
-    key_trigger = (params:get("midi_gate") == 2)
+local function refresh()
+    recompute_routing()
     apply_voice_gate(1)
     apply_voice_gate(2)
-end
-
-local function handle(data)
-    local d = midi.to_msg(data)
-    if not d then return end
-    local t = d.type
-    if t == "note_on" and d.vel and d.vel > 0 then
-        if solo_mode > 0 then
-            held_push(d.note, d.vel)
-            set_voice(solo_mode, held[#held])
-        elseif para_mode then para_note_on(d.note, d.vel)
-        else held_push(d.note, d.vel); update_voices() end
-    elseif t == "note_off" or (t == "note_on" and d.vel == 0) then
-        if solo_mode > 0 then
-            held_remove(d.note)
-            set_voice(solo_mode, held[#held] or nil)
-        elseif para_mode then para_note_off(d.note)
-        else held_remove(d.note); update_voices() end
-    elseif t == "cc" and d.cc == 1 then
-        local dest = CC1_PARAM[params:get("midi_cc1_dest")]
-        if dest and params.lookup[dest] then
-            params:set(dest, floor((d.val or 0) / 127 * 100 + 0.5))
-        end
-    end
-end
-
-function midi_input.set_gate_mode()
-    apply_gate_state()
-end
-
-function midi_input.set_voice_mode()
-    local mode = params.lookup["midi_voice_mode"] and params:get("midi_voice_mode") or 1
-    para_mode = (mode == 2)
-    solo_mode = (mode == 3) and 1 or (mode == 4) and 2 or 0
-    rr = 2; voice_note = { nil, nil }
-    if key_trigger then apply_gate_state() end
-    if solo_mode > 0 then
-        if held[#held] then set_voice(solo_mode, held[#held]) end
-    elseif para_mode then
+    rr = 2
+    voice_note = { nil, nil }
+    if para_mode then
         local solo = solo_loaded_voice()
         if solo then
             if held[#held] then set_voice(solo, held[#held]) end
@@ -240,13 +226,37 @@ function midi_input.set_voice_mode()
     else
         update_voices()
     end
-    if key_trigger then
-        for v = 1, 2 do
-            if midi_controls_voice(v) and not voice_note[v] then
-                cancel_retrig(v); engine.key_gate(v, 0)
-            end
+    for v = 1, 2 do
+        if gate_v[v] and not voice_note[v] then
+            cancel_retrig(v); engine.key_gate(v, 0)
         end
     end
+end
+
+local function handle(data)
+    local d = midi.to_msg(data)
+    if not d then return end
+    local t = d.type
+    if t == "note_on" and d.vel and d.vel > 0 then
+        if para_mode then para_note_on(d.note, d.vel)
+        else held_push(d.note, d.vel); update_voices() end
+    elseif t == "note_off" or (t == "note_on" and d.vel == 0) then
+        if para_mode then para_note_off(d.note)
+        else held_remove(d.note); update_voices() end
+    elseif t == "cc" and d.cc == 1 then
+        local dest = CC1_PARAM[params:get("midi_cc1_dest")]
+        if dest and params.lookup[dest] then
+            params:set(dest, floor((d.val or 0) / 127 * 100 + 0.5))
+        end
+    end
+end
+
+function midi_input.set_gate_mode()
+    refresh()
+end
+
+function midi_input.set_voice_mode()
+    refresh()
 end
 
 function midi_input.push_ad()
@@ -270,9 +280,9 @@ function midi_input.cleanup()
     all_off()
     if engine and engine.key_hold then engine.key_hold(1, 1); engine.key_hold(2, 1) end
     if engine and engine.vel_amp  then engine.vel_amp(1, 1);  engine.vel_amp(2, 1)  end
-    key_trigger = false
-    para_mode   = false
-    solo_mode   = 0
+    pitch_v   = { false, false }
+    gate_v    = { false, false }
+    para_mode = false
 end
 
 return midi_input
