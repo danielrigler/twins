@@ -4,20 +4,19 @@ A randomized dual granular sample playground for Monome Norns.
 
 ![Screenshot](https://llllllll.co/uploads/default/original/3X/d/4/d4f2077ef24aeceebba416defd2e1cce5140f37a.png)
 
-Inspired by @cfd90’s Twine and contains influence and code from other norns users. This is basically Twine on steroids. A granular playground. It contains a lot of effects and extra granular parameters. You can turn off granular processing and use this as a normal sample player with effects. Live input processing is also possible. My main goal was building a tool for creating nice ambient soundscapes. And no problem if you do not have external controllers. I have tweaked the GUI and controls, so it is playable even with only a norns. Let me know if you find this useful.
+Inspired by @cfd90’s Twine and contains influence and code from a lot of other norns users. This is basically Twine on steroids. A granular playground. It contains lot of effects and extra granular parameters. You can turn off granular processing and use this as a normal sample player with effects. Live input processing and MIDI input is also possible. No problem if you do not have external controllers: I have tweaked the GUI and controls, so it is very playable even with only a norns. Let me know if you find this useful.
 
 <img width="552" height="289" alt="twins_ss png" src="https://github.com/user-attachments/assets/e2308c34-df38-47f8-b595-72deed76e240" />
 
 **Some of the new features:**
 * Morphing
-* Reverb, delay, chorus, tape effects, glitch, shimmer, EQ, filters, bit reduction, etc.
+* Reverb, delay, chorus, tape effects, shimmer, glitch, EQ, filters, bit reduction, etc.
 * Extra granular parameters, increased parameter ranges
-* Pitch quantization
 * Freely assignable LFOs with randomization
 * On screen navigation with parameter locking
 * Symmetry mode and mirroring
 * Live input processing
-* Flexible volume control
+* MIDI input - play with a keyboard
 
 And a lot more.
 
