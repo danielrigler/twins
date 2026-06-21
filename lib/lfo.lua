@@ -102,7 +102,7 @@ function lfo.set_sine_all(enabled)
 end
 
 for i = 1, number_of_outputs do
-    lfo[i] = {freq = 0.05, phase = 0, waveform = "walk", shape_int = 4, slope = 0, depth = 50, offset = 0, prev = 0, walk_value = 0, walk_velocity = 0, sync_to = nil, sync_invert = false, active = false, target_idx = 1, target_name = "none", is_pitch = false, is_jitter = false, is_size = false, track_num = "1", last_val = nil, has_user_limits = false, min_key = nil, max_key = nil, def_min = 0, def_max = 100}
+    lfo[i] = {freq = 0.05, phase = 0, waveform = "walk", shape_int = 4, slope = 0, depth = 50, offset = 0, prev = 0, walk_value = 0, walk_velocity = 0, sync_to = nil, sync_invert = false, active = false, target_idx = 1, target_name = "none", is_pitch = false, is_jitter = false, is_size = false, track_num = "1", last_val = nil, has_user_limits = false, min_key = nil, max_key = nil, def_min = 0, def_max = 100, clock_phase_inc = nil}
 end
 
 local active_lfos = {}
@@ -173,8 +173,6 @@ function lfo.is_param_assigned(name) return assigned_params[name] == true end
 function lfo.mark_param_assigned(name) if name then assigned_params[name] = true end end
 function lfo.clear_param_assignment(name) if name then assigned_params[name] = nil end end
 
--- "1hpf" and "2cutoff" appended (not inserted) to complete the filter set without
--- shifting existing indices, since presets/morph store the target as an option index.
 lfo.lfo_targets = {"none", "1pan", "2pan", "1seek", "2seek", "1jitter", "2jitter", "1spread", "2spread", "1size", "2size", "1density", "2density", "1volume", "2volume", "1pitch", "2pitch", "1cutoff", "2hpf", "1speed", "2speed", "1hpf", "2cutoff"}
 local LFO_TARGET_REVERSE = {}
 for i, t in ipairs(lfo.lfo_targets) do LFO_TARGET_REVERSE[t] = i end
@@ -574,6 +572,39 @@ function lfo.process()
 end
 
 local lfo_metro = nil
+
+function lfo.recompute_freq(i)
+    local gs = pget("global_lfo_freq_scale") or 1
+    local base = pget(FREQ_KEYS[i]) or 0.05
+    lfo[i].base_freq = base
+    lfo[i].freq = base * gs
+end
+
+function lfo.apply_clock_sync(hz)
+    for i = 1, number_of_outputs do
+        lfo[i].clock_phase_inc = hz
+        if hz then
+            lfo[i].freq = hz
+        else
+            lfo.recompute_freq(i)
+        end
+    end
+end
+
+function lfo.tick(bpm)
+    if not bpm then return end
+end
+
+function lfo.reset_phases()
+    for i = 1, number_of_outputs do
+        local obj = lfo[i]
+        obj.phase = 0
+        obj.walk_value = 0
+        obj.walk_velocity = 0
+        obj.prev = 0
+    end
+end
+
 function lfo.init()
     for i = 1, number_of_outputs do
         params:add_separator("LFO " .. i)
@@ -582,13 +613,13 @@ function lfo.init()
         params:add_option(TARGET_KEYS[i], i .. " target", lfo.lfo_targets, 1)
         params:set_action(TARGET_KEYS[i], function(v) classify_target(i, v) update_active_lfos() lfo.invalidate_lfo_param_cache() if lfo.on_state_change then lfo.on_state_change() end end)
         params:add_option(SHAPE_KEYS[i], i .. " shape", options.lfotypes, 4)
-        params:set_action(SHAPE_KEYS[i], function(v) lfo[i].waveform = options.lfotypes[v] lfo[i].shape_int = v end)
+        params:set_action(SHAPE_KEYS[i], function(v) lfo[i].waveform = options.lfotypes[v] lfo[i].shape_int = v lfo[i].last_val = nil end)
         params:add_number(DEPTH_KEYS[i], i .. " depth", 0, 100, 50)
         params:set_action(DEPTH_KEYS[i], function(v) lfo[i].depth = v end)
         params:add_control(OFFSET_KEYS[i], i .. " offset", controlspec.new(-0.99, 0.99, "lin", 0.001, 0, ""))
         params:set_action(OFFSET_KEYS[i], function(v) lfo[i].offset = v end)
         params:add_control(FREQ_KEYS[i], i .. " freq", controlspec.new(0.01, 10.00, "lin", 0.01, 0.05, ""))
-        params:set_action(FREQ_KEYS[i], function(v) lfo[i].freq = v * (pget("global_lfo_freq_scale") or 1) end)
+        params:set_action(FREQ_KEYS[i], function(v) lfo[i].base_freq = v lfo.recompute_freq(i) end)
     end
     for i = 1, number_of_outputs do
         lfo[i].active = pget(LFO_KEYS[i]) == 2
