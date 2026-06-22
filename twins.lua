@@ -172,6 +172,22 @@ local random_float = utils.random_float
 local stop_metro_safe = utils.stop_metro_safe
 function is_voice_loaded(i) return audio_active[i] or params:get(i.."live_input") == 1 or params:get(i.."live_direct") == 1 end
 local function pause_voice_if_idle(i) if not is_voice_loaded(i) then engine.pause_voice(i) osc_positions[i] = 0 end end
+
+local function transport_enabled()
+    return not params.lookup["midi_transport"] or params:get("midi_transport") == 2
+end
+local function transport_start()
+    if not transport_enabled() then return end
+    for v = 1, 2 do if is_voice_loaded(v) then engine.run_voice(v, 1) end end
+end
+local function transport_stop()
+    if not transport_enabled() then return end
+    for v = 1, 2 do engine.run_voice(v, 0) end
+end
+local function transport_continue()
+    if not transport_enabled() then return end
+    for v = 1, 2 do if is_voice_loaded(v) then engine.voice_run(v, 1) end end
+end
 local function tracked_clock_run(func) local co = clock.run(func) table.insert(active_clocks, co) return co end
 local function cancel_all_clocks() for i = #active_clocks, 1, -1 do local co = active_clocks[i] if co then pcall(function() clock.cancel(co) end) end end active_clocks = {} end
 local function is_param_locked(track_num, param) return pget(lock_key(track_num, param)) == 2 end
@@ -593,7 +609,7 @@ local function setup_params()
     params:add{type = "trigger", id = "save_to_scene2", name = "Morph Target B", action = function() morph.store_scene(1, 2) morph.store_scene(2, 2) end}
     params:add{type = "trigger", id = "delete_morph_data", name = "Delete Morph Data", action = function() morph.scene_data = {[1] = {[1] = {}, [2] = {}}, [2] = {[1] = {}, [2] = {}}} morph.amount = 0 params:set("morph_amount", 0) params:set("scene_mode", 1) morph.scene_mode = "off" end}
 
-    params:add_group("MIDI/SYNC", 13)
+    params:add_group("MIDI/SYNC", 14)
     midi_input.add_params({set_pitch = set_midi_pitch, on_voice_trigger = function(v) randomize_flash.midi[v] = 1; randomize_flash.held[v] = true end, on_voice_release = function(v) randomize_flash.held[v] = false end, voice_loaded = is_voice_loaded})
     params:add_option("midi_gate", "Drone Mode", { "off", "on" }, 2) params:set_action("midi_gate", function() if midi_input then midi_input.set_gate_mode() end end)
     params:add_option("midi_voice_mode", "MIDI control", { "both", "paraphonic", "voice 1", "voice 2" }, 2) params:set_action("midi_voice_mode", function() if midi_input then midi_input.set_voice_mode() end end)
@@ -604,6 +620,7 @@ local function setup_params()
     params:add_option("midi_cc1_dest", "Mod Wheel to", { "off", "morph", "reverb", "delay" }, 2)
     params:add_separator("                                 ")
     clocksync.add_params()
+    params:add_option("midi_transport", "Transport", { "off", "on" }, 2)
     params:add_separator("                                   ")
     params:add_option("lock_pitch", "Lock Parameters", {"off", "on"}, 1)
 
@@ -1745,6 +1762,9 @@ function init()
     init_longpress_checker()
     for i = 1, 2 do params:set(i.."sample", _path.tape, true) end
     for i = 1, 2 do engine.pause_voice(i) end
+    clock.transport.start = transport_start
+    clock.transport.stop  = transport_stop
+    clock.transport.reset = transport_start
     morph.initialize_scenes_with_current_params()
 end
 
@@ -1756,6 +1776,9 @@ function cleanup()
     stop_metro_safe(finalize_metro)
     for i = 1, 2 do stop_metro_safe(randomize_metro[i]) end
     lfo.cleanup()
+    clock.transport.start = nil
+    clock.transport.stop  = nil
+    clock.transport.reset = nil
     clocksync.cleanup()
     midi_input.cleanup()
     randpara.cleanup()

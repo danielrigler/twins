@@ -23,6 +23,10 @@ local on_voice_trigger = nil
 local on_voice_release = nil
 local voice_loaded     = function(_) return true end
 
+local on_transport_start    = nil
+local on_transport_stop     = nil
+local on_transport_continue = nil
+
 local set_pitch = function(v, p)
     local k = PITCH_KEY[v]
     if params.lookup[k] then params:set(k, clamp(p, -48, 48)) end
@@ -248,6 +252,12 @@ local function handle(data)
         if dest and params.lookup[dest] then
             params:set(dest, floor((d.val or 0) / 127 * 100 + 0.5))
         end
+    elseif t == "start" then
+        if on_transport_start then on_transport_start() end
+    elseif t == "continue" then
+        if on_transport_continue then on_transport_continue() end
+    elseif t == "stop" then
+        if on_transport_stop then on_transport_stop() end
     end
 end
 
@@ -269,6 +279,9 @@ function midi_input.add_params(opts)
     if opts.on_voice_trigger then on_voice_trigger = opts.on_voice_trigger end
     if opts.on_voice_release then on_voice_release = opts.on_voice_release end
     if opts.voice_loaded then voice_loaded = opts.voice_loaded end
+    if opts.on_transport_start then on_transport_start = opts.on_transport_start end
+    if opts.on_transport_stop then on_transport_stop = opts.on_transport_stop end
+    if opts.on_transport_continue then on_transport_continue = opts.on_transport_continue end
     m = midi.connect()
     m.event = handle
 end
@@ -277,6 +290,9 @@ function midi_input.cleanup()
     if m then m.event = nil; m = nil end
     on_voice_trigger = nil
     on_voice_release = nil
+    on_transport_start    = nil
+    on_transport_stop     = nil
+    on_transport_continue = nil
     all_off()
     if engine and engine.key_hold then engine.key_hold(1, 1); engine.key_hold(2, 1) end
     if engine and engine.vel_amp  then engine.vel_amp(1, 1);  engine.vel_amp(2, 1)  end
