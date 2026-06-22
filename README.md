@@ -43,7 +43,7 @@ Hold **K2**+**K3**: Add Random LFO
 ### Discussion
 **[FORUM](https://llllllll.co/t/twins/71052)**
 ### Download
-**v0.61**
+**v0.62**
 install from Maiden Project Manager, or from Maiden REPL:
 ```
 ;install https://github.com/danielrigler/twins
