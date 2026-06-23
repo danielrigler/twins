@@ -59,7 +59,6 @@ local PARAM_SPECS = {
   ["1overtones_2"]        = {1,   {0,1},     "granular"}, ["2overtones_2"]     = {1,   {0,1},     "granular"},
   ["1ratcheting_prob"]    = {25,  {0,100},   "granular"}, ["2ratcheting_prob"] = {25,  {0,100},   "granular"},
   ["delay_feedback"]      = {100, {0,100},   "delay"},
-  ["delay_time"]          = {2,   {0,2},     "delay"},
   ["stereo"]              = {50,  {0,100},   "delay"},
   ["wiggle_depth"]        = {40,  {0,100},   "delay"},
   ["wiggle_rate"]         = {6,   {0,6},     "delay"},

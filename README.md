@@ -17,7 +17,6 @@ Inspired by @cfd90’s Twine and contains influence and code from a lot of other
 * Symmetry mode and mirroring
 * Live input processing
 * MIDI input - play with a keyboard
-* Clock sync
 
 And a lot more.
 
@@ -39,14 +38,12 @@ Hold **K3**: Symmetry
 **K2**+**K3**: HPF/LPF  
 **K2**+**K3**+**E1**/**E2**/**E3**: Effect Mix  
 Hold **K2**+**K3**: Add Random LFO  
-Hold **K1**+**K2**: Clock Sync  
-Hold **K1**+**K3**: Evolve  
 **K2**/**K3**+**E1**/**E2**/**E3**: Adjust LFO  
   
 ### Discussion
 **[FORUM](https://llllllll.co/t/twins/71052)**
 ### Download
-**v0.63**
+**v0.62**
 install from Maiden Project Manager, or from Maiden REPL:
 ```
 ;install https://github.com/danielrigler/twins
