@@ -11,6 +11,9 @@ local saved_shapes = {}
 lfo.sine_all = false
 lfo.on_state_change = nil
 
+local clocksync_ref = nil
+function lfo.set_clocksync_reference(cs) clocksync_ref = cs end
+
 local TWO_PI = math.pi * 2
 local PHASE_INCREMENT = 1 / 30
 local math_sin = math.sin
@@ -102,7 +105,7 @@ function lfo.set_sine_all(enabled)
 end
 
 for i = 1, number_of_outputs do
-    lfo[i] = {freq = 0.05, phase = 0, waveform = "walk", shape_int = 4, slope = 0, depth = 50, offset = 0, prev = 0, walk_value = 0, walk_velocity = 0, sync_to = nil, sync_invert = false, active = false, target_idx = 1, target_name = "none", is_pitch = false, is_jitter = false, is_size = false, track_num = "1", last_val = nil, has_user_limits = false, min_key = nil, max_key = nil, def_min = 0, def_max = 100, clock_phase_inc = nil}
+    lfo[i] = {freq = 0.05, phase = 0, waveform = "walk", shape_int = 4, slope = 0, depth = 50, offset = 0, prev = 0, walk_value = 0, walk_velocity = 0, sync_to = nil, sync_invert = false, active = false, target_idx = 1, target_name = "none", is_pitch = false, is_jitter = false, is_size = false, is_density = false, track_num = "1", last_val = nil, has_user_limits = false, min_key = nil, max_key = nil, def_min = 0, def_max = 100, clock_phase_inc = nil}
 end
 
 local active_lfos = {}
@@ -145,6 +148,7 @@ local function classify_target(i, target_idx)
         obj.is_size   = (tname:sub(-4) == "size")
         obj.track_num = tname:sub(1, 1)
         local suffix = tname:sub(2)
+        obj.is_density = (suffix == "density")
         if USER_LIMIT_PARAMS[suffix] then
             local d = USER_LIMIT_DEFAULTS[suffix]
             obj.has_user_limits = true
@@ -159,6 +163,7 @@ local function classify_target(i, target_idx)
         end
     else
         obj.is_pitch, obj.is_jitter, obj.is_size, obj.track_num = false, false, false, "1"
+        obj.is_density = false
         obj.has_user_limits = false
         obj.min_key, obj.max_key = nil, nil
     end
@@ -302,6 +307,9 @@ local function randomize_lfo(i, target)
     local center = util_clamp(lfo.scale(offset, -1, 1, rand_min, rand_max), rand_min + half_swing, rand_max - half_swing)
     local full_offset = lfo.scale(center, full_min, full_max, -1, 1)
     local full_depth = depth * (narrow_range / full_range)
+    if clocksync_ref and clocksync_ref.grain_synced() and target:sub(2) == "density" then
+        full_offset = clocksync_ref.grain_division_norm(target:sub(1, 1)) * 2 - 1
+    end
     lfo[i].depth = full_depth
     lfo[i].offset = full_offset
     pset(DEPTH_KEYS[i], full_depth)
@@ -525,6 +533,13 @@ function lfo.process()
         obj.slope = mod
         local target = obj.target_name
 
+        if obj.is_density and clocksync_ref and clocksync_ref.grain_synced() then
+            local nt = (mod + 1) * 0.5
+            if nt < 0 then nt = 0 elseif nt > 1 then nt = 1 end
+            clocksync_ref.set_grain_div_norm(obj.track_num, nt)
+            goto continue_lfo
+        end
+
         local mn, mx
         if obj.has_user_limits then
             local min_key, max_key = obj.min_key, obj.max_key
@@ -568,6 +583,7 @@ function lfo.process()
                 if pget(params_table, target) ~= value then pset(params_table, target, value) end
             end
         end
+        ::continue_lfo::
     end
 end
 

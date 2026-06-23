@@ -66,18 +66,54 @@ function clocksync.add_params()
   end)
 end
 
-function clocksync.step_grain_div(voice, delta)
-  local idx = clamp(density_idx[voice] + delta, 1, NDIV)
+local DIV_RAND_MIN, DIV_RAND_MAX = 5, 13
+
+local function apply_div(voice, idx)
   local d = DIVISIONS[idx]
   density_idx[voice]   = idx
   density_gpb[voice]   = 1 / d.beats
   density_label[voice] = d.label
+end
+
+function clocksync.step_grain_div(voice, delta)
+  apply_div(voice, clamp(density_idx[voice] + delta, 1, NDIV))
+  push()
+end
+
+function clocksync.randomize_grain_div(voice, mirror_voice)
+  if not enabled then return end
+  local idx = math.random(DIV_RAND_MIN, DIV_RAND_MAX)
+  apply_div(voice, idx)
+  if mirror_voice then apply_div(mirror_voice, idx) end
+  push()
+end
+
+function clocksync.div_index_for_norm(t)
+  local span = DIV_RAND_MAX - DIV_RAND_MIN
+  return clamp(math.floor(DIV_RAND_MIN + t * span + 0.5), DIV_RAND_MIN, DIV_RAND_MAX)
+end
+
+function clocksync.set_grain_div_norm(voice, t)
+  if not enabled then return end
+  voice = tonumber(voice)
+  local idx = clocksync.div_index_for_norm(t)
+  if idx == density_idx[voice] then return end
+  apply_div(voice, idx)
   push()
 end
 
 function clocksync.lfo_synced()            return enabled end
 function clocksync.grain_synced()          return enabled end
 function clocksync.grain_division_label(v) return density_label[v] end
+
+function clocksync.grain_division_norm(voice)
+  voice = tonumber(voice)
+  local span = DIV_RAND_MAX - DIV_RAND_MIN
+  if span == 0 then return 0 end
+  local nt = (density_idx[voice] - DIV_RAND_MIN) / span
+  if nt < 0 then nt = 0 elseif nt > 1 then nt = 1 end
+  return nt
+end
 
 function clocksync.grain_density(v)
   if not enabled then return nil end

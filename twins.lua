@@ -6,7 +6,7 @@
 --            by: @dddstudio                       
 -- 
 --                          
---                           v0.62
+--                           v0.63
 -- E1: Master Volume
 -- K1+E2/E3: Volume
 -- K2/K3: Navigate
@@ -20,6 +20,8 @@
 -- K2+K3: HPF/LPF
 -- K2+K3+E1/E2/E3: Effect Mix
 -- Hold K2+K3: Add Random LFO
+-- Hold K1+K2: Clock Sync
+-- Hold K1+K3: Evolve
 -- K2/K3+E1/E2/E3: Adjust LFO
 --
 --
@@ -36,6 +38,7 @@
 -- @sonoCircuit @graymazes
 -- @Higaru @NiklasKramer
 -- @xmacex @vehka @Quixotic7
+-- @Aktsom
 --
 -- If you like this,
 -- buy them a beer :)
@@ -58,7 +61,7 @@ local macro = include("lib/macro") macro.set_lfo_reference(lfo)
 local drymode = include("lib/drymode") drymode.set_lfo_reference(lfo)
 local undo = include("lib/undo")
 local midi_input = include("lib/midi_input")
-local clocksync = include("lib/clocksync")
+local clocksync = include("lib/clocksync") lfo.set_clocksync_reference(clocksync)
 local randomize_metro = { [1] = nil, [2] = nil }
 local active_clocks = {}
 local key_state = {} for n = 1, 3 do key_state[n] = false end
@@ -85,6 +88,8 @@ local key_longpress_actions = {
     [1] = {param = "scene_mode", a = 1, b = 2},
     [2] = {param = "global_pitch_size_density_link", a = 1, b = 0},
     [3] = {param = "symmetry", a = 1, b = 0},
+    [12] = {action = "toggle_clock_sync"},
+    [13] = {action = "toggle_evolution"},
     [23] = {action = "assign_lfo_to_current_row"}}
 local showing_save_message = false
 local fx_popup = {label = nil, value = nil, time = nil}
@@ -302,6 +307,17 @@ local function init_longpress_checker()
                 undo.checkpoint()
                 lfo.assign_to_current_row(current_mode, current_filter_mode)
                 invalidate_lfo_cache()
+            end
+        end
+        for s = 2, 3 do
+            local ct = key_trackers[10 + s]
+            if ct and ct.press_time and not ct.had_interaction and not ct.long_triggered then
+                if (now - ct.press_time) >= KEY_LONG_PRESS_THRESHOLD then
+                    ct.long_triggered = true
+                    ct.had_interaction = true
+                    if s == 2 then params:set("clock_sync", params:get("clock_sync") == 2 and 1 or 2)
+                    elseif s == 3 then params:set("evolution", params:get("evolution") == 1 and 0 or 1) end
+                end
             end
         end
     end
@@ -731,6 +747,10 @@ local function randomize(n)
             local val_norm = val * 0.01
             params:set(n.."seek", val); osc_positions[n] = val_norm
             if symmetry then params:set(other_track.."seek", val); osc_positions[other_track] = val_norm end
+        elseif key == "density" and clocksync.grain_synced() then
+            if not is_lfo_active_for_param(cfg_name) then
+                clocksync.randomize_grain_div(n, symmetry and other_track or nil)
+            end
         else
             local min_val = params:get(n .. "min_" .. key)
             local max_val = params:get(n .. "max_" .. key)
@@ -974,10 +994,10 @@ local function handle_param_change(track, config, delta)
     handle_standard_param(track, config, delta)
 end
 
-local function handle_randomize_track(n)
-    if not key_state[1] then return end
-    undo.checkpoint()
+local function handle_randomize_track(n, force)
+    if not force and not key_state[1] then return end
     local track = n == 3 and 2 or 1
+    undo.checkpoint()
     stop_metro_safe(randomize_metro[track])
     lfo.clearLFOs(tostring(track), nil, "volume")
     lfo.randomize_lfos(tostring(track), params:get("allow_volume_lfos") == 2)
@@ -1023,6 +1043,9 @@ local function find_or_create_lfo_for_param(track, param_name, only_existing, cr
     if not min_val or max_val <= min_val then return nil end
     local current_val = pget(full_param)
     local offset = (current_val - min_val) / (max_val - min_val) * 2 - 1
+    if param_name == "density" and clocksync.grain_synced() then
+        offset = clocksync.grain_division_norm(track) * 2 - 1
+    end
     local conflicts = {}
     for j = 1, 16 do if pget(MORPH_LFO_KEYS[j]) == 2 then conflicts[lfo_targets[pget(MORPH_TARGET_KEYS[j])]] = true end end
     for i = 1, 16 do
@@ -1123,6 +1146,16 @@ local function set_key_tracking(n, state)
         key_trackers[23].press_time = nil
         key_trackers[23].had_interaction = false
         key_trackers[23].long_triggered = false
+    end
+    if not is_init then
+        for s = 2, 3 do
+            local ct = key_trackers[10 + s]
+            if (n == 1 or n == s) and ct then
+                ct.press_time = nil
+                ct.had_interaction = false
+                ct.long_triggered = false
+            end
+        end
     end
 end
 
@@ -1258,6 +1291,7 @@ function enc(n, d)
         else
             local mode = (current_mode == "lpf" or current_mode == "hpf") and current_filter_mode or current_mode
             if mode == "density" and clocksync.grain_synced() then
+                disable_lfos_for_param(track .. "density", params:get("symmetry") ~= 1)
                 clocksync.step_grain_div(track, d)
             else
                 local config = param_modes[mode]
@@ -1282,7 +1316,14 @@ local function handle_key_press(n)
         key_trackers[1].had_interaction = true
         key_trackers[1].long_triggered = true
     end
-    if n ~= 1 and k1 then handle_randomize_track(n) end
+    for s = 2, 3 do
+        if (n == s and k1) or (n == 1 and key_state[s]) then
+            local id = 10 + s
+            if not key_trackers[id] then key_trackers[id] = {press_time = nil, had_interaction = false, long_triggered = false} end
+            set_key_tracking(id, "init")
+            key_trackers[s].had_interaction = true
+        end
+    end
 end
 
 local function handle_key_release(n, both_keys_pressed)
@@ -1299,6 +1340,19 @@ local function handle_key_release(n, both_keys_pressed)
                 handle_parameter_lock()
             end
             combo_tracker.had_interaction = true
+        end
+    end
+    for s = 2, 3 do
+        local ct = key_trackers[10 + s]
+        if (n == 1 or n == s) and ct and ct.press_time and not ct.had_interaction then
+            local duration = util.time() - ct.press_time
+            if duration >= KEY_LONG_PRESS_THRESHOLD then
+                if s == 2 then params:set("clock_sync", params:get("clock_sync") == 2 and 1 or 2)
+                elseif s == 3 then params:set("evolution", params:get("evolution") == 1 and 0 or 1) end
+            else
+                handle_randomize_track(s, true)
+            end
+            ct.had_interaction = true
         end
     end
     if (n == 2 or n == 3) and tracker and tracker.press_time and not tracker.long_triggered and not tracker.had_interaction and not both_keys_pressed then 
@@ -1591,6 +1645,19 @@ function redraw()
           local overflow_ratio = clamp((val - b) / (fb - b), 0, 1)
           local overflow_w = max(1, floor(sqrt(overflow_ratio) * BAR_W))
           R(LEVEL.hi, x, y + 1, overflow_w, 1)
+        end
+      elseif C.lfo_on[param] and sync_label then
+        local _, li = is_lfo_active_for_param(param)
+        local draw_bar = true
+        if li then
+          local o = lfo[li]
+          local amp = (o.depth or 0) * 0.01
+          local off = o.offset or 0
+          draw_bar = clocksync.div_index_for_norm((off - amp + 1) * 0.5) ~= clocksync.div_index_for_norm((off + amp + 1) * 0.5)
+        end
+        if draw_bar then
+          local bar_w = clamp(floor(clocksync.grain_division_norm(t) * BAR_W), 0, BAR_W)
+          R(LEVEL.dim + 2, x, y + 1, bar_w, 1)
         end
       end
     end
