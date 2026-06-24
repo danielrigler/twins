@@ -46,7 +46,7 @@ Hold **K1**+**K3**: Evolve
 ### Discussion
 **[FORUM](https://llllllll.co/t/twins/71052)**
 ### Download
-**v0.63**
+**v0.64**
 install from Maiden Project Manager, or from Maiden REPL:
 ```
 ;install https://github.com/danielrigler/twins
