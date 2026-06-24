@@ -54,7 +54,7 @@ function clocksync.add_params()
       set_density(2, params:get("2density"))
     end
   end)
-  params:add_option("clock_lfo_div", "LFO Division", DIV_LABELS, 5)
+  params:add_option("clock_lfo_div", "LFO Division", DIV_LABELS, 3)
   params:set_action("clock_lfo_div", function(v)
     lfo_div_beats = DIVISIONS[v].beats
     push()
@@ -78,6 +78,12 @@ end
 function clocksync.step_grain_div(voice, delta)
   apply_div(voice, clamp(density_idx[voice] + delta, 1, NDIV))
   push()
+end
+
+local LFO_DIV_MIN, LFO_DIV_MAX = 1, 11 -- "2 bar" .. "1/16" for the E1 shortcut
+
+function clocksync.step_lfo_div(delta)
+  params:set("clock_lfo_div", clamp(params:get("clock_lfo_div") + delta, LFO_DIV_MIN, LFO_DIV_MAX))
 end
 
 function clocksync.randomize_grain_div(voice, mirror_voice)

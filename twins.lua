@@ -1196,16 +1196,12 @@ local function adjust_lfo_with_symmetry(track, param_name, lfo_idx, adjustment_f
 end
 
 local function apply_freq_step(idx, dir)
-    if clocksync.lfo_synced() then
-        params:delta("clock_lfo_div", dir)
-    else
-        local fk = MORPH_FREQ_KEYS[idx]
-        local cur = pget(fk)
-        local step = max(cur * 0.06, 0.005) * (dir > 0 and 1 or -1)
-        local new_freq = max(cur + step, 0.01)
-        pset(fk, new_freq)
-        lfo[idx].freq = new_freq * pget("global_lfo_freq_scale")
-    end
+    local fk = MORPH_FREQ_KEYS[idx]
+    local cur = pget(fk)
+    local step = max(cur * 0.06, 0.005) * (dir > 0 and 1 or -1)
+    local new_freq = max(cur + step, 0.01)
+    pset(fk, new_freq)
+    lfo[idx].freq = new_freq * pget("global_lfo_freq_scale")
 end
 
 local FX_MAP = { "reverb_mix", "delay_mix", "shimmer_mix1" }
@@ -1238,6 +1234,11 @@ function enc(n, d)
         end
         mark_key_interaction(k1, k2, k3)
         if n == 1 then
+            if clocksync.lfo_synced() then
+                clocksync.step_lfo_div(d)
+                finalize_change()
+                return
+            end
             local lfo_idx = find_or_create_lfo_for_param(voice, param_name, true, false)
             if lfo_idx then
                 apply_freq_step(lfo_idx, d)
