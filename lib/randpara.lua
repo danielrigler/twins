@@ -317,7 +317,7 @@ local param_configs = {
     {name="fbDelay1",     prob=0.3,  default=0.2,    random=function() return random_float(0.1,0.3)    end},
   }},
   delay = { lock_param = "lock_delay", params = {
-    {name="delay_time",     prob=0.75, default=0.5,   random=function() return random_float(0.1,1)        end, direct_set=true},
+    {name="delay_time",     prob=0.75, default=0.5,   random=function() return random_float(0.1,1)        end, direct_set=true, condition=function() return params:get("clock_sync") ~= 2 end},
     {name="delay_feedback", prob=1.0, default=35,    random=function() return math.random(5,90)         end},
     {name="stereo",         prob=1.0, default=20,    random=function() return math.random(0,100)         end},
     {name="delay_lowpass",  prob=0.6, default=5000,  random=function() return math.random(400,16000)     end},
@@ -334,6 +334,7 @@ local param_configs = {
   }},
   pitch = { lock_param = "lock_pitch", params = {
     {name="pitch_quantize_scale", prob=0.3, default=2, direct_set=true,
+    {name="clock_sync_delay_div", prob=0.75, default=7, random=function() return math.random(5,11)     end, direct_set=true, condition=function() return params:get("clock_sync") == 2 end},
      condition = pitch_scale_allowed,
      random=function() return math.random(2,12) end},
   }},

@@ -269,6 +269,7 @@ function presets.load_complete_preset(name, scene_data, update_pan, audio_active
                 end
             end
         end
+        if params.lookup["1volume"] and params.lookup["2volume"] then _G.master_vol_diff = params:get("1volume") - params:get("2volume") end
         clock.sleep(0.4)
         if saved_output_level ~= nil and params.lookup["output_level"] then params:set("output_level", saved_output_level) end
         redraw()

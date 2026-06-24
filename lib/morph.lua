@@ -1,6 +1,6 @@
 local morph = {}
 morph.voice_params = {"speed","pitch","jitter","size","density","spread","pan","seek","cutoff","hpf","lpf_gain","granular_gain","subharmonics_3","subharmonics_2","subharmonics_1","overtones_1","overtones_2","smoothbass","ratcheting_prob","size_variation","direction_mod","density_mod_amt","pitch_random_scale_type","pitch_random_prob","pitch_mode","probability","eq_low_gain","eq_mid_gain","eq_high_gain","env_select","volume"}
-morph.global_params = {"delay_mix","delay_time","delay_feedback","delay_lowpass","delay_highpass","wiggle_depth","wiggle_rate","stereo","reverb_mix","rev_decay","rev_damp","rev_predelay","rev_prefilter","rev_moddepth","rev_modrate","rev_hpf","shimmer_mix","shimmer_preset","lock_shimmer","tape_mix","sine_drive_wet","drive","wobble_mix","wobble_amp","wobble_rpm","flutter_amp","flutter_freq","flutter_var","chew_depth","chew_freq","chew_variance","lossdegrade_mix","Width","dimension_mix","haas","rspeed","monobass_mix","bitcrush_mix","bitcrush_rate","bitcrush_bits","evolution","evolution_range","evolution_rate","lock_eq","lock_tape","lock_reverb","lock_delay","global_lfo_freq_scale","pitch_quantize_scale","pitch_lag","shimmer_mix1","shimmer_oct1","pitchv1","lowpass1","hipass1","fbDelay1","fb1", "glitch_probability", "glitch_ratio", "glitch_mix", "glitch_min_length", "glitch_max_length", "glitch_reverse", "glitch_pitch", "sine_lfos", "shimmer_mod1", "bitcrush_mod"}
+morph.global_params = {"delay_mix","delay_time","delay_feedback","delay_lowpass","delay_highpass","wiggle_depth","wiggle_rate","stereo","reverb_mix","rev_decay","rev_damp","rev_predelay","rev_prefilter","rev_moddepth","rev_modrate","rev_hpf","shimmer_mix","shimmer_preset","lock_shimmer","tape_mix","sine_drive_wet","drive","wobble_mix","wobble_amp","wobble_rpm","flutter_amp","flutter_freq","flutter_var","chew_depth","chew_freq","chew_variance","lossdegrade_mix","Width","dimension_mix","haas","rspeed","monobass_mix","bitcrush_mix","bitcrush_rate","bitcrush_bits","evolution","evolution_range","evolution_rate","lock_eq","lock_tape","lock_reverb","lock_delay","global_lfo_freq_scale","pitch_quantize_scale","pitch_lag","shimmer_mix1","shimmer_oct1","pitchv1","lowpass1","hipass1","fbDelay1","fb1", "glitch_probability", "glitch_ratio", "glitch_mix", "glitch_min_length", "glitch_max_length", "glitch_reverse", "glitch_pitch", "sine_lfos", "shimmer_mod1", "bitcrush_mod", "clock_lfo_div", "clock_sync_delay_div"}
 local param_registry = {}
 morph.amount = 0
 morph.scene_mode = "off"
@@ -12,6 +12,8 @@ local last_morph_amount = 0
 local last_morph_update_time = 0
 local MORPH_THROTTLE_INTERVAL = 0.03
 local lfo_ref = nil
+local clocksync_ref = nil
+local _synced_density = false
 local invalidate_lfo_cache_ref = nil
 local _p_set, _p_get
 local MORPH_LFO_KEYS, MORPH_TARGET_KEYS, MORPH_SHAPE_KEYS, MORPH_FREQ_KEYS, MORPH_DEPTH_KEYS, MORPH_OFFSET_KEYS
@@ -21,8 +23,9 @@ local pending = {}
 local _t, _t_inv, _morph_dir, _pitch_scale, _get_range_ref
 local _has_lfo_tracking = nil
 
-function morph.init(lfo_module, invalidate_fn)
+function morph.init(lfo_module, invalidate_fn, clocksync_module)
     lfo_ref = lfo_module
+    clocksync_ref = clocksync_module
     invalidate_lfo_cache_ref = invalidate_fn
     MORPH_LFO_KEYS    = lfo_ref.keys.lfo
     MORPH_TARGET_KEYS = lfo_ref.keys.target
@@ -35,11 +38,11 @@ function morph.init(lfo_module, invalidate_fn)
     param_registry = {}
     for track = 1, 2 do 
         for _, p in ipairs(morph.voice_params) do 
-            table.insert(param_registry, {name = tostring(track) .. p, is_pitch = (p == "pitch")}) 
+            table.insert(param_registry, {name = tostring(track) .. p, is_pitch = (p == "pitch"), t2 = (track == 2)}) 
         end 
     end
     for _, p in ipairs(morph.global_params) do 
-        table.insert(param_registry, {name = p, is_pitch = false}) 
+        table.insert(param_registry, {name = p, is_pitch = false, t2 = false}) 
     end
 end
 
@@ -54,6 +57,10 @@ function morph.store_scene(track, scene)
     for _, item in ipairs(param_registry) do
         local param = item.name
         if params.lookup[param] then scene_params[param] = _p_get(params, param) end
+    end
+    if clocksync_ref then
+        scene_params["1density_div"] = clocksync_ref.grain_division_index(1)
+        scene_params["2density_div"] = clocksync_ref.grain_division_index(2)
     end
     scene_params.lfo_data = {}
     for i = 1, 16 do
@@ -92,18 +99,33 @@ function morph.recall_scene(track, scene)
             end
         end
     end
+    if clocksync_ref and clocksync_ref.grain_synced() then
+        for v = 1, 2 do
+            local dv = scene_params[v .. "density_div"]
+            if dv then clocksync_ref.set_grain_div_index(v, dv) end
+        end
+    end
     if invalidate_lfo_cache_ref then invalidate_lfo_cache_ref() end
 end
 
 local function _morph_clamp(x) return x < -1 and -1 or (x > 1 and 1 or x) end
 
-local function _compute_offset(lfo_offset, const_val, target, t_weight, const_weight)
+local function _compute_offset(lfo_offset, const_val, target, t_weight, const_weight, forced_off)
+    if forced_off ~= nil then return _morph_clamp(lfo_offset * t_weight + forced_off * const_weight) end
     if not const_val then return _morph_clamp(lfo_offset * t_weight) end
     local min_val, max_val = _get_range_ref(target)
     if not min_val or not max_val or max_val <= min_val then return _morph_clamp(lfo_offset * t_weight) end
     const_val = const_val < min_val and min_val or (const_val > max_val and max_val or const_val)
     local tgt_off = ((const_val - min_val) / (max_val - min_val)) * 2 - 1
     return _morph_clamp(lfo_offset * t_weight + tgt_off * const_weight)
+end
+
+local function _density_forced_off(target, c1, c2)
+    if not _synced_density then return nil end
+    if target ~= "1density" and target ~= "2density" then return nil end
+    local dv = (c1 and c1[target .. "_div"]) or (c2 and c2[target .. "_div"])
+    if not dv then return nil end
+    return _morph_clamp(clocksync_ref.div_index_to_norm(dv) * 2 - 1)
 end
 
 local DEPTH_THRESHOLD = 0.01
@@ -182,6 +204,7 @@ function morph.apply()
     _morph_dir = morph_direction
     _pitch_scale = params:string("pitch_quantize_scale")
     _get_range_ref = lfo_ref.get_parameter_range
+    _synced_density = clocksync_ref and clocksync_ref.grain_synced() or false
     local s1 = morph.scene_data[1] or {}
     local s2 = morph.scene_data[2] or {}
     local scene1_1, scene1_2 = s1[1] or {}, s1[2] or {}
@@ -231,25 +254,27 @@ function morph.apply()
                 lfo_A.depth * _t_inv + lfo_B.depth * _t,
                 _morph_clamp(lfo_A.offset * _t_inv + lfo_B.offset * _t))
         elseif lfo_A_enabled and target_A == target then
+            local forced = _density_forced_off(target, scene1_2, scene2_2)
             local const_val = scene1_2[target] or scene2_2[target]
-            local temp = morph.temp_scene[target]
+            local temp = forced == nil and morph.temp_scene[target]
             if temp then
                 const_val = chase_temp(temp, scene1_1[target] or scene2_1[target], const_val)
             end
             write_lfo_slot(i, lfo_A.target, lfo_A.shape, lfo_A.freq,
                 lfo_A.depth * _t_inv,
-                _compute_offset(lfo_A.offset, const_val, target, _t_inv, _t))
+                _compute_offset(lfo_A.offset, const_val, target, _t_inv, _t, forced))
         else
             local lfo_val = (lfo_B_enabled and lfo_B) or (lfo_A_enabled and lfo_A)
             if not lfo_val then goto continue end
+            local forced = _density_forced_off(target, scene1_1, scene2_1)
             local const_val = scene1_1[target] or scene2_1[target]
-            local temp = morph.temp_scene[target]
+            local temp = forced == nil and morph.temp_scene[target]
             if temp then
                 const_val = chase_temp(temp, const_val, scene1_2[target] or scene2_2[target])
             end
             write_lfo_slot(i, lfo_val.target, lfo_val.shape, lfo_val.freq,
                 lfo_val.depth * _t,
-                _compute_offset(lfo_val.offset, const_val, target, _t, _t_inv))
+                _compute_offset(lfo_val.offset, const_val, target, _t, _t_inv, forced))
         end
         ::continue::
     end
@@ -261,21 +286,41 @@ function morph.apply()
             if slot then
                 _ensure_unique_assignment(m.param, slot)
                 skip_param_set[m.param] = true
+                local forced = _density_forced_off(m.param, scene1_1, scene2_1)
                 local const_val = scene1_1[m.param] or scene2_1[m.param]
-                local temp = morph.temp_scene[m.param]
+                local temp = forced == nil and morph.temp_scene[m.param]
                 if temp then
                     const_val = chase_temp(temp, const_val, scene1_2[m.param] or scene2_2[m.param])
                 end
                 write_lfo_slot(slot, m.lfo.target, m.lfo.shape, m.lfo.freq,
                     m.lfo.depth * _t,
-                    _compute_offset(m.lfo.offset, const_val, m.param, _t, _t_inv))
+                    _compute_offset(m.lfo.offset, const_val, m.param, _t, _t_inv, forced))
             end
+        end
+    end
+    if _synced_density then
+        for v = 1, 2 do
+            local dkey = v .. "density"
+            if not skip_param_set[dkey] then
+                local dA = scene1_1[dkey .. "_div"] or scene2_1[dkey .. "_div"]
+                local dB = scene1_2[dkey .. "_div"] or scene2_2[dkey .. "_div"]
+                if dA and dB then
+                    clocksync_ref.set_grain_div_index(v, math.floor(dA * _t_inv + dB * _t + 0.5))
+                end
+            end
+            skip_param_set[dkey] = true
         end
     end
     for _, item in ipairs(param_registry) do
         local p = item.name
-        local sA = (string.sub(p, 1, 1) == "1" and scene1_1[p]) or (string.sub(p, 1, 1) == "2" and scene2_1[p]) or scene1_1[p] or scene2_1[p]
-        local sB = (string.sub(p, 1, 1) == "1" and scene1_2[p]) or (string.sub(p, 1, 1) == "2" and scene2_2[p]) or scene1_2[p] or scene2_2[p]
+        local sA, sB
+        if item.t2 then
+            sA = scene2_1[p] or scene1_1[p]
+            sB = scene2_2[p] or scene1_2[p]
+        else
+            sA = scene1_1[p] or scene2_1[p]
+            sB = scene1_2[p] or scene2_2[p]
+        end
         _interp_prebuilt(item, sA, sB)
     end
     if invalidate_lfo_cache_ref then invalidate_lfo_cache_ref() end

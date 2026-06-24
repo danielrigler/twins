@@ -80,7 +80,7 @@ function clocksync.step_grain_div(voice, delta)
   push()
 end
 
-local LFO_DIV_MIN, LFO_DIV_MAX = 1, 11 -- "2 bar" .. "1/16" for the E1 shortcut
+local LFO_DIV_MIN, LFO_DIV_MAX = 1, 11
 
 function clocksync.step_lfo_div(delta)
   params:set("clock_lfo_div", clamp(params:get("clock_lfo_div") + delta, LFO_DIV_MIN, LFO_DIV_MAX))
@@ -108,17 +108,31 @@ function clocksync.set_grain_div_norm(voice, t)
   push()
 end
 
+function clocksync.grain_division_index(voice) return density_idx[tonumber(voice)] end
+
+function clocksync.set_grain_div_index(voice, idx)
+  if not enabled then return end
+  voice = tonumber(voice)
+  idx = clamp(idx, 1, NDIV)
+  if idx == density_idx[voice] then return end
+  apply_div(voice, idx)
+  push()
+end
+
+function clocksync.div_index_to_norm(idx)
+  local span = DIV_RAND_MAX - DIV_RAND_MIN
+  if span == 0 then return 0 end
+  local nt = (idx - DIV_RAND_MIN) / span
+  if nt < 0 then nt = 0 elseif nt > 1 then nt = 1 end
+  return nt
+end
+
 function clocksync.lfo_synced()            return enabled end
 function clocksync.grain_synced()          return enabled end
 function clocksync.grain_division_label(v) return density_label[v] end
 
 function clocksync.grain_division_norm(voice)
-  voice = tonumber(voice)
-  local span = DIV_RAND_MAX - DIV_RAND_MIN
-  if span == 0 then return 0 end
-  local nt = (density_idx[voice] - DIV_RAND_MIN) / span
-  if nt < 0 then nt = 0 elseif nt > 1 then nt = 1 end
-  return nt
+  return clocksync.div_index_to_norm(density_idx[tonumber(voice)])
 end
 
 function clocksync.grain_density(v)

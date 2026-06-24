@@ -6,7 +6,7 @@
 --            by: @dddstudio                       
 -- 
 --                          
---                           v0.63
+--                           v0.64
 -- E1: Master Volume
 -- K1+E2/E3: Volume
 -- K2/K3: Navigate
@@ -625,11 +625,12 @@ local function setup_params()
     params:add{type = "trigger", id = "save_to_scene2", name = "Morph Target B", action = function() morph.store_scene(1, 2) morph.store_scene(2, 2) end}
     params:add{type = "trigger", id = "delete_morph_data", name = "Delete Morph Data", action = function() morph.scene_data = {[1] = {[1] = {}, [2] = {}}, [2] = {[1] = {}, [2] = {}}} morph.amount = 0 params:set("morph_amount", 0) params:set("scene_mode", 1) morph.scene_mode = "off" end}
 
-    params:add_group("MIDI/SYNC", 14)
+    params:add_group("MIDI/SYNC", 15)
     midi_input.add_params({set_pitch = set_midi_pitch, on_voice_trigger = function(v) randomize_flash.midi[v] = 1; randomize_flash.held[v] = true end, on_voice_release = function(v) randomize_flash.held[v] = false end, voice_loaded = is_voice_loaded})
     params:add_option("midi_gate", "Drone Mode", { "off", "on" }, 2) params:set_action("midi_gate", function() if midi_input then midi_input.set_gate_mode() end end)
     params:add_option("midi_voice_mode", "MIDI control", { "both", "paraphonic", "voice 1", "voice 2" }, 2) params:set_action("midi_voice_mode", function() if midi_input then midi_input.set_voice_mode() end end)
     params:add_option("pitch_quantize_scale", "Pitch Quantize", {"off", "major", "minor", "dorian", "phrygian", "lydian", "mixolydian", "locrian", "major pent.", "minor pent.", "blues", "whole tone"}, 2) params:set_action("pitch_quantize_scale", function(value) local scale = params:string("pitch_quantize_scale") if scale ~= "none" then for i = 1, 2 do local current_pitch = params:get(i.."pitch") local quantized = quantize_pitch_to_scale(current_pitch, scale) if current_pitch ~= quantized then params:set(i.."pitch", quantized) end end end end)
+    params:add_option("pitch_lag", "Pitch Lag", {"off", "very small", "small", "medium", "high", "very high"}, 1) params:set_action("pitch_lag", function(value) local lag_times = {0, 1, 2, 4, 8, 16} local lag_time = lag_times[value] for i = 1, 2 do engine.pitch_lag(i, lag_time) end end)
     params:add_control("midi_attack", "Attack", controlspec.new(0.001, 20, "exp", 0, 2.5, "s")) params:set_action("midi_attack", function() if midi_input then midi_input.push_ad() end end)
     params:add_control("midi_decay", "Release", controlspec.new(0.005, 20, "exp", 0, 5, "s")) params:set_action("midi_decay", function() if midi_input then midi_input.push_ad() end end)
     params:add_option("midi_velocity", "Velocity", { "off", "on" }, 2) params:set_action("midi_velocity", function(v) if midi_input and v == 1 then engine.vel_amp(1, 1); engine.vel_amp(2, 1) end end)
@@ -639,14 +640,13 @@ local function setup_params()
     params:add_option("midi_transport", "Transport", { "off", "on" }, 2)
     params:add_separator("                                   ")
     params:add_option("lock_pitch", "Lock Parameters", {"off", "on"}, 1)
-
-    params:add_group("OTHER", 26)
+    
+    params:add_group("OTHER", 25)
     params:add_binary("dry_mode", "Dry Mode", "toggle", 0) params:set_action("dry_mode", function(x) drymode.toggle_dry_mode() end)
     params:add_binary("randomtape1", "Random Tape 1", "trigger", 0) params:set_action("randomtape1", function() load_random_tape_file(1) end)
     params:add_binary("randomtape2", "Random Tape 2", "trigger", 0) params:set_action("randomtape2", function() load_random_tape_file(2) end)
     params:add_binary("unload_all", "Unload All Audio", "trigger", 0) params:set_action("unload_all", function() for i=1, 2 do params:set(i.."seek", 0) params:set(i.."sample", "-") params:set(i.."live_input", 0) params:set(i.."live_direct", 0) audio_active[i] = false osc_positions[i] = 0 end engine.unload_all() update_pan_positioning() end)
     params:add_binary("global_pitch_size_density_link", "Linked Mode", "toggle", 0) params:set_action("global_pitch_size_density_link", function(value) if value == 1 then for i = 1, 2 do local pitch = params:get(i.."pitch") local size = params:get(i.."size") local density = params:get(i.."density") if size > 0 and density > 0 then local lb = link_base[i] lb.pitch = pitch lb.size = size lb.density = density lb.product = size * density end end end end)
-    params:add_option("pitch_lag", "Pitch Lag", {"off", "very small", "small", "medium", "high", "very high"}, 1) params:set_action("pitch_lag", function(value) local lag_times = {0, 1, 2, 4, 8, 16} local lag_time = lag_times[value] for i = 1, 2 do engine.pitch_lag(i, lag_time) end end)
     params:add_option("steps", "Transition Time", {"short", "medium", "long"}, 1) params:set_action("steps", function(value) steps = ({20, 300, 800})[value] end)
     params:add_separator("                                  ")
     for i = 1, 2 do
@@ -823,9 +823,21 @@ local function handle_volume_lfo(track, delta, crossfade_mode)
     elseif a2 then
         params:delta(i2.."offset", other_delta * 1.5)
         params:delta(p, vol_delta)
-    else
+    elseif crossfade_mode then
         params:delta(p, vol_delta)
         params:delta(op, other_delta * 3)
+        _G.master_vol_diff = params:get(p) - params:get(op)
+    else
+        local v1, v2 = params:get(p), params:get(op)
+        if v1 > -70 and v2 > -70 then _G.master_vol_diff = v1 - v2 end
+        local diff = _G.master_vol_diff or 0
+        if diff >= 0 then
+            params:delta(p, vol_delta)
+            params:set(op, clamp(params:get(p) - diff, -70, 10))
+        else
+            params:delta(op, vol_delta)
+            params:set(p, clamp(params:get(op) + diff, -70, 10))
+        end
     end
 end
 
@@ -1289,6 +1301,7 @@ function enc(n, d)
             disable_lfos_for_param(p, true)
             if params:get("symmetry") == 1 then disable_lfos_for_param(p) end
             params:delta(p, 3 * d)
+            _G.master_vol_diff = params:get("1volume") - params:get("2volume")
         else
             local mode = (current_mode == "lpf" or current_mode == "hpf") and current_filter_mode or current_mode
             if mode == "density" and clocksync.grain_synced() then
@@ -1648,18 +1661,8 @@ function redraw()
           R(LEVEL.hi, x, y + 1, overflow_w, 1)
         end
       elseif C.lfo_on[param] and sync_label then
-        local _, li = is_lfo_active_for_param(param)
-        local draw_bar = true
-        if li then
-          local o = lfo[li]
-          local amp = (o.depth or 0) * 0.01
-          local off = o.offset or 0
-          draw_bar = clocksync.div_index_for_norm((off - amp + 1) * 0.5) ~= clocksync.div_index_for_norm((off + amp + 1) * 0.5)
-        end
-        if draw_bar then
-          local bar_w = clamp(floor(clocksync.grain_division_norm(t) * BAR_W), 0, BAR_W)
-          R(LEVEL.dim + 2, x, y + 1, bar_w, 1)
-        end
+        local bar_w = clamp(floor(clocksync.grain_division_norm(t) * BAR_W), 0, BAR_W)
+        R(LEVEL.dim + 2, x, y + 1, bar_w, 1)
       end
     end
   end
@@ -1824,7 +1827,7 @@ function init()
     setup_params()
     setup_undo()
     setup_osc()
-    morph.init(lfo, invalidate_lfo_cache)
+    morph.init(lfo, invalidate_lfo_cache, clocksync)
     clocksync.init({lfo = lfo, set_density = clocksync_set_density})
     font.init_fx_cache()
     init_longpress_checker()

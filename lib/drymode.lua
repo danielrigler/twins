@@ -37,10 +37,8 @@ local DRY_VALUES_STEREO = {
     pan = 0
 }
 
-local STEREO_PARAMS = {"granular_gain", "speed", "eq_low_gain", "eq_mid_gain", "eq_high_gain", "cutoff", "hpf", "lpf_gain", "pan"}
-local MONO_PARAMS = {"reverb_mix", "delay_mix", "bitcrush_mix", "glitch_ratio", "glitch_mix", "shimmer_mix1", "tape_mix",
-                     "drive", "Width", "monobass_mix", "sine_drive_wet", "wobble_mix", "chew_depth", "lossdegrade_mix",
-                     "rspeed", "haas", "dimension_mix"}
+local STEREO_PARAMS = {} for k in pairs(DRY_VALUES_STEREO) do STEREO_PARAMS[#STEREO_PARAMS + 1] = k end
+local MONO_PARAMS = {} for k in pairs(DRY_VALUES) do MONO_PARAMS[#MONO_PARAMS + 1] = k end
 
 local SEEK_PARAMS = {"1seek", "2seek"}
 
