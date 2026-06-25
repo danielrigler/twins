@@ -126,7 +126,7 @@ alloc {
             };
             granular_sig = Mix.ar(l_harmonics) + Mix.ar(r_harmonics);
             sig_mix = Balance2.ar(dry_sig[0], dry_sig[1], pan) * (1 - granular_gain) + (granular_sig * granular_gain);
-            signal = sig_mix * Lag.kr(gain) * key_env * Lag.kr(vel_amp, 0.008);
+            signal = sig_mix * Lag.kr(gain) * key_env * vel_amp;
 
             wrapped_grain_pos = Wrap.kr(buf_pos + jitter_sig);
             SendReply.kr(trigger30, '/voice_state', [voice, buf_pos, Peak.kr(signal[0], trigger30), Peak.kr(signal[1], trigger30)]);
@@ -213,7 +213,7 @@ alloc {
             var key_env = EnvGen.kr(Env.asr(ad_a, 1, ad_d, \sin), gate: key_gate.max(key_hold) * (1 - t_retrig));
             sig = Select.ar(isMono, [sig, [sig[0], sig[0]] ]);
             sig = Balance2.ar(sig[0], sig[1], pan);
-            sig = sig * Lag.kr(gain) * key_env * Lag.kr(vel_amp, 0.008);
+            sig = sig * Lag.kr(gain) * key_env * vel_amp;
             SendReply.kr(trigger30, '/voice_peak', [voice, Peak.kr(sig[0], trigger30), Peak.kr(sig[1], trigger30)]);
             Out.ar(out, sig);
         }).add;
