@@ -118,6 +118,23 @@ local function params_snapshot()
     return state
 end
 
+local CLOCK_PARAMS = { "clock_source", "clock_tempo" }
+
+local function clock_snapshot()
+    local state = {}
+    for _, id in ipairs(CLOCK_PARAMS) do
+        if params.lookup[id] then state[id] = params:get(id) end
+    end
+    return state
+end
+
+local function restore_clock_settings(saved)
+    if not saved then return end
+    for _, id in ipairs(CLOCK_PARAMS) do
+        if saved[id] ~= nil and params.lookup[id] then params:set(id, saved[id]) end
+    end
+end
+
 presets.default_params = {}
 
 function presets.record_defaults()
@@ -169,6 +186,7 @@ function presets.save_complete_preset(name, scene_data, active_mode, active_filt
             morph_amount = morph_amount,
             active_mode = active_mode,
             active_filter_mode = active_filter_mode,
+            clock = clock_snapshot(),
         }
         util.make_dir(PRESETS_PATH)
         local path = PRESETS_PATH .. "/" .. name .. ".lua"
@@ -272,6 +290,7 @@ function presets.load_complete_preset(name, scene_data, update_pan, audio_active
         if params.lookup["1volume"] and params.lookup["2volume"] then _G.master_vol_diff = params:get("1volume") - params:get("2volume") end
         clock.sleep(0.4)
         if saved_output_level ~= nil and params.lookup["output_level"] then params:set("output_level", saved_output_level) end
+        restore_clock_settings(data.clock)
         redraw()
         print("✓ Loaded: " .. name)
         loading_clock = nil
