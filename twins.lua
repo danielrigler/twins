@@ -6,7 +6,7 @@
 --            by: @dddstudio                       
 -- 
 --                          
---                           v0.64
+--                           v0.65
 -- E1: Master Volume
 -- K1+E2/E3: Volume
 -- K2/K3: Navigate
@@ -54,6 +54,7 @@ local font = include("lib/font")
 local presets = include("lib/presets")
 local randpara = include("lib/randpara")
 local lfo = include("lib/lfo")
+presets.set_lfo_reference(lfo)
 local morph = include("lib/morph")
 local osc_positions = {[1] = 0, [2] = 0}
 local Mirror = include("lib/mirror") Mirror.init(osc_positions, lfo, morph.voice_params)
@@ -817,32 +818,29 @@ local function handle_volume_lfo(track, delta, crossfade_mode)
     local op = (3 - track) .. "volume"
     local a1, i1 = is_lfo_active_for_param(p)
     local a2, i2 = is_lfo_active_for_param(op)
+    local k1 = a1 and (i1 .. "offset")
+    local k2 = a2 and (i2 .. "offset")
     local lfo_delta = delta * 1.5
     local vol_delta = delta * 3
-    local other_delta = crossfade_mode and -delta or delta
-    if a1 then
-        params:delta(i1.."offset", lfo_delta)
-        if a2 then params:delta(i2.."offset", other_delta * 1.5)
-        else params:delta(op, other_delta * 3) end
-    elseif a2 then
-        params:delta(i2.."offset", other_delta * 1.5)
-        params:delta(p, vol_delta)
-    elseif crossfade_mode then
-        params:delta(p, vol_delta)
-        params:delta(op, other_delta * 3)
-        _G.master_vol_diff = params:get(p) - params:get(op)
-    else
-        local v1, v2 = params:get(p), params:get(op)
-        if v1 > -70 and v2 > -70 then _G.master_vol_diff = v1 - v2 end
-        local diff = _G.master_vol_diff or 0
-        if diff >= 0 then
-            params:delta(p, vol_delta)
-            params:set(op, clamp(params:get(p) - diff, -70, 10))
-        else
-            params:delta(op, vol_delta)
-            params:set(p, clamp(params:get(op) + diff, -70, 10))
-        end
+    if crossfade_mode then
+        local od = -delta
+        if k1 then params:delta(k1, lfo_delta) else params:delta(p, vol_delta) end
+        if k2 then params:delta(k2, od * 1.5)  else params:delta(op, od * 3)    end
+        local c1 = k1 and ((params:get(k1) + 1) * 40 - 70) or params:get(p)
+        local c2 = k2 and ((params:get(k2) + 1) * 40 - 70) or params:get(op)
+        _G.master_vol_diff = c1 - c2
+        return
     end
+    local c1 = k1 and ((params:get(k1) + 1) * 40 - 70) or params:get(p)
+    local c2 = k2 and ((params:get(k2) + 1) * 40 - 70) or params:get(op)
+    if c1 > (k1 and -69.5 or -70) and c2 > (k2 and -69.5 or -70) then _G.master_vol_diff = c1 - c2 end
+    local diff = _G.master_vol_diff or 0
+    local lk, lp, fk, fp, sign
+    if diff >= 0 then lk, lp, fk, fp, sign = k1, p, k2, op, -1 else lk, lp, fk, fp, sign = k2, op, k1, p,  1 end
+    if lk then params:delta(lk, lfo_delta) else params:delta(lp, vol_delta) end
+    local lead = lk and ((params:get(lk) + 1) * 40 - 70) or params:get(lp)
+    local fdb  = clamp(lead + sign * diff, -70, 10)
+    if fk then params:set(fk, clamp((fdb + 70) / 40 - 1, -0.99, 0.99)) else params:set(fp, fdb) end
 end
 
 local _LINK_SPEED = {pitch = 1, size = 5, density = 0.5}
@@ -1380,10 +1378,10 @@ local function clear_ops() for i=1,15 do local b=buckets[i] b.r_len, b.p_len, b.
 local function R(l,x,y,w,h) local b=buckets[l]; local i=b.r_len+1; b.r_len=i local t=b.r[i]; if t then t[1],t[2],t[3],t[4]=x,y,w,h else b.r[i]={x,y,w,h} end end
 local function P(l,x,y) local b=buckets[l]; local i=b.p_len+1; b.p_len=i local t=b.p[i]; if t then t[1],t[2]=x,y else b.p[i]={x,y} end end
 local function T(l,x,y,s,a) local b=buckets[l]; local i=b.t_len+1; b.t_len=i local t=b.t[i]; if t then t[1],t[2],t[3],t[4]=x,y,s,a else b.t[i]={x,y,s,a} end end
-local LOCK_OFFSETS = {{-3,0},{-4,0},{-4,-1},{-4,-2}} local function draw_lock(x,y) for _,o in ipairs(LOCK_OFFSETS) do P(LEVEL.dim, x+o[1], y+o[2]) end end
+local LOCK_OFFSETS = {{-3,0},{-4,0},{-4,-1},{-4,-2}} local function draw_lock(x,y) for i=1,4 do local o=LOCK_OFFSETS[i] P(LEVEL.dim, x+o[1], y+o[2]) end end
 local SIZE_LINK_PTS = {}
 for _, offset in ipairs({1,3,5,7,9,11,13,15}) do local level = floor(10 * (1 - abs(offset - 8) / 8)) SIZE_LINK_PTS[#SIZE_LINK_PTS+1] = level SIZE_LINK_PTS[#SIZE_LINK_PTS+1] = offset end
-local function draw_size_link(x,y) for i = 1, #SIZE_LINK_PTS, 2 do P(SIZE_LINK_PTS[i], x-4, y+SIZE_LINK_PTS[i+1]) end end
+local function draw_size_link(x,y) for i = 1, 16, 2 do P(SIZE_LINK_PTS[i], x-4, y+SIZE_LINK_PTS[i+1]) end end
 local function flush() for l=1,15 do local b=buckets[l] if b.r_len>0 or b.p_len>0 or b.t_len>0 then screen.level(l) local filled=false for i=1,b.r_len do local r=b.r[i] screen.rect(r[1],r[2],r[3],r[4]) filled=true end for i=1,b.p_len do local p=b.p[i] screen.pixel(p[1],p[2]) filled=true end if filled then screen.fill() end for i=1,b.t_len do local t=b.t[i] screen.move(t[1],t[2]) if t[4]=="center" then screen.text_center(t[3]) else screen.text(t[3]) end end end end end
 local SYM_CACHE = {}
 for sy = 4, 64, 2 do local lvl = max(1, floor(10 * (1 - abs(sy - 34) / 32))); SYM_CACHE[#SYM_CACHE+1] = sy; SYM_CACHE[#SYM_CACHE+1] = lvl end
@@ -1581,7 +1579,7 @@ function redraw()
   local left_slide = -anim_offset_x
   OFFS[1], OFFS[2] = -anim_offset_x, anim_offset_x
   TXP[1], TXP[2] = TRACK_X[1] + OFFS[1], TRACK_X[2] + OFFS[2]
-  for _, row in ipairs(param_rows) do
+  for ri = 1, #param_rows do local row = param_rows[ri]
     local name = row.name
     local hi = cur_mode == row.mode
     local y = row.y
@@ -1602,8 +1600,7 @@ function redraw()
       local val = pget(param)
       local sync_label = density_synced and clocksync.grain_division_label(t) or nil
       local txt = sync_label or (fmt and val_text(param, val, fmt, t, row.st and C.pitch_rand or nil) or params:string(param))
-      local level_fn = flash_level
-      T(level_fn(t, hi and LEVEL.hi or LEVEL.val), x, y, txt)
+      T(flash_level(t, hi and LEVEL.hi or LEVEL.val), x, y, txt)
       if C.lfo_on[param] and not sync_label then
         local rc = _LFO_RANGE_CACHE[param]
         if not rc then
@@ -1672,7 +1669,7 @@ function redraw()
     R(LEVEL.dim - 3, current_vol_x, 64 - h + volume_bar_y[t], 2, h)
     local peak_amp = (audio_active[t] or C.in_ == 1 or C.dir_ == 1) and max(voice_peak_amplitudes[t].l, voice_peak_amplitudes[t].r) or 0
     if peak_amp > 0 then
-      local peak_db = 20 * log(peak_amp, 10)
+      local peak_db = log(peak_amp) * 8.685889638065035
       local pre_fader_db = peak_db - C.vol
       local pre_fader_ratio = (pre_fader_db + 70) / 70
       if pre_fader_ratio < 0 then pre_fader_ratio = 0 elseif pre_fader_ratio > 1 then pre_fader_ratio = 1 end
@@ -1696,7 +1693,7 @@ function redraw()
     end
   end
   if PARAM_CACHE.dry then for x = 7,15,4 do P(LEVEL.hi, x, 0) end end
-  if PARAM_CACHE.sym then local sc = SYM_CACHE; for i = 1,#sc,2 do P(sc[i + 1], 85, sc[i]) end end
+  if PARAM_CACHE.sym then local sc = SYM_CACHE; for i = 1,62,2 do P(sc[i + 1], 85, sc[i]) end end
   if PARAM_CACHE.evo then local t2 = now * 4; for i = 0,2 do P(floor(8 + 7 * sin(t2 - i * 0.8)), (i * 2) + 6, 63) end end
   if morph.scene_mode == "on" then
     R(1, 7 + left_slide, 1, 22, 1)

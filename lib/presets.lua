@@ -10,6 +10,9 @@ presets.k2_mode        = "delete"
 
 _G.preset_loading = false
 
+presets.lfo_ref = nil
+function presets.set_lfo_reference(l) presets.lfo_ref = l end
+
 local PRESETS_DIR         = "twins"
 local PRESETS_PATH        = _path.data .. PRESETS_DIR
 local PRESET_VERSION      = 1
@@ -187,6 +190,7 @@ function presets.save_complete_preset(name, scene_data, active_mode, active_filt
             active_mode = active_mode,
             active_filter_mode = active_filter_mode,
             clock = clock_snapshot(),
+            lfo_phases = presets.lfo_ref and presets.lfo_ref.snapshot_phases() or nil,
         }
         util.make_dir(PRESETS_PATH)
         local path = PRESETS_PATH .. "/" .. name .. ".lua"
@@ -277,6 +281,7 @@ function presets.load_complete_preset(name, scene_data, update_pan, audio_active
         update_pan()
         _G.preset_loading = false
         apply_params_ordered(data.params or {})
+        if data.lfo_phases and presets.lfo_ref then presets.lfo_ref.restore_phases(data.lfo_phases) end
         for i = 1, 2 do
             for _, suffix in ipairs({"volume", "granular_gain"}) do
                 local p = i .. suffix
