@@ -357,7 +357,7 @@ alloc {
             wet = HPF.ar(wet, 60);
             LocalOut.ar(tank);
             Out.ar(revShimmerSendBus, wet);
-            Out.ar(outBus, wet * mix * 1.3);
+            Out.ar(outBus, wet * mix * 1.2);
         }).add;
 
         SynthDef(\revshimmer, {
