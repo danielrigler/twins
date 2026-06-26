@@ -9,6 +9,8 @@ local saved_shapes = {}
 lfo.sine_all = false
 lfo.walk_all = false
 lfo.on_state_change = nil
+local global_depth_scale = 1
+function lfo.set_global_depth_scale(v) global_depth_scale = v or 1 end
 local clocksync_ref = nil
 function lfo.set_clocksync_reference(cs) clocksync_ref = cs end
 local TWO_PI = math.pi * 2
@@ -170,7 +172,7 @@ function lfo.get_parameter_range(param_name, for_randomize)
     return lo, hi
 end
 for i = 1, number_of_outputs do
-    lfo[i] = {freq = 0.05, phase = 0, waveform = "walk", shape_int = 4, slope = 0, depth = 50, offset = 0, prev = 0, walk_value = 0, walk_velocity = 0, sync_to = nil, sync_invert = false, active = false, target_idx = 1, target_name = "none", is_pitch = false, is_jitter = false, is_size = false, is_density = false, is_volume = false, track_num = "1", last_val = nil, has_user_limits = false, min_key = nil, max_key = nil, def_min = 0, def_max = 100, clock_phase_inc = nil}
+    lfo[i] = {freq = 0.05, phase = 0, waveform = "walk", shape_int = 4, slope = 0, depth = 50, offset = 0, prev = 0, walk_value = 0, walk_velocity = 0, sync_to = nil, sync_invert = false, active = false, target_idx = 1, target_name = "none", is_pitch = false, is_jitter = false, is_size = false, is_density = false, is_volume = false, is_pan = false, track_num = "1", last_val = nil, has_user_limits = false, min_key = nil, max_key = nil, def_min = 0, def_max = 100, clock_phase_inc = nil}
 end
 local function classify_target(i, target_idx)
     local obj = lfo[i]
@@ -187,6 +189,7 @@ local function classify_target(i, target_idx)
         obj.is_size    = (suffix == "size")
         obj.is_density = (suffix == "density")
         obj.is_volume  = (suffix == "volume")
+        obj.is_pan     = (suffix == "pan")
         if USER_LIMIT_PARAMS[suffix] then
             local d = USER_LIMIT_DEFAULTS[suffix]
             obj.has_user_limits = true
@@ -201,7 +204,7 @@ local function classify_target(i, target_idx)
         end
     else
         obj.track_num = "1"
-        obj.is_pitch, obj.is_jitter, obj.is_size, obj.is_density, obj.is_volume = false, false, false, false, false
+        obj.is_pitch, obj.is_jitter, obj.is_size, obj.is_density, obj.is_volume, obj.is_pan = false, false, false, false, false, false
         obj.has_user_limits = false
         obj.min_key, obj.max_key = nil, nil
     end
@@ -465,6 +468,7 @@ function lfo.process()
     local phase_inc = PHASE_INCREMENT
     local two_pi = TWO_PI
     local ranges_table = param_ranges
+    local gdepth = global_depth_scale
     tick_pitch_scale = nil
     for k in pairs(tick_lim) do tick_lim[k] = nil end
     for idx = 1, #active_lfos do
@@ -503,7 +507,9 @@ function lfo.process()
         else
             slope = 0
         end
-        local mod = slope * (obj.depth * 0.01) + obj.offset
+        local d = obj.depth
+        if not (obj.is_volume or obj.is_pan) then d = d * gdepth end
+        local mod = slope * (d * 0.01) + obj.offset
         obj.slope = mod
         local target = obj.target_name
         if obj.is_density and clocksync_ref and clocksync_ref.grain_synced() then
