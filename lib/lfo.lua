@@ -268,6 +268,7 @@ local function randomize_lfo(i, target)
     if assigned_params[target] or not lfo.target_ranges[target] then return end
     local track = target:sub(1, 1)
     if target:match("seek$") and pget(track .. "granular_gain") < 100 then return end
+    if target:match("seek$") and clocksync_ref and clocksync_ref.reseek_active() then return end
     if lfo.get_lfo_for_param(target) then return end
     local target_index = LFO_TARGET_REVERSE[target]
     if not target_index then return end
@@ -353,6 +354,7 @@ function lfo.assign_to_current_row(current_mode, current_filter_mode)
     local param_map = {seek = "seek", pan = "pan", jitter = "jitter", size = "size", density = "density", spread = "spread", speed = "speed", pitch = "pitch"}
     local param_name = param_map[current_mode]
     if not param_name then return end
+    if param_name == "seek" and clocksync_ref and clocksync_ref.reseek_active() then return end
     local symmetry = pget("symmetry") == 1
     lfo.clearLFOs("1", param_name)
     lfo.clearLFOs("2", param_name)
@@ -572,10 +574,19 @@ function lfo.recompute_freq(i)
     lfo[i].base_freq = base
     lfo[i].freq = base * gs
 end
-function lfo.apply_clock_sync(hz)
+function lfo.apply_clock_sync(hz1, hz2)
+    if hz1 == nil then
+        for i = 1, number_of_outputs do
+            lfo[i].clock_phase_inc = nil
+            lfo.recompute_freq(i)
+        end
+        return
+    end
+    hz2 = hz2 or hz1
     for i = 1, number_of_outputs do
+        local hz = (lfo[i].track_num == "2") and hz2 or hz1
         lfo[i].clock_phase_inc = hz
-        if hz then lfo[i].freq = hz else lfo.recompute_freq(i) end
+        lfo[i].freq = hz
     end
 end
 function lfo.tick(bpm)

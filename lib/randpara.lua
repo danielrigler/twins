@@ -51,6 +51,7 @@ end
 local PARAM_SPECS = {
   ["1direction_mod"]      = {100, {0,100},   "granular"}, ["2direction_mod"]   = {100, {0,100},   "granular"},
   ["1size_variation"]     = {100, {0,100},   "granular"}, ["2size_variation"]  = {100, {0,100},   "granular"},
+  ["1amp_randomize"]      = {100, {0,100},   "granular"}, ["2amp_randomize"]   = {100, {0,100},   "granular"},
   ["1density_mod_amt"]    = {100, {0,100},   "granular"}, ["2density_mod_amt"] = {100, {0,100},   "granular"},
   ["1subharmonics_1"]     = {1,   {0,1},     "granular"}, ["2subharmonics_1"]  = {1,   {0,1},     "granular"},
   ["1subharmonics_2"]     = {1,   {0,1},     "granular"}, ["2subharmonics_2"]  = {1,   {0,1},     "granular"},
@@ -333,17 +334,18 @@ local param_configs = {
     {name="flutter_var", prob=0.75, default=2,  random=function() return math.random(1,5)   end},
   }},
   pitch = { lock_param = "lock_pitch", params = {
-    {name="pitch_quantize_scale", prob=0.3, default=2, direct_set=true,
-    {name="clock_sync_delay_div", prob=0.75, default=7, random=function() return math.random(5,11)     end, direct_set=true, condition=function() return params:get("clock_sync") == 2 end},
-     condition = pitch_scale_allowed,
-     random=function() return math.random(2,12) end},
+    {name="pitch_quantize_scale", prob=0.3, default=2, random=function() return math.random(1,9) end, direct_set=true},
+  }},
+  sync = { lock_param = "lock_sync", params = {
+    {name="clock_sync_delay_div", prob=0.75, default=13, random=function() return math.random(8,18) end, direct_set=true, condition=function() return params:get("clock_sync") == 2 end},
   }},
 }
 
 local track_param_configs = {
   granular = function(track) return { lock_param = "lock_granular", params = {
     {name=track.."direction_mod",    prob=0.4, default=0,  random=function() return math.random(0,40)       end},
-    {name=track.."size_variation",   prob=0.4, default=0,  random=function() return math.random(0,25)       end},
+    {name=track.."size_variation",   prob=0.4, default=0,  random=function() return math.random(0,35)       end},
+    {name=track.."amp_randomize",    prob=0.35, default=0,  random=function() return math.random(0,40)      end},
     {name=track.."density_mod_amt",  prob=0.25, default=0,  random=function() return math.random(0,40)      end},
     {name=track.."subharmonics_1",   prob=0.4, default=0,  random=function() return random_float(0,0.4)     end},
     {name=track.."subharmonics_2",   prob=0.4, default=0,  random=function() return random_float(0,0.4)     end},
@@ -374,7 +376,7 @@ local function randomize_params(steps, track_num)
   clear_table(targets)
   clear_table(active_interpolations)
   local symmetry = params:get("symmetry") == 1
-  for _, group in ipairs({ param_configs.tape, param_configs.delay, param_configs.dverb, param_configs.shimmer, param_configs.pitch }) do randomize_param_group(group) end
+  for _, group in ipairs({ param_configs.tape, param_configs.delay, param_configs.dverb, param_configs.shimmer, param_configs.pitch, param_configs.sync }) do randomize_param_group(group) end
   local track_fns = { track_param_configs.eq, track_param_configs.granular, track_param_configs.pitch }
   if symmetry then
     randomize_track(1, steps, track_fns)

@@ -429,19 +429,20 @@ local function setup_params()
     params:add{type = "trigger", id = "load_preset_menu", name = "Preset Browser", action = function() presets.open_menu() end}
 
     params:add_separator("Settings")
-    params:add_group("GRANULAR", 37)
+    params:add_group("GRANULAR", 39)
     for i = 1, 2 do
       params:add_separator("SAMPLE "..i)
       params:add_control(i.. "granular_gain", i.. " Mix", controlspec.new(0, 100, "lin", 1, 100, "%")) params:set_action(i.. "granular_gain", function(value) engine.granular_gain(i, value * 0.01) if value < 100 then lfo.clearLFOs(i, "seek") end end)
       local HARMONIC_PARAMS = {{"subharmonics_3","Subharmonics -3oct"},{"subharmonics_2","Subharmonics -2oct"}, {"subharmonics_1","Subharmonics -1oct"},{"overtones_1","Overtones +1oct"},{"overtones_2","Overtones +2oct"}} for _, hp in ipairs(HARMONIC_PARAMS) do local id, lbl = hp[1], hp[2] params:add_control(i..id, i.." "..lbl, controlspec.new(0, 1, "lin", 0.01, 0)) params:set_action(i..id, function(v) engine[id](i, v) end) end
       params:add_option(i.. "smoothbass", i.." Smooth Sub", {"off", "on"}, 1) params:set_action(i.. "smoothbass", function(x) local engine_value = (x == 2) and 2.5 or 1 engine.smoothbass(i, engine_value) end)
-      params:add_control(i.."pitch_random_prob", i.." Pitch Randomize", controlspec.new(-100, 100, "lin", 1, 0, "%")) params:set_action(i.."pitch_random_prob", function(value) engine.pitch_random_prob(i, value) end)
+      params:add_control(i.."pitch_random_prob", i.." Pitch Variation", controlspec.new(-100, 100, "lin", 1, 0, "%")) params:set_action(i.."pitch_random_prob", function(value) engine.pitch_random_prob(i, value) end)
       params:add_option(i.."pitch_random_scale_type", i.." Pitch Quantize", {"5th+oct", "5th+oct 2", "1 oct", "2 oct", "chrom", "maj", "min", "penta", "whole"}, 1) params:set_action(i.."pitch_random_scale_type", function(value) engine.pitch_random_scale_type(i, value - 1) end)
-      params:add_control(i.."ratcheting_prob", i.." Ratcheting", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.."ratcheting_prob", function(value) engine.ratcheting_prob(i, value) end)
-      params:add_option(i.."env_select", i.." Grain Envelope", {"Sine", "Tukey", "Perc.", "ADSR", "Random"}, 1) params:set_action(i.."env_select", function(value) engine.env_select(i, value - 1) end)
       params:add_control(i.. "size_variation", i.. " Size Variation", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.. "size_variation", function(value) engine.size_variation(i, value * 0.01) end)
+      params:add_control(i.. "amp_randomize", i.. " Amp Variation", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.. "amp_randomize", function(value) engine.amp_randomize(i, value * 0.01) end)
       params:add_control(i.. "direction_mod", i.. " Reverse", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.. "direction_mod", function(value) engine.direction_mod(i, value * 0.01) end)
       params:add_control(i.. "density_mod_amt", i.. " Density Mod", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.. "density_mod_amt", function(value) engine.density_mod_amt(i, value * 0.01) end)
+      params:add_control(i.."ratcheting_prob", i.." Ratcheting", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action(i.."ratcheting_prob", function(value) engine.ratcheting_prob(i, value) end)
+      params:add_option(i.."env_select", i.." Grain Envelope", {"Sine", "Tukey", "Perc.", "ADSR", "Random"}, 1) params:set_action(i.."env_select", function(value) engine.env_select(i, value - 1) end)
       params:add_control(i.."probability", i.." Trigger Probability", controlspec.new(0, 100, "lin", 1, 100, "%")) params:set_action(i.."probability", function(value) engine.probability(i, value * 0.01) end)
       params:add_option(i.. "pitch_mode", i.. " Pitch Mode", {"match speed", "independent"}, 2) params:set_action(i.. "pitch_mode", function(value) engine.pitch_mode(i, value - 1) end)
     end
@@ -612,8 +613,8 @@ local function setup_params()
         params:add_taper(i.."max_spread", i.." spread (max)", 0, 100, 100, 0, "%")
         params:add_control(i.."min_pitch", i.." pitch (min)", controlspec.new(-48, 48, "lin", 1, -31, "st"))
         params:add_control(i.."max_pitch", i.." pitch (max)", controlspec.new(-48, 48, "lin", 1, 31, "st"))
-        params:add_taper(i.."min_speed", i.." speed (min)", -2, 2, -0.15, 0, "x")
-        params:add_taper(i.."max_speed", i.." speed (max)", -2, 2, 0.5, 0, "x")
+        params:add_taper(i.."min_speed", i.." speed (min)", -2, 2, -1, 0, "x")
+        params:add_taper(i.."max_speed", i.." speed (max)", -2, 2, 1, 0, "x")
         params:add_taper(i.."min_seek", i.." seek (min)", 0, 100, 0, 0, "%")
         params:add_taper(i.."max_seek", i.." seek (max)", 0, 100, 100, 0, "%")
     end
@@ -631,12 +632,16 @@ local function setup_params()
     params:add{type = "trigger", id = "save_to_scene2", name = "Morph Target B", action = function() morph.store_scene(1, 2) morph.store_scene(2, 2) end}
     params:add{type = "trigger", id = "delete_morph_data", name = "Delete Morph Data", action = function() morph.scene_data = {[1] = {[1] = {}, [2] = {}}, [2] = {[1] = {}, [2] = {}}} morph.amount = 0 params:set("morph_amount", 0) params:set("scene_mode", 1) morph.scene_mode = "off" end}
 
-    params:add_group("MIDI/SYNC", 15)
+    params:add_group("PITCH", 4)
+    params:add_option("pitch_quantize_scale", "Pitch Quantize", {"off", "major", "minor", "dorian", "phrygian", "lydian", "mixolydian", "locrian", "major pent.", "minor pent.", "blues", "whole tone"}, 2) params:set_action("pitch_quantize_scale", function(value) local scale = params:string("pitch_quantize_scale") if scale ~= "none" then for i = 1, 2 do local current_pitch = params:get(i.."pitch") local quantized = quantize_pitch_to_scale(current_pitch, scale) if current_pitch ~= quantized then params:set(i.."pitch", quantized) end end end end)
+    params:add_option("pitch_lag", "Pitch Lag", {"off", "very small", "small", "medium", "high", "very high"}, 1) params:set_action("pitch_lag", function(value) local lag_times = {0, 1, 2, 4, 8, 16} local lag_time = lag_times[value] for i = 1, 2 do engine.pitch_lag(i, lag_time) end end)
+    params:add_separator("                                   ")
+    params:add_option("lock_pitch", "Lock Parameters", {"off", "on"}, 1)
+
+    params:add_group("MIDI/SYNC", 16)
     midi_input.add_params({set_pitch = set_midi_pitch, on_voice_trigger = function(v) randomize_flash.midi[v] = 1; randomize_flash.held[v] = true end, on_voice_release = function(v) randomize_flash.held[v] = false end, voice_loaded = is_voice_loaded})
     params:add_option("midi_gate", "Drone Mode", { "off", "on" }, 2) params:set_action("midi_gate", function() if midi_input then midi_input.set_gate_mode() end end)
     params:add_option("midi_voice_mode", "MIDI control", { "both", "paraphonic", "voice 1", "voice 2" }, 2) params:set_action("midi_voice_mode", function() if midi_input then midi_input.set_voice_mode() end end)
-    params:add_option("pitch_quantize_scale", "Pitch Quantize", {"off", "major", "minor", "dorian", "phrygian", "lydian", "mixolydian", "locrian", "major pent.", "minor pent.", "blues", "whole tone"}, 2) params:set_action("pitch_quantize_scale", function(value) local scale = params:string("pitch_quantize_scale") if scale ~= "none" then for i = 1, 2 do local current_pitch = params:get(i.."pitch") local quantized = quantize_pitch_to_scale(current_pitch, scale) if current_pitch ~= quantized then params:set(i.."pitch", quantized) end end end end)
-    params:add_option("pitch_lag", "Pitch Lag", {"off", "very small", "small", "medium", "high", "very high"}, 1) params:set_action("pitch_lag", function(value) local lag_times = {0, 1, 2, 4, 8, 16} local lag_time = lag_times[value] for i = 1, 2 do engine.pitch_lag(i, lag_time) end end)
     params:add_control("midi_attack", "Attack", controlspec.new(0.001, 20, "exp", 0, 2.5, "s")) params:set_action("midi_attack", function() if midi_input then midi_input.push_ad() end end)
     params:add_control("midi_decay", "Release", controlspec.new(0.005, 20, "exp", 0, 5, "s")) params:set_action("midi_decay", function() if midi_input then midi_input.push_ad() end end)
     params:add_option("midi_velocity", "Velocity", { "off", "on" }, 2) params:set_action("midi_velocity", function(v) if midi_input and v == 1 then engine.vel_amp(1, 1); engine.vel_amp(2, 1) end end)
@@ -644,8 +649,8 @@ local function setup_params()
     params:add_separator("                                 ")
     clocksync.add_params()
     params:add_option("midi_transport", "Transport", { "off", "on" }, 2)
-    params:add_separator("                                   ")
-    params:add_option("lock_pitch", "Lock Parameters", {"off", "on"}, 1)
+    params:add_separator("                                    ")
+    params:add_option("lock_sync", "Lock Parameters", {"off", "on"}, 1)
     
     params:add_group("OTHER", 25)
     params:add_binary("dry_mode", "Dry Mode", "toggle", 0) params:set_action("dry_mode", function(x) drymode.toggle_dry_mode() end)
@@ -777,6 +782,9 @@ local function randomize(n)
             end
         end
         ::continue::
+    end
+    if clocksync.lfo_synced() then
+        clocksync.randomize_lfo_div(n, symmetry and other_track or nil)
     end
     if next(targets) then
         m_rand.time = 1 / 30
@@ -915,7 +923,7 @@ end
 local function handle_seek_param(track, config, delta)
     if config.param ~= "seek" then return false end
     local sym = params:get("symmetry") == 1
-    disable_lfos_for_param(track .. "seek", sym)
+    disable_lfos_for_param(track .. "seek", not sym)
     local function update_seek(tr, current_pos)
         local new_pos = (current_pos + delta) % 100
         local norm_pos = new_pos * 0.01
@@ -1210,7 +1218,7 @@ function enc(n, d)
         mark_key_interaction(k1, k2, k3)
         if n == 1 then
             if clocksync.lfo_synced() then
-                clocksync.step_lfo_div(d)
+                clocksync.step_lfo_div(voice, d, params:get("symmetry") == 1)
                 finalize_change()
                 return
             end
@@ -1268,8 +1276,9 @@ function enc(n, d)
         else
             local mode = (current_mode == "lpf" or current_mode == "hpf") and current_filter_mode or current_mode
             if mode == "density" and clocksync.grain_synced() then
-                disable_lfos_for_param(track .. "density", params:get("symmetry") ~= 1)
-                clocksync.step_grain_div(track, d)
+                local sym = params:get("symmetry") == 1
+                disable_lfos_for_param(track .. "density", not sym)
+                clocksync.step_grain_div(track, d, sym and (3 - track) or nil)
             else
                 local config = param_modes[mode]
                 if config then handle_param_change(track, config, config.delta * d) end
