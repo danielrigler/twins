@@ -300,14 +300,14 @@ end
 local param_configs = {
   dverb = { lock_param = "lock_reverb", params = {
     {name="shimmer_preset", prob=0.15, default=4,    random=function() return math.random(3,5)           end, direct_set=true},
-    {name="shimmer_mix",    prob=0.3,  default=0,    random=function() return math.random(0,10)          end},
-    {name="rev_decay",      prob=0.5,  default=72,   random=function() return random_float(10,95)        end},
-    {name="rev_damp",       prob=0.5,  default=40,   random=function() return random_float(5,80)        end},
-    {name="rev_predelay",   prob=0.5,  default=30,   random=function() return math.random(0,120)         end, direct_set=true},
-    {name="rev_prefilter",  prob=0.4,  default=12,   random=function() return random_float(0,60)         end},
+    {name="shimmer_mix",    prob=0.25,  default=0,    random=function() return math.random(0,25)          end},
+    {name="rev_decay",      prob=0.5,  default=80,   random=function() return random_float(30,95)        end},
+    {name="rev_damp",       prob=0.5,  default=30,   random=function() return random_float(5,80)        end},
+    {name="rev_predelay",   prob=0.25,  default=25,   random=function() return math.random(0,120)         end, direct_set=true},
+    {name="rev_prefilter",  prob=0.4,  default=25,   random=function() return random_float(0,70)         end},
     {name="rev_hpf",        prob=0.6,  default=80,   random=function() return random_float(20,300)       end},
     {name="rev_moddepth",   prob=0.6,  default=32,   random=function() return math.random(0,100)         end},
-    {name="rev_modrate",    prob=0.6,  default=1.2,  random=function() return random_float(0.2,3.5)        end},
+    {name="rev_modrate",    prob=0.6,  default=2,  random=function() return random_float(0.2,4)        end},
   }},
   shimmer = { lock_param = "lock_shimmer", params = {
     {name="shimmer_oct1", prob=0.15, default=4,      random=function() return math.random(3,5)         end, direct_set=true},
