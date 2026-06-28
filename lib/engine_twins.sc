@@ -362,13 +362,12 @@ alloc {
         }).add;
 
         SynthDef(\revshimmer, {
-            arg sendBus, returnBus, shimmer_lowpass=8000, shimmer_fb=0.38, shimmer_hipass=600, shimmer_oct=2;
+            arg sendBus, returnBus, shimmer_lowpass=10000, shimmer_hipass=600, shimmer_oct=2;
             var fb_in = In.ar(sendBus, 2);
             var limited = Limiter.ar(fb_in, 0.9, 0.01);
-            var pit = PitchShift.ar(limited, 0.1, shimmer_oct, 0.01, 0.005, mul: 5);
+            var pit = PitchShift.ar(limited, 0.5, shimmer_oct, 0.02, 1, 2);
             pit = LPF.ar(pit, shimmer_lowpass);
             pit = HPF.ar(pit, shimmer_hipass);
-            pit = pit * shimmer_fb.clip(0, 0.95);
             Out.ar(returnBus, pit);
         }).add;
 
@@ -376,12 +375,14 @@ alloc {
             arg inBus, outBus, reverbBus, mix=0.0, lowpass1=13000, hipass1=1400, pitchv1=0.02, fb1=0.0, fbDelay1=0.15, shimmer_oct1=2, mod_mix=0;
             var input = In.ar(inBus, 2);
             var hpf = HPF.ar(input, hipass1);
-            var pit = PitchShift.ar(hpf, 0.5, shimmer_oct1, pitchv1, 1, mul: 4);
+            var pit = PitchShift.ar(hpf, 0.5, shimmer_oct1, pitchv1, 1, mul: 5);
             var fbSig = LocalIn.ar(2);
-            var fbProcessed = fbSig * fb1;
+            var fbClean = fbSig * fb1;
             var actualMix = mix * Select.kr(mod_mix, [1.0, LFNoise1.kr(0.25).range(0.0, 1.0)]);
-            pit = LPF.ar((pit + fbProcessed), lowpass1);
-            LocalOut.ar(DelayN.ar(pit, 0.5, fbDelay1));
+            var modTime;
+            pit = LPF.ar((pit + fbClean), lowpass1);
+            modTime = fbDelay1 + SinOsc.ar([0.07, 0.09], [0, 0.5pi], 0.5 * 0.004);
+            LocalOut.ar(DelayC.ar(pit, 1.0, modTime.clip(0.001, 1.0)));
             Out.ar(reverbBus, pit * actualMix);
             Out.ar(outBus, pit * actualMix * 1.4);
         }).add;
@@ -389,7 +390,7 @@ alloc {
         SynthDef(\monobass, {
             arg bus, mix=0.0;
             var sig = In.ar(bus, 2);
-            sig = BHiPass.ar(sig, 190) + Pan2.ar(BLowPass.ar(sig[0] + sig[1], 190));
+            sig = BHiPass.ar(sig, 200) + Pan2.ar(BLowPass.ar(sig[0] + sig[1], 200));
             ReplaceOut.ar(bus, sig);
         }).add;
 
@@ -608,7 +609,6 @@ alloc {
         this.addCommand("shimmer_mix", "f", { arg msg; currentShimmerMix = msg[1]; reverbEffect.set(\shimmer_mix, msg[1]); this.updateShimmerRun; });
         this.addCommand("shimmer_lowpass", "f", { arg msg; revShimmerSynth.set(\shimmer_lowpass, msg[1]); });
         this.addCommand("shimmer_hipass", "f", { arg msg; revShimmerSynth.set(\shimmer_hipass, msg[1]); });
-        this.addCommand("shimmer_fb", "f", { arg msg; revShimmerSynth.set(\shimmer_fb, msg[1]); });
         this.addCommand("shimmer_oct", "f", { arg msg; revShimmerSynth.set(\shimmer_oct, msg[1]); });
         this.addCommand("rev_predelay", "f", { arg msg; reverbEffect.set(\pre_delay, msg[1]); });
         this.addCommand("rev_prefilter", "f", { arg msg; reverbEffect.set(\pre_filter, msg[1]); });

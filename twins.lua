@@ -134,11 +134,7 @@ end
 local _grain_pool = {}
 local invalidate_lfo_cache = lfo.invalidate_lfo_param_cache
 local function do_capture_temp_scene() morph.capture_to_temp_scene(lfo.get_active_param_map()) end
-local shimmer_presets = {{oct = 0.25, lowpass = 6000, hipass = 80, fb = 0.4}, 
-                         {oct = 0.5, lowpass = 6000, hipass = 80, fb = 0.4}, 
-                         {oct = 1, lowpass = 20000, hipass = 20, fb = 0.4}, 
-                         {oct = 2, lowpass = 13000, hipass = 600, fb = 0.4}, 
-                         {oct = 4, lowpass = 13000, hipass = 900, fb = 0.4}}
+local shimmer_presets = {{oct = 0.25}, {oct = 0.5}, {oct = 1}, {oct = 2}, {oct = 4}}
 local param_modes = {
     speed = {param = "speed", delta = 1, engine = true, has_lock = true},
     seek = {param = "seek", delta = 1, engine = true, has_lock = true},
@@ -484,7 +480,7 @@ local function setup_params()
     params:add_group("R3VERB", 13)
     params:add_taper("reverb_mix", "Mix", 0, 100, 0, 0, "%") params:set_action("reverb_mix", function(value) engine.reverb_mix(value * 0.01) font.update_fx_cache("reverb_mix", value) end)
     params:add_taper("shimmer_mix", "Shimmer", 0, 100, 0, 0, "%") params:set_action("shimmer_mix", function(value) engine.shimmer_mix(value * 0.01) end)
-    params:add_option("shimmer_preset", "Pitch Shift", {"-2 oct", "-1 oct", "0", "+1 oct", "+2 oct"}, 4) params:set_action("shimmer_preset", function(idx) local preset = shimmer_presets[idx] engine.shimmer_oct(preset.oct) engine.shimmer_lowpass(preset.lowpass) engine.shimmer_hipass(preset.hipass) engine.shimmer_fb(preset.fb) end)
+    params:add_option("shimmer_preset", "Pitch Shift", {"-2 oct", "-1 oct", "0", "+1 oct", "+2 oct"}, 4) params:set_action("shimmer_preset", function(idx) local preset = shimmer_presets[idx] engine.shimmer_oct(preset.oct) end)
     params:add_taper("rev_decay", "Decay", 0, 100, 80, 0, "%") params:set_action("rev_decay", function(value) engine.rev_decay(value * 0.01) end)
     params:add_taper("rev_damp", "Damping", 0, 100, 30, 0, "%") params:set_action("rev_damp", function(value) engine.rev_damp(value * 0.01) end)
     params:add_taper("rev_predelay", "Pre Delay", 0, 500, 25, 0, "ms") params:set_action("rev_predelay", function(value) engine.rev_predelay(value) end)
