@@ -99,6 +99,8 @@ local function value_to_level(val)
   return 1 + math.floor((val / 100) * 14)
 end
 
+local BINARY_ON_INTENSITY = 25
+
 local function tape_active(cache)
   return cache.tape_mix == 2 or cache.sine_drive_wet > 0 or cache.drive > 0
       or cache.wobble_mix > 0 or cache.chew_depth > 0 or cache.lossdegrade_mix > 0
@@ -106,7 +108,7 @@ end
 
 local function tape_intensity(cache)
   local vals = {
-    cache.tape_mix == 2 and 100 or 0,
+    cache.tape_mix == 2 and BINARY_ON_INTENSITY or 0,
     cache.sine_drive_wet,
     cache.drive,
     cache.wobble_mix,
@@ -128,7 +130,7 @@ end
 local function stereo_intensity(cache)
   local width_dev = math.abs(cache.Width - 100) / 100
   local dim = cache.dimension_mix / 100
-  local haas_val = cache.haas == 2 and 1 or 0
+  local haas_val = cache.haas == 2 and (BINARY_ON_INTENSITY / 100) or 0
   local rspeed_val = cache.rspeed
   local maxv = math.max(width_dev, dim, haas_val, rspeed_val)
   return maxv * 100
@@ -152,17 +154,17 @@ local function filter_intensity(cache)
 end
 
 local FX_SPECS = {
-  {glyph = "D", lock = "lock_delay",   show = function(c) return c.delay_mix > 0 end,                 val = function(c) return c.delay_mix end},
-  {glyph = "R", lock = "lock_reverb",  show = function(c) return c.reverb_mix > 0 end,                val = function(c) return c.reverb_mix end},
-  {glyph = "X", lock = "lock_shimmer", show = function(c) return c.shimmer_mix1 > 0 end,              val = function(c) return c.shimmer_mix1 end},
-  {glyph = "T", lock = "lock_tape",    show = tape_active,                                            val = tape_intensity},
-  {glyph = "Z", lock = nil,            show = stereo_active,                                          val = stereo_intensity},
-  {glyph = "B", lock = nil,            show = function(c) return c.bitcrush_mix > 0 end,              val = function(c) return c.bitcrush_mix end},
   {glyph = "F", lock = "lock_filter",  show = filter_active,                                          val = filter_intensity},
-  {glyph = "G", lock = "lock_glitch",  show = function(c) return c.glitch_ratio > 0 and c.glitch_mix > 0 end, val = function(c) return c.glitch_ratio end},
+  {glyph = "B", lock = nil,            show = function(c) return c.bitcrush_mix > 0 end,              val = function(c) return c.bitcrush_mix end},
   {glyph = "O", lock = nil,            show = function(c) return c.resonator_mix > 0 end,            val = function(c) return c.resonator_mix end},
   {glyph = "W", lock = nil,            show = function(c) return c.wavefold_mix > 0 end,             val = function(c) return c.wavefold_mix end},
   {glyph = "M", lock = nil,            show = function(c) return c.ringmod_mix > 0 end,              val = function(c) return c.ringmod_mix end},
+  {glyph = "G", lock = "lock_glitch",  show = function(c) return c.glitch_ratio > 0 and c.glitch_mix > 0 end, val = function(c) return c.glitch_ratio end},
+  {glyph = "T", lock = "lock_tape",    show = tape_active,                                            val = tape_intensity},
+  {glyph = "D", lock = "lock_delay",   show = function(c) return c.delay_mix > 0 end,                 val = function(c) return c.delay_mix end},
+  {glyph = "X", lock = "lock_shimmer", show = function(c) return c.shimmer_mix1 > 0 end,              val = function(c) return c.shimmer_mix1 end},
+  {glyph = "R", lock = "lock_reverb",  show = function(c) return c.reverb_mix > 0 end,                val = function(c) return c.reverb_mix end},
+  {glyph = "Z", lock = nil,            show = stereo_active,                                          val = stereo_intensity},
 }
 
 local function refresh_draw_caches()

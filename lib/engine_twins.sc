@@ -405,14 +405,7 @@ alloc {
         SynthDef(\sine, {
             arg bus, sine_drive_wet=0;
             var orig = In.ar(bus, 2);
-            var drive = 3.5;                          // push harder into the table = more extreme (try 2..6)
-            var driven = (orig * drive).fold2(1.0);   // fold back instead of clamping flat -> richer harmonics
-            var shaped = LeakDC.ar(Shaper.ar(bufSine, driven));
-            // loudness-match the wet path to the dry signal so heavy drive never gets louder
-            var inAmp  = Amplitude.kr(orig.sum * 0.5,  0.05, 0.3);
-            var outAmp = Amplitude.kr(shaped.sum * 0.5, 0.05, 0.3);
-            var comp = (inAmp / (outAmp + 0.0001)).clip(0, 4);
-            shaped = shaped * Lag.kr(comp, 0.1);
+            var shaped = Shaper.ar(bufSine, orig);
             ReplaceOut.ar(bus, SelectX.ar(sine_drive_wet, [orig, shaped]));
         }).add;
 
