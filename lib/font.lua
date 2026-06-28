@@ -16,6 +16,9 @@ font.micro_font = {
   H = {{1,0,1},{1,1,1},{1,0,1}},
   Z = {{0,1,1,1,1},{0,1,0,1,0},{1,1,0,1,0}},
   F = {{1,1,1},{1,1,0},{1,0,0}},
+  O = {{1,1,1},{1,0,1},{1,1,1}},
+  W = {{1,0,1},{1,1,1},{1,1,1}},
+  M = {{1,1,0},{0,1,1},{0,0,1}}
 }
 
 local function plot_text(plot, x, y, text, level)
@@ -58,6 +61,9 @@ local fx_cache = {
   bitcrush_mix    = 0,
   glitch_ratio    = 0,
   glitch_mix      = 0,
+  resonator_mix   = 0,
+  wavefold_mix    = 0,
+  ringmod_mix     = 0,
   ["1cutoff"]     = 20000,
   ["2cutoff"]     = 20000,
   ["1hpf"]        = 20,
@@ -154,6 +160,9 @@ local FX_SPECS = {
   {glyph = "B", lock = nil,            show = function(c) return c.bitcrush_mix > 0 end,              val = function(c) return c.bitcrush_mix end},
   {glyph = "F", lock = "lock_filter",  show = filter_active,                                          val = filter_intensity},
   {glyph = "G", lock = "lock_glitch",  show = function(c) return c.glitch_ratio > 0 and c.glitch_mix > 0 end, val = function(c) return c.glitch_ratio end},
+  {glyph = "O", lock = nil,            show = function(c) return c.resonator_mix > 0 end,            val = function(c) return c.resonator_mix end},
+  {glyph = "W", lock = nil,            show = function(c) return c.wavefold_mix > 0 end,             val = function(c) return c.wavefold_mix end},
+  {glyph = "M", lock = nil,            show = function(c) return c.ringmod_mix > 0 end,              val = function(c) return c.ringmod_mix end},
 }
 
 local function refresh_draw_caches()

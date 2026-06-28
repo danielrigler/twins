@@ -22,7 +22,10 @@ local DRY_VALUES = {
     rspeed = 0,
     haas = 0,
     sine_drive_wet = 0,
-    dimension_mix = 0
+    dimension_mix = 0,
+    resonator_mix = 0,
+    wavefold_mix = 0,
+    ringmod_mix = 0
 }
 
 local DRY_VALUES_STEREO = {

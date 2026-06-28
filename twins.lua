@@ -6,7 +6,7 @@
 --            by: @dddstudio                       
 -- 
 --                          
---                           v0.65
+--                           v0.66
 -- E1: Master Volume
 -- K1+E2/E3: Volume
 -- K2/K3: Navigate
@@ -76,12 +76,7 @@ local steps = 20
 local valid_audio_exts = {[".wav"]=true,[".aif"]=true,[".aiff"]=true,[".flac"]=true}
 local mode_list = {"spread","pitch","density","size","jitter","lpf","pan","speed","seek"}
 local mode_indices = {} for i,v in ipairs(mode_list) do mode_indices[v] = i end
-local MORPH_LFO_KEYS    = lfo.keys.lfo
-local MORPH_TARGET_KEYS = lfo.keys.target
-local MORPH_SHAPE_KEYS  = lfo.keys.shape
-local MORPH_FREQ_KEYS   = lfo.keys.freq
-local MORPH_DEPTH_KEYS  = lfo.keys.depth
-local MORPH_OFFSET_KEYS = lfo.keys.offset
+local MK = lfo.keys
 local key_trackers = {}
 for n = 1, 3 do key_trackers[n] = {press_time = nil, had_interaction = false, long_triggered = false} end
 local KEY_LONG_PRESS_THRESHOLD = 1
@@ -158,13 +153,11 @@ local param_modes = {
     volume = {param = "volume", engine = true}}
 local param_rows = {} for mode, config in pairs(param_modes) do if config.y then local lbl = config.label local nm = lbl:match("%a+") table.insert(param_rows, {y = config.y, label = lbl, label_upper = lbl:upper(), name = nm, mode = mode, param1 = "1" .. config.param, param2 = "2" .. config.param, hz = config.hz, st = config.st, fmt_key = config.hz and "hz" or config.st and "st" or nm}) end end table.sort(param_rows, function(a, b) return a.y < b.y end)
 local LIMITS = {size={min=20,max=4999},density={min=0.1,max=50},pitch={min=-48,max=48}}
-local normalize_scale_name = lfo.scale_utils.normalize
-local get_scale_array = lfo.scale_utils.get_array
-local quantize_pitch_to_scale = lfo.scale_utils.quantize
+local SU = lfo.scale_utils
 local audio_files_cache = nil
 local scale_intervals_cache = {}
-local function get_scale_intervals(scale_name) scale_name = normalize_scale_name(scale_name) if scale_name == "none" then scale_name = "major" end if not scale_intervals_cache[scale_name] then scale_intervals_cache[scale_name] = MusicUtil.generate_scale(0, scale_name, 1) or MusicUtil.generate_scale(0, "major", 1) end return scale_intervals_cache[scale_name] end
-local function get_next_scale_note(pitch_value, scale_name, direction) local scale_array = get_scale_array(scale_name) if not scale_array then return pitch_value + direction end local midi_note = MusicUtil.snap_note_to_array(60 + pitch_value, scale_array) local current_idx for i, note in ipairs(scale_array) do if note == midi_note then current_idx = i break end end if not current_idx then return pitch_value end local next_idx = clamp(current_idx + (direction > 0 and 1 or -1), 1, #scale_array) return scale_array[next_idx] - 60 end
+local function get_scale_intervals(scale_name) scale_name = SU.normalize(scale_name) if scale_name == "none" then scale_name = "major" end if not scale_intervals_cache[scale_name] then scale_intervals_cache[scale_name] = MusicUtil.generate_scale(0, scale_name, 1) or MusicUtil.generate_scale(0, "major", 1) end return scale_intervals_cache[scale_name] end
+local function get_next_scale_note(pitch_value, scale_name, direction) local scale_array = SU.get_array(scale_name) if not scale_array then return pitch_value + direction end local midi_note = MusicUtil.snap_note_to_array(60 + pitch_value, scale_array) local current_idx for i, note in ipairs(scale_array) do if note == midi_note then current_idx = i break end end if not current_idx then return pitch_value end local next_idx = clamp(current_idx + (direction > 0 and 1 or -1), 1, #scale_array) return scale_array[next_idx] - 60 end
 local anim_offset_x = 128 local animation_complete = false local animation_start_time = nil
 local pan_indicator_x = {[1] = -80, [2] = 80} local pan_indicators_visible = false local pan_slide_start_time = nil
 local volume_bar_y = {[1] = 120, [2] = 120} local volume_bars_visible = false
@@ -198,15 +191,33 @@ local function cancel_all_clocks() for i = #active_clocks, 1, -1 do local co = a
 local function is_param_locked(track_num, param) return pget(lock_key(track_num, param)) == 2 end
 local function is_lfo_active_for_param(param_name) local idx = lfo.get_lfo_for_param(param_name) return idx ~= nil, idx end
 local hlp = {}
+hlp.link_suppress_size = false
+hlp.link_last_hz = {}
 function hlp.apply_lfo_or_set(full_param, val)
     local active, idx = is_lfo_active_for_param(full_param)
     if not active then params:set(full_param, val) return end
     local lo, hi = lfo.get_parameter_range(full_param)
     if lo and hi and hi > lo then
-        local depth = pget(MORPH_DEPTH_KEYS[idx])
+        local depth = pget(MK.depth[idx])
         local offset = clamp((val - lo) / (hi - lo) * 2 - 1, depth * 0.01 - 1, 1 - depth * 0.01)
-        pset(MORPH_OFFSET_KEYS[idx], offset)
+        pset(MK.offset[idx], offset)
         lfo[idx].offset = offset
+    end
+end
+function hlp.apply_linked_density(track, target_den)
+    local idx = clocksync.div_index_for_density(target_den)
+    if not idx then return end
+    local active, li = is_lfo_active_for_param(track .. "density")
+    if active then
+        local depth = pget(MK.depth[li])
+        local center = clocksync.div_index_to_norm(idx) * 2 - 1
+        local offset = clamp(center, depth * 0.01 - 1, 1 - depth * 0.01)
+        pset(MK.offset[li], offset)
+        lfo[li].offset = offset
+    else
+        hlp.link_suppress_size = true
+        clocksync.set_grain_div_index(track, idx)
+        hlp.link_suppress_size = false
     end
 end
 function hlp.ensure_link_base(track)
@@ -214,20 +225,28 @@ function hlp.ensure_link_base(track)
     if not (lb.pitch and lb.size and lb.density and lb.product) then
         lb.pitch   = params:get(track .. "pitch")
         lb.size    = params:get(track .. "size")
-        lb.density = params:get(track .. "density")
+        lb.density = (clocksync.grain_synced() and clocksync.grain_density(track)) or params:get(track .. "density")
         lb.product = lb.size * lb.density
     end
     return lb
 end
-function hlp.cancel_longpress(id)
-    local t = key_trackers[id]
-    if t then t.had_interaction = true t.long_triggered = true end
+function hlp.cancel_longpress(id) local t = key_trackers[id] if t then t.had_interaction = true t.long_triggered = true end end
+function hlp.update_resonator()
+    if (pget("resonator_mix") or 0) <= 0 then return end
+    local root = params:get("resonator_root")
+    local degs = {0, 7, 12, 19, 24}
+    engine.resonator_freqs(
+        440 * 2 ^ ((root + degs[1] - 69) / 12), 440 * 2 ^ ((root + degs[2] - 69) / 12),
+        440 * 2 ^ ((root + degs[3] - 69) / 12), 440 * 2 ^ ((root + degs[4] - 69) / 12),
+        440 * 2 ^ ((root + degs[5] - 69) / 12))
 end
+function hlp.ringmod_push() if params:get("ringmod_sync") == 2 then engine.ringmod_rate(clocksync.div_rate_hz(params:get("ringmod_div"))) end end
+function hlp.ringmod_restore() if params:get("ringmod_sync") == 2 then engine.ringmod_rate(params:get("ringmod_rate")) end end
 local function update_pan_positioning() if _G.preset_loading then return end; local l1,l2=audio_active[1],audio_active[2]; local function ok(v,id) return v and not is_param_locked(id,"pan") and not is_lfo_active_for_param(id.."pan") end; if l1 and l2 then if ok(l1,1) then params:set("1pan",-25) end; if ok(l2,2) then params:set("2pan",25) end else if ok(l1,1) then params:set("1pan",0) end; if ok(l2,2) then params:set("2pan",0) end end end
 
 local function set_midi_pitch(voice, pitch_value)
     pitch_value = clamp(pitch_value, LIMITS.pitch.min, LIMITS.pitch.max)
-    pitch_value = quantize_pitch_to_scale(pitch_value, params:string("pitch_quantize_scale"))
+    pitch_value = SU.quantize(pitch_value, params:string("pitch_quantize_scale"))
     if params:get("global_pitch_size_density_link") ~= 1 then hlp.apply_lfo_or_set(voice .. "pitch", pitch_value) return end
     local lb = hlp.ensure_link_base(voice)
     local octaves = (pitch_value - lb.pitch) / 12
@@ -542,6 +561,23 @@ local function setup_params()
     params:add_option("bitcrush_mod", "Mix Mod", {"off", "on"}, 1) params:set_action("bitcrush_mod", function(value) engine.bitcrush_mod(value - 1) end)
     params:add_taper("bitcrush_rate", "Rate", 1, 48000, 4500, 3, "Hz") params:set_action("bitcrush_rate", function(value) engine.bitcrush_rate(value) end)
     params:add_taper("bitcrush_bits", "Bits", 1, 24, 14, 1) params:set_action("bitcrush_bits", function(value) engine.bitcrush_bits(value) end)
+    
+    params:add_group("RESONATE", 4)
+    params:add_control("resonator_mix", "Mix", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("resonator_mix", function(v) engine.resonator_mix(v * 0.01) font.update_fx_cache("resonator_mix", v) if v > 0 then hlp.update_resonator() end end)
+    params:add_control("resonator_decay", "Decay", controlspec.new(0.01, 5, "exp", 0, 2, "s")) params:set_action("resonator_decay", function(v) engine.resonator_decay(v) end)
+    params:add_number("resonator_root", "Root", 24, 128, 48, function(p) return MusicUtil.note_num_to_name(p:get(), true) end) params:set_action("resonator_root", function(v) hlp.update_resonator() end)
+    params:add_control("resonator_tone", "LPF", controlspec.new(200, 16000, "exp", 0, 8000, "Hz")) params:set_action("resonator_tone", function(v) engine.resonator_tone(v) end)
+    
+    params:add_group("WAVEFOLD", 3)
+    params:add_control("wavefold_mix", "Mix", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("wavefold_mix", function(v) engine.wavefold_mix(v * 0.01) font.update_fx_cache("wavefold_mix", v) end)
+    params:add_control("wavefold_drive", "Drive", controlspec.new(0, 100, "lin", 1, 75, "%")) params:set_action("wavefold_drive", function(v) engine.wavefold_drive(v * 0.01) end)
+    params:add_control("wavefold_sym", "Symmetry", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("wavefold_sym", function(v) engine.wavefold_sym(v * 0.01) end)
+    
+    params:add_group("RINGMOD", 4)
+    params:add_control("ringmod_mix", "Mix", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("ringmod_mix", function(v) engine.ringmod_mix(v * 0.01) font.update_fx_cache("ringmod_mix", v) end)
+    params:add_control("ringmod_rate", "Rate", controlspec.new(0.1, 4000, "exp", 0, 200, "Hz")) params:set_action("ringmod_rate", function(v) if not (params:get("ringmod_sync") == 2 and clocksync.grain_synced()) then engine.ringmod_rate(v) end end)
+    params:add_option("ringmod_sync", "Sync", {"off", "on"}, 1) params:set_action("ringmod_sync", function(v) if v == 2 and clocksync.grain_synced() then engine.ringmod_rate(clocksync.div_rate_hz(params:get("ringmod_div"))) else engine.ringmod_rate(params:get("ringmod_rate")) end end)
+    params:add_option("ringmod_div", "Division", clocksync.div_labels(), clocksync.div_index("1/4")) params:set_action("ringmod_div", function(v) if params:get("ringmod_sync") == 2 and clocksync.grain_synced() then engine.ringmod_rate(clocksync.div_rate_hz(v)) end end)
 
     params:add_group("GLITCH", 10)
     params:add_control("glitch_ratio", "Glitch", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("glitch_ratio", function(value) engine.glitch_ratio(value * 0.01) font.update_fx_cache("glitch_ratio", value) end)
@@ -633,7 +669,7 @@ local function setup_params()
     params:add{type = "trigger", id = "delete_morph_data", name = "Delete Morph Data", action = function() morph.scene_data = {[1] = {[1] = {}, [2] = {}}, [2] = {[1] = {}, [2] = {}}} morph.amount = 0 params:set("morph_amount", 0) params:set("scene_mode", 1) morph.scene_mode = "off" end}
 
     params:add_group("PITCH", 4)
-    params:add_option("pitch_quantize_scale", "Pitch Quantize", {"off", "major", "minor", "dorian", "phrygian", "lydian", "mixolydian", "locrian", "major pent.", "minor pent.", "blues", "whole tone"}, 2) params:set_action("pitch_quantize_scale", function(value) local scale = params:string("pitch_quantize_scale") if scale ~= "none" then for i = 1, 2 do local current_pitch = params:get(i.."pitch") local quantized = quantize_pitch_to_scale(current_pitch, scale) if current_pitch ~= quantized then params:set(i.."pitch", quantized) end end end end)
+    params:add_option("pitch_quantize_scale", "Pitch Quantize", {"off", "major", "minor", "dorian", "phrygian", "lydian", "mixolydian", "locrian", "major pent.", "minor pent.", "blues", "whole tone"}, 2) params:set_action("pitch_quantize_scale", function(value) local scale = params:string("pitch_quantize_scale") if scale ~= "none" then for i = 1, 2 do local current_pitch = params:get(i.."pitch") local quantized = SU.quantize(current_pitch, scale) if current_pitch ~= quantized then params:set(i.."pitch", quantized) end end end end)
     params:add_option("pitch_lag", "Pitch Lag", {"off", "very small", "small", "medium", "high", "very high"}, 1) params:set_action("pitch_lag", function(value) local lag_times = {0, 1, 2, 4, 8, 16} local lag_time = lag_times[value] for i = 1, 2 do engine.pitch_lag(i, lag_time) end end)
     params:add_separator("                                   ")
     params:add_option("lock_pitch", "Lock Parameters", {"off", "on"}, 1)
@@ -657,7 +693,7 @@ local function setup_params()
     params:add_binary("randomtape1", "Random Tape 1", "trigger", 0) params:set_action("randomtape1", function() load_random_tape_file(1) end)
     params:add_binary("randomtape2", "Random Tape 2", "trigger", 0) params:set_action("randomtape2", function() load_random_tape_file(2) end)
     params:add_binary("unload_all", "Unload All Audio", "trigger", 0) params:set_action("unload_all", function() for i=1, 2 do params:set(i.."seek", 0) params:set(i.."sample", "-") params:set(i.."live_input", 0) params:set(i.."live_direct", 0) audio_active[i] = false osc_positions[i] = 0 end engine.unload_all() update_pan_positioning() end)
-    params:add_binary("global_pitch_size_density_link", "Linked Mode", "toggle", 0) params:set_action("global_pitch_size_density_link", function(value) if value == 1 then for i = 1, 2 do local pitch = params:get(i.."pitch") local size = params:get(i.."size") local density = params:get(i.."density") if size > 0 and density > 0 then local lb = link_base[i] lb.pitch = pitch lb.size = size lb.density = density lb.product = size * density end end end end)
+    params:add_binary("global_pitch_size_density_link", "Linked Mode", "toggle", 0) params:set_action("global_pitch_size_density_link", function(value) if value == 1 then for i = 1, 2 do local pitch = params:get(i.."pitch") local size = params:get(i.."size") local density = (clocksync.grain_synced() and clocksync.grain_density(i)) or params:get(i.."density") if size > 0 and density > 0 then local lb = link_base[i] lb.pitch = pitch lb.size = size lb.density = density lb.product = size * density end end end end)
     params:add_option("steps", "Transition Time", {"short", "medium", "long"}, 1) params:set_action("steps", function(value) steps = ({20, 300, 800})[value] end)
     params:add_separator("                                  ")
     for i = 1, 2 do
@@ -665,7 +701,7 @@ local function setup_params()
       params:add_taper(i.. "pan", i.. " pan", -100, 100, 0, 0, "%") params:set_action(i.. "pan", function(value) engine.pan(i, value * 0.01)  end)
       params:add_taper(i.. "speed", i.. " speed", -2, 2, 0, 0) params:set_action(i.. "speed", function(value) if abs(value) < 0.01 then engine.speed(i, 0) else engine.speed(i, value) end end)
       params:add_taper(i.. "density", i.. " density", 0.1, 250, 3.5, 5) params:set_action(i.. "density", function(value) engine.density(i, clocksync.grain_density(i) or value) end)
-      params:add_control(i.. "pitch", i.. " pitch", controlspec.new(-48, 48, "lin", 1, 0, "st")) params:set_action(i.. "pitch", function(value) local scale = params:string("pitch_quantize_scale") local quantized = quantize_pitch_to_scale(value, scale) engine.pitch_offset(i, math.pow(0.5, -quantized / 12)) end)
+      params:add_control(i.. "pitch", i.. " pitch", controlspec.new(-48, 48, "lin", 1, 0, "st")) params:set_action(i.. "pitch", function(value) local scale = params:string("pitch_quantize_scale") local quantized = SU.quantize(value, scale) engine.pitch_offset(i, math.pow(0.5, -quantized / 12)) end)
       params:add_taper(i.. "jitter", i.. " jitter", 0, 999900, 250, 10, "ms") params:set_action(i.. "jitter", function(value) engine.jitter(i, value * 0.001) end)
       params:add_taper(i.. "size", i.. " size", 20, 5000, 500, 1, "ms") params:set_action(i.. "size", function(value) engine.size(i, value * 0.001) end)
       params:add_taper(i.. "spread", i.. " spread", 0, 100, 75, 0, "%") params:set_action(i.. "spread", function(value) engine.spread(i, value * 0.01) end)
@@ -677,7 +713,7 @@ end
 
 local function set_pitch(track, other_track, new_pitch, symmetry)
     local scale = params:string("pitch_quantize_scale")
-    new_pitch = quantize_pitch_to_scale(new_pitch, scale)
+    new_pitch = SU.quantize(new_pitch, scale)
     local current = params:get(track.."pitch")
     if current ~= new_pitch then params:set(track.."pitch", new_pitch) if symmetry then params:set(other_track.."pitch", new_pitch) end end
 end
@@ -877,13 +913,20 @@ local function handle_pitch_size_density_link(track, config, delta)
             end
             local pitch_ratio = (new_pitch - base_pitch) / 12
             new_size = clamp(base_size * (2 ^ -pitch_ratio), LIMITS.size.min, LIMITS.size.max)
-            if clocksync.grain_synced() then new_den = clocksync.grain_density(tr) or base_density
+            if clocksync.grain_synced() then
+                local target_den = clamp(size_den_prod / new_size, LIMITS.density.min, LIMITS.density.max)
+                hlp.apply_linked_density(tr, target_den)
+                new_den = clocksync.grain_density(tr) or base_density
             else new_den = clamp(base_density * (2 ^ pitch_ratio), LIMITS.density.min, LIMITS.density.max)
             end
         elseif param == "size" then
             local old_size = base_size
             new_size = clamp(old_size + delta * delta_mult, LIMITS.size.min, LIMITS.size.max)
-            if clocksync.grain_synced() then new_den = clocksync.grain_density(tr) or base_density else new_den = clamp(size_den_prod / new_size, LIMITS.density.min, LIMITS.density.max)
+            if clocksync.grain_synced() then
+                local target_den = clamp(size_den_prod / new_size, LIMITS.density.min, LIMITS.density.max)
+                hlp.apply_linked_density(tr, target_den)
+                new_den = clocksync.grain_density(tr) or base_density
+            else new_den = clamp(size_den_prod / new_size, LIMITS.density.min, LIMITS.density.max)
                 local den_min, den_max = LIMITS.density.min, LIMITS.density.max
                 if new_den == den_min or new_den == den_max then new_size = clamp(size_den_prod / new_den, LIMITS.size.min, LIMITS.size.max) end
             end
@@ -896,13 +939,14 @@ local function handle_pitch_size_density_link(track, config, delta)
             if new_size == size_min or new_size == size_max then new_den = clamp(size_den_prod / new_size, LIMITS.density.min, LIMITS.density.max) end
             new_pitch = base_pitch
         end
+        local synced = clocksync.grain_synced()
         hlp.apply_lfo_or_set(tr .. "size", new_size)
-        hlp.apply_lfo_or_set(tr .. "density", new_den)
+        if not synced then hlp.apply_lfo_or_set(tr .. "density", new_den) end
         hlp.apply_lfo_or_set(tr .. "pitch", new_pitch)
         lb.pitch   = new_pitch
         lb.size    = new_size
         lb.density = new_den
-        lb.product = new_size * new_den
+        if not synced then lb.product = new_size * new_den end
     end
     local speed = _LINK_SPEED[param]
     update_linked_params(track, speed)
@@ -912,12 +956,18 @@ end
 
 local function clocksync_set_density(voice, hz)
     engine.density(voice, hz)
-    if params:get("global_pitch_size_density_link") ~= 1 then return end
+    if params:get("global_pitch_size_density_link") ~= 1 then hlp.link_last_hz[voice] = hz return end
     local lb = hlp.ensure_link_base(voice)
+    if hlp.link_suppress_size or hlp.link_last_hz[voice] == hz or is_lfo_active_for_param(voice .. "density") then
+        lb.density = hz
+        hlp.link_last_hz[voice] = hz
+        return
+    end
     local new_size = clamp(lb.product / hz, LIMITS.size.min, LIMITS.size.max)
     hlp.apply_lfo_or_set(voice .. "size", new_size)
     lb.size    = new_size
     lb.density = hz
+    hlp.link_last_hz[voice] = hz
 end
 
 local function handle_seek_param(track, config, delta)
@@ -1013,8 +1063,8 @@ local function find_or_create_lfo_for_param(track, param_name, only_existing, cr
     local full_param = track .. param_name
     local lfo_targets = lfo.lfo_targets
     for i = 1, 16 do
-        local lfo_state = pget(MORPH_LFO_KEYS[i])
-        if lfo_state == 2 or (only_existing and lfo_state == 1) then if lfo_targets[pget(MORPH_TARGET_KEYS[i])] == full_param then return i end end
+        local lfo_state = pget(MK.lfo[i])
+        if lfo_state == 2 or (only_existing and lfo_state == 1) then if lfo_targets[pget(MK.target[i])] == full_param then return i end end
     end
     if only_existing then return nil end
     local new_target_idx
@@ -1028,15 +1078,15 @@ local function find_or_create_lfo_for_param(track, param_name, only_existing, cr
         offset = clocksync.grain_division_norm(track) * 2 - 1
     end
     local conflicts = {}
-    for j = 1, 16 do if pget(MORPH_LFO_KEYS[j]) == 2 then conflicts[lfo_targets[pget(MORPH_TARGET_KEYS[j])]] = true end end
+    for j = 1, 16 do if pget(MK.lfo[j]) == 2 then conflicts[lfo_targets[pget(MK.target[j])]] = true end end
     for i = 1, 16 do
-        if pget(MORPH_LFO_KEYS[i]) == 1 then
-            local target_name = lfo_targets[pget(MORPH_TARGET_KEYS[i])]
+        if pget(MK.lfo[i]) == 1 then
+            local target_name = lfo_targets[pget(MK.target[i])]
             if target_name == "none" or target_name == full_param or not conflicts[target_name] then
-                params:set(MORPH_TARGET_KEYS[i], new_target_idx)
+                params:set(MK.target[i], new_target_idx)
                 if source_lfo_idx then
-                    params:set(MORPH_SHAPE_KEYS[i], params:get(MORPH_SHAPE_KEYS[source_lfo_idx]))
-                    params:set(MORPH_FREQ_KEYS[i], params:get(MORPH_FREQ_KEYS[source_lfo_idx]))
+                    params:set(MK.shape[i], params:get(MK.shape[source_lfo_idx]))
+                    params:set(MK.freq[i], params:get(MK.freq[source_lfo_idx]))
                     lfo[i].phase = lfo[source_lfo_idx].phase
                     local is_pan    = param_name == "pan"
                     local is_volume = param_name == "volume"
@@ -1048,13 +1098,13 @@ local function find_or_create_lfo_for_param(track, param_name, only_existing, cr
                     end
                 else
                     local default_shape = (param_name == "volume" or clocksync.lfo_synced()) and 1 or 4
-                    params:set(MORPH_SHAPE_KEYS[i], default_shape)
-                    params:set(MORPH_FREQ_KEYS[i], random_float(0.1, 0.7))
+                    params:set(MK.shape[i], default_shape)
+                    params:set(MK.freq[i], random_float(0.1, 0.7))
                 end
-                if lfo.walk_all then params:set(MORPH_SHAPE_KEYS[i], 4) end
-                params:set(MORPH_DEPTH_KEYS[i], create_with_depth and 0.01 or 0)
-                params:set(MORPH_OFFSET_KEYS[i], offset)
-                params:set(MORPH_LFO_KEYS[i], create_with_depth and 2 or 1)
+                if lfo.walk_all then params:set(MK.shape[i], 4) end
+                params:set(MK.depth[i], create_with_depth and 0.01 or 0)
+                params:set(MK.offset[i], offset)
+                params:set(MK.lfo[i], create_with_depth and 2 or 1)
                 invalidate_lfo_cache()
                 return i
             end
@@ -1064,12 +1114,12 @@ local function find_or_create_lfo_for_param(track, param_name, only_existing, cr
 end
 
 local function adjust_lfo_offset(lfo_idx, delta)
-    local ok = MORPH_OFFSET_KEYS[lfo_idx]
+    local ok = MK.offset[lfo_idx]
     local current_offset = pget(ok)
-    local current_depth  = pget(MORPH_DEPTH_KEYS[lfo_idx])
+    local current_depth  = pget(MK.depth[lfo_idx])
     local offset_floor   = current_depth * 0.01 - 1
     local offset_ceiling = 1 - current_depth * 0.01
-    local target_param   = lfo.lfo_targets[pget(MORPH_TARGET_KEYS[lfo_idx])] or ""
+    local target_param   = lfo.lfo_targets[pget(MK.target[lfo_idx])] or ""
     local sensitivity    = (target_param:match("size$") or target_param:match("density$")) and 0.004 or 0.008
     local proposed_offset = clamp(current_offset + delta * sensitivity, offset_floor, offset_ceiling)
     pset(ok, proposed_offset)
@@ -1077,9 +1127,9 @@ local function adjust_lfo_offset(lfo_idx, delta)
 end
 
 local function adjust_lfo_depth(lfo_idx, delta)
-    local dk, ok, lk = MORPH_DEPTH_KEYS[lfo_idx], MORPH_OFFSET_KEYS[lfo_idx], MORPH_LFO_KEYS[lfo_idx]
+    local dk, ok, lk = MK.depth[lfo_idx], MK.offset[lfo_idx], MK.lfo[lfo_idx]
     local current_depth = pget(dk)
-    local target_param  = lfo.lfo_targets[pget(MORPH_TARGET_KEYS[lfo_idx])]
+    local target_param  = lfo.lfo_targets[pget(MK.target[lfo_idx])]
     local full_min, full_max = lfo.get_parameter_range(target_param)
     local rand_min, rand_max = lfo.get_parameter_range(target_param, true)
     local full_range   = (full_max and full_min) and (full_max - full_min) or 1
@@ -1179,7 +1229,7 @@ local function adjust_lfo_with_symmetry(track, param_name, lfo_idx, adjustment_f
 end
 
 local function apply_freq_step(idx, dir)
-    local fk = MORPH_FREQ_KEYS[idx]
+    local fk = MK.freq[idx]
     local cur = pget(fk)
     local step = max(cur * 0.06, 0.005) * (dir > 0 and 1 or -1)
     local new_freq = max(cur + step, 0.01)
@@ -1795,7 +1845,7 @@ function init()
     setup_undo()
     setup_osc()
     morph.init(lfo, invalidate_lfo_cache, clocksync)
-    clocksync.init({lfo = lfo, set_density = clocksync_set_density})
+    clocksync.init({lfo = lfo, set_density = clocksync_set_density, on_push = hlp.ringmod_push, on_sync_off = hlp.ringmod_restore})
     font.init_fx_cache()
     init_longpress_checker()
     for i = 1, 2 do params:set(i.."sample", _path.tape, true) end

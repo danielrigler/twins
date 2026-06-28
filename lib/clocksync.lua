@@ -4,12 +4,11 @@ local math_random = math.random
 local math_floor = math.floor
 local lfo_ref = nil
 local set_density = function(v, hz) if engine then engine.density(v, hz) end end
+local on_push_cb = nil
+local on_sync_off_cb = nil
 local enabled = false
 local delay_div = 1.0
 local lfo_div_beats = {1.0, 1.0}
-local density_gpb = {2, 1}
-local density_label = {"1/8", "1/4"}
-local density_idx = {15, 13}
 local reseek_enabled = false
 local reseek_beats = 1.0
 local reseek_co = nil
@@ -28,12 +27,14 @@ local DIVISIONS = {
 local NDIV = #DIVISIONS
 local DIV_LABELS = {}
 for i = 1, NDIV do DIV_LABELS[i] = DIVISIONS[i].label end
-
+local DIV = {}
+for i = 1, NDIV do DIV[DIVISIONS[i].label] = i end
+local function gpb_of(idx) return 1 / DIVISIONS[idx].beats end
+local density_idx   = { DIV["1/8"], DIV["1/4"] }
+local density_gpb   = { gpb_of(density_idx[1]), gpb_of(density_idx[2]) }
+local density_label = { DIVISIONS[density_idx[1]].label, DIVISIONS[density_idx[2]].label }
 local function t60() return (clock.get_tempo() or 120) / 60 end
-
-local function symmetry_on()
-  return params and params.lookup and params.lookup["symmetry"] and params:get("symmetry") == 1
-end
+local function symmetry_on() return params and params.lookup and params.lookup["symmetry"] and params:get("symmetry") == 1 end
 
 local function push()
   if not enabled then return end
@@ -46,6 +47,7 @@ local function push()
   set_density(1, clamp(t * density_gpb[1], 0.1, 250))
   set_density(2, clamp(t * density_gpb[2], 0.1, 250))
   if params.lookup["delay_time"] then params:set("delay_time", clamp(delay_div / t, 0.02, 2)) end
+  if on_push_cb then on_push_cb() end
 end
 
 local function stop_reseek()
@@ -91,19 +93,20 @@ function clocksync.add_params()
       if lfo_ref then lfo_ref.apply_clock_sync(nil) lfo_ref.set_sine_all(false) end
       set_density(1, params:get("1density"))
       set_density(2, params:get("2density"))
+      if on_sync_off_cb then on_sync_off_cb() end
     end
   end)
-  params:add_option("clock_lfo_div", "LFO Division 1", DIV_LABELS, 9)
+  params:add_option("clock_lfo_div", "LFO Division 1", DIV_LABELS, DIV["1 bar"])
   params:set_action("clock_lfo_div", function(v) 
     lfo_div_beats[1] = DIVISIONS[v].beats
     push() 
   end)
-  params:add_option("clock_lfo_div2", "LFO Division 2", DIV_LABELS, 9)
+  params:add_option("clock_lfo_div2", "LFO Division 2", DIV_LABELS, DIV["1 bar"])
   params:set_action("clock_lfo_div2", function(v) 
     lfo_div_beats[2] = DIVISIONS[v].beats
     push() 
   end)
-  params:add_option("clock_sync_delay_div", "Delay Division", DIV_LABELS, 13)
+  params:add_option("clock_sync_delay_div", "Delay Division", DIV_LABELS, DIV["1/4"])
   params:set_action("clock_sync_delay_div", function(v) 
     delay_div = DIVISIONS[v].beats
     push() 
@@ -117,14 +120,14 @@ function clocksync.add_params()
     end
     refresh_reseek()
   end)
-  params:add_option("clock_reseek_div", "Repeat Division", DIV_LABELS, 9)
+  params:add_option("clock_reseek_div", "Repeat Division", DIV_LABELS, DIV["1 bar"])
   params:set_action("clock_reseek_div", function(v) 
     reseek_beats = DIVISIONS[v].beats
     refresh_reseek() 
   end)
 end
 
-local DIV_RAND_MIN, DIV_RAND_MAX = 11, 19
+local DIV_RAND_MIN, DIV_RAND_MAX = DIV["1/2"], DIV["1/32"]
 
 local function apply_div(voice, idx)
   local d = DIVISIONS[idx]
@@ -141,8 +144,8 @@ function clocksync.step_grain_div(voice, delta, mirror_voice)
   push()
 end
 
-local LFO_DIV_MIN, LFO_DIV_MAX = 5, 17
-local LFO_DIV_RAND_MIN, LFO_DIV_RAND_MAX = 5, 11
+local LFO_DIV_MIN, LFO_DIV_MAX = DIV["4 bar"], DIV["1/16"]
+local LFO_DIV_RAND_MIN, LFO_DIV_RAND_MAX = DIV["4 bar"], DIV["1/2"]
 
 function clocksync.step_lfo_div(voice, delta, symmetry)
   local key = (tonumber(voice) == 2) and "clock_lfo_div2" or "clock_lfo_div"
@@ -199,6 +202,18 @@ function clocksync.set_grain_div_index(voice, idx)
   push()
 end
 
+function clocksync.div_index_for_density(hz)
+  if not enabled or not hz or hz <= 0 then return nil end
+  local t = t60()
+  local target = math.log(clamp(hz, 0.1, 250))
+  local best_idx, best_dist = density_idx[1], math.huge
+  for i = 1, NDIV do
+    local dist = math.abs(math.log(t / DIVISIONS[i].beats) - target)
+    if dist < best_dist then best_dist = dist; best_idx = i end
+  end
+  return best_idx
+end
+
 function clocksync.div_index_to_norm(idx)
   local span = DIV_RAND_MAX - DIV_RAND_MIN
   if span == 0 then return 0 end
@@ -207,12 +222,13 @@ end
 
 function clocksync.lfo_synced() return enabled end
 function clocksync.grain_synced() return enabled end
+function clocksync.div_labels() return DIV_LABELS end
+function clocksync.div_index(label) return DIV[label] end
+function clocksync.div_rate_hz(idx) return t60() / DIVISIONS[idx].beats end
 function clocksync.reseek_active() return reseek_enabled end
 function clocksync.grain_division_label(v) return density_label[v] end
 
-function clocksync.grain_division_norm(voice)
-  return clocksync.div_index_to_norm(density_idx[tonumber(voice)])
-end
+function clocksync.grain_division_norm(voice) return clocksync.div_index_to_norm(density_idx[tonumber(voice)]) end
 
 function clocksync.grain_density(v)
   if not enabled then return nil end
@@ -223,6 +239,8 @@ function clocksync.init(opts)
   opts = opts or {}
   lfo_ref = opts.lfo
   if opts.set_density then set_density = opts.set_density end
+  on_push_cb = opts.on_push
+  on_sync_off_cb = opts.on_sync_off
   delay_div = DIVISIONS[params:get("clock_sync_delay_div")].beats
   lfo_div_beats[1] = DIVISIONS[params:get("clock_lfo_div")].beats
   lfo_div_beats[2] = DIVISIONS[params:get("clock_lfo_div2")].beats
