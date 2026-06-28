@@ -240,8 +240,6 @@ function hlp.update_resonator()
         440 * 2 ^ ((root + degs[3] - 69) / 12), 440 * 2 ^ ((root + degs[4] - 69) / 12),
         440 * 2 ^ ((root + degs[5] - 69) / 12))
 end
-function hlp.ringmod_push() if params:get("ringmod_sync") == 2 then engine.ringmod_rate(clocksync.div_rate_hz(params:get("ringmod_div"))) end end
-function hlp.ringmod_restore() if params:get("ringmod_sync") == 2 then engine.ringmod_rate(params:get("ringmod_rate")) end end
 local function update_pan_positioning() if _G.preset_loading then return end; local l1,l2=audio_active[1],audio_active[2]; local function ok(v,id) return v and not is_param_locked(id,"pan") and not is_lfo_active_for_param(id.."pan") end; if l1 and l2 then if ok(l1,1) then params:set("1pan",-25) end; if ok(l2,2) then params:set("2pan",25) end else if ok(l1,1) then params:set("1pan",0) end; if ok(l2,2) then params:set("2pan",0) end end end
 
 local function set_midi_pitch(voice, pitch_value)
@@ -573,11 +571,10 @@ local function setup_params()
     params:add_control("wavefold_drive", "Drive", controlspec.new(0, 100, "lin", 1, 75, "%")) params:set_action("wavefold_drive", function(v) engine.wavefold_drive(v * 0.01) end)
     params:add_control("wavefold_sym", "Symmetry", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("wavefold_sym", function(v) engine.wavefold_sym(v * 0.01) end)
     
-    params:add_group("RINGMOD", 4)
+    params:add_group("RINGMOD", 3)
     params:add_control("ringmod_mix", "Mix", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("ringmod_mix", function(v) engine.ringmod_mix(v * 0.01) font.update_fx_cache("ringmod_mix", v) end)
-    params:add_control("ringmod_rate", "Rate", controlspec.new(0.1, 4000, "exp", 0, 200, "Hz")) params:set_action("ringmod_rate", function(v) if not (params:get("ringmod_sync") == 2 and clocksync.grain_synced()) then engine.ringmod_rate(v) end end)
-    params:add_option("ringmod_sync", "Sync", {"off", "on"}, 1) params:set_action("ringmod_sync", function(v) if v == 2 and clocksync.grain_synced() then engine.ringmod_rate(clocksync.div_rate_hz(params:get("ringmod_div"))) else engine.ringmod_rate(params:get("ringmod_rate")) end end)
-    params:add_option("ringmod_div", "Division", clocksync.div_labels(), clocksync.div_index("1/4")) params:set_action("ringmod_div", function(v) if params:get("ringmod_sync") == 2 and clocksync.grain_synced() then engine.ringmod_rate(clocksync.div_rate_hz(v)) end end)
+    params:add_control("ringmod_rate", "Rate", controlspec.new(0.1, 4000, "exp", 0, 200, "Hz")) params:set_action("ringmod_rate", function(v) engine.ringmod_rate(v) end)
+    params:add_option("ringmod_freqmod", "Freq Mod", {"off", "on"}, 1) params:set_action("ringmod_freqmod", function(value) engine.ringmod_freqmod(value - 1) end)
 
     params:add_group("GLITCH", 10)
     params:add_control("glitch_ratio", "Glitch", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("glitch_ratio", function(value) engine.glitch_ratio(value * 0.01) font.update_fx_cache("glitch_ratio", value) end)
@@ -1845,7 +1842,7 @@ function init()
     setup_undo()
     setup_osc()
     morph.init(lfo, invalidate_lfo_cache, clocksync)
-    clocksync.init({lfo = lfo, set_density = clocksync_set_density, on_push = hlp.ringmod_push, on_sync_off = hlp.ringmod_restore})
+    clocksync.init({lfo = lfo, set_density = clocksync_set_density})
     font.init_fx_cache()
     init_longpress_checker()
     for i = 1, 2 do params:set(i.."sample", _path.tape, true) end

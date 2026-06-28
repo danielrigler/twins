@@ -563,9 +563,10 @@ alloc {
         }).add;
 
         SynthDef(\ringmod, {
-            arg bus, mix=0.0, rate=200;
+            arg bus, mix=0.0, rate=200, freqmod=0;
             var sig = In.ar(bus, 2);
-            var wet = sig * SinOsc.ar(Lag.kr(rate, 0.05));
+            var modrate = rate * (1 + (LFNoise2.kr(2) * 0.1 * freqmod));
+            var wet = sig * SinOsc.ar(Lag.kr(modrate, 0.05));
             ReplaceOut.ar(bus, XFade2.ar(sig, wet, mix * 2 - 1));
         }).add;
 
@@ -705,6 +706,7 @@ alloc {
         this.addCommand("wavefold_sym", "f", { arg msg; wavefoldEffect.set(\sym, msg[1]); });
         this.addCommand("ringmod_mix", "f", { arg msg; ringmodEffect.set(\mix, msg[1]); ringmodEffect.run(msg[1] > 0); });
         this.addCommand("ringmod_rate", "f", { arg msg; ringmodEffect.set(\rate, msg[1]); });
+        this.addCommand("ringmod_freqmod", "f", { arg msg; ringmodEffect.set(\freqmod, msg[1]); });
 
         this.addCommand("eq_low_gain", "if", { arg msg; var voice = msg[1] - 1; currentLowGain[voice] = msg[2]; eqSynths[voice].set(\low_gain, msg[2]); this.updateEqRun(voice); });
         this.addCommand("eq_mid_gain", "if", { arg msg; var voice = msg[1] - 1; currentMidGain[voice] = msg[2]; eqSynths[voice].set(\mid_gain, msg[2]); this.updateEqRun(voice); });
