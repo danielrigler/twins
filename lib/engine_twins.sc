@@ -546,7 +546,7 @@ alloc {
             freqs = [f1, f2, f3, f4, f5];
             amps  = [1.0, 0.9, 0.8, 0.7, 0.6];
             wet = DynKlank.ar(`[freqs, amps, Array.fill(5, decay)], exc);
-            wet = tanh(0.025 * wet * decay.pow(-0.75));
+            wet = tanh(0.05 * wet * decay.pow(-0.75));
             cf = Lag.kr(cutoff, 0.1).clip(20, 20000);
             wet = LeakDC.ar(RLPF.ar(wet, cf, 0.5));
             detune = DelayC.ar(wet, 0.02, [0.006, 0.011]);
