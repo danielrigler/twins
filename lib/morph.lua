@@ -108,6 +108,25 @@ function morph.recall_scene(track, scene)
     if invalidate_lfo_cache_ref then invalidate_lfo_cache_ref() end
 end
 
+function morph.restore_synced_divisions()
+    if not (clocksync_ref and clocksync_ref.grain_synced()) then return end
+    local s1 = morph.scene_data[1] or {}
+    local s2 = morph.scene_data[2] or {}
+    local scene1_1, scene1_2 = s1[1] or {}, s1[2] or {}
+    local scene2_1, scene2_2 = s2[1] or {}, s2[2] or {}
+    local t = (morph.amount or 0) * 0.01
+    local t_inv = 1.0 - t
+    for v = 1, 2 do
+        local key = v .. "density_div"
+        local dA = scene1_1[key] or scene2_1[key]
+        local dB = scene1_2[key] or scene2_2[key]
+        local idx
+        if dA and dB then idx = math.floor(dA * t_inv + dB * t + 0.5)
+        else idx = dA or dB end
+        if idx then clocksync_ref.set_grain_div_index(v, idx) end
+    end
+end
+
 local function _morph_clamp(x) return x < -1 and -1 or (x > 1 and 1 or x) end
 
 local function _compute_offset(lfo_offset, const_val, target, t_weight, const_weight, forced_off)
