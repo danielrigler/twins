@@ -1,6 +1,6 @@
 Engine_twins : CroneEngine {
 
-var dimensionEffect, haasEffect, bitcrushEffect, saturationEffect, resonatorEffect, wavefoldEffect, ringmodEffect, delayEffect, reverbEffect, shimmerEffect, tapeEffect, chewEffect, widthEffect, monobassEffect, sineEffect, wobbleEffect, lossdegradeEffect, rotateEffect, glitchEffect, <silentBuffer, <buffersL, <buffersR, wobbleBuffer, glitchBuffer, mixBus, postFxBus, shimmerBus, parallelBus, <voices, bufSine, pg, <liveInputBuffersL, <liveInputBuffersR, <liveInputRecorders, <liveRecPosBuses, o, o_rec, o_grain, o_voice_peak, mixToParallelRouter, parallelToPostFxRouter, finalOutputRouter, liveBufferAllocGeneration = 0, grainEnvs, pitchScaleBuffers, pitchScaleLengths, nornsAddr, voicesUsingLiveBuffer, currentSpeed, currentJitter, currentSize, currentDensity, currentDensityModAmt, currentPitch, currentPan, currentSpread, currentVolume, currentGranularGain, currentCutoff, currentHpf, currentlpf_gain, currentSubharmonics1, currentSubharmonics2, currentSubharmonics3, currentOvertones1, currentOvertones2, currentPitchMode, currentDirectionMod, currentSizeVariation, currentSmoothbass, currentLowGain, currentMidGain, currentHighGain, currentProbability, liveBufferMix = 1.0, currentPitchRandomProb, currentPitchRandomScale, currentRatchetingProb, currentPitchLag, currentGlitchRatio = 0.0, currentGlitchMix = 0.0, currentKeyHold, currentKeyGate, currentAdA, currentAdD, currentVelAmp, currentAmpRandomize, voiceBuses, filterSynths, filterRouters, eqSynths, dryGroup, drySynths, voiceAmpBuses, voiceRunning, revShimmerSynth, revShimmerSendBus, revShimmerReturnBus, currentReverbMix = 0.0, currentShimmerMix = 0.0, voiceIsStereo;
+var dimensionEffect, haasEffect, bitcrushEffect, saturationEffect, resonatorEffect, wavefoldEffect, ringmodEffect, delayEffect, reverbEffect, shimmerEffect, tapeEffect, chewEffect, widthEffect, monobassEffect, sineEffect, wobbleEffect, lossdegradeEffect, rotateEffect, glitchEffect, <silentBuffer, <buffersL, <buffersR, wobbleBuffer, glitchBuffer, mixBus, postFxBus, shimmerBus, parallelBus, <voices, bufSine, pg, <liveInputBuffersL, <liveInputBuffersR, <liveInputRecorders, <liveRecPosBuses, o, o_rec, o_grain, o_voice_peak, mixToParallelRouter, parallelToPostFxRouter, finalOutputRouter, liveBufferAllocGeneration = 0, grainEnvs, pitchScaleBuffers, pitchScaleLengths, nornsAddr, voicesUsingLiveBuffer, currentSpeed, currentJitter, currentSize, currentDensity, currentDensityModAmt, currentPitch, currentPan, currentSpread, currentVolume, currentGranularGain, currentCutoff, currentHpf, currentlpf_gain, currentSubharmonics1, currentSubharmonics2, currentSubharmonics3, currentOvertones1, currentOvertones2, currentPitchMode, currentDirectionMod, currentSizeVariation, currentSmoothbass, currentLowGain, currentMidGain, currentHighGain, currentProbability, liveBufferMix = 1.0, currentPitchRandomProb, currentPitchRandomScale, currentRatchetingProb, currentPitchLag, currentGlitchRatio = 0.0, currentGlitchMix = 0.0, currentKeyHold, currentKeyGate, currentAdA, currentAdD, currentVelAmp, currentAmpRandomize, voiceBuses, filterSynths, filterRouters, eqSynths, dryGroup, drySynths, voiceAmpBuses, voiceRunning, revShimmerSynth, revShimmerSendBus, revShimmerReturnBus, currentReverbMix = 0.0, currentShimmerMix = 0.0, voiceIsStereo, pitchShiftSynths, currentPitchShift, currentPitchShiftMix;
 
 classvar pitchScales;
 *initClass {pitchScales = [[7, 12], [7, 12, 19, 24], [12], [12, 24], [1,2,3,4,5,6,7,8,9,10,11], [2,4,5,7,9,11], [2,3,5,7,8,10], [2,4,7,9], [2,4,6,8,10]];}
@@ -49,14 +49,14 @@ alloc {
         pitchScaleBuffers = pitchScales.collect { |scale| Buffer.sendCollection(context.server, scale, 1) };
         pitchScaleLengths = pitchScales.collect(_.size);
 
-        currentSpeed = [0.1, 0.1]; currentJitter = [0.25, 0.25]; currentSize = [0.1, 0.1]; currentDensity = [10, 10]; currentPitch = [1, 1]; currentPan = [0, 0]; currentSpread = [0, 0]; currentVolume = [1, 1]; currentGranularGain = [1, 1]; currentCutoff = [20000, 20000]; currentlpf_gain = [0.95, 0.95]; currentHpf = [20, 20]; currentSubharmonics1 = [0, 0]; currentSubharmonics2 = [0, 0]; currentSubharmonics3 = [0, 0]; currentOvertones1 = [0, 0]; currentOvertones2 = [0, 0]; currentPitchMode = [0, 0]; currentDirectionMod = [0, 0]; currentSizeVariation = [0, 0]; currentSmoothbass = [1, 1]; currentDensityModAmt = [0, 0]; currentLowGain = [0, 0]; currentMidGain = [0, 0]; currentHighGain = [0, 0]; currentProbability = [100, 100]; liveBufferMix = 1.0; currentPitchRandomProb = [0, 0]; currentPitchRandomScale = [0, 0]; currentRatchetingProb = [0, 0]; currentPitchLag = [0, 0];
+        currentSpeed = [0.1, 0.1]; currentJitter = [0.25, 0.25]; currentSize = [0.1, 0.1]; currentDensity = [10, 10]; currentPitch = [1, 1]; currentPan = [0, 0]; currentSpread = [0, 0]; currentVolume = [1, 1]; currentGranularGain = [1, 1]; currentCutoff = [20000, 20000]; currentlpf_gain = [0.95, 0.95]; currentHpf = [20, 20]; currentSubharmonics1 = [0, 0]; currentSubharmonics2 = [0, 0]; currentSubharmonics3 = [0, 0]; currentOvertones1 = [0, 0]; currentOvertones2 = [0, 0]; currentPitchMode = [0, 0]; currentDirectionMod = [0, 0]; currentSizeVariation = [0, 0]; currentSmoothbass = [1, 1]; currentDensityModAmt = [0, 0]; currentLowGain = [0, 0]; currentMidGain = [0, 0]; currentHighGain = [0, 0]; currentProbability = [100, 100]; liveBufferMix = 1.0; currentPitchRandomProb = [0, 0]; currentPitchRandomScale = [0, 0]; currentRatchetingProb = [0, 0]; currentPitchLag = [0, 0]; currentPitchShift = [0, 0]; currentPitchShiftMix = [0.5, 0.5];
         currentKeyHold = [1, 1]; currentKeyGate = [0, 0]; currentAdA = [0.005, 0.005]; currentAdD = [0.3, 0.3]; currentVelAmp = [1, 1]; currentAmpRandomize = [0, 0];
 
         context.server.sync;
 
         SynthDef(\synth1, {
             arg out, voice, buf_l, buf_r, pos, speed, jitter, size, density, density_mod_amt, pitch_offset, pan, spread, gain, t_reset_pos, granular_gain, pitch_mode, subharmonics_1, subharmonics_2, subharmonics_3, overtones_1, overtones_2, cutoff, hpf, lpf_gain, direction_mod, size_variation, low_gain, mid_gain, high_gain, smoothbass, probability, env_select = 0, pitch_random_prob=0, pitch_random_scale_buf=0, pitch_random_scale_len=1, pitch_random_direction=1, ratcheting_prob=0, pitch_lag_time, rec_pos_bus = -1, key_hold = 1, key_gate = 0, t_retrig = 0, ad_a = 0.005, ad_d = 0.3, vel_amp = 1, t_key_trig = 0, base_trig, amp_bus, amp_randomize = 0, is_stereo = 0;
-            var grain_trig, jitter_sig, buf_pos, sig_mix, density_mod, granular_sig, base_pitch, grain_pitch, grain_size, key_env, amp_scale, dmod_half, grain_amp_rand;
+            var grain_trig, jitter_sig, buf_pos, sig_mix, density_mod, granular_sig, base_pitch, grain_pitch, grain_size, key_env, amp_scale, dmod_half, grain_amp_rand, meter_sig;
             var main_vol = 1 / (1 + subharmonics_1 + subharmonics_2 + subharmonics_3 + overtones_1 + overtones_2);
             var subharmonic_1_vol = subharmonics_1 * main_vol * 2;
             var subharmonic_2_vol = subharmonics_2 * main_vol * 2;
@@ -124,10 +124,15 @@ alloc {
             sig_mix = granular_sig * granular_gain;
             amp_scale = Lag.kr(gain) * key_env * vel_amp;
             signal = sig_mix * amp_scale;
+            // Meter the granular content pre granular_gain so peaks keep
+            // displaying when granular_gain is 0 (dry path crossfades in at the
+            // same amp_scale). amp_scale is retained so the Lua-side pre-fader
+            // reconstruction (peak_db - vol) still holds.
+            meter_sig = granular_sig * amp_scale;
             Out.kr(amp_bus, amp_scale);
 
             wrapped_grain_pos = Wrap.kr(buf_pos + jitter_sig);
-            SendReply.kr(trigger60, '/voice_state', [voice, buf_pos, Peak.kr(signal[0], trigger60), Peak.kr(signal[1], trigger60)]);
+            SendReply.kr(trigger60, '/voice_state', [voice, buf_pos, Peak.kr(meter_sig[0], trigger60), Peak.kr(meter_sig[1], trigger60)]);
             {
                 var throttled_grain_trig = Trig1.kr(grain_trig, 1/30);
                 SendReply.kr(throttled_grain_trig, '/grain_pos', [voice, Latch.kr(wrapped_grain_pos, grain_trig), Latch.kr(grain_size, grain_trig), Latch.kr(rand_val, grain_trig)]);
@@ -151,6 +156,15 @@ alloc {
             sig = HPF.ar(sig, hpf);
             sig = MoogFF.ar(sig, lagcutoff, lpf_gain);
             ReplaceOut.ar(bus, sig);
+        }).add;
+
+        SynthDef(\voicepitchshift, {
+            arg bus, ratio = 1, window = 0.5, mix = 1;
+            var sig = In.ar(bus, 2);
+            var m = Lag.kr(mix, 0.1);
+            var lagratio = Lag.kr(ratio, 0.08);
+            var shifted = PitchShift.ar(sig, window, lagratio, 0, window * 0.02);
+            ReplaceOut.ar(bus, XFade2.ar(sig, shifted, m * 2 - 1));
         }).add;
 
         SynthDef(\voicerouter, {
@@ -215,6 +229,15 @@ alloc {
                 \rec_pos_bus, -1,
                 \amp_bus, voiceAmpBuses[i].index,
             ], dryGroup);
+        });
+
+        pitchShiftSynths = Array.fill(2, { arg i;
+            Synth.newPaused(\voicepitchshift, [
+                \bus, voiceBuses[i].index,
+                \ratio, 1,
+                \window, 0.2,
+                \mix, currentPitchShiftMix[i],
+            ], context.xg, 'addToTail');
         });
 
         eqSynths = Array.fill(2, { arg i;
@@ -649,6 +672,8 @@ alloc {
         this.addCommand("overtones_2", "if", { arg msg; var voice = msg[1] - 1; currentOvertones2[voice] = msg[2]; voices[voice].set(\overtones_2, msg[2]); });
         this.addCommand("pitch_mode", "ii", { arg msg; var voice = msg[1] - 1; currentPitchMode[voice] = msg[2]; voices[voice].set(\pitch_mode, msg[2]); });
         this.addCommand("pitch_offset", "if", { arg msg; var voice = msg[1] - 1; currentPitch[voice] = msg[2]; voices[voice].set(\pitch_offset, msg[2]); });
+        this.addCommand("pitch_shift", "if", { arg msg; var voice = msg[1] - 1; currentPitchShift[voice] = msg[2]; pitchShiftSynths[voice].set(\ratio, msg[2].midiratio); this.updatePitchShiftRun(voice); });
+        this.addCommand("pitch_shift_mix", "if", { arg msg; var voice = msg[1] - 1; currentPitchShiftMix[voice] = msg[2]; pitchShiftSynths[voice].set(\mix, msg[2]); this.updatePitchShiftRun(voice); });
         this.addCommand("direction_mod", "if", { arg msg; var voice = msg[1] - 1; currentDirectionMod[voice] = msg[2]; voices[voice].set(\direction_mod, msg[2]); });
         this.addCommand("size_variation", "if", { arg msg; var voice = msg[1] - 1; currentSizeVariation[voice] = msg[2]; voices[voice].set(\size_variation, msg[2]); });
         this.addCommand("amp_randomize", "if", { arg msg; var voice = msg[1] - 1; currentAmpRandomize[voice] = msg[2]; voices[voice].set(\amp_randomize, msg[2]); });
@@ -745,6 +770,7 @@ alloc {
     }
 
 updateFilterRun { arg voice; filterSynths[voice].run((currentCutoff[voice] < 20000) || (currentHpf[voice] > 20)); }
+updatePitchShiftRun { arg voice; pitchShiftSynths[voice].run(currentPitchShift[voice] != 0); }
 updateEqRun { arg voice; eqSynths[voice].run((currentLowGain[voice] != 0) || (currentMidGain[voice] != 0) || (currentHighGain[voice] != 0)); }
 updateDryRun { arg voice; drySynths[voice].run(voiceRunning[voice] && (currentGranularGain[voice] < 1)); }
 updateShimmerRun { revShimmerSynth.run((currentReverbMix > 0) && (currentShimmerMix > 0)); }
@@ -771,6 +797,7 @@ free {
         if (shimmerBus.notNil) { shimmerBus.free; shimmerBus = nil; };
         if (parallelBus.notNil) { parallelBus.free; parallelBus = nil; };
         if (filterSynths.notNil) { filterSynths.do({ arg s; if (s.notNil) { s.free; }; }); filterSynths = nil; };
+        if (pitchShiftSynths.notNil) { pitchShiftSynths.do({ arg s; if (s.notNil) { s.free; }; }); pitchShiftSynths = nil; };
         if (eqSynths.notNil) { eqSynths.do({ arg s; if (s.notNil) { s.free; }; }); eqSynths = nil; };
         if (filterRouters.notNil) { filterRouters.do({ arg s; if (s.notNil) { s.free; }; }); filterRouters = nil; };
         if (voiceBuses.notNil) { voiceBuses.do({ arg b; if (b.notNil) { b.free; }; }); voiceBuses = nil; };

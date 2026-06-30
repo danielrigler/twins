@@ -6,7 +6,7 @@
 --            by: @dddstudio                       
 -- 
 --                          
---                           v0.67
+--                           v0.68
 -- E1: Master Volume
 -- K1+E2/E3: Volume
 -- K2/K3: Navigate
@@ -68,6 +68,7 @@ local active_clocks = {}
 local key_state = {} for n = 1, 3 do key_state[n] = false end
 local current_mode = "seek"
 local current_filter_mode = "lpf"
+local pitchshift_display = false
 local tap_times = {}
 local TAP_TIMEOUT = 2
 local initial_monitor_level, initial_reverb_onoff;
@@ -135,6 +136,15 @@ local _grain_pool = {}
 local invalidate_lfo_cache = lfo.invalidate_lfo_param_cache
 local function do_capture_temp_scene() morph.capture_to_temp_scene(lfo.get_active_param_map()) end
 local shimmer_presets = {{oct = 0.25}, {oct = 0.5}, {oct = 1}, {oct = 2}, {oct = 4}}
+local function combo_longpress_fire()
+    if current_mode == "pitch" then
+        pitchshift_display = not pitchshift_display
+    else
+        undo.checkpoint()
+        lfo.assign_to_current_row(current_mode, current_filter_mode)
+        invalidate_lfo_cache()
+    end
+end
 local param_modes = {
     speed = {param = "speed", delta = 1, engine = true, has_lock = true},
     seek = {param = "seek", delta = 1, engine = true, has_lock = true},
@@ -145,10 +155,11 @@ local param_modes = {
     size = {param = "size", delta = 2, engine = true, has_lock = true, y = 21, label = "size:"},
     density = {param = "density", delta = 2, engine = true, has_lock = true, y = 31, label = "density:", hz = true},
     pitch = {param = "pitch", delta = 1, engine = true, has_lock = true, y = 41, label = "pitch:", st = true},
+    pitchshift = {param = "pitch_shift", delta = 1, engine = true, has_lock = false, st = true},
     spread = {param = "spread", delta = 2, engine = true, has_lock = true, y = 51, label = "spread:"},
     volume = {param = "volume", engine = true}}
 local param_rows = {} for mode, config in pairs(param_modes) do if config.y then local lbl = config.label local nm = lbl:match("%a+") table.insert(param_rows, {y = config.y, label = lbl, label_upper = lbl:upper(), name = nm, mode = mode, param1 = "1" .. config.param, param2 = "2" .. config.param, hz = config.hz, st = config.st, fmt_key = config.hz and "hz" or config.st and "st" or nm}) end end table.sort(param_rows, function(a, b) return a.y < b.y end)
-local LIMITS = {size={min=20,max=4999},density={min=0.1,max=50},pitch={min=-48,max=48}}
+local LIMITS = {size={min=20,max=4999},density={min=0.1,max=50},pitch={min=-48,max=48},pitch_shift={min=-24,max=24}}
 local SU = lfo.scale_utils
 local audio_files_cache = nil
 local scale_intervals_cache = {}
@@ -322,9 +333,7 @@ local function init_longpress_checker()
             if (now - combo_tracker.press_time) >= KEY_LONG_PRESS_THRESHOLD then
                 combo_tracker.long_triggered = true
                 combo_tracker.had_interaction = true
-                undo.checkpoint()
-                lfo.assign_to_current_row(current_mode, current_filter_mode)
-                invalidate_lfo_cache()
+                combo_longpress_fire()
             end
         end
         for s = 2, 3 do
@@ -662,7 +671,7 @@ local function setup_params()
     params:add{type = "trigger", id = "delete_morph_data", name = "Delete Morph Data", action = function() morph.scene_data = {[1] = {[1] = {}, [2] = {}}, [2] = {[1] = {}, [2] = {}}} morph.amount = 0 params:set("morph_amount", 0) params:set("scene_mode", 1) morph.scene_mode = "off" end}
 
     params:add_group("PITCH", 4)
-    params:add_option("pitch_quantize_scale", "Pitch Quantize", {"off", "major", "minor", "dorian", "phrygian", "lydian", "mixolydian", "locrian", "major pent.", "minor pent.", "blues", "whole tone"}, 2) params:set_action("pitch_quantize_scale", function(value) local scale = params:string("pitch_quantize_scale") if scale ~= "none" then for i = 1, 2 do local current_pitch = params:get(i.."pitch") local quantized = SU.quantize(current_pitch, scale) if current_pitch ~= quantized then params:set(i.."pitch", quantized) end end end end)
+    params:add_option("pitch_quantize_scale", "Pitch Quantize", {"off", "major", "minor", "dorian", "phrygian", "lydian", "mixolydian", "locrian", "major pent.", "minor pent.", "blues", "whole tone"}, 2) params:set_action("pitch_quantize_scale", function(value) local scale = params:string("pitch_quantize_scale") if scale ~= "none" then for i = 1, 2 do local current_pitch = params:get(i.."pitch") local quantized = SU.quantize(current_pitch, scale) if current_pitch ~= quantized then params:set(i.."pitch", quantized) end local cps = params:get(i.."pitch_shift") local qps = SU.quantize(cps, scale) if cps ~= qps then params:set(i.."pitch_shift", qps) end end end end)
     params:add_option("pitch_lag", "Pitch Lag", {"off", "very small", "small", "medium", "high", "very high"}, 1) params:set_action("pitch_lag", function(value) local lag_times = {0, 1, 2, 4, 8, 16} local lag_time = lag_times[value] for i = 1, 2 do engine.pitch_lag(i, lag_time) end end)
     params:add_separator("                                   ")
     params:add_option("lock_pitch", "Lock Parameters", {"off", "on"}, 1)
@@ -681,7 +690,7 @@ local function setup_params()
     params:add_separator("                                    ")
     params:add_option("lock_sync", "Lock Parameters", {"off", "on"}, 1)
     
-    params:add_group("OTHER", 25)
+    params:add_group("OTHER", 29)
     params:add_binary("dry_mode", "Dry Mode", "toggle", 0) params:set_action("dry_mode", function(x) drymode.toggle_dry_mode() end)
     params:add_binary("randomtape1", "Random Tape 1", "trigger", 0) params:set_action("randomtape1", function() load_random_tape_file(1) end)
     params:add_binary("randomtape2", "Random Tape 2", "trigger", 0) params:set_action("randomtape2", function() load_random_tape_file(2) end)
@@ -695,6 +704,8 @@ local function setup_params()
       params:add_taper(i.. "speed", i.. " speed", -2, 2, 0, 0) params:set_action(i.. "speed", function(value) if abs(value) < 0.01 then engine.speed(i, 0) else engine.speed(i, value) end end)
       params:add_taper(i.. "density", i.. " density", 0.1, 250, 3.5, 5) params:set_action(i.. "density", function(value) engine.density(i, clocksync.grain_density(i) or value) end)
       params:add_control(i.. "pitch", i.. " pitch", controlspec.new(-48, 48, "lin", 1, 0, "st")) params:set_action(i.. "pitch", function(value) local scale = params:string("pitch_quantize_scale") local quantized = SU.quantize(value, scale) engine.pitch_offset(i, math.pow(0.5, -quantized / 12)) end)
+      params:add_control(i.. "pitch_shift", i.. " pitch shift", controlspec.new(-24, 24, "lin", 1, 0, "st")) params:set_action(i.. "pitch_shift", function(value) local scale = params:string("pitch_quantize_scale") engine.pitch_shift(i, SU.quantize(value, scale)) font.update_fx_cache(i.. "pitch_shift", value) end)
+      params:add_taper(i.. "pitch_shift_mix", i.. " pitch shift mix", 0, 100, 60, 0, "%") params:set_action(i.. "pitch_shift_mix", function(value) engine.pitch_shift_mix(i, value * 0.01) end)
       params:add_taper(i.. "jitter", i.. " jitter", 0, 999900, 250, 10, "ms") params:set_action(i.. "jitter", function(value) engine.jitter(i, value * 0.001) end)
       params:add_taper(i.. "size", i.. " size", 20, 5000, 500, 1, "ms") params:set_action(i.. "size", function(value) engine.size(i, value * 0.001) end)
       params:add_taper(i.. "spread", i.. " spread", 0, 100, 60, 0, "%") params:set_action(i.. "spread", function(value) engine.spread(i, value * 0.01) end)
@@ -987,16 +998,17 @@ local function handle_standard_param(track, config, delta)
     local sym = params:get("symmetry") == 1
     local p = track .. config.param
     disable_lfos_for_param(p, not sym)
-    if config.param == "pitch" then
+    if config.param == "pitch" or config.param == "pitch_shift" then
         local old_value = params:get(p)
         local scale = params:string("pitch_quantize_scale")
+        local lim = LIMITS[config.param] or LIMITS.pitch
         if scale ~= "none" then
             local direction = delta > 0 and 1 or -1
-            local new_value = clamp(get_next_scale_note(old_value, scale, direction), LIMITS.pitch.min, LIMITS.pitch.max)
+            local new_value = clamp(get_next_scale_note(old_value, scale, direction), lim.min, lim.max)
             params:set(p, new_value)
             if sym then
                 local other_p = (3 - track) .. config.param
-                params:set(other_p, clamp(get_next_scale_note(params:get(other_p), scale, direction), LIMITS.pitch.min, LIMITS.pitch.max))
+                params:set(other_p, clamp(get_next_scale_note(params:get(other_p), scale, direction), lim.min, lim.max))
             end
         else
             params:delta(p, delta)
@@ -1233,6 +1245,12 @@ end
 local FX_MAP = { "reverb_mix", "delay_mix", "shimmer_mix1" }
 local FX_LABELS = { "reverb", "delay", "shimmer" }
 
+local function active_edit_mode()
+    if current_mode == "pitch" and pitchshift_display then return "pitchshift" end
+    if current_mode == "lpf" or current_mode == "hpf" then return current_filter_mode end
+    return current_mode
+end
+
 function enc(n, d)
     if not installer:ready() then return end
     if presets.is_menu_open() then presets.menu_enc(n, d) return end
@@ -1255,7 +1273,7 @@ function enc(n, d)
         if k1 then
             param_name = "volume"
         else
-            local mode_name = (current_mode == "lpf" or current_mode == "hpf") and current_filter_mode or current_mode
+            local mode_name = active_edit_mode()
             param_name = param_modes[mode_name] and param_modes[mode_name].param or mode_name
         end
         mark_key_interaction(k1, k2, k3)
@@ -1317,7 +1335,7 @@ function enc(n, d)
             params:delta(p, 3 * d)
             _G.master_vol_diff = params:get("1volume") - params:get("2volume")
         else
-            local mode = (current_mode == "lpf" or current_mode == "hpf") and current_filter_mode or current_mode
+            local mode = active_edit_mode()
             if mode == "density" and clocksync.grain_synced() then
                 local sym = params:get("symmetry") == 1
                 disable_lfos_for_param(track .. "density", not sym)
@@ -1362,9 +1380,7 @@ local function handle_key_release(n, both_keys_pressed)
         if not combo_tracker.had_interaction then
             local duration = util.time() - combo_tracker.press_time
             if duration >= KEY_LONG_PRESS_THRESHOLD then
-                undo.checkpoint()
-                lfo.assign_to_current_row(current_mode, current_filter_mode)
-                invalidate_lfo_cache()
+                combo_longpress_fire()
             else
                 handle_parameter_lock()
             end
@@ -1634,26 +1650,27 @@ function redraw()
   OFFS[1], OFFS[2] = -anim_offset_x, anim_offset_x
   TXP[1], TXP[2] = TRACK_X[1] + OFFS[1], TRACK_X[2] + OFFS[2]
   for ri = 1, #param_rows do local row = param_rows[ri]
-    local name = row.name
+    local ps = (row.mode == "pitch" and pitchshift_display)
+    local name = ps and "pitch_shift" or row.name
     local hi = cur_mode == row.mode
     local y = row.y
     if hi then 
-      T(1, 7 + left_slide, y + 1, row.label_upper)
-      T(LEVEL.hi, 6 + left_slide, y, row.label_upper) 
+      T(1, 7 + left_slide, y + 1, ps and "PITCH S:" or row.label_upper)
+      T(LEVEL.hi, 6 + left_slide, y, ps and "PITCH S:" or row.label_upper) 
     else 
-      T(LEVEL.hi, 6 + left_slide, y, row.label) 
+      T(LEVEL.hi, 6 + left_slide, y, ps and "pitch s:" or row.label) 
     end
     local fmt = FORMAT[row.fmt_key]
     local density_synced = (row.name == "density" and clocksync.grain_synced())
     for t = 1,2 do
       local x = TXP[t]
-      local param = t == 1 and row.param1 or row.param2
+      local param = ps and (t == 1 and "1pitch_shift" or "2pitch_shift") or (t == 1 and row.param1 or row.param2)
       local C = PARAM_CACHE.track[t]
       if name == "size" and PARAM_CACHE.link then draw_size_link(x, y) end
-      if C.locked[name] then draw_lock(x, y - 1) end
+      if C.locked[ps and "pitch" or name] then draw_lock(x, y - 1) end
       local val = pget(param)
       local sync_label = density_synced and clocksync.grain_division_label(t) or nil
-      local txt = sync_label or (fmt and val_text(param, val, fmt, t, row.st and C.pitch_rand or nil) or params:string(param))
+      local txt = sync_label or (fmt and val_text(param, val, fmt, t, (not ps) and row.st and C.pitch_rand or nil) or params:string(param))
       T(flash_level(t, hi and LEVEL.hi or LEVEL.val), x, y, txt)
       if C.lfo_on[param] and not sync_label then
         local rc = _LFO_RANGE_CACHE[param]

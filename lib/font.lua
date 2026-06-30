@@ -16,6 +16,7 @@ font.micro_font = {
   H = {{1,0,1},{1,1,1},{1,0,1}},
   Z = {{0,1,1,1,1},{0,1,0,1,0},{1,1,0,1,0}},
   F = {{1,1,1},{1,1,0},{1,0,0}},
+  P = {{1,1,1},{1,1,1},{1,0,0}},
   O = {{1,1,1},{1,0,1},{1,1,1}},
   W = {{1,0,1},{1,1,1},{1,1,1}},
   M = {{1,0,1},{0,1,0},{1,0,1}}
@@ -67,7 +68,9 @@ local fx_cache = {
   ["1cutoff"]     = 20000,
   ["2cutoff"]     = 20000,
   ["1hpf"]        = 20,
-  ["2hpf"]        = 20
+  ["2hpf"]        = 20,
+  ["1pitch_shift"] = 0,
+  ["2pitch_shift"] = 0
 }
 
 function font.update_fx_cache(param_name, value)
@@ -153,7 +156,18 @@ local function filter_intensity(cache)
   return math.max(v1, v2) * 100
 end
 
+local function pitchshift_active(cache)
+  return cache["1pitch_shift"] ~= 0 or cache["2pitch_shift"] ~= 0
+end
+
+local function pitchshift_intensity(cache)
+  local v1 = math.abs(cache["1pitch_shift"]) / 24
+  local v2 = math.abs(cache["2pitch_shift"]) / 24
+  return math.max(v1, v2) * 100
+end
+
 local FX_SPECS = {
+  {glyph = "P", lock = nil,            show = pitchshift_active,                                     val = pitchshift_intensity},
   {glyph = "F", lock = "lock_filter",  show = filter_active,                                          val = filter_intensity},
   {glyph = "B", lock = nil,            show = function(c) return c.bitcrush_mix > 0 end,              val = function(c) return c.bitcrush_mix end},
   {glyph = "O", lock = nil,            show = function(c) return c.resonator_mix > 0 end,            val = function(c) return c.resonator_mix end},
