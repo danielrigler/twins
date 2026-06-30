@@ -124,13 +124,8 @@ alloc {
             sig_mix = granular_sig * granular_gain;
             amp_scale = Lag.kr(gain) * key_env * vel_amp;
             signal = sig_mix * amp_scale;
-            // Meter the granular content pre granular_gain so peaks keep
-            // displaying when granular_gain is 0 (dry path crossfades in at the
-            // same amp_scale). amp_scale is retained so the Lua-side pre-fader
-            // reconstruction (peak_db - vol) still holds.
             meter_sig = granular_sig * amp_scale;
             Out.kr(amp_bus, amp_scale);
-
             wrapped_grain_pos = Wrap.kr(buf_pos + jitter_sig);
             SendReply.kr(trigger60, '/voice_state', [voice, buf_pos, Peak.kr(meter_sig[0], trigger60), Peak.kr(meter_sig[1], trigger60)]);
             {
