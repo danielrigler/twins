@@ -1035,7 +1035,7 @@ local function handle_randomize_track(n, force)
     local track = n == 3 and 2 or 1
     undo.checkpoint()
     stop_metro_safe(randomize_metro[track])
-    lfo.clearLFOs(tostring(track), nil, "volume")
+    lfo.clearLFOs(tostring(track), nil, lfo.PRESERVE_ON_RANDOMIZE)
     lfo.randomize_lfos(tostring(track), params:get("allow_volume_lfos") == 2)
     invalidate_lfo_cache()
     randomize(track)
@@ -1655,10 +1655,10 @@ function redraw()
     local hi = cur_mode == row.mode
     local y = row.y
     if hi then 
-      T(1, 7 + left_slide, y + 1, ps and "PITCH S:" or row.label_upper)
-      T(LEVEL.hi, 6 + left_slide, y, ps and "PITCH S:" or row.label_upper) 
+      T(1, 7 + left_slide, y + 1, ps and "PITCH:)" or row.label_upper)
+      T(LEVEL.hi, 6 + left_slide, y, ps and "PITCH:)" or row.label_upper) 
     else 
-      T(LEVEL.hi, 6 + left_slide, y, ps and "pitch s:" or row.label) 
+      T(LEVEL.hi, 6 + left_slide, y, ps and "pitch:)" or row.label) 
     end
     local fmt = FORMAT[row.fmt_key]
     local density_synced = (row.name == "density" and clocksync.grain_synced())

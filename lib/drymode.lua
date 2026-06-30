@@ -37,7 +37,8 @@ local DRY_VALUES_STEREO = {
     cutoff = 20000,
     hpf = 20,
     lpf_gain = 0.05,
-    pan = 0
+    pan = 0,
+    pitch_shift = 0
 }
 
 local STEREO_PARAMS = {} for k in pairs(DRY_VALUES_STEREO) do STEREO_PARAMS[#STEREO_PARAMS + 1] = k end
@@ -49,10 +50,12 @@ local LFO_TARGETS = {
     speed = {["1speed"] = true, ["2speed"] = true},
     seek = {["1seek"] = true, ["2seek"] = true},
     pan = {["1pan"] = true, ["2pan"] = true},
-    volume = {["1volume"] = true, ["2volume"] = true}
+    volume = {["1volume"] = true, ["2volume"] = true},
+    cutoff = {["1cutoff"] = true, ["2cutoff"] = true},
+    hpf = {["1hpf"] = true, ["2hpf"] = true}
 }
 
-local LFO_TARGET_TYPES = {"speed", "seek", "pan", "volume"}
+local LFO_TARGET_TYPES = {"speed", "seek", "pan", "volume", "cutoff", "hpf"}
 
 function drymode.set_lfo_reference(lfo_module) lfo = lfo_module end
 

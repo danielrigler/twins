@@ -101,6 +101,7 @@ end
 lfo.lfo_targets = {"none", "1pan", "2pan", "1seek", "2seek", "1jitter", "2jitter", "1spread", "2spread", "1size", "2size", "1density", "2density", "1volume", "2volume", "1pitch", "2pitch", "1cutoff", "2hpf", "1speed", "2speed", "1hpf", "2cutoff"}
 local LFO_TARGET_REVERSE = {}
 for i, t in ipairs(lfo.lfo_targets) do LFO_TARGET_REVERSE[t] = i end
+lfo.PRESERVE_ON_RANDOMIZE = { volume = true, cutoff = true, hpf = true }
 lfo.target_ranges = {
     ["1pan"] = {depth = {25, 90}, offset = {0, 0}, frequency = {0.1, 1}, waveform = {"walk"}, chance = 0.75},
     ["2pan"] = {depth = {25, 90}, offset = {0, 0}, frequency = {0.1, 1}, waveform = {"walk"}, chance = 0.75},
@@ -238,6 +239,7 @@ function lfo.clearLFOs(track, param_type, except_param)
     end
     local function excluded(target)
         if not except_param then return false end
+        if type(except_param) == "table" then return except_param[target:sub(2)] == true end
         if track then return target == track .. except_param end
         return target:sub(2) == except_param
     end
@@ -386,7 +388,7 @@ function lfo.randomize_lfos(track, allow_volume_lfos)
                 local target = lfo.lfo_targets[t_idx]
                 if target then
                     local tn, pn = split_target(target)
-                    local is_vol = target:match("volume$")
+                    local is_vol = lfo.PRESERVE_ON_RANDOMIZE[pn]
                     local should_clear = (symmetry and not is_vol and target:match("^[12]")) or (target:match("^" .. track) and not is_vol)
                     if should_clear and not lfo.is_param_locked(tn, pn) then
                         pset(LFO_KEYS[i], 1)
