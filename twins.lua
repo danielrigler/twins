@@ -159,7 +159,7 @@ local param_modes = {
     spread = {param = "spread", delta = 2, engine = true, has_lock = true, y = 51, label = "spread:"},
     volume = {param = "volume", engine = true}}
 local param_rows = {} for mode, config in pairs(param_modes) do if config.y then local lbl = config.label local nm = lbl:match("%a+") table.insert(param_rows, {y = config.y, label = lbl, label_upper = lbl:upper(), name = nm, mode = mode, param1 = "1" .. config.param, param2 = "2" .. config.param, hz = config.hz, st = config.st, fmt_key = config.hz and "hz" or config.st and "st" or nm}) end end table.sort(param_rows, function(a, b) return a.y < b.y end)
-local LIMITS = {size={min=20,max=4999},density={min=0.1,max=50},pitch={min=-48,max=48},pitch_shift={min=-24,max=24}}
+local LIMITS = {size={min=20,max=4999},density={min=0.1,max=50},pitch={min=-48,max=48},pitch_shift={min=-48,max=48}}
 local SU = lfo.scale_utils
 local audio_files_cache = nil
 local scale_intervals_cache = {}
@@ -704,7 +704,7 @@ local function setup_params()
       params:add_taper(i.. "speed", i.. " speed", -2, 2, 0, 0) params:set_action(i.. "speed", function(value) if abs(value) < 0.01 then engine.speed(i, 0) else engine.speed(i, value) end end)
       params:add_taper(i.. "density", i.. " density", 0.1, 250, 3.5, 5) params:set_action(i.. "density", function(value) engine.density(i, clocksync.grain_density(i) or value) end)
       params:add_control(i.. "pitch", i.. " pitch", controlspec.new(-48, 48, "lin", 1, 0, "st")) params:set_action(i.. "pitch", function(value) local scale = params:string("pitch_quantize_scale") local quantized = SU.quantize(value, scale) engine.pitch_offset(i, math.pow(0.5, -quantized / 12)) end)
-      params:add_control(i.. "pitch_shift", i.. " pitch shift", controlspec.new(-24, 24, "lin", 1, 0, "st")) params:set_action(i.. "pitch_shift", function(value) local scale = params:string("pitch_quantize_scale") engine.pitch_shift(i, SU.quantize(value, scale)) font.update_fx_cache(i.. "pitch_shift", value) end)
+      params:add_control(i.. "pitch_shift", i.. " pitch shift", controlspec.new(-48, 48, "lin", 1, 0, "st")) params:set_action(i.. "pitch_shift", function(value) local scale = params:string("pitch_quantize_scale") engine.pitch_shift(i, SU.quantize(value, scale)) font.update_fx_cache(i.. "pitch_shift", value) end)
       params:add_taper(i.. "pitch_shift_mix", i.. " pitch shift mix", 0, 100, 60, 0, "%") params:set_action(i.. "pitch_shift_mix", function(value) engine.pitch_shift_mix(i, value * 0.01) end)
       params:add_taper(i.. "jitter", i.. " jitter", 0, 999900, 250, 10, "ms") params:set_action(i.. "jitter", function(value) engine.jitter(i, value * 0.001) end)
       params:add_taper(i.. "size", i.. " size", 20, 5000, 500, 1, "ms") params:set_action(i.. "size", function(value) engine.size(i, value * 0.001) end)

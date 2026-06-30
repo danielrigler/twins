@@ -161,8 +161,8 @@ local function pitchshift_active(cache)
 end
 
 local function pitchshift_intensity(cache)
-  local v1 = math.abs(cache["1pitch_shift"]) / 24
-  local v2 = math.abs(cache["2pitch_shift"]) / 24
+  local v1 = math.abs(cache["1pitch_shift"]) / 48
+  local v2 = math.abs(cache["2pitch_shift"]) / 48
   return math.max(v1, v2) * 100
 end
 
