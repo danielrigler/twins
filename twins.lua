@@ -170,7 +170,7 @@ local pan_indicator_x = {[1] = -80, [2] = 80} local pan_indicators_visible = fal
 local volume_bar_y = {[1] = 120, [2] = 120} local volume_bars_visible = false
 local seek_bar_width = 0 local seek_bars_visible = false
 local randomize_flash = {[1] = 0, [2] = 0, held = {false, false}, midi = {0, 0}}
-local FLASH_INTENSITY = 8
+local FLASH_INTENSITY = 12
 local FLASH_DECAY = 0.9
 local function flash_level(track, base_level) local f = randomize_flash[track] local m = randomize_flash.held[track] and 1 or randomize_flash.midi[track] if m > f then f = m end if f <= 0.001 then return base_level end return min(base_level + floor(f * FLASH_INTENSITY), 15) end
 local random_float = utils.random_float
@@ -1655,7 +1655,6 @@ function redraw()
     local hi = cur_mode == row.mode
     local y = row.y
     if hi then 
-      T(1, 7 + left_slide, y + 1, ps and "PITCH:)" or row.label_upper)
       T(LEVEL.hi, 6 + left_slide, y, ps and "PITCH:)" or row.label_upper) 
     else 
       T(LEVEL.hi, 6 + left_slide, y, ps and "pitch:)" or row.label) 
@@ -1698,7 +1697,6 @@ function redraw()
   local label = LABEL_CACHE[disp_mode] or (disp_mode .. ":      ")
   local label_upper = LABEL_UPPER_CACHE[disp_mode] or string.upper(label)
   local y_bot = Y.bottom
-  if active then T(1, 7 + left_slide, y_bot + 2, label_upper) end
   T(LEVEL.hi, 6 + left_slide, y_bot + 1, active and label_upper or label)
   for t = 1,2 do
     local x = TXP[t]
@@ -1740,7 +1738,7 @@ function redraw()
     R(LEVEL.dim - 3, current_vol_x, 64 - h + volume_bar_y[t], 2, h)
     local peak_amp = (audio_active[t] or C.in_ == 1 or C.dir_ == 1) and max(voice_peak_amplitudes[t].l, voice_peak_amplitudes[t].r) or 0
     if peak_amp > 0 then
-      local peak_db = log(peak_amp) * 8.685889638065035
+      local peak_db = log(peak_amp) * 9
       local pre_fader_db = peak_db - C.vol
       local pre_fader_ratio = (pre_fader_db + 70) / 70
       if pre_fader_ratio < 0 then pre_fader_ratio = 0 elseif pre_fader_ratio > 1 then pre_fader_ratio = 1 end
