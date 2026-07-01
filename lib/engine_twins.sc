@@ -1,6 +1,6 @@
 Engine_twins : CroneEngine {
 
-var dimensionEffect, haasEffect, bitcrushEffect, saturationEffect, resonatorEffect, wavefoldEffect, ringmodEffect, delayEffect, reverbEffect, shimmerEffect, tapeEffect, chewEffect, widthEffect, monobassEffect, sineEffect, wobbleEffect, lossdegradeEffect, rotateEffect, glitchEffect, <silentBuffer, <buffersL, <buffersR, wobbleBuffer, glitchBuffer, mixBus, postFxBus, shimmerBus, parallelBus, <voices, bufSine, pg, <liveInputBuffersL, <liveInputBuffersR, <liveInputRecorders, <liveRecPosBuses, o, o_rec, o_grain, o_voice_peak, mixToParallelRouter, parallelToPostFxRouter, finalOutputRouter, liveBufferAllocGeneration = 0, grainEnvs, pitchScaleBuffers, pitchScaleLengths, nornsAddr, voicesUsingLiveBuffer, currentSpeed, currentJitter, currentSize, currentDensity, currentDensityModAmt, currentPitch, currentPan, currentSpread, currentVolume, currentGranularGain, currentCutoff, currentHpf, currentlpf_gain, currentSubharmonics1, currentSubharmonics2, currentSubharmonics3, currentOvertones1, currentOvertones2, currentPitchMode, currentDirectionMod, currentSizeVariation, currentSmoothbass, currentLowGain, currentMidGain, currentHighGain, currentProbability, liveBufferMix = 1.0, currentPitchRandomProb, currentPitchRandomScale, currentRatchetingProb, currentPitchLag, currentGlitchRatio = 0.0, currentGlitchMix = 0.0, currentKeyHold, currentKeyGate, currentAdA, currentAdD, currentVelAmp, currentAmpRandomize, voiceBuses, filterSynths, filterRouters, eqSynths, dryGroup, drySynths, voiceAmpBuses, voiceRunning, revShimmerSynth, revShimmerSendBus, revShimmerReturnBus, currentReverbMix = 0.0, currentShimmerMix = 0.0, voiceIsStereo, pitchShiftSynths, currentPitchShift, currentPitchShiftMix;
+var dimensionEffect, haasEffect, bitcrushEffect, saturationEffect, resonatorEffect, wavefoldEffect, ringmodEffect, delayEffect, reverbEffect, shimmerEffect, tapeEffect, chewEffect, widthEffect, monobassEffect, sineEffect, wobbleEffect, lossdegradeEffect, rotateEffect, glitchEffect, <silentBuffer, <buffersL, <buffersR, wobbleBuffer, glitchBuffer, mixBus, postFxBus, shimmerBus, parallelBus, <voices, bufSine, pg, <liveInputBuffersL, <liveInputBuffersR, <liveInputRecorders, <liveRecPosBuses, o, o_rec, o_grain, o_voice_peak, o_delayduck, mixToParallelRouter, parallelToPostFxRouter, finalOutputRouter, liveBufferAllocGeneration = 0, grainEnvs, pitchScaleBuffers, pitchScaleLengths, nornsAddr, voicesUsingLiveBuffer, currentSpeed, currentJitter, currentSize, currentDensity, currentDensityModAmt, currentPitch, currentPan, currentSpread, currentVolume, currentGranularGain, currentCutoff, currentHpf, currentlpf_gain, currentSubharmonics1, currentSubharmonics2, currentSubharmonics3, currentOvertones1, currentOvertones2, currentPitchMode, currentDirectionMod, currentSizeVariation, currentSmoothbass, currentLowGain, currentMidGain, currentHighGain, currentProbability, liveBufferMix = 1.0, currentPitchRandomProb, currentPitchRandomScale, currentRatchetingProb, currentPitchLag, currentGlitchRatio = 0.0, currentGlitchMix = 0.0, currentKeyHold, currentKeyGate, currentAdA, currentAdD, currentVelAmp, currentAmpRandomize, voiceBuses, filterSynths, filterRouters, eqSynths, dryGroup, drySynths, voiceAmpBuses, voiceRunning, revShimmerSynth, revShimmerSendBus, revShimmerReturnBus, currentReverbMix = 0.0, currentShimmerMix = 0.0, voiceIsStereo, pitchShiftSynths, currentPitchShift, currentPitchShiftMix;
 
 classvar pitchScales;
 *initClass {pitchScales = [[7, 12], [7, 12, 19, 24], [12], [12, 24], [1,2,3,4,5,6,7,8,9,10,11], [2,4,5,7,9,11], [2,3,5,7,8,10], [2,4,7,9], [2,4,6,8,10]];}
@@ -302,9 +302,9 @@ alloc {
         }).add;
 
         SynthDef(\delay, {
-            arg inBus, outBus, mix=0.0, delay=0.5, fb_amt=0.3, dhpf=20, lpf=20000, w_rate=0.0, w_depth=0.0, stereo=0.2;
+            arg inBus, outBus, mix=0.0, delay=0.5, fb_amt=0.3, dhpf=20, lpf=20000, w_rate=0.0, w_depth=0.0, stereo=0.2, duck_amt=0.0;
             var input, local, fb, delayed, wet, combinedMod, lfo2Rate, lfo3Rate;
-            var baseLFO, drift, wobble, steps;
+            var baseLFO, drift, wobble, steps, dryAmp, duck;
             lfo2Rate = w_rate * (1 + LFNoise1.kr(0.13, 0.18));
             lfo3Rate = w_rate * 0.71;
             baseLFO = SinOsc.kr(w_rate * [0.6, 0.63]).sum * 0.5;
@@ -319,16 +319,19 @@ alloc {
             delayed = DelayC.ar(input + fb, 2, Lag.kr(delay, 0.7) + combinedMod);
             wet = Balance2.ar(delayed[0], delayed[1], (SinOsc.kr(delay.max(0.1).reciprocal * 0.5) + (LFNoise2.kr(0.4) * 0.3)) * (stereo * 0.77));
             LocalOut.ar(wet);
-            Out.ar(outBus, wet * mix * 1.3);
+            dryAmp = Amplitude.kr(input.sum, 0.005, 0.05);
+            duck = LagUD.kr((1 - (dryAmp.sqrt * duck_amt * 6).clip(0, 1)), 0.15, 0.02);
+            SendReply.kr(Impulse.kr(20), '/delay_duck', [duck]);
+            Out.ar(outBus, wet * mix * 1.3 * duck);
         }).add;
 
         SynthDef(\reverb, {
             arg inBus1, inBus2, outBus, mix=0.0,
             pre_delay=35, pre_filter=0.1, pre_hpf=60, decay=0.75, damp=0.40, mod_depth=0.35, mod_rate=1.25,
-            shimmer_mix=0.0;
+            shimmer_mix=0.0, low_mult=1.0;
             var combined, reverb_input, pitch_feedback;
             var tank_fb;
-            var preTank, tank, wet, wetL, wetR, damping, preFilter, decayRate;
+            var preTank, tank, wet, wetL, wetR, damping, preFilter, decayRate, loBand;
             var dSR = 29761;
             var exMax = 24;
             var gFacT60 = { |del, gFac| gFac.sign * (-3 * del / log10(gFac.abs)); };
@@ -362,7 +365,9 @@ alloc {
             wetR = 0.6 * tank;
             wetR = 0.6 * DelayN.ar(tank, 3300/dSR, 3300/dSR) + wetR;
             tank = DelayN.ar(tank, tankDel1, tankDel1);
-            tank = OnePole.ar(tank, damping) * decayRate;
+            tank = OnePole.ar(tank, damping);
+            loBand = LPF.ar(tank, 350);
+            tank = (loBand * (decayRate * low_mult).clip(0, 0.998)) + ((tank - loBand) * decayRate);
             wetL = -0.6 * tank + wetL;
             tank = AllpassN.ar(tank, tankAP2Time, tankAP2Time, gFacT60.value(tankAP2Time, tankAP2GFac));
             wetR = -0.6 * tank + wetR;
@@ -373,7 +378,9 @@ alloc {
             wetL = 0.6 * DelayN.ar(tank, 2700/dSR, 2700/dSR) + wetL;
             wetR = -0.6 * DelayN.ar(tank, 2100/dSR, 2100/dSR) + wetR;
             tank = DelayC.ar(tank, tankDel3, tankDel3);
-            tank = OnePole.ar(tank, damping) * decayRate;
+            tank = OnePole.ar(tank, damping);
+            loBand = LPF.ar(tank, 350);
+            tank = (loBand * (decayRate * low_mult).clip(0, 0.998)) + ((tank - loBand) * decayRate);
             tank = AllpassN.ar(tank, tankAP4Time, tankAP4Time, gFacT60.value(tankAP4Time, tankAP4GFac));
             wetL = -0.6 * tank + wetL;
             wetR = -0.6 * DelayN.ar(tank, 200/dSR, 200/dSR) + wetR;
@@ -630,6 +637,7 @@ alloc {
         this.addCommand(\w_rate, "f", { arg msg; delayEffect.set(\w_rate, msg[1]); });
         this.addCommand(\w_depth, "f", { arg msg; delayEffect.set(\w_depth, msg[1]/100); });
         this.addCommand("stereo", "f", { arg msg; delayEffect.set(\stereo, msg[1]); });
+        this.addCommand("delay_duck", "f", { arg msg; delayEffect.set(\duck_amt, msg[1]); });
 
         this.addCommand("reverb_mix", "f", { arg msg; currentReverbMix = msg[1]; reverbEffect.set(\mix, msg[1]); reverbEffect.run(msg[1] > 0); this.updateShimmerRun; });
         this.addCommand("shimmer_mix", "f", { arg msg; currentShimmerMix = msg[1]; reverbEffect.set(\shimmer_mix, msg[1]); this.updateShimmerRun; });
@@ -643,6 +651,7 @@ alloc {
         this.addCommand("rev_damp", "f", { arg msg; reverbEffect.set(\damp, msg[1]); });
         this.addCommand("rev_moddepth", "f", { arg msg; reverbEffect.set(\mod_depth, msg[1]); });
         this.addCommand("rev_modrate", "f", { arg msg; reverbEffect.set(\mod_rate, msg[1]); });
+        this.addCommand("rev_lowmult", "f", { arg msg; reverbEffect.set(\low_mult, msg[1]); });
 
         this.addCommand("shimmer_mix1", "f", { arg msg; shimmerEffect.set(\mix, msg[1]); shimmerEffect.run(msg[1] > 0); });
         this.addCommand("shimmer_mod1", "i", { arg msg; shimmerEffect.set(\mod_mix, msg[1]); });
@@ -762,6 +771,7 @@ alloc {
         o_rec = OSCFunc({ |msg| nornsAddr.sendMsg("/twins/rec_pos", msg[3].asInteger, msg[4]); }, '/rec_pos', context.server.addr);
         o_grain = OSCFunc({ |msg| nornsAddr.sendMsg("/twins/grain_pos", msg[3].asInteger, msg[4], msg[5], msg[6]); }, '/grain_pos', context.server.addr);
         o_voice_peak = OSCFunc({ |msg| nornsAddr.sendMsg("/twins/voice_peak", msg[3].asInteger, msg[4], msg[5]); }, '/voice_peak', context.server.addr);
+        o_delayduck = OSCFunc({ |msg| nornsAddr.sendMsg("/twins/delay_duck", msg[3]); }, '/delay_duck', context.server.addr);
     }
 
 updateFilterRun { arg voice; filterSynths[voice].run((currentCutoff[voice] < 20000) || (currentHpf[voice] > 20)); }
@@ -784,6 +794,7 @@ free {
         if (o_rec.notNil) { o_rec.free; o_rec = nil; };
         if (o_grain.notNil) { o_grain.free; o_grain = nil; };
         if (o_voice_peak.notNil) { o_voice_peak.free; o_voice_peak = nil; };
+        if (o_delayduck.notNil) { o_delayduck.free; o_delayduck = nil; };
         if (wobbleBuffer.notNil) { wobbleBuffer.free; wobbleBuffer = nil; };
         if (glitchBuffer.notNil) { glitchBuffer.free; glitchBuffer = nil; };
         if (silentBuffer.notNil) { silentBuffer.free; silentBuffer = nil; };

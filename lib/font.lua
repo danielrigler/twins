@@ -97,6 +97,11 @@ end
 
 local _lock_cache = {}
 local _blink_level = 1
+local _delay_duck_gain = 1.0
+
+function font.set_delay_duck(gain)
+  _delay_duck_gain = gain
+end
 
 local function value_to_level(val)
   return 1 + math.floor((val / 100) * 14)
@@ -175,7 +180,7 @@ local FX_SPECS = {
   {glyph = "M", lock = nil,            show = function(c) return c.ringmod_mix > 0 end,              val = function(c) return c.ringmod_mix end},
   {glyph = "G", lock = "lock_glitch",  show = function(c) return c.glitch_ratio > 0 and c.glitch_mix > 0 end, val = function(c) return c.glitch_ratio end},
   {glyph = "T", lock = "lock_tape",    show = tape_active,                                            val = tape_intensity},
-  {glyph = "D", lock = "lock_delay",   show = function(c) return c.delay_mix > 0 end,                 val = function(c) return c.delay_mix end},
+  {glyph = "D", lock = "lock_delay",   show = function(c) return c.delay_mix > 0 end,                 val = function(c) return c.delay_mix end, fade = function() return _delay_duck_gain end},
   {glyph = "X", lock = "lock_shimmer", show = function(c) return c.shimmer_mix1 > 0 end,              val = function(c) return c.shimmer_mix1 end},
   {glyph = "R", lock = "lock_reverb",  show = function(c) return c.reverb_mix > 0 end,                val = function(c) return c.reverb_mix end},
   {glyph = "Z", lock = nil,            show = stereo_active,                                          val = stereo_intensity},
@@ -211,6 +216,10 @@ function font.draw_fx_status_bucketed(P_func)
         local level = value_to_level(spec.val(fx_cache))
         if spec.lock and _lock_cache[spec.lock] then
           level = math.min(15, level + (_blink_level == 4 and 2 or 0))
+        end
+        if spec.fade then
+          local f = math.max(0, math.min(1, spec.fade(fx_cache)))
+          level = math.max(1, 1 + math.floor((level - 1) * f))
         end
         x = plot_text(collect, x, y, spec.glyph, level)
       end
