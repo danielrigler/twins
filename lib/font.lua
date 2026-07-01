@@ -87,10 +87,6 @@ function font.init_fx_cache()
   end
 end
 
-function font.draw_micro_text_bucketed(P_func, x, y, text, level)
-  plot_text(P_func, x, y, text, level)
-end
-
 local function is_locked(lock_key)
   return params.lookup[lock_key] and params:get(lock_key) == 2
 end
@@ -172,12 +168,12 @@ local function pitchshift_intensity(cache)
 end
 
 local FX_SPECS = {
-  {glyph = "P", lock = nil,            show = pitchshift_active,                                     val = pitchshift_intensity},
+  {glyph = "P", lock = nil,            show = pitchshift_active,                                      val = pitchshift_intensity},
   {glyph = "F", lock = "lock_filter",  show = filter_active,                                          val = filter_intensity},
   {glyph = "B", lock = nil,            show = function(c) return c.bitcrush_mix > 0 end,              val = function(c) return c.bitcrush_mix end},
-  {glyph = "O", lock = nil,            show = function(c) return c.resonator_mix > 0 end,            val = function(c) return c.resonator_mix end},
-  {glyph = "W", lock = nil,            show = function(c) return c.wavefold_mix > 0 end,             val = function(c) return c.wavefold_mix end},
-  {glyph = "M", lock = nil,            show = function(c) return c.ringmod_mix > 0 end,              val = function(c) return c.ringmod_mix end},
+  {glyph = "O", lock = nil,            show = function(c) return c.resonator_mix > 0 end,             val = function(c) return c.resonator_mix end},
+  {glyph = "W", lock = nil,            show = function(c) return c.wavefold_mix > 0 end,              val = function(c) return c.wavefold_mix end},
+  {glyph = "M", lock = nil,            show = function(c) return c.ringmod_mix > 0 end,               val = function(c) return c.ringmod_mix end},
   {glyph = "G", lock = "lock_glitch",  show = function(c) return c.glitch_ratio > 0 and c.glitch_mix > 0 end, val = function(c) return c.glitch_ratio end},
   {glyph = "T", lock = "lock_tape",    show = tape_active,                                            val = tape_intensity},
   {glyph = "D", lock = "lock_delay",   show = function(c) return c.delay_mix > 0 end,                 val = function(c) return c.delay_mix end, fade = function() return _delay_duck_gain end},
@@ -204,11 +200,9 @@ function font.draw_fx_status_bucketed(P_func)
     _pixel_cache = {}
     _last_update = now
     refresh_draw_caches()
-
     local collect = function(level, px, py)
       table.insert(_pixel_cache, {level, px, py})
     end
-
     local y = 0
     local x = 7
     for _, spec in ipairs(FX_SPECS) do
@@ -225,7 +219,6 @@ function font.draw_fx_status_bucketed(P_func)
       end
     end
   end
-
   for _, px in ipairs(_pixel_cache) do
     P_func(px[1], px[2], px[3])
   end

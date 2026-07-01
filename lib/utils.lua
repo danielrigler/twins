@@ -1,4 +1,5 @@
 local utils = {}
+
 local running_metros = {}
 
 function utils.metro_start(m)
@@ -21,8 +22,27 @@ function utils.deep_copy(t)
     return copy
 end
 
+function utils.clear_table(t)
+    for k in pairs(t) do t[k] = nil end
+end
+
 function utils.random_float(l, h)
-  return l + math.random() * (h - l)
+    return l + math.random() * (h - l)
+end
+
+function utils.mirror_param_name(param)
+    local mirrored = param:gsub("^(%d)(.*)", function(n, rest)
+        return tostring((tonumber(n) % 2) + 1) .. rest
+    end)
+    return mirrored
+end
+
+function utils.is_locked(key)
+    return params.lookup[key] ~= nil and params:get(key) == 2
+end
+
+function utils.is_param_locked(track, suffix)
+    return utils.is_locked(track .. "lock_" .. suffix)
 end
 
 return utils

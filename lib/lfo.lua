@@ -591,9 +591,6 @@ function lfo.apply_clock_sync(hz1, hz2)
         lfo[i].freq = hz
     end
 end
-function lfo.tick(bpm)
-    if not bpm then return end
-end
 function lfo.reset_phases()
     for i = 1, number_of_outputs do
         local obj = lfo[i]

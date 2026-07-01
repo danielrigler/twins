@@ -21,10 +21,10 @@ local evolution_group_enabled = {
   bitcrush = true,
 }
 local utils = include("lib/utils")
-local random_float    = utils.random_float
-local stop_metro_safe = utils.stop_metro_safe
-
-local function clear_table(t) for k in pairs(t) do t[k] = nil end end
+local random_float      = utils.random_float
+local stop_metro_safe   = utils.stop_metro_safe
+local clear_table       = utils.clear_table
+local mirror_param_name = utils.mirror_param_name
 
 local function set_group_evolution(group, enabled)
   if evolution_group_enabled[group] ~= nil then
@@ -40,12 +40,6 @@ end
 local function interpolate(current, target, threshold, factor)
   if math.abs(current - target) < threshold then return target end
   return current + (target - current) * (1 - math.exp(-4 * factor))
-end
-
-local function mirror_param_name(param)
-  return param:gsub("^(%d)(.*)", function(n, rest)
-    return tostring((tonumber(n) % 2) + 1) .. rest
-  end)
 end
 
 local PARAM_SPECS = {

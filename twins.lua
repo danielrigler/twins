@@ -1657,9 +1657,9 @@ function redraw()
     local hi = cur_mode == row.mode
     local y = row.y
     if hi then 
-      T(LEVEL.hi, 6 + left_slide, y, ps and "PITCH:)" or row.label_upper) 
+      T(LEVEL.hi, 6 + left_slide, y, ps and "PITCH :)" or row.label_upper) 
     else 
-      T(LEVEL.hi, 6 + left_slide, y, ps and "pitch:)" or row.label) 
+      T(LEVEL.hi, 6 + left_slide, y, ps and "pitch :)" or row.label) 
     end
     local fmt = FORMAT[row.fmt_key]
     local density_synced = (row.name == "density" and clocksync.grain_synced())

@@ -232,9 +232,7 @@ function morph.apply()
     local lfo_data_B = (scene1_2.lfo_data or scene2_2.lfo_data) or {}
     local lfo_targets = lfo_ref.lfo_targets
     local lfo_targets_count = #lfo_targets
-    if _has_lfo_tracking == nil then 
-        _has_lfo_tracking = (lfo_ref.clear_param_assignment and true or false)
-    end
+    if _has_lfo_tracking == nil then _has_lfo_tracking = (lfo_ref.clear_param_assignment and true or false) end
     if _has_lfo_tracking then
         for i = 1, 16 do
             if _p_get(params, MORPH_LFO_KEYS[i]) == 2 then
@@ -323,9 +321,7 @@ function morph.apply()
             if not skip_param_set[dkey] then
                 local dA = scene1_1[dkey .. "_div"] or scene2_1[dkey .. "_div"]
                 local dB = scene1_2[dkey .. "_div"] or scene2_2[dkey .. "_div"]
-                if dA and dB then
-                    clocksync_ref.set_grain_div_index(v, math.floor(dA * _t_inv + dB * _t + 0.5))
-                end
+                if dA and dB then clocksync_ref.set_grain_div_index(v, math.floor(dA * _t_inv + dB * _t + 0.5)) end
             end
             skip_param_set[dkey] = true
         end
@@ -349,9 +345,7 @@ function morph.capture_to_temp_scene(lfo_cache)
     if morph.amount == 0 or morph.amount == 100 then return end
     for _, item in ipairs(param_registry) do
         local p = item.name
-        if (not lfo_cache or not lfo_cache[p]) then 
-            morph.temp_scene[p] = _p_get(params, p) 
-        end
+        if (not lfo_cache or not lfo_cache[p]) then morph.temp_scene[p] = _p_get(params, p) end
     end
 end
 
@@ -365,11 +359,7 @@ function morph.auto_save_to_scene()
 end
 
 function morph.initialize_scenes_with_current_params()
-    for track = 1, 2 do 
-        for scene = 1, 2 do 
-            morph.store_scene(track, scene) 
-        end 
-    end
+    for track = 1, 2 do for scene = 1, 2 do morph.store_scene(track, scene) end end
 end
 
 return morph

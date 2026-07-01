@@ -6,7 +6,6 @@ local target_lookup = nil
 
 local _LFO_KEYS, _TARGET_KEYS, _SHAPE_KEYS, _FREQ_KEYS, _DEPTH_KEYS, _OFFSET_KEYS
 
-local function param_exists(name) return params_lookup[name] ~= nil end
 local function safe_get(name) return params_lookup[name] and params:get(name) or 0 end
 local function safe_set(name, value) if params_lookup[name] and value ~= nil then params:set(name, value) end end
 
@@ -35,7 +34,7 @@ function Mirror.init(osc_positions_ref, lfo_ref, voice_params)
     target_lookup = {}
     if lfo_targets then for idx, t in ipairs(lfo_targets) do target_lookup[t] = idx end end
 end
- 
+
 function Mirror.copy_voice_params(from_track, to_track, mirror_pan)
     local function clear_destination_lfos(to_track_num)
         local pattern = get_track_pattern(to_track_num)
