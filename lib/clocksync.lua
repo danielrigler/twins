@@ -46,7 +46,7 @@ local function push()
   end
   set_density(1, clamp(t * density_gpb[1], 0.1, 250))
   set_density(2, clamp(t * density_gpb[2], 0.1, 250))
-  if params.lookup["delay_time"] then params:set("delay_time", clamp(delay_div / t, 0.02, 2)) end
+  if params.lookup["delay_time"] then params:set("delay_time", clamp(delay_div / t, 0.02, 5)) end
   if on_push_cb then on_push_cb() end
 end
 

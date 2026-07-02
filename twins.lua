@@ -422,7 +422,7 @@ local function register_tap()
             count = count + 1
         end
         local avg_interval = sum / count
-        params:set("delay_time", clamp(avg_interval, 0.02, 2))
+        params:set("delay_time", clamp(avg_interval, 0.02, 5))
     end
 end
 
@@ -474,7 +474,7 @@ local function setup_params()
 
     params:add_group("DELAY", 13)
     params:add_control("delay_mix", "Mix", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("delay_mix", function(x) engine.mix(x * 0.01) font.update_fx_cache("delay_mix", x) end)
-    params:add_taper("delay_time", "Time", 0.02, 2, 0.5, 0.1, "s") params:set_action("delay_time", function(value) engine.delay(value) end)
+    params:add_taper("delay_time", "Time", 0.02, 5, 0.5, 0.1, "s") params:set_action("delay_time", function(value) engine.delay(value) end)
     params:add_binary("tap", "↳ TAP!", "trigger", 0) params:set_action("tap", function() register_tap() end)
     params:add_taper("delay_feedback", "Feedback", 0, 120, 40, 1, "%") params:set_action("delay_feedback", function(value) engine.fb_amt(value * 0.01) end)
     params:add_control("delay_lowpass", "LPF", controlspec.new(20, 20000, 'exp', 1, 7500, "Hz")) params:set_action('delay_lowpass', function(value) engine.lpf(value) end)
@@ -776,17 +776,24 @@ local function randomize_pitch(track, other_track, symmetry)
     end
 end
 
+local _rand_can_randomize = {}
+local _rand_targets = {}
+
 local function randomize(n)
     if randomize_metro[n] then stop_metro_safe(randomize_metro[n]) else randomize_metro[n] = metro.init() end
     local m_rand = randomize_metro[n]
     local symmetry = params:get("symmetry") == 1
     local other_track = 3 - n
-    local can_randomize = {}
+    for k in pairs(_rand_can_randomize) do _rand_can_randomize[k] = nil end
+    for k in pairs(_rand_targets) do _rand_targets[k] = nil end
+    local can_randomize = _rand_can_randomize
+    local targets = _rand_targets
+
     local param_names = {"speed", "jitter", "size", "density", "spread", "pitch", "seek"}
     local pitch_size_density_linked = params:get("global_pitch_size_density_link") == 1
     for i = 1, #param_names do can_randomize[param_names[i]] = params:get(n .. "lock_" .. param_names[i]) == 1 end
     if can_randomize.pitch then randomize_pitch(n, other_track, symmetry) end
-    local targets = {}
+
     if not m_rand then print("Error: Hardware metro limit reached!") return end
     for i = 1, #param_names do
         local key = param_names[i]
@@ -1519,7 +1526,7 @@ local function refresh_redraw_cache()
       lfo_on[fk] = act
       if act then
         local rc = _LFO_RANGE_CACHE[fk]
-        if not rc then rc = {} _LFO_RANGE_CACHE[fk] = rc end
+        if not rc then rc = {0,0,0}; _LFO_RANGE_CACHE[fk] = rc end
         local a, b = lfo.get_parameter_range(fk, true)
         local _, fb = lfo.get_parameter_range(fk, false)
         rc[1], rc[2], rc[3] = a, b, fb
@@ -1676,11 +1683,11 @@ function redraw()
       if C.lfo_on[param] and not sync_label then
         local rc = _LFO_RANGE_CACHE[param]
         if not rc then
-          rc = {} _LFO_RANGE_CACHE[param] = rc
-          local a0, b0 = lfo.get_parameter_range(param, true)
-          local _, fb0 = lfo.get_parameter_range(param, false)
-          rc[1], rc[2], rc[3] = a0, b0, fb0
+          rc = {0,0,0} _LFO_RANGE_CACHE[param] = rc
         end
+        local a0, b0 = lfo.get_parameter_range(param, true)
+        local _, fb0 = lfo.get_parameter_range(param, false)
+        rc[1], rc[2], rc[3] = a0, b0, fb0
         local a, b, fb = rc[1], rc[2], rc[3]
         local bar_w = clamp(floor(((val - a) / (b - a)) * BAR_W), 0, BAR_W)
         R(LEVEL.dim + 2, x, y + 1, bar_w, 1)
@@ -1862,6 +1869,7 @@ function init()
     clocksync.init({lfo = lfo, set_density = clocksync_set_density})
     font.init_fx_cache()
     init_longpress_checker()
+    for _, target in pairs(lfo.lfo_targets or {}) do if target ~= "none" then _LFO_RANGE_CACHE[target] = {0, 0, 0} end end
     for i = 1, 2 do params:set(i.."sample", _path.tape, true) end
     for i = 1, 2 do engine.pause_voice(i) end
     clock.transport.start = transport_start

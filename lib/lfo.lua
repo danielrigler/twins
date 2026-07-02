@@ -498,14 +498,20 @@ function lfo.process()
                 obj.walk_velocity = src.walk_velocity
                 obj.prev = obj.sync_invert and -src.prev or src.prev
             else
-                local vel = obj.walk_velocity * 0.92 + (rnd() - 0.5) * (obj.freq * 0.4)
+                local rate = clamp(obj.freq, 0.01, 10.0)
+                local loss = clamp(0.15 * rate, 0.01, 1.0)
+                local damp = 1.0 - loss
+                local noise_amp = 0.5 * math.sqrt(loss)
+                local vel = obj.walk_velocity * damp + (rnd() - 0.5) * noise_amp
                 local val = obj.walk_value + vel
-                if val > 0.75 then vel = vel - (val - 0.75) * 0.1
-                elseif val < -0.75 then vel = vel - (val + 0.75) * 0.1 end
+                local spring = clamp(0.2 * rate, 0.01, 1.0)
+                if val > 0.75 then vel = vel - (val - 0.75) * spring
+                elseif val < -0.75 then vel = vel - (val + 0.75) * spring end
                 val = clamp(val, -1, 1)
                 obj.walk_velocity = vel
                 obj.walk_value = val
-                obj.prev = obj.prev * 0.90 + val * 0.10
+                local smooth = clamp(0.2 * rate, 0.01, 1.0)
+                obj.prev = obj.prev + (val - obj.prev) * smooth
             end
             slope = obj.prev
         else

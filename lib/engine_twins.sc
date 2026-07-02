@@ -316,7 +316,7 @@ alloc {
             local = LocalIn.ar(2);
             fb = LPF.ar(HPF.ar(local, dhpf), lpf);
             fb = (1.35 * (1 - (stereo * 0.35)) * fb_amt * [fb[1], fb[0]]).softclip;
-            delayed = DelayC.ar(input + fb, 2, Lag.kr(delay, 0.7) + combinedMod);
+            delayed = DelayC.ar(input + fb, 5, Lag.kr(delay, 0.7) + combinedMod);
             wet = Balance2.ar(delayed[0], delayed[1], (SinOsc.kr(delay.max(0.1).reciprocal * 0.5) + (LFNoise2.kr(0.4) * 0.3)) * (stereo * 0.77));
             LocalOut.ar(wet);
             dryAmp = Amplitude.kr(input.sum, 0.005, 0.05);
