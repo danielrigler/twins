@@ -331,7 +331,7 @@ local param_configs = {
     {name="pitch_quantize_scale", prob=0.3, default=2, random=function() return math.random(1,9) end, direct_set=true},
   }},
   sync = { lock_param = "lock_sync", params = {
-    {name="clock_sync_delay_div", prob=0.75, default=13, random=function() return math.random(8,18) end, direct_set=true, condition=function() return params:get("clock_sync") == 2 end},
+    {name="clock_sync_delay_div", prob=1, default=13, random=function() return math.random(9,18) end, direct_set=true, condition=function() return params:get("clock_sync") == 2 end},
   }},
 }
 
