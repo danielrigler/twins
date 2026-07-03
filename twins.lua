@@ -6,7 +6,7 @@
 --            by: @dddstudio                       
 -- 
 --                          
---                           v0.68
+--                           v0.69
 -- E1: Master Volume
 -- K1+E2/E3: Volume
 -- K2/K3: Navigate
@@ -19,10 +19,11 @@
 -- K1+E1: Crossfade/Morph
 -- K2+K3: HPF/LPF
 -- K2+K3+E1/E2/E3: Effect Mix
--- Hold K2+K3: Add Random LFO
--- Hold K1+K2: Clock Sync
--- Hold K1+K3: Evolve
 -- K2/K3+E1/E2/E3: Adjust LFO
+-- Hold K2+K3: Add Random LFOs
+-- Hold K1+K2: Clock Sync
+-- Hold K1+K3: Arp Mode 
+-- Hold K1+K2+K3: Randomize Arp
 --
 --
 --
@@ -62,7 +63,13 @@ local macro = include("lib/macro") macro.set_lfo_reference(lfo)
 local drymode = include("lib/drymode") drymode.set_lfo_reference(lfo)
 local undo = include("lib/undo")
 local midi_input = include("lib/midi_input")
+local arp = include("lib/arp")
 local clocksync = include("lib/clocksync") lfo.set_clocksync_reference(clocksync)
+arp.set_clocksync_reference(clocksync)
+presets.set_arp_reference(arp)
+font.set_arp_reference(arp)
+font.set_clocksync_reference(clocksync)
+lfo.set_size_cap_fn(function(v) return arp.max_size_ms(v) end)
 local randomize_metro = { [1] = nil, [2] = nil }
 local active_clocks = {}
 local key_state = {} for n = 1, 3 do key_state[n] = false end
@@ -78,16 +85,9 @@ local valid_audio_exts = {[".wav"]=true,[".aif"]=true,[".aiff"]=true,[".flac"]=t
 local mode_list = {"spread","pitch","density","size","jitter","lpf","pan","speed","seek"}
 local mode_indices = {} for i,v in ipairs(mode_list) do mode_indices[v] = i end
 local MK = lfo.keys
-local key_trackers = {}
-for n = 1, 3 do key_trackers[n] = {press_time = nil, had_interaction = false, long_triggered = false} end
+
+local key_gesture = nil
 local KEY_LONG_PRESS_THRESHOLD = 1
-local key_longpress_actions = {
-    [1] = {param = "scene_mode", a = 1, b = 2},
-    [2] = {param = "global_pitch_size_density_link", a = 1, b = 0},
-    [3] = {param = "symmetry", a = 1, b = 0},
-    [12] = {action = "toggle_clock_sync"},
-    [13] = {action = "toggle_evolution"},
-    [23] = {action = "assign_lfo_to_current_row"}}
 local showing_save_message = false
 local fx_popup = {label = nil, value = nil, time = nil}
 local FX_POPUP_DURATION = 1
@@ -237,7 +237,7 @@ function hlp.ensure_link_base(track)
     end
     return lb
 end
-function hlp.cancel_longpress(id) local t = key_trackers[id] if t then t.had_interaction = true t.long_triggered = true end end
+function hlp.cancel_gesture() if key_gesture then key_gesture.fired = true end end
 function hlp.update_resonator()
     if (pget("resonator_mix") or 0) <= 0 then return end
     local root = params:get("resonator_root")
@@ -267,12 +267,12 @@ local function setup_ui_metro()
         if not animation_complete then
             animation_start_time = animation_start_time or now
             local elapsed = now - animation_start_time
-            local progress = min(elapsed * 2.5, 1) 
+            local progress = min(elapsed * 2.5, 1)
             local eased = 1 - (1 - progress) ^ 3
-            if progress < 1 then 
+            if progress < 1 then
                 anim_offset_x = (1 - eased) * 128
-            else 
-                anim_offset_x = 0 
+            else
+                anim_offset_x = 0
             end
             animation_complete = progress >= 1
             if progress >= 0.4 and not pan_slide_start_time then pan_slide_start_time = now end
@@ -313,39 +313,12 @@ local function init_longpress_checker()
     longpress_metro = metro.init()
     longpress_metro.time = 0.2
     longpress_metro.event = function()
-        local now = util.time()
-        for n = 1, 3 do
-            local tracker = key_trackers[n]
-            local action = key_longpress_actions[n]
-            local blocked = (n == 2 or n == 3) and key_state[1]
-            if tracker.press_time and not tracker.had_interaction and 
-               not tracker.long_triggered and action and not blocked then
-                if (now - tracker.press_time) >= KEY_LONG_PRESS_THRESHOLD then
-                    tracker.long_triggered = true
-                    tracker.had_interaction = true
-                    local curr = params:get(action.param)
-                    params:set(action.param, (curr == action.a) and action.b or action.a)
-                end
-            end
-        end
-        local combo_tracker = key_trackers[23]
-        if combo_tracker and combo_tracker.press_time and not combo_tracker.had_interaction and not combo_tracker.long_triggered then
-            if (now - combo_tracker.press_time) >= KEY_LONG_PRESS_THRESHOLD then
-                combo_tracker.long_triggered = true
-                combo_tracker.had_interaction = true
-                combo_longpress_fire()
-            end
-        end
-        for s = 2, 3 do
-            local ct = key_trackers[10 + s]
-            if ct and ct.press_time and not ct.had_interaction and not ct.long_triggered then
-                if (now - ct.press_time) >= KEY_LONG_PRESS_THRESHOLD then
-                    ct.long_triggered = true
-                    ct.had_interaction = true
-                    if s == 2 then params:set("clock_sync", params:get("clock_sync") == 2 and 1 or 2)
-                    elseif s == 3 then params:set("evolution", params:get("evolution") == 1 and 0 or 1) end
-                end
-            end
+        local g = key_gesture
+        if not g or g.fired then return end
+        local combo = hlp.key_combos[g.id]
+        if combo and combo.long and (util.time() - g.press_time) >= KEY_LONG_PRESS_THRESHOLD then
+            g.fired = true
+            combo.long()
         end
     end
     utils.metro_start(longpress_metro)
@@ -368,12 +341,12 @@ local function disable_lfos_for_param(param_name, only_self)
 end
 
 local function get_audio_duration(filepath)
-    if not filepath or filepath == "" or filepath == "none" or filepath == "-" then 
+    if not filepath or filepath == "" or filepath == "none" or filepath == "-" then
         for i = 1, 2 do if params:get(i.."live_input") == 1 then return params:get("live_buffer_length") end end
-        return nil 
+        return nil
     end
     if not util.file_exists(filepath) then return nil end
-    local ch, samples, rate = audio.file_info(filepath)
+    local _, samples, rate = audio.file_info(filepath)
     if samples and rate and rate > 0 then return samples / rate end
     return nil
 end
@@ -432,7 +405,7 @@ local function setup_params()
       params:add_file(i.."sample","Sample "..i, _path.tape); params:set_action(i.."sample",function(f) if f~=nil and f~="" and f~="none" and f~="-" and f~=(_path.tape.."live!") and not f:match("/$") then if params:get(i.."live_input")==1 then engine.set_live_input(i,0) params:set(i.."live_input",0,true) end if params:get(i.."live_direct")==1 then engine.live_direct(i,0) params:set(i.."live_direct",0,true) end local jitter_locked=is_param_locked(i,"jitter"); if not jitter_locked then lfo.clearLFOs(tostring(i),"jitter"); end engine.read(i,f); if not _G.preset_loading then params:set(i.."seek",0) end; audio_active[i]=true; update_pan_positioning(); local is_live=params:get(i.."live_input")==1; local dur=is_live and params:get("live_buffer_length") or get_audio_duration(f); if dur then cached_buffer_durations[i]=dur; local ms=dur*1000; local jit_ceiling=min(ms,99999); local cur_max_jit=params:get(i.."max_jitter") or jit_ceiling; local new_max_jit=min(cur_max_jit,jit_ceiling); params:set(i.."max_jitter",new_max_jit); local cur_min_jit=params:get(i.."min_jitter") or 0; params:set(i.."min_jitter",min(cur_min_jit,new_max_jit)); local size_ceiling=max(20,min(ms,999)); local cur_max_size=params:get(i.."max_size") or size_ceiling; local new_max_size=min(cur_max_size,size_ceiling); params:set(i.."max_size",new_max_size); local cur_min_size=params:get(i.."min_size") or 20; if cur_min_size>new_max_size then params:set(i.."min_size",new_max_size) end; if not _G.preset_loading and not jitter_locked then local jp=i.."jitter"; disable_lfos_for_param(jp); local jitter_val; if math.random()<0.75 then local upper_limit=min(500,dur*1000); jitter_val=clamp(math.random()*upper_limit,0,99999); else jitter_val=clamp(math.random()*dur*1000,0,99999); end params:set(jp,jitter_val); end else if not jitter_locked then lfo.clearLFOs(tostring(i),"jitter"); end audio_active[i]=false; osc_positions[i]=0; update_pan_positioning(); end end end)
     end
     params:add_binary("randomtapes", "Random Tapes", "trigger", 0) params:set_action("randomtapes", function() load_random_tape_file() end)
-    
+
     params:add_group("LIVE!", 10)
     for i = 1, 2 do
       params:add_binary(i.."live_input", "Live Buffer "..i.." ● ►", "toggle", 0) params:set_action(i.."live_input", function(value) if value == 1 then if params:get(i.."live_direct") == 1 then params:set(i.."live_direct", 0) end engine.set_live_input(i, 1) engine.live_mono(i, params:get("isMono") - 1) audio_active[i] = true cached_buffer_durations[i]=params:get("live_buffer_length") set_sample_live(i) update_pan_positioning() else engine.set_live_input(i, 0) if not audio_active[i] and params:get(i.."live_direct") == 0 then osc_positions[i] = 0 params:set(i.."sample", "-") pause_voice_if_idle(i) else set_sample_live(i) update_pan_positioning() end end end)
@@ -446,7 +419,7 @@ local function setup_params()
     end
     params:add_option("isMono", "Input Mode", {"stereo", "mono"}, 1) params:set_action("isMono", function(value) local monoValue = value - 1 for i = 1, 2 do if params:get(i.."live_direct") == 1 then engine.isMono(i, monoValue) end if params:get(i.."live_input") == 1 then engine.live_mono(i, monoValue) end end end)
     params:add_binary("dry_mode2", "Dry Mode", "toggle", 0) params:set_action("dry_mode2", function(x) drymode.toggle_dry_mode2() end)
-    
+
     params:add{type = "trigger", id = "save_preset", name = "Save Preset", action = function() presets.save_complete_preset(nil, morph.scene_data, current_mode, current_filter_mode) end}
     params:add{type = "trigger", id = "load_preset_menu", name = "Preset Browser", action = function() presets.open_menu() end}
 
@@ -514,8 +487,8 @@ local function setup_params()
     params:add_control("fb1", "Feedback", controlspec.new(0, 100, "lin", 1, 15, "%")) params:set_action("fb1", function(x) engine.fb1(x * 0.01) end)
     params:add_separator("        ")
     params:add_option("lock_shimmer", "Lock Parameters", {"off", "on"}, 1)
-    
-    params:add_group("TAPE", 16) 
+
+    params:add_group("TAPE", 16)
     params:add_option("tape_mix", "Analog Tape", {"off", "on"}, 1) params:set_action("tape_mix", function(x) engine.tape_mix(x-1) font.update_fx_cache("tape_mix", x) end)
     params:add_control("sine_drive_wet", "Shaper Drive", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("sine_drive_wet", function(value) engine.sine_drive_wet(value * 0.01) font.update_fx_cache("sine_drive_wet", value) end)
     params:add_control("drive", "Saturation", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("drive", function(x) engine.drive(x * 0.01) font.update_fx_cache("drive", x) end)
@@ -531,10 +504,10 @@ local function setup_params()
     params:add_control("lossdegrade_mix", "Loss / Degrade", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("lossdegrade_mix", function(value) engine.lossdegrade_mix(value * 0.01) font.update_fx_cache("lossdegrade_mix", value) end)
     params:add_separator("    ")
     params:add_binary("randomize_tape", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_tape", function() undo.checkpoint() randpara.randomize_tape_params(steps) end)
-    params:add_option("lock_tape", "Lock Parameters", {"off", "on"}, 1)    
-    
+    params:add_option("lock_tape", "Lock Parameters", {"off", "on"}, 1)
+
     params:add_group("EQ", 9)
-    for i = 1, 2 do 
+    for i = 1, 2 do
     params:add_control(i.."eq_low_gain", i.." Bass", controlspec.new(-1, 1, "lin", 0.01, 0, "")) params:set_action(i.."eq_low_gain", function(value) engine.eq_low_gain(i, value*55) end)
     params:add_control(i.."eq_mid_gain", i.." Mid", controlspec.new(-1, 1, "lin", 0.01, 0, "")) params:set_action(i.."eq_mid_gain", function(value) engine.eq_mid_gain(i, value*35) end)
     params:add_control(i.."eq_high_gain", i.." Treble", controlspec.new(-1, 1, "lin", 0.01, 0, "")) params:set_action(i.."eq_high_gain", function(value) engine.eq_high_gain(i, value*45) end)
@@ -542,7 +515,7 @@ local function setup_params()
     params:add_separator("     ")
     params:add_binary("randomize_eq", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_eq", function() undo.checkpoint() for i=1, 2 do randpara.randomize_eq_params(i) end end)
     params:add_option("lock_eq", "Lock Parameters", {"off", "on"}, 1)
-    
+
     params:add_group("LFO", 120)
     params:add_binary("randomize_lfos", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_lfos", function() undo.checkpoint() lfo.clearLFOs() local allow_vol = params:get("allow_volume_lfos") == 2 for i = 1, 2 do lfo.randomize_lfos(i, allow_vol) end invalidate_lfo_cache() end)
     params:add_binary("lfo.assign_to_current_row", "Assign to Selection", "trigger", 0) params:set_action("lfo.assign_to_current_row", function() undo.checkpoint() lfo.assign_to_current_row(current_mode, current_filter_mode) invalidate_lfo_cache() end)
@@ -566,18 +539,18 @@ local function setup_params()
     params:add_option("bitcrush_mod", "Mix Mod", {"off", "on"}, 1) params:set_action("bitcrush_mod", function(value) engine.bitcrush_mod(value - 1) end)
     params:add_taper("bitcrush_rate", "Rate", 1, 48000, 4500, 3, "Hz") params:set_action("bitcrush_rate", function(value) engine.bitcrush_rate(value) end)
     params:add_taper("bitcrush_bits", "Bits", 1, 24, 14, 1) params:set_action("bitcrush_bits", function(value) engine.bitcrush_bits(value) end)
-    
+
     params:add_group("RESONATE", 4)
     params:add_control("resonator_mix", "Mix", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("resonator_mix", function(v) engine.resonator_mix(v * 0.01) font.update_fx_cache("resonator_mix", v) if v > 0 then hlp.update_resonator() end end)
     params:add_control("resonator_decay", "Decay", controlspec.new(0.01, 5, "exp", 0, 2, "s")) params:set_action("resonator_decay", function(v) engine.resonator_decay(v) end)
     params:add_number("resonator_root", "Root", 24, 128, 48, function(p) return MusicUtil.note_num_to_name(p:get(), true) end) params:set_action("resonator_root", function(v) hlp.update_resonator() end)
     params:add_control("resonator_tone", "LPF", controlspec.new(200, 16000, "exp", 0, 8000, "Hz")) params:set_action("resonator_tone", function(v) engine.resonator_tone(v) end)
-    
+
     params:add_group("WAVEFOLD", 3)
     params:add_control("wavefold_mix", "Mix", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("wavefold_mix", function(v) engine.wavefold_mix(v * 0.01) font.update_fx_cache("wavefold_mix", v) end)
     params:add_control("wavefold_drive", "Drive", controlspec.new(0, 100, "lin", 1, 75, "%")) params:set_action("wavefold_drive", function(v) engine.wavefold_drive(v * 0.01) end)
     params:add_control("wavefold_sym", "Symmetry", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("wavefold_sym", function(v) engine.wavefold_sym(v * 0.01) end)
-    
+
     params:add_group("RINGMOD", 3)
     params:add_control("ringmod_mix", "Mix", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("ringmod_mix", function(v) engine.ringmod_mix(v * 0.01) font.update_fx_cache("ringmod_mix", v) end)
     params:add_control("ringmod_rate", "Rate", controlspec.new(0.1, 4000, "exp", 0, 200, "Hz")) params:set_action("ringmod_rate", function(v) engine.ringmod_rate(v) end)
@@ -640,7 +613,7 @@ local function setup_params()
         params:add_option(i.. "lock_pan", i.. " Lock Pan", {"off", "on"}, 1)
     end
 
-    params:add_group("LIMITS", 30) 
+    params:add_group("LIMITS", 30)
     for i = 1, 2 do
         params:add_separator("Voice "..i)
         params:add_taper(i.."min_jitter", i.." jitter (min)", 0, 999999, 0, 5, "ms")
@@ -658,7 +631,7 @@ local function setup_params()
         params:add_taper(i.."min_seek", i.." seek (min)", 0, 100, 0, 0, "%")
         params:add_taper(i.."max_seek", i.." seek (max)", 0, 100, 100, 0, "%")
     end
-    
+
     params:add_group("ACTIONS", 4)
     params:add_binary("undo_action", "UNDO", "trigger", 0) params:set_action("undo_action", function() undo.undo() end)
     params:add_binary("redo_action", "REDO", "trigger", 0) params:set_action("redo_action", function() undo.redo() end)
@@ -679,7 +652,7 @@ local function setup_params()
     params:add_option("lock_pitch", "Lock Parameters", {"off", "on"}, 1)
 
     params:add_group("MIDI/SYNC", 16)
-    midi_input.add_params({set_pitch = set_midi_pitch, on_voice_trigger = function(v) randomize_flash.midi[v] = 1; randomize_flash.held[v] = true end, on_voice_release = function(v) randomize_flash.held[v] = false end, voice_loaded = is_voice_loaded})
+    midi_input.add_params({set_pitch = set_midi_pitch, on_voice_trigger = function(v) randomize_flash.midi[v] = 1; randomize_flash.held[v] = true end, on_voice_release = function(v) randomize_flash.held[v] = false end, voice_loaded = is_voice_loaded, on_transport_start = transport_start, on_transport_stop = transport_stop, on_transport_continue = transport_continue})
     params:add_option("midi_gate", "Drone Mode", { "off", "on" }, 2) params:set_action("midi_gate", function() if midi_input then midi_input.set_gate_mode() end end)
     params:add_option("midi_voice_mode", "MIDI control", { "both", "paraphonic", "voice 1", "voice 2" }, 2) params:set_action("midi_voice_mode", function() if midi_input then midi_input.set_voice_mode() end end)
     params:add_control("midi_attack", "Attack", controlspec.new(0.001, 20, "exp", 0, 2.5, "s")) params:set_action("midi_attack", function() if midi_input then midi_input.push_ad() end end)
@@ -691,7 +664,9 @@ local function setup_params()
     params:add_option("midi_transport", "Transport", { "off", "on" }, 2)
     params:add_separator("                                    ")
     params:add_option("lock_sync", "Lock Parameters", {"off", "on"}, 1)
-    
+
+    arp.add_params()
+
     params:add_group("OTHER", 29)
     params:add_binary("dry_mode", "Dry Mode", "toggle", 0) params:set_action("dry_mode", function(x) drymode.toggle_dry_mode() end)
     params:add_binary("randomtape1", "Random Tape 1", "trigger", 0) params:set_action("randomtape1", function() load_random_tape_file(1) end)
@@ -705,11 +680,11 @@ local function setup_params()
       params:add_taper(i.. "pan", i.. " pan", -100, 100, 0, 0, "%") params:set_action(i.. "pan", function(value) engine.pan(i, value * 0.01)  end)
       params:add_taper(i.. "speed", i.. " speed", -2, 2, 0, 0) params:set_action(i.. "speed", function(value) if abs(value) < 0.01 then engine.speed(i, 0) else engine.speed(i, value) end end)
       params:add_taper(i.. "density", i.. " density", 0.1, 250, 3.5, 5) params:set_action(i.. "density", function(value) engine.density(i, clocksync.grain_density(i) or value) end)
-      params:add_control(i.. "pitch", i.. " pitch", controlspec.new(-48, 48, "lin", 1, 0, "st")) params:set_action(i.. "pitch", function(value) local scale = params:string("pitch_quantize_scale") local quantized = SU.quantize(value, scale) engine.pitch_offset(i, math.pow(0.5, -quantized / 12)) end)
+      params:add_control(i.. "pitch", i.. " pitch", controlspec.new(-48, 48, "lin", 1, 0, "st")) params:set_action(i.. "pitch", function(value) local scale = params:string("pitch_quantize_scale") local quantized = SU.quantize(value, scale) engine.pitch_offset(i, math.pow(0.5, -quantized / 12) * arp.ratio(i)) end)
       params:add_control(i.. "pitch_shift", i.. " pitch shift", controlspec.new(-48, 48, "lin", 1, 0, "st")) params:set_action(i.. "pitch_shift", function(value) local scale = params:string("pitch_quantize_scale") engine.pitch_shift(i, SU.quantize(value, scale)) font.update_fx_cache(i.. "pitch_shift", value) end)
       params:add_taper(i.. "pitch_shift_mix", i.. " pitch shift mix", 0, 100, 60, 0, "%") params:set_action(i.. "pitch_shift_mix", function(value) engine.pitch_shift_mix(i, value * 0.01) end)
       params:add_taper(i.. "jitter", i.. " jitter", 0, 999900, 250, 10, "ms") params:set_action(i.. "jitter", function(value) engine.jitter(i, value * 0.001) end)
-      params:add_taper(i.. "size", i.. " size", 20, 5000, 500, 1, "ms") params:set_action(i.. "size", function(value) engine.size(i, value * 0.001) end)
+      params:add_taper(i.. "size", i.. " size", 20, 5000, 500, 1, "ms") params:set_action(i.. "size", function(value) engine.size(i, math.min(value, arp.max_size_ms(i)) * 0.001) end)
       params:add_taper(i.. "spread", i.. " spread", 0, 100, 60, 0, "%") params:set_action(i.. "spread", function(value) engine.spread(i, value * 0.01) end)
       params:add_control(i.. "seek", i.. " seek", controlspec.new(0, 100, "lin", 0.01, 0, "%")) params:set_action(i.. "seek", function(value) engine.seek(i, value * 0.01) end) params:lookup_param(i.."seek").save = false
     end
@@ -808,9 +783,7 @@ local function randomize(n)
             params:set(n.."seek", val); osc_positions[n] = val_norm
             if symmetry then params:set(other_track.."seek", val); osc_positions[other_track] = val_norm end
         elseif key == "density" and clocksync.grain_synced() then
-            if not is_lfo_active_for_param(cfg_name) then
-                clocksync.randomize_grain_div(n, symmetry and other_track or nil)
-            end
+            if not is_lfo_active_for_param(cfg_name) then clocksync.randomize_grain_div(n, symmetry and other_track or nil) end
         else
             local min_val = params:get(n .. "min_" .. key)
             local max_val = params:get(n .. "max_" .. key)
@@ -1030,6 +1003,11 @@ local function handle_standard_param(track, config, delta)
         params:delta(p, delta)
         if sym then params:delta((3 - track) .. config.param, delta) end
     end
+    if config.param == "size" and arp.is_running() then
+        local cap = arp.max_size_ms(track)
+        if params:get(p) > cap then params:set(p, cap) end
+        if sym then local op = (3 - track) .. config.param local ocap = arp.max_size_ms(3 - track) if params:get(op) > ocap then params:set(op, ocap) end end
+    end
 end
 
 local function handle_param_change(track, config, delta)
@@ -1180,38 +1158,8 @@ local function adjust_lfo_depth(lfo_idx, delta)
     end
 end
 
-
-local function set_key_tracking(n, state)
-    local tracker = key_trackers[n]
-    local is_init = state == "init"
-    tracker.press_time = is_init and util.time() or nil
-    tracker.had_interaction = false
-    tracker.long_triggered = false
-    if not is_init and (n == 2 or n == 3) and key_trackers[23] then
-        key_trackers[23].press_time = nil
-        key_trackers[23].had_interaction = false
-        key_trackers[23].long_triggered = false
-    end
-    if not is_init then
-        for s = 2, 3 do
-            local ct = key_trackers[10 + s]
-            if (n == 1 or n == s) and ct then
-                ct.press_time = nil
-                ct.had_interaction = false
-                ct.long_triggered = false
-            end
-        end
-    end
-end
-
-local function mark_key_interaction(k1, k2, k3)
-    local cancel = hlp.cancel_longpress
-    if k1 then cancel(1) end
-    if k2 then cancel(2) end
-    if k3 then cancel(3) end
-    if k1 and k2 then cancel(12) end
-    if k1 and k3 then cancel(13) end
-    if k2 and k3 then cancel(23) end
+local function mark_key_interaction()
+    if key_gesture then key_gesture.fired = true end
 end
 
 local FINALIZE_DEBOUNCE = 0.25
@@ -1227,9 +1175,7 @@ end
 local function flush_finalize() if finalize_pending then run_finalize() end end
 local function finalize_change()
     finalize_pending = true
-    if not finalize_metro then
-        finalize_metro = metro.init(run_finalize, FINALIZE_DEBOUNCE, 1)
-    end
+    if not finalize_metro then finalize_metro = metro.init(run_finalize, FINALIZE_DEBOUNCE, 1) end
     finalize_metro:stop()
     utils.metro_start(finalize_metro)
 end
@@ -1267,7 +1213,7 @@ function enc(n, d)
     if k2 and k3 and not k1 then
         local fx = FX_MAP[n]
         if fx then
-            mark_key_interaction(k1, k2, k3)
+            mark_key_interaction()
             params:delta(fx, d)
             fx_popup.label = FX_LABELS[n]
             fx_popup.value = params:get(fx)
@@ -1285,7 +1231,7 @@ function enc(n, d)
             local mode_name = active_edit_mode()
             param_name = param_modes[mode_name] and param_modes[mode_name].param or mode_name
         end
-        mark_key_interaction(k1, k2, k3)
+        mark_key_interaction()
         if n == 1 then
             if clocksync.lfo_synced() then
                 clocksync.step_lfo_div(voice, d, params:get("symmetry") == 1)
@@ -1318,7 +1264,7 @@ function enc(n, d)
         return
     end
     if n == 1 then
-        mark_key_interaction(k1, k2, k3)
+        mark_key_interaction()
         if morph.amount == 0 or morph.amount == 100 then
             local now = util.time()
             if (now - last_e1_autosave) > FINALIZE_DEBOUNCE then morph.auto_save_to_scene() end
@@ -1334,7 +1280,7 @@ function enc(n, d)
     end
     if n == 2 or n == 3 then
         local track = n - 1
-        mark_key_interaction(k1, k2, k3)
+        mark_key_interaction()
         local r_metro = randomize_metro[track]
         if r_metro then stop_metro_safe(r_metro); randomize_metro[track] = nil end
         if k1 then
@@ -1358,61 +1304,32 @@ function enc(n, d)
     end
 end
 
-local function handle_key_press(n)
-    flush_finalize()
-    if n <= 3 then set_key_tracking(n, "init") end
-    local k1, k2, k3 = key_state[1], key_state[2], key_state[3]
-    if k2 and k3 then
-        if not key_trackers[23] then key_trackers[23] = {press_time = nil, had_interaction = false, long_triggered = false} end
-        set_key_tracking(23, "init")
-        key_trackers[2].had_interaction = true
-        key_trackers[3].had_interaction = true
-    end
-    if (k1 and (n == 2 or n == 3)) or (n == 1 and (k2 or k3)) then
-        key_trackers[1].had_interaction = true
-        key_trackers[1].long_triggered = true
-    end
-    for s = 2, 3 do
-        if (n == s and k1) or (n == 1 and key_state[s]) then
-            local id = 10 + s
-            if not key_trackers[id] then key_trackers[id] = {press_time = nil, had_interaction = false, long_triggered = false} end
-            set_key_tracking(id, "init")
-            key_trackers[s].had_interaction = true
-        end
-    end
-end
+hlp.key_combos = {
+    ["1"]   = {long  = function() params:set("scene_mode", params:get("scene_mode") == 1 and 2 or 1) end},
+    ["2"]   = {short = function() handle_mode_navigation(2) end, long  = function() params:set("global_pitch_size_density_link", params:get("global_pitch_size_density_link") == 1 and 0 or 1) end},
+    ["3"]   = {short = function() handle_mode_navigation(3) end, long  = function() params:set("symmetry", params:get("symmetry") == 1 and 0 or 1) end},
+    ["12"]  = {short = function() handle_randomize_track(2, true) end, long  = function() params:set("clock_sync", params:get("clock_sync") == 2 and 1 or 2) end},
+    ["13"]  = {short = function() handle_randomize_track(3, true) end, long  = function() params:set("arp_on", params:get("arp_on") == 2 and 1 or 2) end},
+    ["23"]  = {short = handle_parameter_lock, long  = combo_longpress_fire},
+    ["123"] = {long  = function() params:set("arp_randomize", 1) fx_popup.label = "RANDOM ARP" fx_popup.value = nil fx_popup.time = util.time() end},
+}
 
-local function handle_key_release(n, both_keys_pressed)
-    local tracker = key_trackers[n]
-    local combo_tracker = key_trackers[23]
-    if (n == 2 or n == 3) and combo_tracker and combo_tracker.press_time then
-        if not combo_tracker.had_interaction then
-            local duration = util.time() - combo_tracker.press_time
-            if duration >= KEY_LONG_PRESS_THRESHOLD then
-                combo_longpress_fire()
-            else
-                handle_parameter_lock()
-            end
-            combo_tracker.had_interaction = true
+local function gesture_id() return (key_state[1] and "1" or "") .. (key_state[2] and "2" or "") .. (key_state[3] and "3" or "") end
+local function handle_key_press() flush_finalize() key_gesture = {id = gesture_id(), press_time = util.time(), fired = false} end
+local function handle_key_release()
+    local g = key_gesture
+    if g and not g.fired then
+        g.fired = true
+        local combo = hlp.key_combos[g.id]
+        if combo then
+            local action = (util.time() - g.press_time) >= KEY_LONG_PRESS_THRESHOLD and combo.long or combo.short
+            if action then action() end
         end
     end
-    for s = 2, 3 do
-        local ct = key_trackers[10 + s]
-        if (n == 1 or n == s) and ct and ct.press_time and not ct.had_interaction then
-            local duration = util.time() - ct.press_time
-            if duration >= KEY_LONG_PRESS_THRESHOLD then
-                if s == 2 then params:set("clock_sync", params:get("clock_sync") == 2 and 1 or 2)
-                elseif s == 3 then params:set("evolution", params:get("evolution") == 1 and 0 or 1) end
-            else
-                handle_randomize_track(s, true)
-            end
-            ct.had_interaction = true
-        end
+    local id = gesture_id()
+    if id == "" then key_gesture = nil
+    else key_gesture = {id = id, press_time = g and g.press_time or util.time(), fired = true}
     end
-    if (n == 2 or n == 3) and tracker and tracker.press_time and not tracker.long_triggered and not tracker.had_interaction and not both_keys_pressed then 
-        if (util.time() - tracker.press_time) < KEY_LONG_PRESS_THRESHOLD then handle_mode_navigation(n) end
-    end
-    set_key_tracking(n)
 end
 
 function key(n, z)
@@ -1427,10 +1344,9 @@ function key(n, z)
             redraw()
         end) then return end
     end
-    local is_press = (z == 1)
-    key_state[n] = is_press
-    if is_press then handle_key_press(n) 
-    else handle_key_release(n, key_state[2] and key_state[3]) 
+    key_state[n] = (z == 1)
+    if z == 1 then handle_key_press()
+    else handle_key_release()
     end
 end
 
@@ -1487,7 +1403,6 @@ local _LFO_RANGE_CACHE = {}
 local _LOCK_PARAMS = {"jitter","size","density","spread","pitch","speed","seek","pan"}
 local _FULL_PARAM_KEYS = {{},{}}
 for t = 1, 2 do for i = 1, #_LOCK_PARAMS do _FULL_PARAM_KEYS[t][i] = t .. _LOCK_PARAMS[i] end end
-
 local _slow_refresh_countdown = 0
 local function refresh_redraw_cache()
   for t = 1,2 do
@@ -1663,13 +1578,16 @@ function redraw()
     local name = ps and "pitch_shift" or row.name
     local hi = cur_mode == row.mode
     local y = row.y
-    if hi then 
-      T(LEVEL.hi, 6 + left_slide, y, ps and "PITCH :)" or row.label_upper) 
-    else 
-      T(LEVEL.hi, 6 + left_slide, y, ps and "pitch :)" or row.label) 
+    if hi then
+      T(LEVEL.hi, 6 + left_slide, y, ps and "PITCH :)" or row.label_upper)
+    else
+      T(LEVEL.hi, 6 + left_slide, y, ps and "pitch :)" or row.label)
     end
     local fmt = FORMAT[row.fmt_key]
     local density_synced = (row.name == "density" and clocksync.grain_synced())
+    local is_size_row = (name == "size")
+    local size_cap1 = is_size_row and arp.max_size_ms(1) or nil
+    local size_cap2 = is_size_row and arp.max_size_ms(2) or nil
     for t = 1,2 do
       local x = TXP[t]
       local param = ps and (t == 1 and "1pitch_shift" or "2pitch_shift") or (t == 1 and row.param1 or row.param2)
@@ -1677,6 +1595,8 @@ function redraw()
       if name == "size" and PARAM_CACHE.link then draw_size_link(x, y) end
       if C.locked[ps and "pitch" or name] then draw_lock(x, y - 1) end
       local val = pget(param)
+      local size_cap = (t == 2) and size_cap2 or size_cap1
+      if size_cap and val > size_cap then val = size_cap end
       local sync_label = density_synced and clocksync.grain_division_label(t) or nil
       local txt = sync_label or (fmt and val_text(param, val, fmt, t, (not ps) and row.st and C.pitch_rand or nil) or params:string(param))
       T(flash_level(t, hi and LEVEL.hi or LEVEL.val), x, y, txt)
@@ -1684,10 +1604,10 @@ function redraw()
         local rc = _LFO_RANGE_CACHE[param]
         if not rc then
           rc = {0,0,0} _LFO_RANGE_CACHE[param] = rc
+          local a0, b0 = lfo.get_parameter_range(param, true)
+          local _, fb0 = lfo.get_parameter_range(param, false)
+          rc[1], rc[2], rc[3] = a0, b0, fb0
         end
-        local a0, b0 = lfo.get_parameter_range(param, true)
-        local _, fb0 = lfo.get_parameter_range(param, false)
-        rc[1], rc[2], rc[3] = a0, b0, fb0
         local a, b, fb = rc[1], rc[2], rc[3]
         local bar_w = clamp(floor(((val - a) / (b - a)) * BAR_W), 0, BAR_W)
         R(LEVEL.dim + 2, x, y + 1, bar_w, 1)
@@ -1831,7 +1751,8 @@ local function setup_undo()
                 morph_amount = params:get("morph_amount"),
                 scene_mode   = params:get("scene_mode"),
                 scene_data   = utils.deep_copy(morph.scene_data),
-                temp_scene   = utils.deep_copy(morph.temp_scene)}
+                temp_scene   = utils.deep_copy(morph.temp_scene),
+                arp          = arp.snapshot()}
         end,
         restore_extra = function(s)
             morph.scene_data = utils.deep_copy(s.scene_data)
@@ -1840,6 +1761,7 @@ local function setup_undo()
             morph.scene_mode = (s.scene_mode == 2) and "on" or "off"
             params:set("morph_amount", s.morph_amount, true)
             morph.sync_amount(s.morph_amount)
+            if s.arp then arp.restore(s.arp) end
         end,
         on_before_restore = function()
             for i = 1, 2 do if randomize_metro[i] then stop_metro_safe(randomize_metro[i]) end end
@@ -1867,9 +1789,9 @@ function init()
     setup_osc()
     morph.init(lfo, invalidate_lfo_cache, clocksync)
     clocksync.init({lfo = lfo, set_density = clocksync_set_density})
+    arp.init({scale_utils = SU, is_voice_active = function(v) return audio_active[v] end, checkpoint = undo.checkpoint})
     font.init_fx_cache()
     init_longpress_checker()
-    for _, target in pairs(lfo.lfo_targets or {}) do if target ~= "none" then _LFO_RANGE_CACHE[target] = {0, 0, 0} end end
     for i = 1, 2 do params:set(i.."sample", _path.tape, true) end
     for i = 1, 2 do engine.pause_voice(i) end
     clock.transport.start = transport_start
@@ -1890,6 +1812,7 @@ function cleanup()
     clock.transport.stop  = nil
     clock.transport.reset = nil
     clocksync.cleanup()
+    arp.cleanup()
     midi_input.cleanup()
     randpara.cleanup()
     if initial_monitor_level then params:set('monitor_level', initial_monitor_level) end

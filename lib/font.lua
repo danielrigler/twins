@@ -19,7 +19,9 @@ font.micro_font = {
   P = {{1,1,1},{1,1,1},{1,0,0}},
   O = {{1,1,1},{1,0,1},{1,1,1}},
   W = {{1,0,1},{1,1,1},{1,1,1}},
-  M = {{1,0,1},{0,1,0},{1,0,1}}
+  M = {{1,0,1},{0,1,0},{1,0,1}},
+  K = {{0,1,0},{1,0,1},{0,1,0}},
+  A = {{0,0,1},{0,1,1},{1,1,1}}
 }
 
 local function plot_text(plot, x, y, text, level)
@@ -29,10 +31,12 @@ local function plot_text(plot, x, y, text, level)
     local glyph = font.micro_font[char]
     if glyph then
       local w = #glyph[1]
+      local col_levels = type(level) == "table" and level or nil
       for row = 1, 3 do
         for col = 1, w do
           if glyph[row][col] == 1 then
-            plot(level or 1, cursor_x + col - 1, y + row - 1)
+            local lvl = col_levels and (col_levels[col] or col_levels[#col_levels]) or level
+            plot(lvl or 1, cursor_x + col - 1, y + row - 1)
           end
         end
       end
@@ -98,6 +102,12 @@ local _delay_duck_gain = 1.0
 function font.set_delay_duck(gain)
   _delay_duck_gain = gain
 end
+
+font.arp_ref = nil
+function font.set_arp_reference(a) font.arp_ref = a end
+
+font.clocksync_ref = nil
+function font.set_clocksync_reference(c) font.clocksync_ref = c end
 
 local function value_to_level(val)
   return 1 + math.floor((val / 100) * 14)
@@ -168,6 +178,8 @@ local function pitchshift_intensity(cache)
 end
 
 local FX_SPECS = {
+  {glyph = "K", lock = nil,            show = function() return font.clocksync_ref and font.clocksync_ref.grain_synced() end, val = function() return 100 end},
+  {glyph = "A", lock = nil,            show = function() return font.arp_ref and font.arp_ref.is_running() end, val = function() return 100 end, gradient = true},
   {glyph = "P", lock = nil,            show = pitchshift_active,                                      val = pitchshift_intensity},
   {glyph = "F", lock = "lock_filter",  show = filter_active,                                          val = filter_intensity},
   {glyph = "B", lock = nil,            show = function(c) return c.bitcrush_mix > 0 end,              val = function(c) return c.bitcrush_mix end},
@@ -182,6 +194,15 @@ local FX_SPECS = {
   {glyph = "Z", lock = nil,            show = stereo_active,                                          val = stereo_intensity},
 }
 
+local function column_gradient(peak)
+
+  return {
+    math.max(1, math.floor(peak * 0.35)),
+    math.max(1, math.floor(peak * 0.65)),
+    peak,
+  }
+end
+
 local function refresh_draw_caches()
   local phase = (util.time() * 2) % 1
   _blink_level = phase < 0.5 and 4 or 1
@@ -190,37 +211,44 @@ local function refresh_draw_caches()
   end
 end
 
-local _pixel_cache = nil
-local _last_update = 0
+local _pc_l, _pc_x, _pc_y, _pc_n = {}, {}, {}, 0
+local _last_update = -1
 local _update_interval = 1 / 10
+local min, max, floor = math.min, math.max, math.floor
 
 function font.draw_fx_status_bucketed(P_func)
   local now = util.time()
-  if _pixel_cache == nil or now - _last_update >= _update_interval then
-    _pixel_cache = {}
+  if now - _last_update >= _update_interval then
     _last_update = now
     refresh_draw_caches()
+    local n = 0
     local collect = function(level, px, py)
-      table.insert(_pixel_cache, {level, px, py})
+      n = n + 1
+      _pc_l[n], _pc_x[n], _pc_y[n] = level, px, py
     end
-    local y = 0
     local x = 7
-    for _, spec in ipairs(FX_SPECS) do
+    for i = 1, #FX_SPECS do
+      local spec = FX_SPECS[i]
       if spec.show(fx_cache) then
         local level = value_to_level(spec.val(fx_cache))
         if spec.lock and _lock_cache[spec.lock] then
-          level = math.min(15, level + (_blink_level == 4 and 2 or 0))
+          level = min(15, level + (_blink_level == 4 and 2 or 0))
         end
         if spec.fade then
-          local f = math.max(0, math.min(1, spec.fade(fx_cache)))
-          level = math.max(1, 1 + math.floor((level - 1) * f))
+          local f = max(0, min(1, spec.fade(fx_cache)))
+          level = max(1, 1 + floor((level - 1) * f))
         end
-        x = plot_text(collect, x, y, spec.glyph, level)
+        if spec.gradient then
+          level = column_gradient(level)
+        end
+        x = plot_text(collect, x, 0, spec.glyph, level)
       end
     end
+    _pc_n = n
   end
-  for _, px in ipairs(_pixel_cache) do
-    P_func(px[1], px[2], px[3])
+  local l, px, py = _pc_l, _pc_x, _pc_y
+  for i = 1, _pc_n do
+    P_func(l[i], px[i], py[i])
   end
 end
 

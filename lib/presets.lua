@@ -13,6 +13,9 @@ _G.preset_loading = false
 presets.lfo_ref = nil
 function presets.set_lfo_reference(l) presets.lfo_ref = l end
 
+presets.arp_ref = nil
+function presets.set_arp_reference(a) presets.arp_ref = a end
+
 local PRESETS_DIR         = "twins"
 local PRESETS_PATH        = _path.data .. PRESETS_DIR
 local PRESET_VERSION      = 1
@@ -191,6 +194,7 @@ function presets.save_complete_preset(name, scene_data, active_mode, active_filt
             active_filter_mode = active_filter_mode,
             clock = clock_snapshot(),
             lfo_phases = presets.lfo_ref and presets.lfo_ref.snapshot_phases() or nil,
+            arp = presets.arp_ref and presets.arp_ref.snapshot() or nil,
             master_vol_diff = _G.master_vol_diff,
         }
         util.make_dir(PRESETS_PATH)
@@ -250,7 +254,7 @@ function presets.load_complete_preset(name, scene_data, update_pan, audio_active
     local ok, data = pcall(chunk)
     if not ok or not data then print("✗ Parse error: " .. (data or "?")); return false end
     if data.version and data.version > PRESET_VERSION then print("⚠ Newer preset version") end
-    
+
     local saved_output_level
     if params.lookup["output_level"] then
         saved_output_level = params:get("output_level")
@@ -281,6 +285,7 @@ function presets.load_complete_preset(name, scene_data, update_pan, audio_active
         end
         update_pan()
         _G.preset_loading = false
+        if presets.arp_ref and presets.arp_ref.restore then presets.arp_ref.restore(data.arp) end
         apply_params_ordered(data.params or {})
         if data.lfo_phases and presets.lfo_ref then presets.lfo_ref.restore_phases(data.lfo_phases) end
         for i = 1, 2 do

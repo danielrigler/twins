@@ -36,13 +36,13 @@ function morph.init(lfo_module, invalidate_fn, clocksync_module)
     _p_set = params.set
     _p_get = params.get
     param_registry = {}
-    for track = 1, 2 do 
-        for _, p in ipairs(morph.voice_params) do 
-            table.insert(param_registry, {name = tostring(track) .. p, is_pitch = (p == "pitch"), t2 = (track == 2)}) 
-        end 
+    for track = 1, 2 do
+        for _, p in ipairs(morph.voice_params) do
+            table.insert(param_registry, {name = tostring(track) .. p, is_pitch = (p == "pitch"), t2 = (track == 2)})
+        end
     end
-    for _, p in ipairs(morph.global_params) do 
-        table.insert(param_registry, {name = p, is_pitch = false, t2 = false}) 
+    for _, p in ipairs(morph.global_params) do
+        table.insert(param_registry, {name = p, is_pitch = false, t2 = false})
     end
 end
 
@@ -83,8 +83,8 @@ function morph.recall_scene(track, scene)
     local scene_params = morph.scene_data[track][scene]
     if not scene_params then return end
     for i = 1, 16 do _p_set(params, MORPH_LFO_KEYS[i], 1) end
-    for param_name, value in pairs(scene_params) do 
-        if param_name ~= "lfo_data" and params.lookup[param_name] then _p_set(params, param_name, value) end 
+    for param_name, value in pairs(scene_params) do
+        if param_name ~= "lfo_data" and params.lookup[param_name] then _p_set(params, param_name, value) end
     end
     if scene_params.lfo_data then
         for i = 1, 16 do
@@ -249,7 +249,7 @@ function morph.apply()
         local lfo_A_enabled, lfo_B_enabled = (lfo_A and lfo_A.enabled), (lfo_B and lfo_B.enabled)
         if not (lfo_A_enabled or lfo_B_enabled) then
             if _p_get(params, MORPH_LFO_KEYS[i]) == 2 then _p_set(params, MORPH_LFO_KEYS[i], 1) end
-            goto continue 
+            goto continue
         end
         used_slots[i] = true
         local target_A = lfo_A_enabled and lfo_A.target and lfo_targets[lfo_A.target]

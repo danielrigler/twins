@@ -13,6 +13,8 @@ local global_depth_scale = 1
 function lfo.set_global_depth_scale(v) global_depth_scale = v or 1 end
 local clocksync_ref = nil
 function lfo.set_clocksync_reference(cs) clocksync_ref = cs end
+local size_cap_fn = nil
+function lfo.set_size_cap_fn(fn) size_cap_fn = fn end
 local TWO_PI = math.pi * 2
 local PHASE_INCREMENT = 1 / 30
 local math_sin = math.sin
@@ -291,9 +293,7 @@ local function randomize_lfo(i, target)
     local center = util_clamp(lfo.scale(offset, -1, 1, rand_min, rand_max), rand_min + half_swing, rand_max - half_swing)
     local full_offset = lfo.scale(center, full_min, full_max, -1, 1)
     local full_depth = depth * (narrow_range / full_range)
-    if clocksync_ref and clocksync_ref.grain_synced() and target:sub(2) == "density" then
-        full_offset = clocksync_ref.grain_division_norm(track) * 2 - 1
-    end
+    if clocksync_ref and clocksync_ref.grain_synced() and target:sub(2) == "density" then full_offset = clocksync_ref.grain_division_norm(track) * 2 - 1 end
     local obj = lfo[i]
     obj.depth = full_depth
     obj.offset = full_offset
@@ -474,6 +474,8 @@ function lfo.process()
     local ranges_table = param_ranges
     local gdepth = global_depth_scale
     tick_pitch_scale = nil
+    local size_cap1 = size_cap_fn and size_cap_fn("1") or math.huge
+    local size_cap2 = size_cap_fn and size_cap_fn("2") or math.huge
     for k in pairs(tick_lim) do tick_lim[k] = nil end
     for idx = 1, #active_lfos do
         local i = active_lfos[idx]
@@ -548,6 +550,24 @@ function lfo.process()
             mn, mx = r and r[1] or 0, r and r[2] or 100
         end
         local value = (mod + 1) * 0.5 * (mx - mn) + mn
+        if obj.is_size then
+            local size_cap = (obj.track_num == "2") and size_cap2 or size_cap1
+            if size_cap < mx then
+                local wh = (size_cap - mn) * 0.5
+                local center = (obj.offset + 1) * (mx - mn) * 0.5 + mn
+                local en = mod - obj.offset
+                local maxen = d * 0.01
+                if maxen > 1 then
+                    en = en / maxen
+                    maxen = 1
+                end
+                local maxexc = maxen * wh
+                local lo, hi = mn + maxexc, size_cap - maxexc
+                if center < lo then center = lo elseif center > hi then center = hi end
+                value = center + en * wh
+                if value > size_cap then value = size_cap end
+            end
+        end
         if value < mn then value = mn elseif value > mx then value = mx end
         if obj.is_volume and obj.offset <= -0.9875 then value = -70 end
         if obj.is_pitch then

@@ -51,9 +51,9 @@ local function push()
 end
 
 local function stop_reseek()
-  if reseek_co then 
-    clock.cancel(reseek_co) 
-    reseek_co = nil 
+  if reseek_co then
+    clock.cancel(reseek_co)
+    reseek_co = nil
   end
 end
 
@@ -62,9 +62,9 @@ local function start_reseek()
   reseek_co = clock.run(function()
     while true do
       clock.sync(reseek_beats)
-      if engine then 
-        engine.reseek(1) 
-        engine.reseek(2) 
+      if engine then
+        engine.reseek(1)
+        engine.reseek(2)
       end
     end
   end)
@@ -97,19 +97,19 @@ function clocksync.add_params()
     end
   end)
   params:add_option("clock_lfo_div", "LFO Division 1", DIV_LABELS, DIV["1 bar"])
-  params:set_action("clock_lfo_div", function(v) 
+  params:set_action("clock_lfo_div", function(v)
     lfo_div_beats[1] = DIVISIONS[v].beats
-    push() 
+    push()
   end)
   params:add_option("clock_lfo_div2", "LFO Division 2", DIV_LABELS, DIV["1 bar"])
-  params:set_action("clock_lfo_div2", function(v) 
+  params:set_action("clock_lfo_div2", function(v)
     lfo_div_beats[2] = DIVISIONS[v].beats
-    push() 
+    push()
   end)
   params:add_option("clock_sync_delay_div", "Delay Division", DIV_LABELS, DIV["1/4"])
-  params:set_action("clock_sync_delay_div", function(v) 
+  params:set_action("clock_sync_delay_div", function(v)
     delay_div = DIVISIONS[v].beats
-    push() 
+    push()
   end)
   params:add_option("clock_reseek", "Beat Repeat", {"off", "on"}, 1)
   params:set_action("clock_reseek", function(v)
@@ -121,9 +121,9 @@ function clocksync.add_params()
     refresh_reseek()
   end)
   params:add_option("clock_reseek_div", "Repeat Division", DIV_LABELS, DIV["1 bar"])
-  params:set_action("clock_reseek_div", function(v) 
+  params:set_action("clock_reseek_div", function(v)
     reseek_beats = DIVISIONS[v].beats
-    refresh_reseek() 
+    refresh_reseek()
   end)
 end
 
@@ -225,6 +225,7 @@ function clocksync.grain_synced() return enabled end
 function clocksync.div_labels() return DIV_LABELS end
 function clocksync.div_index(label) return DIV[label] end
 function clocksync.div_rate_hz(idx) return t60() / DIVISIONS[idx].beats end
+function clocksync.div_beats(idx) return DIVISIONS[idx].beats end
 function clocksync.reseek_active() return reseek_enabled end
 function clocksync.grain_division_label(v) return density_label[v] end
 
