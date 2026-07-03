@@ -77,17 +77,13 @@ local current_mode = "seek"
 local current_filter_mode = "lpf"
 local pitchshift_display = false
 local tap_times = {}
-local TAP_TIMEOUT = 2
 local initial_monitor_level, initial_reverb_onoff;
 local audio_active = {[1] = false, [2] = false}
 local steps = 20
-local valid_audio_exts = {[".wav"]=true,[".aif"]=true,[".aiff"]=true,[".flac"]=true}
 local mode_list = {"spread","pitch","density","size","jitter","lpf","pan","speed","seek"}
 local mode_indices = {} for i,v in ipairs(mode_list) do mode_indices[v] = i end
 local MK = lfo.keys
-
 local key_gesture = nil
-local KEY_LONG_PRESS_THRESHOLD = 1
 local showing_save_message = false
 local fx_popup = {label = nil, value = nil, time = nil}
 local FX_POPUP_DURATION = 1
@@ -100,7 +96,6 @@ local link_base = {[1]={pitch=nil,size=nil,density=nil,product=nil}, [2]={pitch=
 local ui_metro = nil
 local floor, abs, log, max, min, sqrt, ceil, sin = math.floor, math.abs, math.log, math.max, math.min, math.sqrt, math.ceil, math.sin
 local clamp = util.clamp
-local UI_FPS = 60
 local _param_obj = {}
 local function _pobj(id)
     local o = _param_obj[id]
@@ -125,6 +120,14 @@ for t = 1, 2 do
         pitch_random_prob = t.."pitch_random_prob"}
 end
 local _lock_key_cache = {}
+local _HK = {
+    size = {"1size", "2size"}, den = {"1density", "2density"}, pitch = {"1pitch", "2pitch"},
+    vol = {"1volume", "2volume"}, seek = {"1seek", "2seek"},
+    reso_degs = {0, 7, 12, 19, 24},
+    rand_names = {"speed", "jitter", "size", "density", "spread", "pitch", "seek"},
+    TAP_TIMEOUT = 2, LONGPRESS = 1, UI_FPS = 60,
+    audio_exts = {[".wav"]=true,[".aif"]=true,[".aiff"]=true,[".flac"]=true},
+    shimmer_presets = {{oct = 0.25}, {oct = 0.5}, {oct = 1}, {oct = 2}, {oct = 4}}}
 local function lock_key(track_num, param)
     local tk = _lock_key_cache[track_num]
     if not tk then tk = {} _lock_key_cache[track_num] = tk end
@@ -135,7 +138,6 @@ end
 local _grain_pool = {}
 local invalidate_lfo_cache = lfo.invalidate_lfo_param_cache
 local function do_capture_temp_scene() morph.capture_to_temp_scene(lfo.get_active_param_map()) end
-local shimmer_presets = {{oct = 0.25}, {oct = 0.5}, {oct = 1}, {oct = 2}, {oct = 4}}
 local function combo_longpress_fire()
     if current_mode == "pitch" then
         pitchshift_display = not pitchshift_display
@@ -158,7 +160,7 @@ local param_modes = {
     pitchshift = {param = "pitch_shift", delta = 1, engine = true, has_lock = false, st = true},
     spread = {param = "spread", delta = 2, engine = true, has_lock = true, y = 51, label = "spread:"},
     volume = {param = "volume", engine = true}}
-local param_rows = {} for mode, config in pairs(param_modes) do if config.y then local lbl = config.label local nm = lbl:match("%a+") table.insert(param_rows, {y = config.y, label = lbl, label_upper = lbl:upper(), name = nm, mode = mode, param1 = "1" .. config.param, param2 = "2" .. config.param, hz = config.hz, st = config.st, fmt_key = config.hz and "hz" or config.st and "st" or nm}) end end table.sort(param_rows, function(a, b) return a.y < b.y end)
+local param_rows = {} for mode, config in pairs(param_modes) do config.pkeys = {"1" .. config.param, "2" .. config.param} if config.y then local lbl = config.label local nm = lbl:match("%a+") table.insert(param_rows, {y = config.y, label = lbl, label_upper = lbl:upper(), name = nm, mode = mode, param1 = "1" .. config.param, param2 = "2" .. config.param, hz = config.hz, st = config.st, fmt_key = config.hz and "hz" or config.st and "st" or nm}) end end table.sort(param_rows, function(a, b) return a.y < b.y end)
 local LIMITS = {size={min=20,max=4999},density={min=0.1,max=50},pitch={min=-48,max=48},pitch_shift={min=-48,max=48}}
 local SU = lfo.scale_utils
 local audio_files_cache = nil
@@ -214,7 +216,7 @@ end
 function hlp.apply_linked_density(track, target_den)
     local idx = clocksync.div_index_for_density(target_den)
     if not idx then return end
-    local active, li = is_lfo_active_for_param(track .. "density")
+    local active, li = is_lfo_active_for_param(_HK.den[track])
     if active then
         local depth = pget(MK.depth[li])
         local center = clocksync.div_index_to_norm(idx) * 2 - 1
@@ -230,9 +232,9 @@ end
 function hlp.ensure_link_base(track)
     local lb = link_base[track]
     if not (lb.pitch and lb.size and lb.density and lb.product) then
-        lb.pitch   = params:get(track .. "pitch")
-        lb.size    = params:get(track .. "size")
-        lb.density = (clocksync.grain_synced() and clocksync.grain_density(track)) or params:get(track .. "density")
+        lb.pitch   = params:get(_HK.pitch[track])
+        lb.size    = params:get(_HK.size[track])
+        lb.density = (clocksync.grain_synced() and clocksync.grain_density(track)) or params:get(_HK.den[track])
         lb.product = lb.size * lb.density
     end
     return lb
@@ -241,11 +243,11 @@ function hlp.cancel_gesture() if key_gesture then key_gesture.fired = true end e
 function hlp.update_resonator()
     if (pget("resonator_mix") or 0) <= 0 then return end
     local root = params:get("resonator_root")
-    local degs = {0, 7, 12, 19, 24}
+    local d = _HK.reso_degs
     engine.resonator_freqs(
-        440 * 2 ^ ((root + degs[1] - 69) / 12), 440 * 2 ^ ((root + degs[2] - 69) / 12),
-        440 * 2 ^ ((root + degs[3] - 69) / 12), 440 * 2 ^ ((root + degs[4] - 69) / 12),
-        440 * 2 ^ ((root + degs[5] - 69) / 12))
+        440 * 2 ^ ((root + d[1] - 69) / 12), 440 * 2 ^ ((root + d[2] - 69) / 12),
+        440 * 2 ^ ((root + d[3] - 69) / 12), 440 * 2 ^ ((root + d[4] - 69) / 12),
+        440 * 2 ^ ((root + d[5] - 69) / 12))
 end
 local function update_pan_positioning() if _G.preset_loading then return end; local l1,l2=audio_active[1],audio_active[2]; local function ok(v,id) return v and not is_param_locked(id,"pan") and not is_lfo_active_for_param(id.."pan") end; if l1 and l2 then if ok(l1,1) then params:set("1pan",-25) end; if ok(l2,2) then params:set("2pan",25) end else if ok(l1,1) then params:set("1pan",0) end; if ok(l2,2) then params:set("2pan",0) end end end
 
@@ -304,7 +306,7 @@ local function setup_ui_metro()
         end
         redraw()
     end)
-    ui_metro.time = 1 / UI_FPS
+    ui_metro.time = 1 / _HK.UI_FPS
     utils.metro_start(ui_metro)
 end
 
@@ -316,7 +318,7 @@ local function init_longpress_checker()
         local g = key_gesture
         if not g or g.fired then return end
         local combo = hlp.key_combos[g.id]
-        if combo and combo.long and (util.time() - g.press_time) >= KEY_LONG_PRESS_THRESHOLD then
+        if combo and combo.long and (util.time() - g.press_time) >= _HK.LONGPRESS then
             g.fired = true
             combo.long()
         end
@@ -328,13 +330,13 @@ local function disable_lfos_for_param(param_name, only_self)
     local base_param = param_name:sub(2)
     if only_self then
         local is_active, lfo_index = is_lfo_active_for_param(param_name)
-        if is_active then params:set(lfo_index .. "lfo", 1) invalidate_lfo_cache() end
+        if is_active then params:set(MK.lfo[lfo_index], 1) invalidate_lfo_cache() end
     else
         local did_disable = false
         for track = 1, 2 do
             local full_param = track .. base_param
             local is_active, lfo_index = is_lfo_active_for_param(full_param)
-            if is_active then params:set(lfo_index .. "lfo", 1) did_disable = true end
+            if is_active then params:set(MK.lfo[lfo_index], 1) did_disable = true end
         end
         if did_disable then invalidate_lfo_cache() end
     end
@@ -356,7 +358,7 @@ local function scan_audio_files(dir)
     for _, entry in ipairs(util.scandir(dir)) do
         local path = dir .. entry
         if entry:sub(-1) == "/" then for _, f in ipairs(scan_audio_files(path)) do files[#files+1] = f end
-        elseif valid_audio_exts[path:lower():match("^.+(%..+)$") or ""] then files[#files+1] = path end
+        elseif _HK.audio_exts[path:lower():match("^.+(%..+)$") or ""] then files[#files+1] = path end
     end
     return files
 end
@@ -385,7 +387,7 @@ end
 
 local function register_tap()
     local now = util.time()
-    if #tap_times > 0 and (now - tap_times[#tap_times]) > TAP_TIMEOUT then tap_times = {} end
+    if #tap_times > 0 and (now - tap_times[#tap_times]) > _HK.TAP_TIMEOUT then tap_times = {} end
     table.insert(tap_times, now)
     if #tap_times > 3 then tap_times = {tap_times[#tap_times-2], tap_times[#tap_times-1], tap_times[#tap_times]} end
     if #tap_times >= 2 then
@@ -463,7 +465,7 @@ local function setup_params()
     params:add_group("R3VERB", 14)
     params:add_taper("reverb_mix", "Mix", 0, 100, 0, 0, "%") params:set_action("reverb_mix", function(value) engine.reverb_mix(value * 0.01) font.update_fx_cache("reverb_mix", value) end)
     params:add_taper("shimmer_mix", "Shimmer", 0, 100, 0, 0, "%") params:set_action("shimmer_mix", function(value) engine.shimmer_mix(value * 0.01) end)
-    params:add_option("shimmer_preset", "Pitch Shift", {"-2 oct", "-1 oct", "0", "+1 oct", "+2 oct"}, 4) params:set_action("shimmer_preset", function(idx) local preset = shimmer_presets[idx] engine.shimmer_oct(preset.oct) end)
+    params:add_option("shimmer_preset", "Pitch Shift", {"-2 oct", "-1 oct", "0", "+1 oct", "+2 oct"}, 4) params:set_action("shimmer_preset", function(idx) local preset = _HK.shimmer_presets[idx] engine.shimmer_oct(preset.oct) end)
     params:add_taper("rev_decay", "Decay", 0, 100, 80, 0, "%") params:set_action("rev_decay", function(value) engine.rev_decay(value * 0.01) end)
     params:add_taper("rev_damp", "Damping", 0, 100, 30, 0, "%") params:set_action("rev_damp", function(value) engine.rev_damp(value * 0.01) end)
     params:add_taper("rev_predelay", "Pre Delay", 0, 500, 25, 0, "ms") params:set_action("rev_predelay", function(value) engine.rev_predelay(value) end)
@@ -754,6 +756,7 @@ end
 local _rand_can_randomize = {}
 local _rand_targets = {}
 
+
 local function randomize(n)
     if randomize_metro[n] then stop_metro_safe(randomize_metro[n]) else randomize_metro[n] = metro.init() end
     local m_rand = randomize_metro[n]
@@ -764,9 +767,9 @@ local function randomize(n)
     local can_randomize = _rand_can_randomize
     local targets = _rand_targets
 
-    local param_names = {"speed", "jitter", "size", "density", "spread", "pitch", "seek"}
+    local param_names = _HK.rand_names
     local pitch_size_density_linked = params:get("global_pitch_size_density_link") == 1
-    for i = 1, #param_names do can_randomize[param_names[i]] = params:get(n .. "lock_" .. param_names[i]) == 1 end
+    for i = 1, #param_names do can_randomize[param_names[i]] = not is_param_locked(n, param_names[i]) end
     if can_randomize.pitch then randomize_pitch(n, other_track, symmetry) end
 
     if not m_rand then print("Error: Hardware metro limit reached!") return end
@@ -845,12 +848,12 @@ end
 
 local function handle_volume_lfo(track, delta, crossfade_mode)
     if key_state[2] or key_state[3] then return end
-    local p = track .. "volume"
-    local op = (3 - track) .. "volume"
+    local p = _HK.vol[track]
+    local op = _HK.vol[3 - track]
     local a1, i1 = is_lfo_active_for_param(p)
     local a2, i2 = is_lfo_active_for_param(op)
-    local k1 = a1 and (i1 .. "offset")
-    local k2 = a2 and (i2 .. "offset")
+    local k1 = a1 and MK.offset[i1]
+    local k2 = a2 and MK.offset[i2]
     local lfo_delta = delta * 1.5
     local vol_delta = delta * 3
     if crossfade_mode then
@@ -875,68 +878,68 @@ local function handle_volume_lfo(track, delta, crossfade_mode)
 end
 
 local _LINK_SPEED = {pitch = 1, size = 5, density = 0.5}
+function hlp.update_linked_params(tr, delta_mult, param, delta)
+    local lb = hlp.ensure_link_base(tr)
+    local base_pitch   = lb.pitch
+    local base_size    = lb.size
+    local base_density = lb.density
+    local size_den_prod = lb.product
+    local new_pitch, new_size, new_den
+    if param == "pitch" then
+        local old_pitch = base_pitch
+        local scale = params:string("pitch_quantize_scale")
+        if scale ~= "none" then
+            local direction = (delta * delta_mult) > 0 and 1 or -1
+            new_pitch = get_next_scale_note(old_pitch, scale, direction)
+            new_pitch = clamp(new_pitch, LIMITS.pitch.min, LIMITS.pitch.max)
+        else new_pitch = clamp(old_pitch + delta * delta_mult, LIMITS.pitch.min, LIMITS.pitch.max)
+        end
+        local pitch_ratio = (new_pitch - base_pitch) / 12
+        new_size = clamp(base_size * (2 ^ -pitch_ratio), LIMITS.size.min, LIMITS.size.max)
+        if clocksync.grain_synced() then
+            local target_den = clamp(size_den_prod / new_size, LIMITS.density.min, LIMITS.density.max)
+            hlp.apply_linked_density(tr, target_den)
+            new_den = clocksync.grain_density(tr) or base_density
+        else new_den = clamp(base_density * (2 ^ pitch_ratio), LIMITS.density.min, LIMITS.density.max)
+        end
+    elseif param == "size" then
+        local old_size = base_size
+        new_size = clamp(old_size + delta * delta_mult, LIMITS.size.min, LIMITS.size.max)
+        if clocksync.grain_synced() then
+            local target_den = clamp(size_den_prod / new_size, LIMITS.density.min, LIMITS.density.max)
+            hlp.apply_linked_density(tr, target_den)
+            new_den = clocksync.grain_density(tr) or base_density
+        else new_den = clamp(size_den_prod / new_size, LIMITS.density.min, LIMITS.density.max)
+            local den_min, den_max = LIMITS.density.min, LIMITS.density.max
+            if new_den == den_min or new_den == den_max then new_size = clamp(size_den_prod / new_den, LIMITS.size.min, LIMITS.size.max) end
+        end
+        new_pitch = base_pitch
+    else
+        local old_den = base_density
+        new_den = clamp(old_den + delta * delta_mult * 0.1, LIMITS.density.min, LIMITS.density.max)
+        new_size = clamp(size_den_prod / new_den, LIMITS.size.min, LIMITS.size.max)
+        local size_min, size_max = LIMITS.size.min, LIMITS.size.max
+        if new_size == size_min or new_size == size_max then new_den = clamp(size_den_prod / new_size, LIMITS.density.min, LIMITS.density.max) end
+        new_pitch = base_pitch
+    end
+    local synced = clocksync.grain_synced()
+    hlp.apply_lfo_or_set(_HK.size[tr], new_size)
+    if not synced then hlp.apply_lfo_or_set(_HK.den[tr], new_den) end
+    hlp.apply_lfo_or_set(_HK.pitch[tr], new_pitch)
+    lb.pitch   = new_pitch
+    lb.size    = new_size
+    lb.density = new_den
+    if not synced then lb.product = new_size * new_den end
+end
 local function handle_pitch_size_density_link(track, config, delta)
     local param = config.param
     if params:get("global_pitch_size_density_link") ~= 1 then return false end
     if not _LINK_SPEED[param] then return false end
     local symmetry = params:get("symmetry") == 1
     local other_track = 3 - track
-    local function update_linked_params(tr, delta_mult)
-        local lb = hlp.ensure_link_base(tr)
-        local base_pitch   = lb.pitch
-        local base_size    = lb.size
-        local base_density = lb.density
-        local size_den_prod = lb.product
-        local new_pitch, new_size, new_den
-        if param == "pitch" then
-            local old_pitch = base_pitch
-            local scale = params:string("pitch_quantize_scale")
-            if scale ~= "none" then
-                local direction = (delta * delta_mult) > 0 and 1 or -1
-                new_pitch = get_next_scale_note(old_pitch, scale, direction)
-                new_pitch = clamp(new_pitch, LIMITS.pitch.min, LIMITS.pitch.max)
-            else new_pitch = clamp(old_pitch + delta * delta_mult, LIMITS.pitch.min, LIMITS.pitch.max)
-            end
-            local pitch_ratio = (new_pitch - base_pitch) / 12
-            new_size = clamp(base_size * (2 ^ -pitch_ratio), LIMITS.size.min, LIMITS.size.max)
-            if clocksync.grain_synced() then
-                local target_den = clamp(size_den_prod / new_size, LIMITS.density.min, LIMITS.density.max)
-                hlp.apply_linked_density(tr, target_den)
-                new_den = clocksync.grain_density(tr) or base_density
-            else new_den = clamp(base_density * (2 ^ pitch_ratio), LIMITS.density.min, LIMITS.density.max)
-            end
-        elseif param == "size" then
-            local old_size = base_size
-            new_size = clamp(old_size + delta * delta_mult, LIMITS.size.min, LIMITS.size.max)
-            if clocksync.grain_synced() then
-                local target_den = clamp(size_den_prod / new_size, LIMITS.density.min, LIMITS.density.max)
-                hlp.apply_linked_density(tr, target_den)
-                new_den = clocksync.grain_density(tr) or base_density
-            else new_den = clamp(size_den_prod / new_size, LIMITS.density.min, LIMITS.density.max)
-                local den_min, den_max = LIMITS.density.min, LIMITS.density.max
-                if new_den == den_min or new_den == den_max then new_size = clamp(size_den_prod / new_den, LIMITS.size.min, LIMITS.size.max) end
-            end
-            new_pitch = base_pitch
-        else
-            local old_den = base_density
-            new_den = clamp(old_den + delta * delta_mult * 0.1, LIMITS.density.min, LIMITS.density.max)
-            new_size = clamp(size_den_prod / new_den, LIMITS.size.min, LIMITS.size.max)
-            local size_min, size_max = LIMITS.size.min, LIMITS.size.max
-            if new_size == size_min or new_size == size_max then new_den = clamp(size_den_prod / new_size, LIMITS.density.min, LIMITS.density.max) end
-            new_pitch = base_pitch
-        end
-        local synced = clocksync.grain_synced()
-        hlp.apply_lfo_or_set(tr .. "size", new_size)
-        if not synced then hlp.apply_lfo_or_set(tr .. "density", new_den) end
-        hlp.apply_lfo_or_set(tr .. "pitch", new_pitch)
-        lb.pitch   = new_pitch
-        lb.size    = new_size
-        lb.density = new_den
-        if not synced then lb.product = new_size * new_den end
-    end
     local speed = _LINK_SPEED[param]
-    update_linked_params(track, speed)
-    if symmetry then update_linked_params(other_track, speed) end
+    hlp.update_linked_params(track, speed, param, delta)
+    if symmetry then hlp.update_linked_params(other_track, speed, param, delta) end
     return true
 end
 
@@ -944,41 +947,42 @@ local function clocksync_set_density(voice, hz)
     engine.density(voice, hz)
     if params:get("global_pitch_size_density_link") ~= 1 then hlp.link_last_hz[voice] = hz return end
     local lb = hlp.ensure_link_base(voice)
-    if hlp.link_suppress_size or hlp.link_last_hz[voice] == hz or is_lfo_active_for_param(voice .. "density") then
+    if hlp.link_suppress_size or hlp.link_last_hz[voice] == hz or is_lfo_active_for_param(_HK.den[voice]) then
         lb.density = hz
         hlp.link_last_hz[voice] = hz
         return
     end
     local new_size = clamp(lb.product / hz, LIMITS.size.min, LIMITS.size.max)
-    hlp.apply_lfo_or_set(voice .. "size", new_size)
+    hlp.apply_lfo_or_set(_HK.size[voice], new_size)
     lb.size    = new_size
     lb.density = hz
     hlp.link_last_hz[voice] = hz
 end
 
+function hlp.update_seek(tr, current_pos, delta)
+    local new_pos = (current_pos + delta) % 100
+    local norm_pos = new_pos * 0.01
+    osc_positions[tr] = norm_pos
+    params:set(tr.."seek", new_pos)
+    engine.seek(tr, norm_pos)
+end
 local function handle_seek_param(track, config, delta)
     if config.param ~= "seek" then return false end
     local sym = params:get("symmetry") == 1
-    disable_lfos_for_param(track .. "seek", not sym)
-    local function update_seek(tr, current_pos)
-        local new_pos = (current_pos + delta) % 100
-        local norm_pos = new_pos * 0.01
-        osc_positions[tr] = norm_pos
-        params:set(tr.."seek", new_pos)
-        engine.seek(tr, norm_pos)
-    end
+    disable_lfos_for_param(_HK.seek[track], not sym)
     if sym then
-        update_seek(1, floor(osc_positions[1] * 100 + 0.5))
-        update_seek(2, floor(osc_positions[2] * 100 + 0.5))
+        hlp.update_seek(1, floor(osc_positions[1] * 100 + 0.5), delta)
+        hlp.update_seek(2, floor(osc_positions[2] * 100 + 0.5), delta)
     else
-        update_seek(track, floor(osc_positions[track] * 100 + 0.5))
+        hlp.update_seek(track, floor(osc_positions[track] * 100 + 0.5), delta)
     end
     return true
 end
 
 local function handle_standard_param(track, config, delta)
     local sym = params:get("symmetry") == 1
-    local p = track .. config.param
+    local pkeys = config.pkeys
+    local p = pkeys[track]
     disable_lfos_for_param(p, not sym)
     if config.param == "pitch" or config.param == "pitch_shift" then
         local old_value = params:get(p)
@@ -989,24 +993,24 @@ local function handle_standard_param(track, config, delta)
             local new_value = clamp(get_next_scale_note(old_value, scale, direction), lim.min, lim.max)
             params:set(p, new_value)
             if sym then
-                local other_p = (3 - track) .. config.param
+                local other_p = pkeys[3 - track]
                 params:set(other_p, clamp(get_next_scale_note(params:get(other_p), scale, direction), lim.min, lim.max))
             end
         else
             params:delta(p, delta)
             if sym then
-                local other_p = (3 - track) .. config.param
+                local other_p = pkeys[3 - track]
                 params:set(other_p, params:get(other_p) + (params:get(p) - old_value))
             end
         end
     else
         params:delta(p, delta)
-        if sym then params:delta((3 - track) .. config.param, delta) end
+        if sym then params:delta(pkeys[3 - track], delta) end
     end
     if config.param == "size" and arp.is_running() then
         local cap = arp.max_size_ms(track)
         if params:get(p) > cap then params:set(p, cap) end
-        if sym then local op = (3 - track) .. config.param local ocap = arp.max_size_ms(3 - track) if params:get(op) > ocap then params:set(op, ocap) end end
+        if sym then local op = pkeys[3 - track] local ocap = arp.max_size_ms(3 - track) if params:get(op) > ocap then params:set(op, ocap) end end
     end
 end
 
@@ -1158,10 +1162,7 @@ local function adjust_lfo_depth(lfo_idx, delta)
     end
 end
 
-local function mark_key_interaction()
-    if key_gesture then key_gesture.fired = true end
-end
-
+local function mark_key_interaction() if key_gesture then key_gesture.fired = true end end
 local FINALIZE_DEBOUNCE = 0.25
 local finalize_metro = nil
 local finalize_pending = false
@@ -1284,7 +1285,7 @@ function enc(n, d)
         local r_metro = randomize_metro[track]
         if r_metro then stop_metro_safe(r_metro); randomize_metro[track] = nil end
         if k1 then
-            local p = track .. "volume"
+            local p = _HK.vol[track]
             disable_lfos_for_param(p, true)
             if params:get("symmetry") == 1 then disable_lfos_for_param(p) end
             params:delta(p, 3 * d)
@@ -1293,7 +1294,7 @@ function enc(n, d)
             local mode = active_edit_mode()
             if mode == "density" and clocksync.grain_synced() then
                 local sym = params:get("symmetry") == 1
-                disable_lfos_for_param(track .. "density", not sym)
+                disable_lfos_for_param(_HK.den[track], not sym)
                 clocksync.step_grain_div(track, d, sym and (3 - track) or nil)
             else
                 local config = param_modes[mode]
@@ -1322,7 +1323,7 @@ local function handle_key_release()
         g.fired = true
         local combo = hlp.key_combos[g.id]
         if combo then
-            local action = (util.time() - g.press_time) >= KEY_LONG_PRESS_THRESHOLD and combo.long or combo.short
+            local action = (util.time() - g.press_time) >= _HK.LONGPRESS and combo.long or combo.short
             if action then action() end
         end
     end

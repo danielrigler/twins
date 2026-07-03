@@ -17,6 +17,7 @@ local twin      = 1
 local octaves   = 1
 local step_deg  = {0, 0, 0, 0, 0, 0, 0, 0}
 local step_vol  = {100, 100, 100, 100, 100, 100, 100, 100}
+local step_rat  = {1, 1, 1, 1, 1, 1, 1, 1}
 local ratio     = {1, 1}
 local tickn        = {0, 0}
 local pre_arp_size = {nil, nil}
@@ -40,6 +41,7 @@ end
 local PITCH_KEYS   = {"1pitch", "2pitch"}
 local SIZE_KEYS    = {"1size", "2size"}
 local DENSITY_KEYS = {"1density", "2density"}
+local RAT_KEYS     = {"1ratcheting_prob", "2ratcheting_prob"}
 local scale_idx, scale_name, scale_ivs = nil, "off", nil
 local last_po = {nil, nil}
 
@@ -105,11 +107,28 @@ local function get_hz(v)
   return params:get(DENSITY_KEYS[v])
 end
 
-local function apply_size_cap(v, hz)
+local eff_size = {nil, nil}
+
+local function apply_size_cap(v, hz, half)
   local id = SIZE_KEYS[v]
   if not params.lookup[id] then return end
-  local cap = 1000 / hz
-  if params:get(id) > cap then params:set(id, cap) end
+  local cap = (half and 500 or 1000) / hz
+  local desired = params:get(id)
+  local eff = desired > cap and cap or desired
+  if half or eff ~= eff_size[v] then
+    eff_size[v] = eff
+    engine.size(v, eff * 0.001)
+  end
+end
+
+local function rebang_size(v)
+  local i = params.lookup and params.lookup[SIZE_KEYS[v]]
+  if i then params.params[i]:bang() end
+end
+
+local function refire(v)
+  if not is_voice_active(v) then return end
+  engine.key_grain(v)
 end
 
 local function tick(v, hz)
@@ -119,8 +138,10 @@ local function tick(v, hz)
   local i1  = index_for(t, count)
   local idx = (v == 1) and i1 or twin_index(i1, count)
   local oct = floor((t - 1) / count) % octaves
-  apply_size_cap(v, hz)
+  local ratchet = (step_rat[idx] * 100) < params:get(RAT_KEYS[v])
+  apply_size_cap(v, hz, ratchet)
   fire(v, idx, v == 2 and twin == 3, oct)
+  return ratchet
 end
 
 local function stop_clock()
@@ -134,14 +155,24 @@ local function start_clock()
   local sync, sleep, get_tempo = clock.sync, clock.sleep, clock.get_tempo
   for v = 1, 2 do
     co[v] = clock.run(function()
+      local carry = 0
       while true do
         local hz = clamp(get_hz(v), 0.1, 250)
         if clocksync.grain_synced() then
           sync(get_tempo() / (60 * hz))
         else
-          sleep(1 / hz)
+          sleep((1 - carry) / hz)
         end
-        tick(v, hz)
+        carry = 0
+        if tick(v, hz) then
+          if clocksync.grain_synced() then
+            sync(get_tempo() / (60 * hz) * 0.5)
+          else
+            sleep(0.5 / hz)
+          end
+          refire(v)
+          carry = 0.5
+        end
       end
     end)
   end
@@ -153,6 +184,7 @@ local function set_running(on)
   if on then
     tickn = {0, 0}
     last_po = {nil, nil}
+    eff_size = {nil, nil}
     for v = 1, 2 do
       local id_size = SIZE_KEYS[v]
       local id_prob = v .. "probability"
@@ -175,6 +207,8 @@ local function set_running(on)
       local id_size = SIZE_KEYS[v]
       local id_prob = v .. "probability"
       if pre_arp_size[v] and params.lookup[id_size] then params:set(id_size, pre_arp_size[v]) end
+      rebang_size(v)
+      eff_size[v] = nil
       if params.lookup[id_prob] then
         local pp = pre_arp_prob[v]
         params:set(id_prob, (pp and pp > 0) and pp or 100)
@@ -190,7 +224,7 @@ local function randomize()
   nsteps  = random(2, MAX_STEPS)
   mode    = random(1, 4)
   twin    = random(1, 3)
-  octaves = random(1, 3)
+  octaves = random(1, 2)
   local prev
   for i = 1, MAX_STEPS do
     local d
@@ -218,6 +252,7 @@ local function randomize()
   end
   for i = 1, MAX_STEPS do
     step_vol[i] = (random(6) == 1) and 0 or random(55, 100)
+    step_rat[i] = random()
   end
   step_vol[1] = math.max(step_vol[1], 80)
 end
@@ -233,10 +268,10 @@ function arp.max_size_ms(v)
 end
 
 function arp.snapshot()
-  local deg, vol = {}, {}
-  for i = 1, MAX_STEPS do deg[i] = step_deg[i]; vol[i] = step_vol[i] end
+  local deg, vol, rat = {}, {}, {}
+  for i = 1, MAX_STEPS do deg[i] = step_deg[i]; vol[i] = step_vol[i]; rat[i] = step_rat[i] end
   return { nsteps = nsteps, mode = mode, twin = twin, octaves = octaves,
-           deg = deg, vol = vol,
+           deg = deg, vol = vol, rat = rat,
            pre_size1 = pre_arp_size[1], pre_size2 = pre_arp_size[2],
            pre_prob1 = pre_arp_prob[1], pre_prob2 = pre_arp_prob[2] }
 end
@@ -251,6 +286,11 @@ function arp.restore(s)
     for i = 1, MAX_STEPS do
       step_deg[i] = clamp(tonumber(s.deg[i]) or 0, DEG_MIN, DEG_MAX)
       step_vol[i] = clamp(tonumber(s.vol[i]) or 100, 0, 100)
+    end
+  end
+  if type(s.rat) == "table" then
+    for i = 1, MAX_STEPS do
+      step_rat[i] = clamp(tonumber(s.rat[i]) or 1, 0, 1)
     end
   end
   pre_arp_size[1], pre_arp_size[2] = tonumber(s.pre_size1), tonumber(s.pre_size2)

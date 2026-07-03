@@ -121,18 +121,12 @@ local function tape_active(cache)
 end
 
 local function tape_intensity(cache)
-  local vals = {
-    cache.tape_mix == 2 and BINARY_ON_INTENSITY or 0,
-    cache.sine_drive_wet,
-    cache.drive,
-    cache.wobble_mix,
-    cache.chew_depth,
-    cache.lossdegrade_mix
-  }
-  local maxv = 0
-  for _, v in ipairs(vals) do
-    if v > maxv then maxv = v end
-  end
+  local maxv = cache.tape_mix == 2 and BINARY_ON_INTENSITY or 0
+  if cache.sine_drive_wet  > maxv then maxv = cache.sine_drive_wet  end
+  if cache.drive           > maxv then maxv = cache.drive           end
+  if cache.wobble_mix      > maxv then maxv = cache.wobble_mix      end
+  if cache.chew_depth      > maxv then maxv = cache.chew_depth      end
+  if cache.lossdegrade_mix > maxv then maxv = cache.lossdegrade_mix end
   return maxv
 end
 
@@ -194,13 +188,12 @@ local FX_SPECS = {
   {glyph = "Z", lock = nil,            show = stereo_active,                                          val = stereo_intensity},
 }
 
+local _gradient = {1, 1, 1}
 local function column_gradient(peak)
-
-  return {
-    math.max(1, math.floor(peak * 0.35)),
-    math.max(1, math.floor(peak * 0.65)),
-    peak,
-  }
+  _gradient[1] = math.max(1, math.floor(peak * 0.35))
+  _gradient[2] = math.max(1, math.floor(peak * 0.65))
+  _gradient[3] = peak
+  return _gradient
 end
 
 local function refresh_draw_caches()

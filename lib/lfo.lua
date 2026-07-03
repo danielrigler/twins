@@ -37,7 +37,20 @@ end
 local function pset(k, v)
     if params and params.lookup and params.lookup[k] then params:set(k, v) end
 end
-local function split_target(target) return target:sub(1, 1), target:sub(2) end
+local _SPLIT_CACHE = {}
+local function split_target(target)
+    local c = _SPLIT_CACHE[target]
+    if not c then c = {target:sub(1, 1), target:sub(2)} _SPLIT_CACHE[target] = c end
+    return c[1], c[2]
+end
+local _LIMIT_KEYS = {}
+local function limit_keys(track, suffix)
+    local tk = _LIMIT_KEYS[track]
+    if not tk then tk = {} _LIMIT_KEYS[track] = tk end
+    local k = tk[suffix]
+    if not k then k = {track .. "min_" .. suffix, track .. "max_" .. suffix} tk[suffix] = k end
+    return k[1], k[2]
+end
 function lfo.is_param_locked(track, param_name)
     local key = track .. "lock_" .. param_name
     return params.lookup[key] and pget(key) == 2
@@ -154,8 +167,9 @@ function lfo.get_parameter_range(param_name, for_randomize)
     local track, suffix = split_target(param_name)
     local lo, hi
     if track:match("%d") and USER_LIMIT_PARAMS[suffix] then
-        lo = pget(track .. "min_" .. suffix)
-        hi = pget(track .. "max_" .. suffix)
+        local min_key, max_key = limit_keys(track, suffix)
+        lo = pget(min_key)
+        hi = pget(max_key)
         local d = USER_LIMIT_DEFAULTS[suffix]
         if lo == nil then lo = d and d[1] or 0 end
         if hi == nil then hi = d and d[2] or 100 end
@@ -197,8 +211,7 @@ local function classify_target(i, target_idx)
             local d = USER_LIMIT_DEFAULTS[suffix]
             obj.has_user_limits = true
             obj.limit_suffix = suffix
-            obj.min_key = track .. "min_" .. suffix
-            obj.max_key = track .. "max_" .. suffix
+            obj.min_key, obj.max_key = limit_keys(track, suffix)
             obj.def_min = d and d[1] or 0
             obj.def_max = d and d[2] or 100
         else
@@ -501,18 +514,22 @@ function lfo.process()
                 obj.prev = obj.sync_invert and -src.prev or src.prev
             else
                 local rate = clamp(obj.freq, 0.01, 10.0)
-                local loss = clamp(0.15 * rate, 0.01, 1.0)
-                local damp = 1.0 - loss
-                local noise_amp = 0.5 * math.sqrt(loss)
-                local vel = obj.walk_velocity * damp + (rnd() - 0.5) * noise_amp
+                if obj._walk_rate ~= rate then
+                    obj._walk_rate = rate
+                    local loss = clamp(0.15 * rate, 0.01, 1.0)
+                    obj._walk_damp = 1.0 - loss
+                    obj._walk_noise = 0.5 * math.sqrt(loss)
+                    obj._walk_spring = clamp(0.2 * rate, 0.01, 1.0)
+                end
+                local spring = obj._walk_spring
+                local vel = obj.walk_velocity * obj._walk_damp + (rnd() - 0.5) * obj._walk_noise
                 local val = obj.walk_value + vel
-                local spring = clamp(0.2 * rate, 0.01, 1.0)
                 if val > 0.75 then vel = vel - (val - 0.75) * spring
                 elseif val < -0.75 then vel = vel - (val + 0.75) * spring end
                 val = clamp(val, -1, 1)
                 obj.walk_velocity = vel
                 obj.walk_value = val
-                local smooth = clamp(0.2 * rate, 0.01, 1.0)
+                local smooth = spring
                 obj.prev = obj.prev + (val - obj.prev) * smooth
             end
             slope = obj.prev

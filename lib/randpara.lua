@@ -159,12 +159,14 @@ local function evolve_parameter(name, state)
   return new_value
 end
 
+local _evo_updated = {}
 local function evolution_update()
   if not evolution_active then return end
   build_evolvable_params_cache()
   if #evolvable_params_cache == 0 then return end
   local symmetry = evolution_symmetry_state
-  local updated  = {}
+  local updated  = _evo_updated
+  for k in pairs(updated) do updated[k] = nil end
   for _, name in ipairs(evolvable_params_cache) do
     if params.lookup[name] and not updated[name] then
       init_evolution_state(name)

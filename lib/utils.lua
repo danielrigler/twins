@@ -30,11 +30,15 @@ function utils.random_float(l, h)
     return l + math.random() * (h - l)
 end
 
+local _mirror_cache = {}
 function utils.mirror_param_name(param)
-    local mirrored = param:gsub("^(%d)(.*)", function(n, rest)
+    local m = _mirror_cache[param]
+    if m then return m end
+    m = param:gsub("^(%d)(.*)", function(n, rest)
         return tostring((tonumber(n) % 2) + 1) .. rest
     end)
-    return mirrored
+    _mirror_cache[param] = m
+    return m
 end
 
 function utils.is_locked(key)
