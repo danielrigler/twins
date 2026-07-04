@@ -9,6 +9,7 @@
 --                           v0.69
 -- E1: Master Volume
 -- K1+E2/E3: Volume
+-- K1+E1: Crossfade/Morph
 -- K2/K3: Navigate
 -- E2/E3: Adjust Parameters
 -- K1+K2/K3: Randomize
@@ -16,10 +17,9 @@
 -- Hold K1: Morphing
 -- Hold K2: Linked Mode
 -- Hold K3: Symmetry
--- K1+E1: Crossfade/Morph
--- K2+K3: HPF/LPF
 -- K2+K3+E1/E2/E3: Effect Mix
 -- K2/K3+E1/E2/E3: Adjust LFO
+-- Hold K2+K3: HPF/LPF
 -- Hold K2+K3: Add Random LFOs
 -- Hold K1+K2: Clock Sync
 -- Hold K1+K3: Arp Mode 
