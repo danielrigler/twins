@@ -39,7 +39,7 @@
 -- @sonoCircuit @graymazes
 -- @Higaru @NiklasKramer
 -- @xmacex @vehka @Quixotic7
--- @Aktsom
+-- @Aktsom @Boorch
 --
 -- If you like this,
 -- buy them a beer :)

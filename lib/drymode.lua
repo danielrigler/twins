@@ -25,7 +25,9 @@ local DRY_VALUES = {
     dimension_mix = 0,
     resonator_mix = 0,
     wavefold_mix = 0,
-    ringmod_mix = 0
+    ringmod_mix = 0,
+    clock_sync = 1,
+    arp_on = 1
 }
 
 local DRY_VALUES_STEREO = {

@@ -395,13 +395,16 @@ alloc {
         }).add;
 
         SynthDef(\revshimmer, {
-            arg sendBus, returnBus, shimmer_lowpass=10000, shimmer_hipass=600, shimmer_oct=2;
+            arg sendBus, returnBus, shimmer_lowpass=6000, shimmer_hipass=100, shimmer_oct=2;
             var fb_in = In.ar(sendBus, 2);
-            var limited = Limiter.ar(fb_in, 0.9, 0.01);
-            var pit = PitchShift.ar(limited, 0.5, shimmer_oct, 0.02, 1, 2);
-            pit = LPF.ar(pit, shimmer_lowpass);
-            pit = HPF.ar(pit, shimmer_hipass);
-            Out.ar(returnBus, pit);
+            var clean = LeakDC.ar(fb_in).clip2(4);
+            var pit, fbk;
+            clean = clean.collect { |ch| Select.ar(CheckBadValues.ar(ch, 0, 0), [ch, DC.ar(0), DC.ar(0), ch]) };
+            pit = PitchShift.ar(clean, 0.2, shimmer_oct, 0.01, 0.05, mul: 4);
+            fbk = Limiter.ar(pit * 0.5, 0.25);
+            fbk = LPF.ar(HPF.ar(fbk, shimmer_hipass), shimmer_lowpass).clip2(1.0);
+            fbk = fbk.collect { |ch| Select.ar(CheckBadValues.ar(ch, 0, 0), [ch, DC.ar(0), DC.ar(0), ch]) };
+            Out.ar(returnBus, fbk);
         }).add;
 
         SynthDef(\shimmer, {
