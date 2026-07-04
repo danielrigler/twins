@@ -82,7 +82,6 @@ function clocksync.add_params()
   params:set_action("clock_sync", function(v)
     enabled = (v == 2)
     if enabled then
-      if params.lookup["clock_source"] then params:set("clock_source", 2) end
       if lfo_ref then lfo_ref.set_sine_all(true) end
       sync_co = sync_co or clock.run(function()
         while true do clock.sync(1) push() end

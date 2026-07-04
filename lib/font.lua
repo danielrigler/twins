@@ -64,6 +64,8 @@ local fx_cache = {
   rspeed          = 0,
   monobass_mix    = 1,
   bitcrush_mix    = 0,
+  bitcrush_mod    = 1,
+  shimmer_mod1    = 1,
   glitch_ratio    = 0,
   glitch_mix      = 0,
   resonator_mix   = 0,
@@ -149,15 +151,15 @@ local function filter_active(cache)
       or cache["1hpf"] > 20.1 or cache["2hpf"] > 20.1
 end
 
+local _LOG_FILTER_INV = 1.0 / math.log(20000 / 20)
+local function filter_log_norm(freq)
+  local f = freq < 20 and 20 or (freq > 20000 and 20000 or freq)
+  return math.log(f / 20) * _LOG_FILTER_INV
+end
+
 local function filter_intensity(cache)
-  local function cutoff_intensity(cutoff)
-    return (20000 - math.min(math.max(cutoff, 20), 20000)) / 19980
-  end
-  local function hpf_intensity(hpf)
-    return (math.min(math.max(hpf, 20), 20000) - 20) / 19980
-  end
-  local v1 = math.max(cutoff_intensity(cache["1cutoff"]), hpf_intensity(cache["1hpf"]))
-  local v2 = math.max(cutoff_intensity(cache["2cutoff"]), hpf_intensity(cache["2hpf"]))
+  local v1 = math.max(1 - filter_log_norm(cache["1cutoff"]), filter_log_norm(cache["1hpf"]))
+  local v2 = math.max(1 - filter_log_norm(cache["2cutoff"]), filter_log_norm(cache["2hpf"]))
   return math.max(v1, v2) * 100
 end
 
@@ -171,19 +173,40 @@ local function pitchshift_intensity(cache)
   return math.max(v1, v2) * 100
 end
 
+local _draw_now = 0
+local MIX_MOD_FREQ = 0.25
+local MIX_MOD_PERIOD = 1 / MIX_MOD_FREQ
+local function make_mix_mod()
+  local cur, nxt = math.random(), math.random()
+  local seg_start = util.time()
+  return function(now)
+    local t = now - seg_start
+    if t >= MIX_MOD_PERIOD then
+      repeat
+        cur, nxt = nxt, math.random()
+        seg_start = seg_start + MIX_MOD_PERIOD
+        t = now - seg_start
+      until t < MIX_MOD_PERIOD
+    end
+    return cur + (nxt - cur) * (t * MIX_MOD_FREQ)
+  end
+end
+local _bitcrush_mod_lfo = make_mix_mod()
+local _shimmer_mod_lfo = make_mix_mod()
+
 local FX_SPECS = {
   {glyph = "K", lock = nil,            show = function() return font.clocksync_ref and font.clocksync_ref.grain_synced() end, val = function() return 100 end},
   {glyph = "A", lock = nil,            show = function() return font.arp_ref and font.arp_ref.is_running() end, val = function() return 100 end, gradient = true},
   {glyph = "P", lock = nil,            show = pitchshift_active,                                      val = pitchshift_intensity},
   {glyph = "F", lock = "lock_filter",  show = filter_active,                                          val = filter_intensity},
-  {glyph = "B", lock = nil,            show = function(c) return c.bitcrush_mix > 0 end,              val = function(c) return c.bitcrush_mix end},
+  {glyph = "B", lock = nil,            show = function(c) return c.bitcrush_mix > 0 end,              val = function(c) return c.bitcrush_mod == 2 and c.bitcrush_mix * _bitcrush_mod_lfo(_draw_now) or c.bitcrush_mix end},
   {glyph = "O", lock = nil,            show = function(c) return c.resonator_mix > 0 end,             val = function(c) return c.resonator_mix end},
   {glyph = "W", lock = nil,            show = function(c) return c.wavefold_mix > 0 end,              val = function(c) return c.wavefold_mix end},
   {glyph = "M", lock = nil,            show = function(c) return c.ringmod_mix > 0 end,               val = function(c) return c.ringmod_mix end},
   {glyph = "G", lock = "lock_glitch",  show = function(c) return c.glitch_ratio > 0 and c.glitch_mix > 0 end, val = function(c) return c.glitch_ratio end},
   {glyph = "T", lock = "lock_tape",    show = tape_active,                                            val = tape_intensity},
   {glyph = "D", lock = "lock_delay",   show = function(c) return c.delay_mix > 0 end,                 val = function(c) return c.delay_mix end, fade = function() return _delay_duck_gain end},
-  {glyph = "X", lock = "lock_shimmer", show = function(c) return c.shimmer_mix1 > 0 end,              val = function(c) return c.shimmer_mix1 end},
+  {glyph = "X", lock = "lock_shimmer", show = function(c) return c.shimmer_mix1 > 0 end,              val = function(c) return c.shimmer_mod1 == 2 and c.shimmer_mix1 * _shimmer_mod_lfo(_draw_now) or c.shimmer_mix1 end},
   {glyph = "R", lock = "lock_reverb",  show = function(c) return c.reverb_mix > 0 end,                val = function(c) return c.reverb_mix end},
   {glyph = "Z", lock = nil,            show = stereo_active,                                          val = stereo_intensity},
 }
@@ -213,6 +236,7 @@ function font.draw_fx_status_bucketed(P_func)
   local now = util.time()
   if now - _last_update >= _update_interval then
     _last_update = now
+    _draw_now = now
     refresh_draw_caches()
     local n = 0
     local collect = function(level, px, py)
