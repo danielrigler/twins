@@ -116,14 +116,14 @@ end
 lfo.lfo_targets = {"none", "1pan", "2pan", "1seek", "2seek", "1jitter", "2jitter", "1spread", "2spread", "1size", "2size", "1density", "2density", "1volume", "2volume", "1pitch", "2pitch", "1cutoff", "2hpf", "1speed", "2speed", "1hpf", "2cutoff"}
 local LFO_TARGET_REVERSE = {}
 for i, t in ipairs(lfo.lfo_targets) do LFO_TARGET_REVERSE[t] = i end
-lfo.PRESERVE_ON_RANDOMIZE = { volume = true, cutoff = true, hpf = true }
+lfo.PRESERVE_ON_RANDOMIZE = { volume = true, cutoff = false, hpf = true }
 lfo.target_ranges = {
     ["1pan"] = {depth = {25, 90}, offset = {0, 0}, frequency = {0.1, 1}, waveform = {"walk"}, chance = 0.75},
     ["2pan"] = {depth = {25, 90}, offset = {0, 0}, frequency = {0.1, 1}, waveform = {"walk"}, chance = 0.75},
-    ["1jitter"] = {depth = {20, 70}, offset = {-1, 1}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.7},
-    ["2jitter"] = {depth = {20, 70}, offset = {-1, 1}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.7},
-    ["1spread"] = {depth = {10, 30}, offset = {0, 0.3}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.7},
-    ["2spread"] = {depth = {10, 30}, offset = {0, 0.3}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.7},
+    ["1jitter"] = {depth = {20, 70}, offset = {0, 1}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.7},
+    ["2jitter"] = {depth = {20, 70}, offset = {0, 1}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.7},
+    ["1spread"] = {depth = {10, 30}, offset = {0, 1}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.7},
+    ["2spread"] = {depth = {10, 30}, offset = {0, 1}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.7},
     ["1size"] = {depth = {5, 40}, offset = {0.1, 1}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.7},
     ["2size"] = {depth = {5, 40}, offset = {0.1, 1}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.7},
     ["1density"] = {depth = {5, 75}, offset = {0, 1}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.7},
@@ -136,7 +136,10 @@ lfo.target_ranges = {
     ["2speed"] = {depth = {10, 50}, offset = {-1, 1}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.3},
     ["1pitch"] = {depth = {5, 30}, offset = {-1, 1}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.0},
     ["2pitch"] = {depth = {5, 30}, offset = {-1, 1}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.0},
+    ["1cutoff"] = {depth = {30, 80}, offset = {0.1, 0.9}, frequency = {0.1, 0.6}, waveform = {"sine"}, chance = 0.3},
+    ["2cutoff"] = {depth = {30, 80}, offset = {0.1, 0.9}, frequency = {0.1, 0.6}, waveform = {"sine"}, chance = 0.3},
 }
+
 local param_ranges = {
     ["1pan"] = {-100, 100}, ["2pan"] = {-100, 100},
     ["1seek"] = {0, 100}, ["2seek"] = {0, 100},
@@ -146,7 +149,7 @@ local param_ranges = {
     ["1density"] = {0.1, 250}, ["2density"] = {0.1, 250},
     ["1volume"] = {-70, 10}, ["2volume"] = {-70, 10},
     ["1pitch"] = {-48, 48}, ["2pitch"] = {-48, 48},
-    ["1cutoff"] = {20, 20000}, ["2cutoff"] = {20, 20000},
+    ["1cutoff"] = {20, 19999}, ["2cutoff"] = {20, 19999},
     ["1hpf"] = {20, 20000}, ["2hpf"] = {20, 20000},
 }
 local randomize_param_ranges = {["1size"] = {20, 599}, ["2size"] = {20, 599}, ["1density"] = {1, 30}, ["2density"] = {1, 30}}
@@ -445,6 +448,9 @@ function lfo.randomize_lfos(track, allow_volume_lfos)
             mirrored[target] = true
         end
     end
+    local function reset_cutoff(t) if not lfo.is_param_locked(t, "cutoff") and not assigned_params[t .. "cutoff"] then pset(t .. "cutoff", 20000) end end
+    reset_cutoff(track)
+    if symmetry then reset_cutoff(tostring((tonumber(track) % 2) + 1)) end
 end
 local _lfo_param_cache = {}
 local _lfo_param_cache_dirty = true

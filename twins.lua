@@ -139,7 +139,9 @@ local _grain_pool = {}
 local invalidate_lfo_cache = lfo.invalidate_lfo_param_cache
 local function do_capture_temp_scene() morph.capture_to_temp_scene(lfo.get_active_param_map()) end
 local function combo_longpress_fire()
-    if current_mode == "pitch" then
+    if current_mode == "lpf" or current_mode == "hpf" then
+        current_filter_mode = current_filter_mode == "lpf" and "hpf" or "lpf"
+    elseif current_mode == "pitch" then
         pitchshift_display = not pitchshift_display
     else
         undo.checkpoint()
@@ -600,10 +602,10 @@ local function setup_params()
       params:add_taper(i.."lpf_gain", i.." Q", 0, 1, 0.25, 1, "") params:set_action(i.."lpf_gain", function(value) engine.lpf_gain(i, 4 * value) end)
     end
     params:add_separator("                   ")
-    params:add_binary("randomizefilters", "RaNd0m1ze!", "trigger", 0) params:set_action("randomizefilters", function(value) for i = 1, 2 do local cutoff = math.random(20, 20000) params:set(i.."cutoff", cutoff) params:set(i.."lpf_gain", math.random()) params:set(i.."hpf", math.random(20, floor(cutoff))) end end)
+    params:add_binary("randomizefilters", "RaNd0m1ze!", "trigger", 0) params:set_action("randomizefilters", function(value) for i = 1, 2 do local cutoff if is_param_locked(i, "cutoff") then cutoff = params:get(i.."cutoff") else cutoff = is_lfo_active_for_param(i.."cutoff") and math.random(20, 20000) or 20000 params:set(i.."cutoff", cutoff) params:set(i.."lpf_gain", math.random()) end if not is_param_locked(i, "hpf") then params:set(i.."hpf", math.random(20, floor(cutoff))) end end end)
     params:add_binary("resetfilters", "Reset", "trigger", 0) params:set_action("resetfilters", function(value) for i=1, 2 do params:set(i.."cutoff", 20000) params:set(i.."hpf", 20) params:set(i.."lpf_gain", 0.0) end end)
 
-    params:add_group("LOCKING", 16)
+    params:add_group("LOCKING", 20)
     for i = 1, 2 do
         params:add_option(i.. "lock_jitter", i.. " Lock Jitter", {"off", "on"}, 1)
         params:add_option(i.. "lock_size", i.. " Lock Size", {"off", "on"}, 1)
@@ -613,6 +615,8 @@ local function setup_params()
         params:add_option(i.. "lock_speed", i.. " Lock Speed", {"off", "on"}, 1)
         params:add_option(i.. "lock_seek", i.. " Lock Seek", {"off", "on"}, 1)
         params:add_option(i.. "lock_pan", i.. " Lock Pan", {"off", "on"}, 1)
+        params:add_option(i.. "lock_cutoff", i.. " Lock LPF", {"off", "on"}, 1)
+        params:add_option(i.. "lock_hpf", i.. " Lock HPF", {"off", "on"}, 1)
     end
 
     params:add_group("LIMITS", 30)
@@ -1044,8 +1048,7 @@ local function handle_mode_navigation(n)
 end
 
 local function handle_parameter_lock()
-    if current_mode == "lpf" or current_mode == "hpf" then current_filter_mode = current_filter_mode == "lpf" and "hpf" or "lpf" return end
-    local param_name = string.match(current_mode, "%a+")
+    local param_name = (current_mode == "lpf" or current_mode == "hpf") and (current_filter_mode == "lpf" and "cutoff" or "hpf") or string.match(current_mode, "%a+")
     local lock1 = "1lock_" .. param_name
     local lock2 = "2lock_" .. param_name
     local is_locked1 = params:get(lock1) == 2
@@ -1448,6 +1451,8 @@ local function refresh_redraw_cache()
         rc[1], rc[2], rc[3] = a, b, fb
       end
     end
+    locked["lpf"] = is_param_locked(t, "cutoff")
+    locked["hpf"] = is_param_locked(t, "hpf")
     C.pitch_rand = (pget(K.pitch_random_prob) or 0) ~= 0
   end
 end
@@ -1645,6 +1650,7 @@ function redraw()
       local txt = (abs(C.pan) < 0.5) and "0%" or fast_percent(C.pan)
       T(flash_level(t, LEVEL.hi), x, y_bot + 1, txt)
     else
+      if C.locked[cur_filter] then draw_lock(x, y_bot) end
       local v = cur_filter == "lpf" and C.cut or C.hpf
       T(flash_level(t, LEVEL.hi), x, y_bot + 1, fast_int(v))
     end
