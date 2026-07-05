@@ -28,7 +28,7 @@ function Updater:is_git()
 end
 
 function Updater:is_dirty()
-  return git(self, "status --porcelain") ~= ""
+  return git(self, "status --porcelain --untracked-files=no") ~= ""
 end
 
 function Updater:count_behind()
