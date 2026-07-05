@@ -37,6 +37,8 @@ function Installer:init()
   self.requirements     = self.requirements or {}
   self.ready_to_restart = false
   self.satisfied        = false
+  self.update_state     = nil
+  self.restarting       = false
 
   local found = {}
   for _, req in ipairs(self.requirements) do found[req] = false end
@@ -69,7 +71,57 @@ function Installer:init()
 end
 
 function Installer:ready()
-  return self.satisfied
+  return self.satisfied and self.update_state == nil
+end
+
+function Installer:check_update()
+  if not self.satisfied or self.update_state then return end
+  local dir = norns.state.path
+  local cmd = "cd '" .. dir .. "' 2>/dev/null && "
+    .. "git rev-parse --git-dir >/dev/null 2>&1 || { echo NOGIT; exit 0; }; "
+    .. "[ -n \"$(git status --porcelain -uno 2>/dev/null)\" ] && { echo DIRTY; exit 0; }; "
+    .. "git rev-parse --abbrev-ref '@{u}' >/dev/null 2>&1 || { echo NOUPSTREAM; exit 0; }; "
+    .. "timeout 5 git fetch -q 2>/dev/null || { echo OFFLINE; exit 0; }; "
+    .. "b=$(git rev-list --count 'HEAD..@{u}' 2>/dev/null || echo 0); "
+    .. "a=$(git rev-list --count '@{u}..HEAD' 2>/dev/null || echo 0); "
+    .. "echo \"STATUS $b $a\""
+  norns.system_cmd(cmd, function(out)
+    local b, a = string.match(out or "", "STATUS (%d+) (%d+)")
+    if b and tonumber(b) > 0 and tonumber(a) == 0 then
+      self.update_state = "offer"
+    end
+  end)
+end
+
+function Installer:update_pull()
+  self.update_state = "pulling"
+  local dir = norns.state.path
+  local cmd = "cd '" .. dir .. "' 2>/dev/null || exit 0; "
+    .. "h1=$(cat lib/*.sc 2>/dev/null | md5sum); "
+    .. "if timeout 60 git pull --ff-only -q 2>&1; then "
+    .. "h2=$(cat lib/*.sc 2>/dev/null | md5sum); "
+    .. "if [ \"$h1\" = \"$h2\" ]; then echo PULLOK LUA; else echo PULLOK ENGINE; fi; "
+    .. "fi"
+  norns.system_cmd(cmd, function(out)
+    local kind = string.match(out or "", "PULLOK (%u+)")
+    if kind == "LUA" then
+      self.update_state = nil
+      norns.script.load(norns.state.script)
+    elseif kind == "ENGINE" then
+      self.update_state = "restart"
+    else
+      self.update_state = "failed"
+    end
+  end)
+end
+
+function Installer:finish_restart()
+  if self.restarting then return end
+  self.restarting = true
+  self:redraw()
+  os.execute("sudo systemd-run --no-block --collect bash -c '"
+    .. "systemctl restart norns-jack.service; sleep 3; "
+    .. "systemctl restart norns-sclang.service norns-crone.service norns-matron.service' >/dev/null 2>&1")
 end
 
 function Installer:install()
@@ -103,6 +155,18 @@ function Installer:install()
 end
 
 function Installer:key(k, z)
+  if self.update_state then
+    if z ~= 1 then return end
+    if self.update_state == "offer" then
+      if k == 2 then self.update_state = nil
+      elseif k == 3 then self:update_pull() end
+    elseif self.update_state == "restart" then
+      if k == 3 then self:finish_restart() end
+    elseif self.update_state == "failed" then
+      if k == 3 then self.update_state = nil end
+    end
+    return
+  end
   if self.satisfied or self.ready_to_restart or self.installing then return end
   if k == 3 and z == 1 then
     clock.run(function() self:install() end)
@@ -113,6 +177,29 @@ function Installer:redraw()
   screen.clear()
   screen.blend_mode(0)
   screen.level(15)
+  if self.update_state then
+    if self.update_state == "offer" then
+      screen.move(64, 26); screen.text_center("update available")
+      screen.level(8)
+      screen.move(64, 44); screen.text_center("K2 = later   K3 = update")
+    elseif self.update_state == "pulling" then
+      screen.move(64, 32); screen.text_center("updating...")
+    elseif self.update_state == "restart" then
+      if self.restarting then
+        screen.move(64, 32); screen.text_center("restarting...")
+      else
+        screen.move(64, 26); screen.text_center("engine updated")
+        screen.level(8)
+        screen.move(64, 44); screen.text_center("K3 = restart")
+      end
+    else
+      screen.move(64, 26); screen.text_center("update failed")
+      screen.level(8)
+      screen.move(64, 44); screen.text_center("K3 = continue")
+    end
+    screen.update()
+    return
+  end
   if self.ready_to_restart then
     screen.move(64, 22); screen.text_center("ready.")
     screen.move(64, 32); screen.text_center("do SYSTEM -> RESTART")
