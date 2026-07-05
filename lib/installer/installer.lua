@@ -232,7 +232,9 @@ function Installer:redraw()
   local s = self.update.state
   if s == "update" then
     screen.move(64, 18); screen.text_center("Twins Update Available")
+    screen.level(1);
     screen.move(64, 30); screen.text_center(self.update.behind .. " new commit" .. (self.update.behind == 1 and "" or "s"))
+    screen.level(15);
     screen.move(64, 46); screen.text_center("K2: Skip   K3: Install")
   elseif s == "installing" then
     screen.move(64, 28); screen.text_center("Installing Update...")
