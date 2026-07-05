@@ -212,37 +212,37 @@ function Installer:redraw()
       screen.move(64, 32); screen.text_center("do SYSTEM -> RESTART")
       screen.move(64, 42); screen.text_center("then reload this script.")
     elseif self.installing then
-      screen.move(64, 22); screen.text_center("installing:")
+      screen.move(64, 22); screen.text_center("Installing:")
       screen.move(64, 32); screen.text_center(self.message_needed)
       if self.message_progress then
         screen.move(64, 42); screen.text_center(self.message_progress)
       end
     else
-      screen.move(64, 22); screen.text_center("missing SuperCollider libraries:")
+      screen.move(64, 22); screen.text_center("Missing SuperCollider Libraries:")
       screen.move(64, 32); screen.text_center(self.message_needed)
-      screen.move(64, 42); screen.text_center("press K3 to install.")
+      screen.move(64, 42); screen.text_center("Press K3 to Install.")
     end
     screen.update()
     return
   end
   local s = self.update.state
   if s == "update" then
-    screen.move(64, 18); screen.text_center("twins update available")
+    screen.move(64, 18); screen.text_center("Twins Update Available")
     screen.move(64, 30); screen.text_center(self.update.behind .. " new commit" .. (self.update.behind == 1 and "" or "s"))
-    screen.move(64, 46); screen.text_center("K2: skip   K3: install")
+    screen.move(64, 46); screen.text_center("K2: Skip   K3: Install")
   elseif s == "installing" then
-    screen.move(64, 28); screen.text_center("installing update...")
+    screen.move(64, 28); screen.text_center("Installing Update...")
   elseif s == "reloading" then
-    screen.move(64, 28); screen.text_center("updated - reloading...")
+    screen.move(64, 28); screen.text_center("Updated - Reloading...")
   elseif s == "restart" then
-    screen.move(64, 16); screen.text_center("update installed.")
-    screen.move(64, 28); screen.text_center("engine changed - restart needed")
-    screen.move(64, 44); screen.text_center("K3: restart   K2: later")
+    screen.move(64, 16); screen.text_center("Update installed.")
+    screen.move(64, 28); screen.text_center("Restart Needed")
+    screen.move(64, 44); screen.text_center("K2: Later   K3: Restart")
   elseif s == "restarting" then
-    screen.move(64, 28); screen.text_center("restarting...")
+    screen.move(64, 28); screen.text_center("Restarting...")
   elseif s == "error" then
     screen.move(64, 24); screen.text_center(self.update.message or "update error")
-    screen.move(64, 40); screen.text_center("K2/K3: dismiss")
+    screen.move(64, 40); screen.text_center("K2/K3: Dismiss")
   end
   screen.update()
 end
