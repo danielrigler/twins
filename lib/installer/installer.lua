@@ -253,4 +253,5 @@ function Installer:redraw()
   screen.update()
 end
 
+
 return Installer
