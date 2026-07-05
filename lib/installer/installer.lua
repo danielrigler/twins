@@ -212,7 +212,9 @@ function Installer:redraw()
         screen.move(64, 28); screen.text_center("Restarting...")
       else
         screen.move(64, 22); screen.text_center("Libraries Installed.")
+        screen.level(1);
         screen.move(64, 34); screen.text_center("Restart to Load the Engine")
+         screen.level(15);
         screen.move(64, 46); screen.text_center("K3: Restart")
       end
     elseif self.installing then
