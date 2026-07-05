@@ -242,7 +242,9 @@ function Installer:redraw()
     screen.move(64, 28); screen.text_center("Updated - Reloading...")
   elseif s == "restart" then
     screen.move(64, 16); screen.text_center("Update Installed.")
-    screen.move(64, 28); screen.text_center("Engine changed - Restart Needed")
+    screen.level(1);
+    screen.move(64, 28); screen.text_center("New Engine - Restart Needed")
+    screen.level(15);
     screen.move(64, 44); screen.text_center("K2: Later   K3: Restart")
   elseif s == "restarting" then
     screen.move(64, 28); screen.text_center("Restarting...")
