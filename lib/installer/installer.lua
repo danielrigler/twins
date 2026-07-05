@@ -8,7 +8,7 @@ local SEARCH_FOLDERS = {
   "/home/we/dust/code",
   "/home/we/.local/share/SuperCollider/Extensions",
 }
-local RESTART_CMD = "sudo systemctl restart norns-jack.service norns-crone.service norns-matron.service"
+local RESTART_CMD = "sudo reboot"
 
 local function basename(path)
   return path:match("([^\\/]+)$") or path
@@ -170,7 +170,7 @@ end
 
 function Installer:do_restart()
   self.update.state = "restarting"
-  os.execute(RESTART_CMD)
+  norns.system_cmd(RESTART_CMD, function() end)
 end
 
 function Installer:pending()
@@ -209,7 +209,8 @@ function Installer:redraw()
   if not self.satisfied then
     if self.ready_to_restart then
       if self.update.state == "restarting" then
-        screen.move(64, 28); screen.text_center("restarting...")
+        screen.move(64, 24); screen.text_center("restarting norns...")
+        screen.move(64, 40); screen.text_center("or SYSTEM > RESTART")
       else
         screen.move(64, 22); screen.text_center("libraries installed.")
         screen.move(64, 34); screen.text_center("restart to load the engine")
@@ -243,7 +244,8 @@ function Installer:redraw()
     screen.move(64, 28); screen.text_center("engine changed - restart needed")
     screen.move(64, 44); screen.text_center("K3: restart   K2: later")
   elseif s == "restarting" then
-    screen.move(64, 28); screen.text_center("restarting...")
+    screen.move(64, 24); screen.text_center("restarting norns...")
+    screen.move(64, 40); screen.text_center("or SYSTEM > RESTART")
   elseif s == "error" then
     screen.move(64, 24); screen.text_center(self.update.message or "update error")
     screen.move(64, 40); screen.text_center("K2/K3: dismiss")
