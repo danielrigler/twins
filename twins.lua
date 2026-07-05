@@ -24,7 +24,7 @@
 -- Hold K1+K2: Clock Sync
 -- Hold K1+K3: Arp Mode 
 -- Hold K1+K2+K3: Randomize Arp
---
+-- 
 --
 --
 --
