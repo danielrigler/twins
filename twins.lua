@@ -6,8 +6,8 @@
 --            by: @dddstudio                       
 -- 
 --                          
---                           v0.69
--- E1: Master Volum
+--                           v0.699
+-- E1: Master Volume
 -- K1+E2/E3: Volume
 -- K1+E1: Crossfade/Morph
 -- K2/K3: Navigate
