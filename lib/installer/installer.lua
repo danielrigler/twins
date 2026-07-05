@@ -205,8 +205,8 @@ function Installer:redraw()
   if not self.satisfied then
     if self.ready_to_restart then
       screen.move(64, 22); screen.text_center("ready.")
-      screen.move(64, 32); screen.text_center("do SYSTEM -> RESTART")
-      screen.move(64, 42); screen.text_center("then reload this script.")
+      screen.move(64, 32); screen.text_center("Do SYSTEM -> RESTART")
+      screen.move(64, 42); screen.text_center("Then Reload This Script.")
     elseif self.installing then
       screen.move(64, 22); screen.text_center("installing:")
       screen.move(64, 32); screen.text_center(self.message_needed)
