@@ -46,11 +46,9 @@
 --
 --                    Daniel Rigler
 
-installer_ = include("lib/scinstaller/scinstaller")
+installer_ = include("lib/installer/installer")
 installer = installer_:new{requirements = {"AnalogTape", "AnalogChew", "AnalogLoss", "AnalogDegrade"}, zip = "https://github.com/schollz/portedplugins/releases/download/v0.4.6/PortedPlugins-RaspberryPi.zip"}
 engine.name = installer:ready() and 'twins' or nil
-updater_ = include("lib/updater/updater")
-updater = updater_:new{}
 local MusicUtil = require("musicutil")
 local utils = include("lib/utils")
 local font = include("lib/font")
@@ -1212,8 +1210,7 @@ local function active_edit_mode()
 end
 
 function enc(n, d)
-    if not installer:ready() then return end
-    if updater:pending() then return end
+    if not installer:ready() or installer:pending() then return end
     if presets.is_menu_open() then presets.menu_enc(n, d) return end
     local k1, k2, k3 = key_state[1], key_state[2], key_state[3]
     if k2 and k3 and not k1 then
@@ -1339,8 +1336,7 @@ local function handle_key_release()
 end
 
 function key(n, z)
-    if not installer:ready() then installer:key(n, z) return end
-    if updater:pending() then updater:key(n, z) return end
+    if not installer:ready() or installer:pending() then installer:key(n, z) return end
     if presets.is_menu_open() then
         if n == 1 and z == 1 then presets.close_menu() return end
         if presets.menu_key(n, z, morph.scene_data, update_pan_positioning, audio_active, current_mode, current_filter_mode, function(mode, filter)
@@ -1566,8 +1562,7 @@ end
 local OFFS, TXP = {0, 0}, {0, 0}
 
 function redraw()
-  if not installer:ready() then installer:redraw(); return end
-  if updater:pending() then updater:redraw(); return end
+  if not installer:ready() or installer:pending() then installer:redraw(); return end
   if presets.draw_menu() then return end
   if _G.preset_loading then screen.clear(); screen.level(15); screen.move(64, 32); screen.text_center("Loading..."); screen.update(); return end
   refresh_redraw_cache()
@@ -1808,7 +1803,7 @@ function init()
     clock.transport.stop  = transport_stop
     clock.transport.reset = transport_start
     morph.initialize_scenes_with_current_params()
-    updater:check()
+    installer:check()
 end
 
 function cleanup()
