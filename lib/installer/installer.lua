@@ -38,7 +38,7 @@ function Installer:new(args)
   local m = setmetatable({}, Installer)
   for k, v in pairs(args or {}) do m[k] = v end
   m.path = trim(m.path or norns.state.path):gsub("/$", "")
-  m.update = { state = nil, behind = 0, engine_changed = false, message = nil }
+  m.update = { state = nil, behind = 0, message = nil }
   m:scan()
   return m
 end
@@ -128,12 +128,9 @@ function Installer:count_behind()
   return tonumber(git(self, "rev-list --count HEAD..@{u}")) or 0
 end
 
-function Installer:scan_engine_change()
-  local names = util.os_capture("git -C '" .. self.path .. "' diff --name-only HEAD..@{u} 2>/dev/null") or ""
-  for line in names:gmatch("[^\r\n]+") do
-    if line:match("%.sc$") then return true end
-  end
-  return false
+function Installer:pulled_engine_change()
+  local names = util.os_capture("git -C '" .. self.path .. "' diff --name-only ORIG_HEAD..HEAD -- '*.sc' '*.scd' 2>/dev/null") or ""
+  return trim(names) ~= ""
 end
 
 function Installer:check()
@@ -148,7 +145,6 @@ function Installer:check()
       print("[installer] " .. self.update.behind .. " update(s) available but working tree has local changes; skipping prompt.")
       self.update.state = nil
     else
-      self.update.engine_changed = self:scan_engine_change()
       self.update.state = "update"
     end
   end)
@@ -159,7 +155,7 @@ function Installer:install_update()
   self.update.message = nil
   norns.system_cmd("git -C '" .. self.path .. "' pull --ff-only 2>&1", function()
     if self:count_behind() == 0 then
-      if self.update.engine_changed then
+      if self:pulled_engine_change() then
         self.update.state = "restart"
       else
         self.update.state = "reloading"
@@ -208,41 +204,41 @@ function Installer:redraw()
   screen.level(15)
   if not self.satisfied then
     if self.ready_to_restart then
-      screen.move(64, 22); screen.text_center("Ready.")
-      screen.move(64, 32); screen.text_center("Do SYSTEM -> RESTART")
-      screen.move(64, 42); screen.text_center("Then Reload This Script.")
+      screen.move(64, 22); screen.text_center("ready.")
+      screen.move(64, 32); screen.text_center("do SYSTEM -> RESTART")
+      screen.move(64, 42); screen.text_center("then reload this script.")
     elseif self.installing then
-      screen.move(64, 22); screen.text_center("Installing:")
+      screen.move(64, 22); screen.text_center("installing:")
       screen.move(64, 32); screen.text_center(self.message_needed)
       if self.message_progress then
         screen.move(64, 42); screen.text_center(self.message_progress)
       end
     else
-      screen.move(64, 22); screen.text_center("Missing SuperCollider Libraries:")
+      screen.move(64, 22); screen.text_center("missing SuperCollider libraries:")
       screen.move(64, 32); screen.text_center(self.message_needed)
-      screen.move(64, 42); screen.text_center("Press K3 to Install.")
+      screen.move(64, 42); screen.text_center("press K3 to install.")
     end
     screen.update()
     return
   end
   local s = self.update.state
   if s == "update" then
-    screen.move(64, 18); screen.text_center("Twins Update Available")
+    screen.move(64, 18); screen.text_center("twins update available")
     screen.move(64, 30); screen.text_center(self.update.behind .. " new commit" .. (self.update.behind == 1 and "" or "s"))
-    screen.move(64, 46); screen.text_center("K2: Skip   K3: Install")
+    screen.move(64, 46); screen.text_center("K2: skip   K3: install")
   elseif s == "installing" then
-    screen.move(64, 28); screen.text_center("Installing Update...")
+    screen.move(64, 28); screen.text_center("installing update...")
   elseif s == "reloading" then
-    screen.move(64, 28); screen.text_center("Updated - Reloading...")
+    screen.move(64, 28); screen.text_center("updated - reloading...")
   elseif s == "restart" then
-    screen.move(64, 16); screen.text_center("Update installed.")
-    screen.move(64, 28); screen.text_center("Restart Needed")
-    screen.move(64, 44); screen.text_center("K2: Later   K3: Restart")
+    screen.move(64, 16); screen.text_center("update installed.")
+    screen.move(64, 28); screen.text_center("engine changed - restart needed")
+    screen.move(64, 44); screen.text_center("K3: restart   K2: later")
   elseif s == "restarting" then
-    screen.move(64, 28); screen.text_center("Restarting...")
+    screen.move(64, 28); screen.text_center("restarting...")
   elseif s == "error" then
     screen.move(64, 24); screen.text_center(self.update.message or "update error")
-    screen.move(64, 40); screen.text_center("K2/K3: Dismiss")
+    screen.move(64, 40); screen.text_center("K2/K3: dismiss")
   end
   screen.update()
 end
