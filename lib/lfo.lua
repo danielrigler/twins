@@ -136,8 +136,8 @@ lfo.target_ranges = {
     ["2speed"] = {depth = {10, 50}, offset = {-1, 1}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.3},
     ["1pitch"] = {depth = {5, 30}, offset = {-1, 1}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.0},
     ["2pitch"] = {depth = {5, 30}, offset = {-1, 1}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.0},
-    ["1cutoff"] = {depth = {30, 80}, offset = {0.1, 0.9}, frequency = {0.1, 0.6}, waveform = {"sine"}, chance = 0.3},
-    ["2cutoff"] = {depth = {30, 80}, offset = {0.1, 0.9}, frequency = {0.1, 0.6}, waveform = {"sine"}, chance = 0.3},
+    ["1cutoff"] = {depth = {30, 85}, offset = {0.1, 0.9}, frequency = {0.1, 0.6}, waveform = {"sine"}, chance = 0.3},
+    ["2cutoff"] = {depth = {30, 85}, offset = {0.1, 0.9}, frequency = {0.1, 0.6}, waveform = {"sine"}, chance = 0.3},
 }
 
 local param_ranges = {
