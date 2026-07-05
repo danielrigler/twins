@@ -224,7 +224,9 @@ function Installer:redraw()
       end
     else
       screen.move(64, 22); screen.text_center("Missing SuperCollider Libraries:")
+      screen.level(1);
       screen.move(64, 32); screen.text_center(self.message_needed)
+      screen.level(15);
       screen.move(64, 42); screen.text_center("Press K3 to Install.")
     end
     screen.update()
