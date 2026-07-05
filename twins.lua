@@ -1803,6 +1803,7 @@ function init()
     clock.transport.stop  = transport_stop
     clock.transport.reset = transport_start
     morph.initialize_scenes_with_current_params()
+    installer:check_update()
 end
 
 function cleanup()
