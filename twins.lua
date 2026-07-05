@@ -7,7 +7,7 @@
 -- 
 --                          
 --                           v0.69
--- E1: Master Volume
+-- E1: Master Volum
 -- K1+E2/E3: Volume
 -- K1+E1: Crossfade/Morph
 -- K2/K3: Navigate
@@ -24,7 +24,7 @@
 -- Hold K1+K2: Clock Sync
 -- Hold K1+K3: Arp Mode 
 -- Hold K1+K2+K3: Randomize Arp
--- 
+--
 --
 --
 --
