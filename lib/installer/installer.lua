@@ -10,9 +10,7 @@ local SEARCH_FOLDERS = {
 }
 local RESTART_CMD = "sudo systemctl restart norns-jack.service norns-crone.service norns-matron.service"
 
-local function basename(path)
-  return path:match("([^\\/]+)$") or path
-end
+local function basename(path) return path:match("([^\\/]+)$") or path end
 
 local function list_files(dir)
   local delim = "!"
@@ -44,14 +42,11 @@ function Installer:new(args)
 end
 
 function Installer:scan()
-  if self.zip == nil or self.zip == "" then
-    print("[installer] NEED TO SPECIFY ZIP FILE")
-  end
+  if self.zip == nil or self.zip == "" then print("[installer] NEED TO SPECIFY ZIP FILE") end
   self.requirements     = self.requirements or {}
   self.ready_to_restart = false
   self.installing       = false
   self.satisfied        = false
-
   local found = {}
   local remaining = 0
   for _, req in ipairs(self.requirements) do
@@ -97,18 +92,14 @@ end
 
 function Installer:install_libs()
   self.installing = true
-
   os.execute("mkdir -p " .. TMP_DIR)
   os.execute("mkdir -p " .. EXTENSIONS_DIR)
-
   print(string.format("[installer] downloading %s", self.zip))
   self.message_progress = "Downloading..."
   os.execute(string.format("wget -q -O %s/bundle.zip %s", TMP_DIR, self.zip))
-
   print(string.format("[installer] unzipping %s", self.zip))
   self.message_progress = "Unzipping..."
   os.execute(string.format("cd %s && unzip -o -q bundle.zip", TMP_DIR))
-
   for _, file in ipairs(list_files(TMP_DIR)) do
     local name = basename(file)
     for _, req in ipairs(self.missing_requirements) do
@@ -119,7 +110,6 @@ function Installer:install_libs()
       end
     end
   end
-
   os.execute("cd /tmp/ && rm -rf norns-installer")
   self.ready_to_restart = true
   self.installing       = false
