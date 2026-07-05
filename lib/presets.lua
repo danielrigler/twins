@@ -31,7 +31,7 @@ local LFO_KEYS      = {}
 for i = 1, 16 do LFO_KEYS[i] = i .. "lfo" end
 
 local PARAM_MATCHERS = {
-    "^%d+lock$",
+    "^%d*lock_",
     "sample_[se][tn][ad]r?t?$",
     "volume$",
 }

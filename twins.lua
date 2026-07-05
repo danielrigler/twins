@@ -75,7 +75,6 @@ local active_clocks = {}
 local key_state = {} for n = 1, 3 do key_state[n] = false end
 local current_mode = "seek"
 local current_filter_mode = "lpf"
-local pitchshift_display = false
 local tap_times = {}
 local initial_monitor_level, initial_reverb_onoff;
 local audio_active = {[1] = false, [2] = false}
@@ -141,8 +140,6 @@ local function do_capture_temp_scene() morph.capture_to_temp_scene(lfo.get_activ
 local function combo_longpress_fire()
     if current_mode == "lpf" or current_mode == "hpf" then
         current_filter_mode = current_filter_mode == "lpf" and "hpf" or "lpf"
-    elseif current_mode == "pitch" then
-        pitchshift_display = not pitchshift_display
     else
         undo.checkpoint()
         lfo.assign_to_current_row(current_mode, current_filter_mode)
@@ -159,11 +156,10 @@ local param_modes = {
     size = {param = "size", delta = 2, engine = true, has_lock = true, y = 21, label = "size:"},
     density = {param = "density", delta = 2, engine = true, has_lock = true, y = 31, label = "density:", hz = true},
     pitch = {param = "pitch", delta = 1, engine = true, has_lock = true, y = 41, label = "pitch:", st = true},
-    pitchshift = {param = "pitch_shift", delta = 1, engine = true, has_lock = false, st = true},
     spread = {param = "spread", delta = 2, engine = true, has_lock = true, y = 51, label = "spread:"},
     volume = {param = "volume", engine = true}}
 local param_rows = {} for mode, config in pairs(param_modes) do config.pkeys = {"1" .. config.param, "2" .. config.param} if config.y then local lbl = config.label local nm = lbl:match("%a+") table.insert(param_rows, {y = config.y, label = lbl, label_upper = lbl:upper(), name = nm, mode = mode, param1 = "1" .. config.param, param2 = "2" .. config.param, hz = config.hz, st = config.st, fmt_key = config.hz and "hz" or config.st and "st" or nm}) end end table.sort(param_rows, function(a, b) return a.y < b.y end)
-local LIMITS = {size={min=20,max=4999},density={min=0.1,max=50},pitch={min=-48,max=48},pitch_shift={min=-48,max=48}}
+local LIMITS = {size={min=20,max=4999},density={min=0.1,max=50},pitch={min=-48,max=48}}
 local SU = lfo.scale_utils
 local audio_files_cache = nil
 local scale_intervals_cache = {}
@@ -446,7 +442,7 @@ local function setup_params()
       params:add_option(i.. "pitch_mode", i.. " Pitch Mode", {"match speed", "independent"}, 2) params:set_action(i.. "pitch_mode", function(value) engine.pitch_mode(i, value - 1) end)
     end
     params:add_separator(" ")
-    params:add_binary("randomize_granular", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_granular", function() undo.checkpoint() for i=1, 2 do randpara.randomize_granular_params(i) end end)
+    params:add_binary("randomize_granular", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_granular", function() undo.checkpoint() for i=1, 2 do randpara.randomize_granular_params(i, steps) end end)
     params:add_option("lock_granular", "Lock Parameters", {"off", "on"}, 1)
 
     params:add_group("DELAY", 13)
@@ -492,10 +488,15 @@ local function setup_params()
     params:add_separator("        ")
     params:add_option("lock_shimmer", "Lock Parameters", {"off", "on"}, 1)
 
-    params:add_group("TAPE", 16)
+    params:add_group("DRIVE", 4) 
+    params:add_control("analogdrive_mix", "Mix", controlspec.new(0, 100, 'lin', 1, 0, "%")) params:set_action("analogdrive_mix", function(v) engine.analogdrive_mix(v * 0.01) font.update_fx_cache("analogdrive_mix", v) end)
+    params:add_control("analogdrive_drive", "Drive", controlspec.new(0, 100, 'lin', 1, 60, "%")) params:set_action("analogdrive_drive", function(v) engine.analogdrive_drive(v * 0.01) end)
+    params:add_control("analogdrive_tone", "Tone", controlspec.new(0, 100, 'lin', 1, 60, "%")) params:set_action("analogdrive_tone", function(v) engine.analogdrive_tone(v * 0.01) end)
+    params:add_control("analogdrive_mode", "Style", controlspec.new(0, 100, 'lin', 1, 75, "%")) params:set_action("analogdrive_mode", function(v) engine.analogdrive_mode(v * 0.01) end)
+
+    params:add_group("TAPE", 15)
     params:add_option("tape_mix", "Analog Tape", {"off", "on"}, 1) params:set_action("tape_mix", function(x) engine.tape_mix(x-1) font.update_fx_cache("tape_mix", x) end)
     params:add_control("sine_drive_wet", "Shaper Drive", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("sine_drive_wet", function(value) engine.sine_drive_wet(value * 0.01) font.update_fx_cache("sine_drive_wet", value) end)
-    params:add_control("drive", "Saturation", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("drive", function(x) engine.drive(x * 0.01) font.update_fx_cache("drive", x) end)
     params:add{type = "control", id = "wobble_mix", name = "Wobble", controlspec = controlspec.new(0, 100, "lin", 1, 0, "%"), action = function(value) engine.wobble_mix(value * 0.01) font.update_fx_cache("wobble_mix", value) end}
     params:add{type = "control", id = "wobble_amp", name = "Wow Depth", controlspec = controlspec.new(0, 100, "lin", 1, 20, "%"), action = function(value) engine.wobble_amp(value * 0.01) end}
     params:add{type = "control", id = "wobble_rpm", name = "Wow Speed", controlspec = controlspec.new(30, 90, "lin", 1, 33, "RPM"), action = function(value) engine.wobble_rpm(value) end}
@@ -517,7 +518,7 @@ local function setup_params()
     params:add_control(i.."eq_high_gain", i.." Treble", controlspec.new(-1, 1, "lin", 0.01, 0, "")) params:set_action(i.."eq_high_gain", function(value) engine.eq_high_gain(i, value*45) end)
     end
     params:add_separator("     ")
-    params:add_binary("randomize_eq", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_eq", function() undo.checkpoint() for i=1, 2 do randpara.randomize_eq_params(i) end end)
+    params:add_binary("randomize_eq", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_eq", function() undo.checkpoint() for i=1, 2 do randpara.randomize_eq_params(i, steps) end end)
     params:add_option("lock_eq", "Lock Parameters", {"off", "on"}, 1)
 
     params:add_group("LFO", 120)
@@ -560,7 +561,7 @@ local function setup_params()
     params:add_control("ringmod_rate", "Rate", controlspec.new(0.1, 4000, "exp", 0, 200, "Hz")) params:set_action("ringmod_rate", function(v) engine.ringmod_rate(v) end)
     params:add_option("ringmod_freqmod", "Freq Mod", {"off", "on"}, 1) params:set_action("ringmod_freqmod", function(value) engine.ringmod_freqmod(value - 1) end)
 
-    params:add_group("GLITCH", 10)
+    params:add_group("GLITCH", 11)
     params:add_control("glitch_ratio", "Glitch", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("glitch_ratio", function(value) engine.glitch_ratio(value * 0.01) font.update_fx_cache("glitch_ratio", value) end)
     params:add_control("glitch_mix", "Mix", controlspec.new(0, 100, "lin", 1, 100, "%")) params:set_action("glitch_mix", function(value) engine.glitch_mix(value * 0.01) font.update_fx_cache("glitch_mix", value) end)
     params:add_taper("glitch_probability", "Frequency", 0.1, 20, 5, 1, "Hz") params:set_action("glitch_probability", function(value) engine.glitch_probability(value) end)
@@ -570,7 +571,8 @@ local function setup_params()
     params:add_control("glitch_reverse", "Reverse Prob", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("glitch_reverse", function(value) engine.glitch_reverse(value * 0.01) end)
     params:add_control("glitch_pitch", "Pitch Prob", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("glitch_pitch", function(value) engine.glitch_pitch(value * 0.01) end)
     params:add_separator("       ")
-    params:add_binary("randomize_glitch", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_glitch", function() if params:get("lock_glitch") == 1 then params:set("glitch_probability", math.random(1, 150) / 10) params:set("glitch_min_length", math.random(10, 200)) params:set("glitch_max_length", math.random(100, 500)) params:set("glitch_reverse", math.random(0, 100)) params:set("glitch_pitch", math.random(0, 100)) end end)
+    params:add_binary("randomize_glitch", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_glitch", function() if params:get("lock_glitch") == 1 then undo.checkpoint() params:set("glitch_probability", math.random(1, 150) / 10) params:set("glitch_min_length", math.random(10, 200)) params:set("glitch_max_length", math.random(100, 500)) params:set("glitch_reverse", math.random(0, 100)) params:set("glitch_pitch", math.random(0, 100)) end end)
+    params:add_option("lock_glitch", "Lock Parameters", {"off", "on"}, 1)
 
     params:add_group("EVOLVE", 12)
     params:add_binary("evolution", "Evolve!", "toggle", 0) params:set_action("evolution", function(value) if value == 1 then randpara.reset_evolution_centers() randpara.start_evolution() else randpara.stop_evolution() end end)
@@ -652,7 +654,7 @@ local function setup_params()
     params:add{type = "trigger", id = "delete_morph_data", name = "Delete Morph Data", action = function() morph.scene_data = {[1] = {[1] = {}, [2] = {}}, [2] = {[1] = {}, [2] = {}}} morph.amount = 0 params:set("morph_amount", 0) params:set("scene_mode", 1) morph.scene_mode = "off" end}
 
     params:add_group("PITCH", 4)
-    params:add_option("pitch_quantize_scale", "Pitch Quantize", {"off", "major", "minor", "dorian", "phrygian", "lydian", "mixolydian", "locrian", "major pent.", "minor pent.", "blues", "whole tone"}, 2) params:set_action("pitch_quantize_scale", function(value) local scale = params:string("pitch_quantize_scale") if scale ~= "none" then for i = 1, 2 do local current_pitch = params:get(i.."pitch") local quantized = SU.quantize(current_pitch, scale) if current_pitch ~= quantized then params:set(i.."pitch", quantized) end local cps = params:get(i.."pitch_shift") local qps = SU.quantize(cps, scale) if cps ~= qps then params:set(i.."pitch_shift", qps) end end end end)
+    params:add_option("pitch_quantize_scale", "Pitch Quantize", {"off", "major", "minor", "dorian", "phrygian", "lydian", "mixolydian", "locrian", "major pent.", "minor pent.", "blues", "whole tone"}, 2) params:set_action("pitch_quantize_scale", function(value) local scale = params:string("pitch_quantize_scale") if scale ~= "off" then for i = 1, 2 do local current_pitch = params:get(i.."pitch") local quantized = SU.quantize(current_pitch, scale) if current_pitch ~= quantized then params:set(i.."pitch", quantized) end end end end)
     params:add_option("pitch_lag", "Pitch Lag", {"off", "very small", "small", "medium", "high", "very high"}, 1) params:set_action("pitch_lag", function(value) local lag_times = {0, 1, 2, 4, 8, 16} local lag_time = lag_times[value] for i = 1, 2 do engine.pitch_lag(i, lag_time) end end)
     params:add_separator("                                   ")
     params:add_option("lock_pitch", "Lock Parameters", {"off", "on"}, 1)
@@ -673,7 +675,7 @@ local function setup_params()
 
     arp.add_params()
 
-    params:add_group("OTHER", 29)
+    params:add_group("OTHER", 25)
     params:add_binary("dry_mode", "Dry Mode", "toggle", 0) params:set_action("dry_mode", function(x) drymode.toggle_dry_mode() end)
     params:add_binary("randomtape1", "Random Tape 1", "trigger", 0) params:set_action("randomtape1", function() load_random_tape_file(1) end)
     params:add_binary("randomtape2", "Random Tape 2", "trigger", 0) params:set_action("randomtape2", function() load_random_tape_file(2) end)
@@ -687,8 +689,6 @@ local function setup_params()
       params:add_taper(i.. "speed", i.. " speed", -2, 2, 0, 0) params:set_action(i.. "speed", function(value) if abs(value) < 0.01 then engine.speed(i, 0) else engine.speed(i, value) end end)
       params:add_taper(i.. "density", i.. " density", 0.1, 250, 3.5, 5) params:set_action(i.. "density", function(value) engine.density(i, clocksync.grain_density(i) or value) end)
       params:add_control(i.. "pitch", i.. " pitch", controlspec.new(-48, 48, "lin", 1, 0, "st")) params:set_action(i.. "pitch", function(value) local scale = params:string("pitch_quantize_scale") local quantized = SU.quantize(value, scale) engine.pitch_offset(i, math.pow(0.5, -quantized / 12) * arp.ratio(i)) end)
-      params:add_control(i.. "pitch_shift", i.. " pitch shift", controlspec.new(-48, 48, "lin", 1, 0, "st")) params:set_action(i.. "pitch_shift", function(value) local scale = params:string("pitch_quantize_scale") engine.pitch_shift(i, SU.quantize(value, scale)) font.update_fx_cache(i.. "pitch_shift", value) end)
-      params:add_taper(i.. "pitch_shift_mix", i.. " pitch shift mix", 0, 100, 60, 0, "%") params:set_action(i.. "pitch_shift_mix", function(value) engine.pitch_shift_mix(i, value * 0.01) end)
       params:add_taper(i.. "jitter", i.. " jitter", 0, 999900, 250, 10, "ms") params:set_action(i.. "jitter", function(value) engine.jitter(i, value * 0.001) end)
       params:add_taper(i.. "size", i.. " size", 20, 5000, 500, 1, "ms") params:set_action(i.. "size", function(value) engine.size(i, math.min(value, arp.max_size_ms(i)) * 0.001) end)
       params:add_taper(i.. "spread", i.. " spread", 0, 100, 60, 0, "%") params:set_action(i.. "spread", function(value) engine.spread(i, value * 0.01) end)
@@ -892,7 +892,7 @@ function hlp.update_linked_params(tr, delta_mult, param, delta)
     if param == "pitch" then
         local old_pitch = base_pitch
         local scale = params:string("pitch_quantize_scale")
-        if scale ~= "none" then
+        if scale ~= "off" then
             local direction = (delta * delta_mult) > 0 and 1 or -1
             new_pitch = get_next_scale_note(old_pitch, scale, direction)
             new_pitch = clamp(new_pitch, LIMITS.pitch.min, LIMITS.pitch.max)
@@ -988,11 +988,11 @@ local function handle_standard_param(track, config, delta)
     local pkeys = config.pkeys
     local p = pkeys[track]
     disable_lfos_for_param(p, not sym)
-    if config.param == "pitch" or config.param == "pitch_shift" then
+    if config.param == "pitch" then
         local old_value = params:get(p)
         local scale = params:string("pitch_quantize_scale")
         local lim = LIMITS[config.param] or LIMITS.pitch
-        if scale ~= "none" then
+        if scale ~= "off" then
             local direction = delta > 0 and 1 or -1
             local new_value = clamp(get_next_scale_note(old_value, scale, direction), lim.min, lim.max)
             params:set(p, new_value)
@@ -1205,7 +1205,6 @@ local FX_MAP = { "reverb_mix", "delay_mix", "shimmer_mix1" }
 local FX_LABELS = { "reverb", "delay", "shimmer" }
 
 local function active_edit_mode()
-    if current_mode == "pitch" and pitchshift_display then return "pitchshift" end
     if current_mode == "lpf" or current_mode == "hpf" then return current_filter_mode end
     return current_mode
 end
@@ -1286,7 +1285,7 @@ function enc(n, d)
         local track = n - 1
         mark_key_interaction()
         local r_metro = randomize_metro[track]
-        if r_metro then stop_metro_safe(r_metro); randomize_metro[track] = nil end
+        if r_metro then stop_metro_safe(r_metro) end
         if k1 then
             local p = _HK.vol[track]
             disable_lfos_for_param(p, true)
@@ -1580,14 +1579,13 @@ function redraw()
   OFFS[1], OFFS[2] = -anim_offset_x, anim_offset_x
   TXP[1], TXP[2] = TRACK_X[1] + OFFS[1], TRACK_X[2] + OFFS[2]
   for ri = 1, #param_rows do local row = param_rows[ri]
-    local ps = (row.mode == "pitch" and pitchshift_display)
-    local name = ps and "pitch_shift" or row.name
+    local name = row.name
     local hi = cur_mode == row.mode
     local y = row.y
     if hi then
-      T(LEVEL.hi, 6 + left_slide, y, ps and "PITCH :)" or row.label_upper)
+      T(LEVEL.hi, 6 + left_slide, y, row.label_upper)
     else
-      T(LEVEL.hi, 6 + left_slide, y, ps and "pitch :)" or row.label)
+      T(LEVEL.hi, 6 + left_slide, y, row.label)
     end
     local fmt = FORMAT[row.fmt_key]
     local density_synced = (row.name == "density" and clocksync.grain_synced())
@@ -1596,15 +1594,15 @@ function redraw()
     local size_cap2 = is_size_row and arp.max_size_ms(2) or nil
     for t = 1,2 do
       local x = TXP[t]
-      local param = ps and (t == 1 and "1pitch_shift" or "2pitch_shift") or (t == 1 and row.param1 or row.param2)
+      local param = t == 1 and row.param1 or row.param2
       local C = PARAM_CACHE.track[t]
       if name == "size" and PARAM_CACHE.link then draw_size_link(x, y) end
-      if C.locked[ps and "pitch" or name] then draw_lock(x, y - 1) end
+      if C.locked[name] then draw_lock(x, y - 1) end
       local val = pget(param)
       local size_cap = (t == 2) and size_cap2 or size_cap1
       if size_cap and val > size_cap then val = size_cap end
       local sync_label = density_synced and clocksync.grain_division_label(t) or nil
-      local txt = sync_label or (fmt and val_text(param, val, fmt, t, (not ps) and row.st and C.pitch_rand or nil) or params:string(param))
+      local txt = sync_label or (fmt and val_text(param, val, fmt, t, row.st and C.pitch_rand or nil) or params:string(param))
       T(flash_level(t, hi and LEVEL.hi or LEVEL.val), x, y, txt)
       if C.lfo_on[param] and not sync_label then
         local rc = _LFO_RANGE_CACHE[param]

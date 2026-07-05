@@ -13,7 +13,7 @@ local DRY_VALUES = {
     glitch_mix = 0,
     shimmer_mix1 = 0,
     tape_mix = 1,
-    drive = 0,
+    analogdrive_mix = 0,
     Width = 100,
     monobass_mix = 1,
     wobble_mix = 0,
@@ -39,8 +39,7 @@ local DRY_VALUES_STEREO = {
     cutoff = 20000,
     hpf = 20,
     lpf_gain = 0.05,
-    pan = 0,
-    pitch_shift = 0
+    pan = 0
 }
 
 local STEREO_PARAMS = {} for k in pairs(DRY_VALUES_STEREO) do STEREO_PARAMS[#STEREO_PARAMS + 1] = k end

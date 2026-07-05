@@ -12,7 +12,7 @@ font.micro_font = {
   T = {{1,1,1},{0,1,0},{0,1,0}},
   S = {{0,1,1},{0,1,0},{1,1,0}},
   X = {{0,1,1,1,0,1},{0,1,0,1,1,1},{1,1,0,1,0,1}},
-  V = {{1,0,1},{1,0,1},{0,1,0}},
+  V = {{0,0,1},{1,1,1},{1,1,1}},
   H = {{1,0,1},{1,1,1},{1,0,1}},
   Z = {{0,1,1,1,1},{0,1,0,1,0},{1,1,0,1,0}},
   F = {{1,1,1},{1,1,0},{1,0,0}},
@@ -54,7 +54,6 @@ local fx_cache = {
   shimmer_mix1    = 0,
   tape_mix        = 1,
   sine_drive_wet  = 0,
-  drive           = 0,
   wobble_mix      = 0,
   chew_depth      = 0,
   lossdegrade_mix = 0,
@@ -71,12 +70,11 @@ local fx_cache = {
   resonator_mix   = 0,
   wavefold_mix    = 0,
   ringmod_mix     = 0,
+  analogdrive_mix = 0,
   ["1cutoff"]     = 20000,
   ["2cutoff"]     = 20000,
   ["1hpf"]        = 20,
-  ["2hpf"]        = 20,
-  ["1pitch_shift"] = 0,
-  ["2pitch_shift"] = 0
+  ["2hpf"]        = 20
 }
 
 function font.update_fx_cache(param_name, value)
@@ -118,14 +116,12 @@ end
 local BINARY_ON_INTENSITY = 25
 
 local function tape_active(cache)
-  return cache.tape_mix == 2 or cache.sine_drive_wet > 0 or cache.drive > 0
-      or cache.wobble_mix > 0 or cache.chew_depth > 0 or cache.lossdegrade_mix > 0
+  return cache.tape_mix == 2 or cache.sine_drive_wet > 0 or cache.wobble_mix > 0 or cache.chew_depth > 0 or cache.lossdegrade_mix > 0
 end
 
 local function tape_intensity(cache)
   local maxv = cache.tape_mix == 2 and BINARY_ON_INTENSITY or 0
   if cache.sine_drive_wet  > maxv then maxv = cache.sine_drive_wet  end
-  if cache.drive           > maxv then maxv = cache.drive           end
   if cache.wobble_mix      > maxv then maxv = cache.wobble_mix      end
   if cache.chew_depth      > maxv then maxv = cache.chew_depth      end
   if cache.lossdegrade_mix > maxv then maxv = cache.lossdegrade_mix end
@@ -163,16 +159,6 @@ local function filter_intensity(cache)
   return math.max(v1, v2) * 100
 end
 
-local function pitchshift_active(cache)
-  return cache["1pitch_shift"] ~= 0 or cache["2pitch_shift"] ~= 0
-end
-
-local function pitchshift_intensity(cache)
-  local v1 = math.abs(cache["1pitch_shift"]) / 48
-  local v2 = math.abs(cache["2pitch_shift"]) / 48
-  return math.max(v1, v2) * 100
-end
-
 local _draw_now = 0
 local MIX_MOD_FREQ = 0.25
 local MIX_MOD_PERIOD = 1 / MIX_MOD_FREQ
@@ -197,12 +183,12 @@ local _shimmer_mod_lfo = make_mix_mod()
 local FX_SPECS = {
   {glyph = "K", lock = nil,            show = function() return font.clocksync_ref and font.clocksync_ref.grain_synced() end, val = function() return 100 end},
   {glyph = "A", lock = nil,            show = function() return font.arp_ref and font.arp_ref.is_running() end, val = function() return 100 end, gradient = true},
-  {glyph = "P", lock = nil,            show = pitchshift_active,                                      val = pitchshift_intensity},
   {glyph = "F", lock = "lock_filter",  show = filter_active,                                          val = filter_intensity},
   {glyph = "B", lock = nil,            show = function(c) return c.bitcrush_mix > 0 end,              val = function(c) return c.bitcrush_mod == 2 and c.bitcrush_mix * _bitcrush_mod_lfo(_draw_now) or c.bitcrush_mix end},
   {glyph = "O", lock = nil,            show = function(c) return c.resonator_mix > 0 end,             val = function(c) return c.resonator_mix end},
   {glyph = "W", lock = nil,            show = function(c) return c.wavefold_mix > 0 end,              val = function(c) return c.wavefold_mix end},
   {glyph = "M", lock = nil,            show = function(c) return c.ringmod_mix > 0 end,               val = function(c) return c.ringmod_mix end},
+  {glyph = "V", lock = nil,            show = function(c) return c.analogdrive_mix > 0 end,           val = function(c) return c.analogdrive_mix end},
   {glyph = "G", lock = "lock_glitch",  show = function(c) return c.glitch_ratio > 0 and c.glitch_mix > 0 end, val = function(c) return c.glitch_ratio end},
   {glyph = "T", lock = "lock_tape",    show = tape_active,                                            val = tape_intensity},
   {glyph = "D", lock = "lock_delay",   show = function(c) return c.delay_mix > 0 end,                 val = function(c) return c.delay_mix end, fade = function() return _delay_duck_gain end},

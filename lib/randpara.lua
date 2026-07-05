@@ -80,8 +80,8 @@ local PARAM_SPECS = {
   ["fbDelay1"]            = {1,   {0.02,1},  "shimmer"},
   ["bitcrush_rate"]       = {5500,{2000,5500},"bitcrush"},
   ["bitcrush_bits"]       = {2,   {10,16},   "bitcrush"},
-  ["chew_freq"]           = {60,  {1,60},    "chew"},
-  ["chew_variance"]       = {70,  {0,70},    "chew"},
+  ["chew_freq"]           = {60,  {1,60},    "tape"},
+  ["chew_variance"]       = {70,  {0,70},    "tape"},
   ["1eq_low_gain"]        = {0.2, {0,1},     "eq"}, ["2eq_low_gain"]  = {0.2,{0,1},"eq"},
   ["1eq_mid_gain"]        = {0.2, {0,1},     "eq"}, ["2eq_mid_gain"]  = {0.2,{0,1},"eq"},
   ["1eq_high_gain"]       = {0.2, {0,1},     "eq"}, ["2eq_high_gain"] = {0.2,{0,1},"eq"},
@@ -99,6 +99,7 @@ local GROUP_LOCK = {
   reverb   = "lock_reverb",  tape    = "lock_tape",
   shimmer  = "lock_shimmer", eq      = "lock_eq",
   filter   = "lock_filter",  pitch   = "lock_pitch",
+  glitch   = "lock_glitch",
 }
 
 local function build_evolvable_params_cache(force)
