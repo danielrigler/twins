@@ -181,7 +181,11 @@ end
 
 function Installer:key(k, z)
   if not self.satisfied then
-    if self.ready_to_restart or self.installing then return end
+    if self.installing then return end
+    if self.ready_to_restart then
+      if k == 3 and z == 1 then self:do_restart() end
+      return
+    end
     if k == 3 and z == 1 then clock.run(function() self:install_libs() end) end
     return
   end
@@ -204,9 +208,13 @@ function Installer:redraw()
   screen.level(15)
   if not self.satisfied then
     if self.ready_to_restart then
-      screen.move(64, 22); screen.text_center("ready.")
-      screen.move(64, 32); screen.text_center("Do SYSTEM -> RESTART")
-      screen.move(64, 42); screen.text_center("Then Reload This Script.")
+      if self.update.state == "restarting" then
+        screen.move(64, 28); screen.text_center("restarting...")
+      else
+        screen.move(64, 22); screen.text_center("libraries installed.")
+        screen.move(64, 34); screen.text_center("restart to load the engine")
+        screen.move(64, 46); screen.text_center("K3: restart")
+      end
     elseif self.installing then
       screen.move(64, 22); screen.text_center("installing:")
       screen.move(64, 32); screen.text_center(self.message_needed)
@@ -229,7 +237,7 @@ function Installer:redraw()
   elseif s == "installing" then
     screen.move(64, 28); screen.text_center("installing update...")
   elseif s == "reloading" then
-    screen.move(64, 28); screen.text_center("Updated - Reloading...")
+    screen.move(64, 28); screen.text_center("updated - reloading...")
   elseif s == "restart" then
     screen.move(64, 16); screen.text_center("update installed.")
     screen.move(64, 28); screen.text_center("engine changed - restart needed")
