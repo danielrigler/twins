@@ -93,18 +93,18 @@ function Installer:install_libs()
   os.execute("mkdir -p " .. EXTENSIONS_DIR)
 
   print(string.format("[installer] downloading %s", self.zip))
-  self.message_progress = "downloading..."
+  self.message_progress = "Downloading..."
   os.execute(string.format("wget -q -O %s/bundle.zip %s", TMP_DIR, self.zip))
 
   print(string.format("[installer] unzipping %s", self.zip))
-  self.message_progress = "unzipping..."
+  self.message_progress = "Unzipping..."
   os.execute(string.format("cd %s && unzip -o -q bundle.zip", TMP_DIR))
 
   for _, file in ipairs(list_files(TMP_DIR)) do
     local name = basename(file)
     for _, req in ipairs(self.missing_requirements) do
       if name:find(req, 1, true) then
-        print("copying " .. name .. " to Extensions...")
+        print("Copying " .. name .. " to Extensions...")
         self.message_progress = "copying " .. name .. "..."
         os.execute(string.format("cp %s %s/", file, EXTENSIONS_DIR))
       end
@@ -209,44 +209,44 @@ function Installer:redraw()
   if not self.satisfied then
     if self.ready_to_restart then
       if self.update.state == "restarting" then
-        screen.move(64, 28); screen.text_center("restarting...")
+        screen.move(64, 28); screen.text_center("Restarting...")
       else
-        screen.move(64, 22); screen.text_center("libraries installed.")
-        screen.move(64, 34); screen.text_center("restart to load the engine")
-        screen.move(64, 46); screen.text_center("K3: restart")
+        screen.move(64, 22); screen.text_center("Libraries Installed.")
+        screen.move(64, 34); screen.text_center("Restart to Load the Engine")
+        screen.move(64, 46); screen.text_center("K3: Restart")
       end
     elseif self.installing then
-      screen.move(64, 22); screen.text_center("installing:")
+      screen.move(64, 22); screen.text_center("Installing:")
       screen.move(64, 32); screen.text_center(self.message_needed)
       if self.message_progress then
         screen.move(64, 42); screen.text_center(self.message_progress)
       end
     else
-      screen.move(64, 22); screen.text_center("missing SuperCollider libraries:")
+      screen.move(64, 22); screen.text_center("Missing SuperCollider Libraries:")
       screen.move(64, 32); screen.text_center(self.message_needed)
-      screen.move(64, 42); screen.text_center("press K3 to install.")
+      screen.move(64, 42); screen.text_center("Press K3 to Install.")
     end
     screen.update()
     return
   end
   local s = self.update.state
   if s == "update" then
-    screen.move(64, 18); screen.text_center("twins update available")
+    screen.move(64, 18); screen.text_center("Twins Update Available")
     screen.move(64, 30); screen.text_center(self.update.behind .. " new commit" .. (self.update.behind == 1 and "" or "s"))
-    screen.move(64, 46); screen.text_center("K2: skip   K3: install")
+    screen.move(64, 46); screen.text_center("K2: Skip   K3: Install")
   elseif s == "installing" then
-    screen.move(64, 28); screen.text_center("installing update...")
+    screen.move(64, 28); screen.text_center("Installing Update...")
   elseif s == "reloading" then
-    screen.move(64, 28); screen.text_center("updated - reloading...")
+    screen.move(64, 28); screen.text_center("Updated - Reloading...")
   elseif s == "restart" then
-    screen.move(64, 16); screen.text_center("update installed.")
-    screen.move(64, 28); screen.text_center("engine changed - restart needed")
-    screen.move(64, 44); screen.text_center("K3: restart   K2: later")
+    screen.move(64, 16); screen.text_center("Update Installed.")
+    screen.move(64, 28); screen.text_center("Engine changed - Restart Needed")
+    screen.move(64, 44); screen.text_center("K2: Later   K3: Restart")
   elseif s == "restarting" then
-    screen.move(64, 28); screen.text_center("restarting...")
+    screen.move(64, 28); screen.text_center("Restarting...")
   elseif s == "error" then
-    screen.move(64, 24); screen.text_center(self.update.message or "update error")
-    screen.move(64, 40); screen.text_center("K2/K3: dismiss")
+    screen.move(64, 24); screen.text_center(self.update.message or "Update Error")
+    screen.move(64, 40); screen.text_center("K2/K3: Dismiss")
   end
   screen.update()
 end
