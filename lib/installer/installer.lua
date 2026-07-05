@@ -5,8 +5,8 @@ local EXTENSIONS_DIR = "/home/we/.local/share/SuperCollider/Extensions/supercoll
 local TMP_DIR        = "/tmp/norns-installer/ignore"
 local SEARCH_FOLDERS = {
   "/usr/local/share/SuperCollider/Extensions",
-  "/home/we/dust/code",
   "/home/we/.local/share/SuperCollider/Extensions",
+  "/home/we/dust/code",
 }
 local RESTART_CMD = "sudo systemctl restart norns-jack.service norns-crone.service norns-matron.service"
 
@@ -53,18 +53,27 @@ function Installer:scan()
   self.satisfied        = false
 
   local found = {}
-  for _, req in ipairs(self.requirements) do found[req] = false end
+  local remaining = 0
+  for _, req in ipairs(self.requirements) do
+    if found[req] == nil then
+      found[req] = false
+      remaining = remaining + 1
+    end
+  end
 
   for _, folder in ipairs(SEARCH_FOLDERS) do
+    if remaining == 0 then break end
     for _, file in ipairs(list_files(folder)) do
       if not file:find("ignore") then
         local name = basename(file)
         for req, already in pairs(found) do
           if not already and name:find(req, 1, true) then
             found[req] = true
+            remaining = remaining - 1
           end
         end
       end
+      if remaining == 0 then break end
     end
   end
 
