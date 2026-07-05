@@ -121,7 +121,7 @@ alloc {
                 GrainBuf.ar(numChannels: 2, trigger: active_trig, dur: grain_size * size_mults[i], sndbuf: buf_r, rate: grain_pitch * harmonic * grain_direction * detuneRatio, pos: buf_pos + jitter_sig, interp: 4, pan: harmonic_pan, envbufnum: envBuf, mul: volumes[i] * grain_amp_rand);
             };
             granular_sig = Mix.ar(l_harmonics) + Mix.ar(r_harmonics);
-            sig_mix = (granular_sig * granular_gain).tanh;
+            sig_mix = (granular_sig * granular_gain);
             amp_scale = Lag.kr(gain) * key_env * vel_amp;
             signal = sig_mix * amp_scale;
             meter_sig = granular_sig * amp_scale;
