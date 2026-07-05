@@ -484,7 +484,7 @@ local function setup_params()
     params:add_control("lowpass1", "LPF", controlspec.new(20, 20000, "lin", 1, 13000, "Hz")) params:set_action("lowpass1", function(x) engine.lowpass1(x) end)
     params:add_control("hipass1", "HPF", controlspec.new(20, 20000, "exp", 1, 1400, "Hz")) params:set_action("hipass1", function(x) engine.hipass1(x) end)
     params:add_control("fbDelay1", "Delay", controlspec.new(0.01, 0.5, "lin", 0.01, 0.2, "s")) params:set_action("fbDelay1", function(x) engine.fbDelay1(x) end)
-    params:add_control("fb1", "Feedback", controlspec.new(0, 100, "lin", 1, 15, "%")) params:set_action("fb1", function(x) engine.fb1(x * 0.01) end)
+    params:add_control("fb1", "Feedback", controlspec.new(0, 100, "lin", 1, 20, "%")) params:set_action("fb1", function(x) engine.fb1(x * 0.01) end)
     params:add_separator("        ")
     params:add_option("lock_shimmer", "Lock Parameters", {"off", "on"}, 1)
 
