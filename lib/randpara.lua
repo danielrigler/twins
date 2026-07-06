@@ -33,10 +33,6 @@ local function set_group_evolution(group, enabled)
   end
 end
 
-local function get_group_evolution(group)
-  return evolution_group_enabled[group] == true
-end
-
 local function interpolate(current, target, threshold, factor)
   if math.abs(current - target) < threshold then return target end
   return current + (target - current) * (1 - math.exp(-4 * factor))
@@ -98,7 +94,6 @@ local GROUP_LOCK = {
   granular = "lock_granular", delay   = "lock_delay",
   reverb   = "lock_reverb",  tape    = "lock_tape",
   shimmer  = "lock_shimmer", eq      = "lock_eq",
-  filter   = "lock_filter",  pitch   = "lock_pitch",
   glitch   = "lock_glitch",
 }
 
@@ -248,6 +243,14 @@ local function randomize_param_group(config)
   end
 end
 
+local function apply_interpolated(param, data, factor)
+  local new_value = interpolate(params:get(param), data.target, data.threshold, factor)
+  params:set(param, new_value)
+  local st = evolution_states[param]
+  if st then st.center_value = new_value; st.current_drift = 0 end
+  return new_value
+end
+
 local function start_interpolation(steps, symmetry)
   if not next(targets) then return end
   steps = math.max(1, steps or 30)
@@ -258,18 +261,12 @@ local function start_interpolation(steps, symmetry)
     local all_done = true
     for param, data in pairs(targets) do
       if not active_interpolations[param] then goto next_param end
-      local new_value = interpolate(params:get(param), data.target, data.threshold, factor)
-      params:set(param, new_value)
-      local st = evolution_states[param]
-      if st then st.center_value = new_value; st.current_drift = 0 end
+      local new_value = apply_interpolated(param, data, factor)
       if symmetry and param:match("^%d") then
         local mirror = mirror_param_name(param)
         if params.lookup[mirror] then
           local mdata = targets[mirror] or data
-          local mnew  = interpolate(params:get(mirror), mdata.target, mdata.threshold, factor)
-          params:set(mirror, mnew)
-          local mst = evolution_states[mirror]
-          if mst then mst.center_value = mnew; mst.current_drift = 0 end
+          local mnew  = apply_interpolated(mirror, mdata, factor)
           if math.abs(mnew - mdata.target) > mdata.threshold then all_done = false end
         end
       end
@@ -437,5 +434,4 @@ return {
   cleanup                 = cleanup,
   stop_interpolation      = stop_interpolation,
   set_group_evolution = set_group_evolution,
-  get_group_evolution = get_group_evolution,
 }

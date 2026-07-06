@@ -1,4 +1,5 @@
 local undo = {}
+local utils = include("lib/utils")
 local MAX_DEPTH = 8
 local NUM_LFOS  = 16
 local undo_stack = {}
@@ -72,14 +73,7 @@ local function capture()
         sp[id] = params:get(id)
     end
     for i = 1, NUM_LFOS do
-        snap.lfo[i] = {
-            state  = params:get(keys.lfo[i]),
-            target = params:get(keys.target[i]),
-            shape  = params:get(keys.shape[i]),
-            freq   = params:get(keys.freq[i]),
-            depth  = params:get(keys.depth[i]),
-            offset = params:get(keys.offset[i]),
-        }
+        snap.lfo[i] = utils.capture_lfo_slot(i, keys)
     end
     if capture_extra then
         local ok, extra = pcall(capture_extra)
@@ -101,13 +95,7 @@ local function restore(snap)
     end
 
     for i = 1, NUM_LFOS do
-        local s = snap.lfo[i]
-        params:set(keys.target[i], s.target)
-        params:set(keys.shape[i],  s.shape)
-        params:set(keys.freq[i],   s.freq)
-        params:set(keys.depth[i],  s.depth)
-        params:set(keys.offset[i], s.offset)
-        params:set(keys.lfo[i],    s.state)
+        utils.apply_lfo_slot(i, keys, snap.lfo[i])
     end
 
     params:set("lfo_pause", was_paused)
@@ -140,10 +128,6 @@ function undo.init(opts)
     undo.clear()
 end
 
-function undo.rebuild_param_list()
-    capture_ids = nil
-end
-
 function undo.checkpoint()
     if _G.preset_loading then return end
     if not keys then return end
@@ -171,9 +155,5 @@ function undo.clear()
     for i = #undo_stack, 1, -1 do undo_stack[i] = nil end
     for i = #redo_stack, 1, -1 do redo_stack[i] = nil end
 end
-
-function undo.depth()    return #undo_stack       end
-function undo.can_undo() return #undo_stack > 0   end
-function undo.can_redo() return #redo_stack > 0   end
 
 return undo

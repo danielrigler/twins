@@ -221,10 +221,6 @@ end
 
 function clocksync.lfo_synced() return enabled end
 function clocksync.grain_synced() return enabled end
-function clocksync.div_labels() return DIV_LABELS end
-function clocksync.div_index(label) return DIV[label] end
-function clocksync.div_rate_hz(idx) return t60() / DIVISIONS[idx].beats end
-function clocksync.div_beats(idx) return DIVISIONS[idx].beats end
 function clocksync.reseek_active() return reseek_enabled end
 function clocksync.grain_division_label(v) return density_label[v] end
 

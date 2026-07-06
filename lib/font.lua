@@ -71,6 +71,7 @@ local fx_cache = {
   wavefold_mix    = 0,
   ringmod_mix     = 0,
   analogdrive_mix = 0,
+  analogdrive_mod = 1,
   ["1cutoff"]     = 20000,
   ["2cutoff"]     = 20000,
   ["1hpf"]        = 20,
@@ -179,6 +180,7 @@ local function make_mix_mod()
 end
 local _bitcrush_mod_lfo = make_mix_mod()
 local _shimmer_mod_lfo = make_mix_mod()
+local _drive_mod_lfo = make_mix_mod()
 
 local FX_SPECS = {
   {glyph = "K", lock = nil,            show = function() return font.clocksync_ref and font.clocksync_ref.grain_synced() end, val = function() return 100 end},
@@ -188,7 +190,7 @@ local FX_SPECS = {
   {glyph = "O", lock = nil,            show = function(c) return c.resonator_mix > 0 end,             val = function(c) return c.resonator_mix end},
   {glyph = "W", lock = nil,            show = function(c) return c.wavefold_mix > 0 end,              val = function(c) return c.wavefold_mix end},
   {glyph = "M", lock = nil,            show = function(c) return c.ringmod_mix > 0 end,               val = function(c) return c.ringmod_mix end},
-  {glyph = "V", lock = nil,            show = function(c) return c.analogdrive_mix > 0 end,           val = function(c) return c.analogdrive_mix end},
+  {glyph = "V", lock = nil,            show = function(c) return c.analogdrive_mix > 0 end,           val = function(c) return c.analogdrive_mod == 2 and c.analogdrive_mix * _drive_mod_lfo(_draw_now) or c.analogdrive_mix end},
   {glyph = "G", lock = "lock_glitch",  show = function(c) return c.glitch_ratio > 0 and c.glitch_mix > 0 end, val = function(c) return c.glitch_ratio end},
   {glyph = "T", lock = "lock_tape",    show = tape_active,                                            val = tape_intensity},
   {glyph = "D", lock = "lock_delay",   show = function(c) return c.delay_mix > 0 end,                 val = function(c) return c.delay_mix end, fade = function() return _delay_duck_gain end},
@@ -218,17 +220,19 @@ local _last_update = -1
 local _update_interval = 1 / 10
 local min, max, floor = math.min, math.max, math.floor
 
+local _collect_n = 0
+local function collect(level, px, py)
+  _collect_n = _collect_n + 1
+  _pc_l[_collect_n], _pc_x[_collect_n], _pc_y[_collect_n] = level, px, py
+end
+
 function font.draw_fx_status_bucketed(P_func)
   local now = util.time()
   if now - _last_update >= _update_interval then
     _last_update = now
     _draw_now = now
     refresh_draw_caches()
-    local n = 0
-    local collect = function(level, px, py)
-      n = n + 1
-      _pc_l[n], _pc_x[n], _pc_y[n] = level, px, py
-    end
+    _collect_n = 0
     local x = 7
     for i = 1, #FX_SPECS do
       local spec = FX_SPECS[i]
@@ -247,7 +251,7 @@ function font.draw_fx_status_bucketed(P_func)
         x = plot_text(collect, x, 0, spec.glyph, level)
       end
     end
-    _pc_n = n
+    _pc_n = _collect_n
   end
   local l, px, py = _pc_l, _pc_x, _pc_y
   for i = 1, _pc_n do

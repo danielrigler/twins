@@ -6,7 +6,7 @@
 --            by: @dddstudio                       
 -- 
 --                          
---                           v0.70
+--                           v0.71
 -- E1: Master Volume
 -- K1+E2/E3: Volume
 -- K1+E1: Crossfade/Morph
@@ -114,7 +114,7 @@ for t = 1, 2 do
         volume = t.."volume", pan = t.."pan", speed = t.."speed",
         cutoff = t.."cutoff", hpf = t.."hpf", size = t.."size",
         granular_gain = t.."granular_gain", live_input = t.."live_input",
-        live_direct = t.."live_direct", seek = t.."seek",
+        live_direct = t.."live_direct",
         direction_mod = t.."direction_mod", env_select = t.."env_select",
         pitch_random_prob = t.."pitch_random_prob"}
 end
@@ -237,7 +237,6 @@ function hlp.ensure_link_base(track)
     end
     return lb
 end
-function hlp.cancel_gesture() if key_gesture then key_gesture.fired = true end end
 function hlp.update_resonator()
     if (pget("resonator_mix") or 0) <= 0 then return end
     local root = params:get("resonator_root")
@@ -488,8 +487,9 @@ local function setup_params()
     params:add_separator("        ")
     params:add_option("lock_shimmer", "Lock Parameters", {"off", "on"}, 1)
 
-    params:add_group("DRIVE", 4) 
+    params:add_group("DRIVE", 5) 
     params:add_control("analogdrive_mix", "Mix", controlspec.new(0, 100, 'lin', 1, 0, "%")) params:set_action("analogdrive_mix", function(v) engine.analogdrive_mix(v * 0.01) font.update_fx_cache("analogdrive_mix", v) end)
+    params:add_option("analogdrive_mod", "Mix Mod", {"off", "on"}, 1) params:set_action("analogdrive_mod", function(v) engine.analogdrive_mod(v - 1) font.update_fx_cache("analogdrive_mod", v) end)
     params:add_control("analogdrive_drive", "Drive", controlspec.new(0, 100, 'lin', 1, 60, "%")) params:set_action("analogdrive_drive", function(v) engine.analogdrive_drive(v * 0.01) end)
     params:add_control("analogdrive_tone", "Tone", controlspec.new(0, 100, 'lin', 1, 60, "%")) params:set_action("analogdrive_tone", function(v) engine.analogdrive_tone(v * 0.01) end)
     params:add_control("analogdrive_mode", "Style", controlspec.new(0, 100, 'lin', 1, 75, "%")) params:set_action("analogdrive_mode", function(v) engine.analogdrive_mode(v * 0.01) end)
@@ -687,10 +687,10 @@ local function setup_params()
       params:add_taper(i.. "volume", i.. " volume", -70, 10, -15, 0, "dB") params:set_action(i.. "volume", function(value) if value == -70 then engine.volume(i, 0) else engine.volume(i, math.pow(10, value / 20)) end end)
       params:add_taper(i.. "pan", i.. " pan", -100, 100, 0, 0, "%") params:set_action(i.. "pan", function(value) engine.pan(i, value * 0.01)  end)
       params:add_taper(i.. "speed", i.. " speed", -2, 2, 0, 0) params:set_action(i.. "speed", function(value) if abs(value) < 0.01 then engine.speed(i, 0) else engine.speed(i, value) end end)
-      params:add_taper(i.. "density", i.. " density", 0.1, 250, 3.5, 5) params:set_action(i.. "density", function(value) engine.density(i, clocksync.grain_density(i) or value) end)
+      params:add_taper(i.. "density", i.. " density", 0.1, 250, 2.5, 5) params:set_action(i.. "density", function(value) engine.density(i, clocksync.grain_density(i) or value) end)
       params:add_control(i.. "pitch", i.. " pitch", controlspec.new(-48, 48, "lin", 1, 0, "st")) params:set_action(i.. "pitch", function(value) local scale = params:string("pitch_quantize_scale") local quantized = SU.quantize(value, scale) engine.pitch_offset(i, math.pow(0.5, -quantized / 12) * arp.ratio(i)) end)
       params:add_taper(i.. "jitter", i.. " jitter", 0, 999900, 250, 10, "ms") params:set_action(i.. "jitter", function(value) engine.jitter(i, value * 0.001) end)
-      params:add_taper(i.. "size", i.. " size", 20, 5000, 500, 1, "ms") params:set_action(i.. "size", function(value) engine.size(i, math.min(value, arp.max_size_ms(i)) * 0.001) end)
+      params:add_taper(i.. "size", i.. " size", 20, 5000, 1000, 1, "ms") params:set_action(i.. "size", function(value) engine.size(i, math.min(value, arp.max_size_ms(i)) * 0.001) end)
       params:add_taper(i.. "spread", i.. " spread", 0, 100, 60, 0, "%") params:set_action(i.. "spread", function(value) engine.spread(i, value * 0.01) end)
       params:add_control(i.. "seek", i.. " seek", controlspec.new(0, 100, "lin", 0.01, 0, "%")) params:set_action(i.. "seek", function(value) engine.seek(i, value * 0.01) end) params:lookup_param(i.."seek").save = false
     end
@@ -844,6 +844,12 @@ local function randomize(n)
     if morph.amount > 0 and morph.amount < 100 then do_capture_temp_scene() end
 end
 
+local function offset_key_to_db(k, fallback_param)
+    return k and ((params:get(k) + 1) * 40 - 70) or params:get(fallback_param)
+end
+local function db_to_offset_value(db)
+    return clamp((db + 70) / 40 - 1, -0.99, 0.99)
+end
 local function handle_volume_lfo(track, delta, crossfade_mode)
     if key_state[2] or key_state[3] then return end
     local p = _HK.vol[track]
@@ -858,21 +864,21 @@ local function handle_volume_lfo(track, delta, crossfade_mode)
         local od = -delta
         if k1 then params:delta(k1, lfo_delta) else params:delta(p, vol_delta) end
         if k2 then params:delta(k2, od * 1.5)  else params:delta(op, od * 3)    end
-        local c1 = k1 and ((params:get(k1) + 1) * 40 - 70) or params:get(p)
-        local c2 = k2 and ((params:get(k2) + 1) * 40 - 70) or params:get(op)
+        local c1 = offset_key_to_db(k1, p)
+        local c2 = offset_key_to_db(k2, op)
         _G.master_vol_diff = c1 - c2
         return
     end
-    local c1 = k1 and ((params:get(k1) + 1) * 40 - 70) or params:get(p)
-    local c2 = k2 and ((params:get(k2) + 1) * 40 - 70) or params:get(op)
+    local c1 = offset_key_to_db(k1, p)
+    local c2 = offset_key_to_db(k2, op)
     if c1 > (k1 and -69.5 or -70) and c2 > (k2 and -69.5 or -70) then _G.master_vol_diff = c1 - c2 end
     local diff = _G.master_vol_diff or 0
     local lk, lp, fk, fp, sign
     if diff >= 0 then lk, lp, fk, fp, sign = k1, p, k2, op, -1 else lk, lp, fk, fp, sign = k2, op, k1, p,  1 end
     if lk then params:delta(lk, lfo_delta) else params:delta(lp, vol_delta) end
-    local lead = lk and ((params:get(lk) + 1) * 40 - 70) or params:get(lp)
+    local lead = offset_key_to_db(lk, lp)
     local fdb  = clamp(lead + sign * diff, -70, 10)
-    if fk then params:set(fk, clamp((fdb + 70) / 40 - 1, -0.99, 0.99)) else params:set(fp, fdb) end
+    if fk then params:set(fk, db_to_offset_value(fdb)) else params:set(fp, fdb) end
 end
 
 local _LINK_SPEED = {pitch = 1, size = 5, density = 0.5}
@@ -1005,7 +1011,7 @@ local function handle_standard_param(track, config, delta)
         params:delta(p, delta)
         if sym then params:delta(pkeys[3 - track], delta) end
     end
-    if config.param == "size" and arp.is_running() then
+    if config.param == "size" and arp.is_running() and delta < 0 then
         local cap = arp.max_size_ms(track)
         if params:get(p) > cap then params:set(p, cap) end
         if sym then local op = pkeys[3 - track] local ocap = arp.max_size_ms(3 - track) if params:get(op) > ocap then params:set(op, ocap) end end
@@ -1094,7 +1100,6 @@ local function find_or_create_lfo_for_param(track, param_name, only_existing, cr
                     params:set(MK.shape[i], default_shape)
                     params:set(MK.freq[i], random_float(0.1, 0.7))
                 end
-                if lfo.walk_all then params:set(MK.shape[i], 4) end
                 params:set(MK.depth[i], create_with_depth and 0.01 or 0)
                 params:set(MK.offset[i], offset)
                 params:set(MK.lfo[i], create_with_depth and 2 or 1)

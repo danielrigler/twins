@@ -129,7 +129,6 @@ function Mirror.copy_voice_params(from_track, to_track, mirror_pan)
                             d_obj.depth = src_depth
                             d_obj.offset = src_offset
                             d_obj.phase = current_phase
-                            d_obj.base_freq = src_freq
                             local in_symmetry = params.lookup["symmetry"] and params:get("symmetry") == 1
                             if in_symmetry and src_param_name ~= "volume" and s_obj then
                                 local is_pan = (src_param_name == "pan")

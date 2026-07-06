@@ -164,6 +164,7 @@ local function start_clock()
           sleep((1 - carry) / hz)
         end
         carry = 0
+        hz = clamp(get_hz(v), 0.1, 250)
         if tick(v, hz) then
           if clocksync.grain_synced() then
             sync(get_tempo() / (60 * hz) * 0.5)

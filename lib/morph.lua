@@ -1,6 +1,6 @@
 local morph = {}
 morph.voice_params = {"speed","pitch","jitter","size","density","spread","pan","seek","cutoff","hpf","lpf_gain","granular_gain","subharmonics_3","subharmonics_2","subharmonics_1","overtones_1","overtones_2","smoothbass","ratcheting_prob","size_variation","amp_randomize","direction_mod","density_mod_amt","pitch_random_scale_type","pitch_random_prob","pitch_mode","probability","eq_low_gain","eq_mid_gain","eq_high_gain","env_select","volume"}
-morph.global_params = {"delay_mix","delay_time","delay_feedback","delay_lowpass","delay_highpass","wiggle_depth","wiggle_rate","stereo","reverb_mix","rev_decay","rev_damp","rev_predelay","rev_prefilter","rev_moddepth","rev_modrate","rev_hpf","shimmer_mix","shimmer_preset","lock_shimmer","tape_mix","sine_drive_wet","wobble_mix","wobble_amp","wobble_rpm","flutter_amp","flutter_freq","flutter_var","chew_depth","chew_freq","chew_variance","lossdegrade_mix","Width","dimension_mix","haas","rspeed","monobass_mix","bitcrush_mix","bitcrush_rate","bitcrush_bits","evolution","evolution_range","evolution_rate","lock_eq","lock_tape","lock_reverb","lock_delay","global_lfo_freq_scale","global_lfo_depth_scale","pitch_quantize_scale","pitch_lag","shimmer_mix1","shimmer_oct1","pitchv1","lowpass1","hipass1","fbDelay1","fb1", "glitch_probability", "glitch_ratio", "glitch_mix", "glitch_min_length", "glitch_max_length", "glitch_reverse", "glitch_pitch", "sine_lfos", "shimmer_mod1", "bitcrush_mod", "clock_lfo_div", "clock_lfo_div2", "clock_sync_delay_div", "clock_reseek_div", "resonator_mix", "resonator_decay", "resonator_root", "resonator_tone", "wavefold_mix", "wavefold_drive", "wavefold_sym", "ringmod_mix", "ringmod_rate", "delay_duck", "analogdrive_mix", "analogdrive_drive", "analogdrive_tone", "analogdrive_mode" }
+morph.global_params = {"delay_mix","delay_time","delay_feedback","delay_lowpass","delay_highpass","wiggle_depth","wiggle_rate","stereo","reverb_mix","rev_decay","rev_damp","rev_predelay","rev_prefilter","rev_moddepth","rev_modrate","rev_hpf","shimmer_mix","shimmer_preset","lock_shimmer","tape_mix","sine_drive_wet","wobble_mix","wobble_amp","wobble_rpm","flutter_amp","flutter_freq","flutter_var","chew_depth","chew_freq","chew_variance","lossdegrade_mix","Width","dimension_mix","haas","rspeed","monobass_mix","bitcrush_mix","bitcrush_rate","bitcrush_bits","evolution","evolution_range","evolution_rate","lock_eq","lock_tape","lock_reverb","lock_delay","global_lfo_freq_scale","global_lfo_depth_scale","pitch_quantize_scale","pitch_lag","shimmer_mix1","shimmer_oct1","pitchv1","lowpass1","hipass1","fbDelay1","fb1", "glitch_probability", "glitch_ratio", "glitch_mix", "glitch_min_length", "glitch_max_length", "glitch_reverse", "glitch_pitch", "sine_lfos", "shimmer_mod1", "bitcrush_mod", "clock_lfo_div", "clock_lfo_div2", "clock_sync_delay_div", "clock_reseek_div", "resonator_mix", "resonator_decay", "resonator_root", "resonator_tone", "wavefold_mix", "wavefold_drive", "wavefold_sym", "ringmod_mix", "ringmod_rate", "delay_duck", "analogdrive_mix", "analogdrive_drive", "analogdrive_tone", "analogdrive_mode", "analogdrive_mod" }
 local param_registry = {}
 morph.amount = 0
 morph.scene_mode = "off"
@@ -108,6 +108,10 @@ function morph.recall_scene(track, scene)
     if invalidate_lfo_cache_ref then invalidate_lfo_cache_ref() end
 end
 
+local function _lerp_div_index(dA, dB, t, t_inv)
+    if dA and dB then return math.floor(dA * t_inv + dB * t + 0.5) end
+end
+
 function morph.restore_synced_divisions()
     if not (clocksync_ref and clocksync_ref.grain_synced()) then return end
     local s1 = morph.scene_data[1] or {}
@@ -120,9 +124,7 @@ function morph.restore_synced_divisions()
         local key = v .. "density_div"
         local dA = scene1_1[key] or scene2_1[key]
         local dB = scene1_2[key] or scene2_2[key]
-        local idx
-        if dA and dB then idx = math.floor(dA * t_inv + dB * t + 0.5)
-        else idx = dA or dB end
+        local idx = _lerp_div_index(dA, dB, t, t_inv) or dA or dB
         if idx then clocksync_ref.set_grain_div_index(v, idx) end
     end
 end
@@ -321,7 +323,8 @@ function morph.apply()
             if not skip_param_set[dkey] then
                 local dA = scene1_1[dkey .. "_div"] or scene2_1[dkey .. "_div"]
                 local dB = scene1_2[dkey .. "_div"] or scene2_2[dkey .. "_div"]
-                if dA and dB then clocksync_ref.set_grain_div_index(v, math.floor(dA * _t_inv + dB * _t + 0.5)) end
+                local idx = _lerp_div_index(dA, dB, _t, _t_inv)
+                if idx then clocksync_ref.set_grain_div_index(v, idx) end
             end
             skip_param_set[dkey] = true
         end

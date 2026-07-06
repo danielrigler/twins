@@ -7,8 +7,6 @@ local assigned_params = {}
 local lfo_paused = false
 local saved_shapes = {}
 lfo.sine_all = false
-lfo.walk_all = false
-lfo.on_state_change = nil
 local global_depth_scale = 1
 function lfo.set_global_depth_scale(v) global_depth_scale = v or 1 end
 local clocksync_ref = nil
@@ -89,7 +87,6 @@ local function quantize_pitch_to_scale(value, scale_name)
     return out
 end
 lfo.scale_utils = {normalize = normalize_scale_name, get_array = get_scale_array, quantize = quantize_pitch_to_scale}
-function lfo.clear_scale_cache() scale_array_cache = {} snap_lut_cache = {} end
 function lfo.scale(v, old_min, old_max, new_min, new_max) return (v - old_min) * (new_max - new_min) / (old_max - old_min) + new_min end
 function lfo.set_pause(paused) lfo_paused = paused end
 function lfo.set_sine_all(enabled)
@@ -192,7 +189,7 @@ function lfo.get_parameter_range(param_name, for_randomize)
     return lo, hi
 end
 for i = 1, number_of_outputs do
-    lfo[i] = {freq = 0.05, phase = 0, waveform = "walk", shape_int = 4, slope = 0, depth = 50, offset = 0, prev = 0, walk_value = 0, walk_velocity = 0, sync_to = nil, sync_invert = false, active = false, target_idx = 1, target_name = "none", is_pitch = false, is_jitter = false, is_size = false, is_density = false, is_volume = false, is_pan = false, track_num = "1", last_val = nil, has_user_limits = false, min_key = nil, max_key = nil, def_min = 0, def_max = 100, clock_phase_inc = nil}
+    lfo[i] = {freq = 0.05, phase = 0, waveform = "walk", shape_int = 4, slope = 0, depth = 50, offset = 0, prev = 0, walk_value = 0, walk_velocity = 0, sync_to = nil, sync_invert = false, active = false, target_idx = 1, target_name = "none", is_pitch = false, is_jitter = false, is_size = false, is_density = false, is_volume = false, is_pan = false, track_num = "1", last_val = nil, has_user_limits = false, min_key = nil, max_key = nil, def_min = 0, def_max = 100}
 end
 local function classify_target(i, target_idx)
     local obj = lfo[i]
@@ -622,13 +619,11 @@ local lfo_metro = nil
 function lfo.recompute_freq(i)
     local gs = pget("global_lfo_freq_scale") or 1
     local base = pget(FREQ_KEYS[i]) or 0.05
-    lfo[i].base_freq = base
     lfo[i].freq = base * gs
 end
 function lfo.apply_clock_sync(hz1, hz2)
     if hz1 == nil then
         for i = 1, number_of_outputs do
-            lfo[i].clock_phase_inc = nil
             lfo.recompute_freq(i)
         end
         return
@@ -636,17 +631,7 @@ function lfo.apply_clock_sync(hz1, hz2)
     hz2 = hz2 or hz1
     for i = 1, number_of_outputs do
         local hz = (lfo[i].track_num == "2") and hz2 or hz1
-        lfo[i].clock_phase_inc = hz
         lfo[i].freq = hz
-    end
-end
-function lfo.reset_phases()
-    for i = 1, number_of_outputs do
-        local obj = lfo[i]
-        obj.phase = 0
-        obj.walk_value = 0
-        obj.walk_velocity = 0
-        obj.prev = 0
     end
 end
 function lfo.snapshot_phases()
@@ -670,7 +655,6 @@ function lfo.restore_phases(snap)
         end
     end
 end
-local function fire_state_change() if lfo.on_state_change then lfo.on_state_change() end end
 function lfo.init()
     for i = 1, number_of_outputs do
         params:add_separator("LFO " .. i)
@@ -680,14 +664,12 @@ function lfo.init()
             lfo[i].last_val = nil
             update_active_lfos()
             lfo.invalidate_lfo_param_cache()
-            fire_state_change()
         end)
         params:add_option(TARGET_KEYS[i], i .. " target", lfo.lfo_targets, 1)
         params:set_action(TARGET_KEYS[i], function(v)
             classify_target(i, v)
             update_active_lfos()
             lfo.invalidate_lfo_param_cache()
-            fire_state_change()
         end)
         params:add_option(SHAPE_KEYS[i], i .. " shape", options.lfotypes, 4)
         params:set_action(SHAPE_KEYS[i], function(v)
@@ -700,7 +682,7 @@ function lfo.init()
         params:add_control(OFFSET_KEYS[i], i .. " offset", controlspec.new(-0.99, 0.99, "lin", 0.001, 0, ""))
         params:set_action(OFFSET_KEYS[i], function(v) lfo[i].offset = v end)
         params:add_control(FREQ_KEYS[i], i .. " freq", controlspec.new(0.01, 10.00, "lin", 0.01, 0.05, ""))
-        params:set_action(FREQ_KEYS[i], function(v) lfo[i].base_freq = v lfo.recompute_freq(i) end)
+        params:set_action(FREQ_KEYS[i], function(v) lfo.recompute_freq(i) end)
     end
     for i = 1, number_of_outputs do
         lfo[i].active = pget(LFO_KEYS[i]) == 2

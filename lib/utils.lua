@@ -30,6 +30,26 @@ function utils.random_float(l, h)
     return l + math.random() * (h - l)
 end
 
+function utils.capture_lfo_slot(i, keys)
+    return {
+        state  = params:get(keys.lfo[i]),
+        target = params:get(keys.target[i]),
+        shape  = params:get(keys.shape[i]),
+        freq   = params:get(keys.freq[i]),
+        depth  = params:get(keys.depth[i]),
+        offset = params:get(keys.offset[i]),
+    }
+end
+
+function utils.apply_lfo_slot(i, keys, data)
+    params:set(keys.target[i], data.target)
+    params:set(keys.shape[i],  data.shape)
+    params:set(keys.freq[i],   data.freq)
+    params:set(keys.depth[i],  data.depth)
+    params:set(keys.offset[i], data.offset)
+    params:set(keys.lfo[i],    data.state)
+end
+
 local _mirror_cache = {}
 function utils.mirror_param_name(param)
     local m = _mirror_cache[param]
@@ -39,14 +59,6 @@ function utils.mirror_param_name(param)
     end)
     _mirror_cache[param] = m
     return m
-end
-
-function utils.is_locked(key)
-    return params.lookup[key] ~= nil and params:get(key) == 2
-end
-
-function utils.is_param_locked(track, suffix)
-    return utils.is_locked(track .. "lock_" .. suffix)
 end
 
 return utils

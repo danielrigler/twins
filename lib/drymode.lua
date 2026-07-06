@@ -1,4 +1,5 @@
 local drymode = {}
+local utils = include("lib/utils")
 local dry_mode_state = false
 local dry_mode_state2 = false
 local prev_settings = nil
@@ -98,39 +99,29 @@ end
 
 local function store_and_disable_lfos(targets, storage)
     if not lfo or not lfo.lfo_targets then return end
+    local keys = lfo.keys
 
     for i = 1, 16 do
-        local target_index = params:get(i.."lfo_target")
+        local target_index = params:get(keys.target[i])
         local target = lfo.lfo_targets[target_index]
 
         if targets[target] then
-            storage[i] = {
-                state = params:get(i.."lfo"),
-                target_index = target_index,
-                shape = params:get(i.."lfo_shape"),
-                depth = params:get(i.."lfo_depth"),
-                offset = params:get(i.."offset"),
-                freq = params:get(i.."lfo_freq")
-            }
-            params:set(i.."lfo", 1)
+            storage[i] = utils.capture_lfo_slot(i, keys)
+            params:set(keys.lfo[i], 1)
         end
     end
 end
 
 local function restore_lfos(lfo_table)
     if not lfo_table then return end
+    local keys = lfo.keys
 
     local was_paused = params:get("lfo_pause")
     params:set("lfo_pause", 1)
 
     for i, data in pairs(lfo_table) do
         if data then
-            params:set(i.."lfo_target", data.target_index)
-            params:set(i.."lfo_shape", data.shape)
-            params:set(i.."lfo_depth", data.depth)
-            params:set(i.."offset", data.offset)
-            params:set(i.."lfo_freq", data.freq)
-            params:set(i.."lfo", data.state)
+            utils.apply_lfo_slot(i, keys, data)
         end
     end
 
@@ -186,18 +177,6 @@ function drymode.toggle_dry_mode2()
             restore_params(prev_settings2.stereo, true)
         end
     end
-end
-
-function drymode.get_dry_mode_state()
-    return dry_mode_state
-end
-
-function drymode.get_dry_mode2_state()
-    return dry_mode_state2
-end
-
-function drymode.is_any_dry_mode_active()
-    return dry_mode_state or dry_mode_state2
 end
 
 return drymode

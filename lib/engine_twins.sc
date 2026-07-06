@@ -304,7 +304,7 @@ alloc {
             dryAmp = Amplitude.kr(input.sum, 0.005, 0.05);
             duck = LagUD.kr((1 - (dryAmp.sqrt * duck_amt * 6).clip(0, 1)), 0.15, 0.02);
             SendReply.kr(Impulse.kr(20), '/delay_duck', [duck]);
-            Out.ar(outBus, wet * mix * 1.3 * duck);
+            Out.ar(outBus, wet * mix * 1.4 * duck);
         }).add;
 
         SynthDef(\reverb, {
@@ -518,8 +518,9 @@ alloc {
         }).add;
 
         SynthDef(\analogdrive, {
-            arg bus, mix = 0.0, drive = 0.6, tone = 0.6, mode = 0.75;
+            arg bus, mix = 0.0, drive = 0.6, tone = 0.6, mode = 0.75, mod_mix = 0;
             var dry = In.ar(bus, 2);
+            var actualMix = mix * Select.kr(mod_mix, [1.0, LFNoise1.kr(0.25).range(0.0, 1.0)]);
             var pregain = dry * drive.linexp(0, 1, 1, 100);
             var clipR = pregain.clip2(0.7); 
             var outR = LPF.ar(clipR, tone.linexp(0, 1, 400, 15000));
@@ -527,7 +528,7 @@ alloc {
             var outM = LPF.ar(BPF.ar(clipM, tone.linexp(0, 1, 800, 7500), 1.5), 6000);
             var wet = SelectX.ar(mode, [outM, outR]);
             var comp = drive.linexp(0, 1, 1.0, 0.12);
-            ReplaceOut.ar(bus, XFade2.ar(dry, wet * comp, mix * 2 - 1));
+            ReplaceOut.ar(bus, XFade2.ar(dry, wet * comp, actualMix * 2 - 1));
         }).add;
 
         SynthDef(\rotate, {
@@ -656,6 +657,7 @@ alloc {
         this.addCommand("analogdrive_drive", "f", { arg msg; analogDriveEffect.set(\drive, msg[1]); });
         this.addCommand("analogdrive_tone", "f", { arg msg; analogDriveEffect.set(\tone, msg[1]); });
         this.addCommand("analogdrive_mode", "f", { arg msg; analogDriveEffect.set(\mode, msg[1]); });
+        this.addCommand("analogdrive_mod", "i", { arg msg; analogDriveEffect.set(\mod_mix, msg[1]); });
 
         this.addCommand("cutoff", "if", { arg msg; var voice = msg[1] - 1; currentCutoff[voice] = msg[2]; filterSynths[voice].set(\cutoff, msg[2]); this.updateFilterRun(voice); });
         this.addCommand("lpf_gain", "if", { arg msg; var voice = msg[1] - 1; currentlpf_gain[voice] = msg[2]; filterSynths[voice].set(\lpf_gain, msg[2]); this.updateFilterRun(voice); });
