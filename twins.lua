@@ -760,7 +760,6 @@ end
 local _rand_can_randomize = {}
 local _rand_targets = {}
 
-
 local function randomize(n)
     if randomize_metro[n] then stop_metro_safe(randomize_metro[n]) else randomize_metro[n] = metro.init() end
     local m_rand = randomize_metro[n]
