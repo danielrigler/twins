@@ -759,7 +759,6 @@ end
 
 local _rand_can_randomize = {}
 local _rand_targets = {}
-
 local function randomize(n)
     if randomize_metro[n] then stop_metro_safe(randomize_metro[n]) else randomize_metro[n] = metro.init() end
     local m_rand = randomize_metro[n]
@@ -769,12 +768,10 @@ local function randomize(n)
     for k in pairs(_rand_targets) do _rand_targets[k] = nil end
     local can_randomize = _rand_can_randomize
     local targets = _rand_targets
-
     local param_names = _HK.rand_names
     local pitch_size_density_linked = params:get("global_pitch_size_density_link") == 1
     for i = 1, #param_names do can_randomize[param_names[i]] = not is_param_locked(n, param_names[i]) end
     if can_randomize.pitch then randomize_pitch(n, other_track, symmetry) end
-
     if not m_rand then print("Error: Hardware metro limit reached!") return end
     for i = 1, #param_names do
         local key = param_names[i]
@@ -811,9 +808,7 @@ local function randomize(n)
         end
         ::continue::
     end
-    if clocksync.lfo_synced() then
-        clocksync.randomize_lfo_div(n, symmetry and other_track or nil)
-    end
+    if clocksync.lfo_synced() then clocksync.randomize_lfo_div(n, symmetry and other_track or nil) end
     if next(targets) then
         m_rand.time = 1 / 30
         m_rand.event = function(count)
