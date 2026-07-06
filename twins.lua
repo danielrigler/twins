@@ -601,7 +601,7 @@ local function setup_params()
     for i = 1, 2 do
       params:add_control(i.."cutoff",i.." LPF",controlspec.new(20,20000,"exp",0,20000,"Hz")) params:set_action(i.."cutoff", function(value) engine.cutoff(i, value) font.update_fx_cache(i.."cutoff", value) end)
       params:add_control(i.."hpf",i.." HPF",controlspec.new(20,20000,"exp",0,20,"Hz")) params:set_action(i.."hpf", function(value) engine.hpf(i, value) font.update_fx_cache(i.."hpf", value) end)
-      params:add_taper(i.."lpf_gain", i.." Q", 0, 1, 0.25, 1, "") params:set_action(i.."lpf_gain", function(value) engine.lpf_gain(i, 4 * value) end)
+      params:add_taper(i.."lpf_gain", i.." Q", 0, 1, 0, 1, "") params:set_action(i.."lpf_gain", function(value) engine.lpf_gain(i, 4 * value) end)
     end
     params:add_separator("                   ")
     params:add_binary("randomizefilters", "RaNd0m1ze!", "trigger", 0) params:set_action("randomizefilters", function(value) for i = 1, 2 do local cutoff if is_param_locked(i, "cutoff") then cutoff = params:get(i.."cutoff") else cutoff = is_lfo_active_for_param(i.."cutoff") and math.random(20, 20000) or 20000 params:set(i.."cutoff", cutoff) params:set(i.."lpf_gain", math.random()) end if not is_param_locked(i, "hpf") then params:set(i.."hpf", math.random(20, floor(cutoff))) end end end)
