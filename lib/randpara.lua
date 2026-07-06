@@ -296,8 +296,6 @@ end
 
 local param_configs = {
   dverb = { lock_param = "lock_reverb", params = {
-    {name="shimmer_preset", prob=0.15, default=4,    random=function() return math.random(3,5)           end, direct_set=true},
-    {name="shimmer_mix",    prob=0.25,  default=0,    random=function() return math.random(0,25)          end},
     {name="rev_decay",      prob=0.5,  default=80,   random=function() return random_float(30,95)        end},
     {name="rev_damp",       prob=0.5,  default=40,   random=function() return random_float(5,80)        end},
     {name="rev_predelay",   prob=0.25,  default=20,   random=function() return math.random(0,120)         end, direct_set=true},
