@@ -7,7 +7,7 @@ local prev_settings2 = nil
 local lfo
 
 local DRY_VALUES = {
-    reverb_mix = 0,
+    reverb_mix = -40,
     delay_mix = 0,
     bitcrush_mix = 0,
     glitch_ratio = 0,

@@ -6,7 +6,7 @@
 --            by: @dddstudio                       
 -- 
 --                          
---                           v0.71
+--                           v0.72
 -- E1: Master Volume
 -- K1+E2/E3: Volume
 -- K1+E1: Crossfade/Morph
@@ -108,6 +108,14 @@ local function _pobj(id)
 end
 local function pget(id) local o = _pobj(id) if o then return o:get() end return nil end
 local function pset(id, v, silent) local o = _pobj(id) if o then o:set(v, silent) end end
+local function nrev_set_mix(db)
+    if db <= -40 then
+        params:set("reverb", 1)
+        return
+    end
+    params:set("reverb", 2)
+    params:set("rev_eng_input", db)
+end
 local TRACK_KEYS = {}
 for t = 1, 2 do
     TRACK_KEYS[t] = {
@@ -125,8 +133,7 @@ local _HK = {
     reso_degs = {0, 7, 12, 19, 24},
     rand_names = {"speed", "jitter", "size", "density", "spread", "pitch", "seek"},
     TAP_TIMEOUT = 2, LONGPRESS = 1, UI_FPS = 60,
-    audio_exts = {[".wav"]=true,[".aif"]=true,[".aiff"]=true,[".flac"]=true},
-    shimmer_presets = {{oct = 0.25}, {oct = 0.5}, {oct = 1}, {oct = 2}, {oct = 4}}}
+    audio_exts = {[".wav"]=true,[".aif"]=true,[".aiff"]=true,[".flac"]=true}}
 local function lock_key(track_num, param)
     local tk = _lock_key_cache[track_num]
     if not tk then tk = {} _lock_key_cache[track_num] = tk end
@@ -459,20 +466,34 @@ local function setup_params()
     params:add_binary("randomize_delay_params", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_delay_params", function() undo.checkpoint() randpara.randomize_delay_params(steps) end)
     params:add_option("lock_delay", "Lock Parameters", {"off", "on"}, 1)
 
-    params:add_group("R3VERB", 14)
-    params:add_taper("reverb_mix", "Mix", 0, 100, 0, 0, "%") params:set_action("reverb_mix", function(value) engine.reverb_mix(value * 0.01) font.update_fx_cache("reverb_mix", value) end)
-    params:add_taper("shimmer_mix", "Shimmer", 0, 100, 0, 0, "%") params:set_action("shimmer_mix", function(value) engine.shimmer_mix(value * 0.01) end)
-    params:add_option("shimmer_preset", "Pitch Shift", {"-2 oct", "-1 oct", "0", "+1 oct", "+2 oct"}, 4) params:set_action("shimmer_preset", function(idx) local preset = _HK.shimmer_presets[idx] engine.shimmer_oct(preset.oct) end)
-    params:add_taper("rev_decay", "Decay", 0, 100, 80, 0, "%") params:set_action("rev_decay", function(value) engine.rev_decay(value * 0.01) end)
-    params:add_taper("rev_damp", "Damping", 0, 100, 40, 0, "%") params:set_action("rev_damp", function(value) engine.rev_damp(value * 0.01) end)
-    params:add_taper("rev_predelay", "Pre Delay", 0, 500, 25, 0, "ms") params:set_action("rev_predelay", function(value) engine.rev_predelay(value) end)
-    params:add_taper("rev_prefilter", "Pre Filter", 0, 100, 40, 0, "%") params:set_action("rev_prefilter", function(value) engine.rev_prefilter(value * 0.01) end)
-    params:add_control("rev_hpf", "High Pass", controlspec.new(20, 1000, 'exp', 1, 20, "Hz")) params:set_action('rev_hpf', function(value) engine.rev_hpf(value) end)
-    params:add_taper("rev_moddepth", "Mod Depth", 0, 100, 35, 0, "%") params:set_action("rev_moddepth", function(value) engine.rev_moddepth(value * 0.01) end)
-    params:add_taper("rev_modrate", "Mod Rate", 0.1, 5, 2.5, 0, "Hz") params:set_action("rev_modrate", function(value) engine.rev_modrate(value) end)
-    params:add_taper("rev_lowmult", "Bass Decay", 0, 300, 150, 0, "%") params:set_action("rev_lowmult", function(value) engine.rev_lowmult(value * 0.01) end)
-    params:add_separator("  ")
-    params:add_binary("randomize_dverb", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_dverb", function() undo.checkpoint() randpara.randomize_dverb_params(steps) end)
+    local rev_sync = false
+    local rev_proxies = {
+        {"rv_predelay", "rev_pre_delay",    "Pre-delay"},
+        {"rv_lffc",     "rev_lf_fc",        "LPF"},
+        {"rv_lowtime",  "rev_low_time",     "Low Time"},
+        {"rv_midtime",  "rev_mid_time",     "Mid Time"},
+        {"rv_hfdamp",   "rev_hf_damping",   "Damping"}}
+    local rev_present = {}
+    for _, p in ipairs(rev_proxies) do if params.lookup[p[2]] then rev_present[#rev_present + 1] = p end end
+    
+    params:add_group("R3VERB", 3 + #rev_present)
+    params:add_taper("reverb_mix", "Mix", -40, 18, -40, 0, "dB") params:set_action("reverb_mix", function(value) nrev_set_mix(value) font.update_fx_cache("reverb_mix", value) end)
+    for _, p in ipairs(rev_present) do
+        local proxy_id, sys_id, name = p[1], p[2], p[3]
+        local sp = params.params[params.lookup[sys_id]]
+        params:add{type = "control", id = proxy_id, name = name, controlspec = sp.controlspec}
+        params:set(proxy_id, params:get(sys_id), true)
+        params:set_action(proxy_id, function(v)
+            if rev_sync then return end
+            rev_sync = true; params:set(sys_id, v); rev_sync = false
+        end)
+        local orig = sp.action
+        sp.action = function(v)
+            if orig then orig(v) end
+            if not rev_sync then rev_sync = true; params:set(proxy_id, v, true); rev_sync = false end
+        end
+    end
+    params:add_separator("           ")
     params:add_option("lock_reverb", "Lock Parameters", {"off", "on"}, 1)
 
     params:add_group("SHIMMER", 10)
@@ -695,6 +716,7 @@ local function setup_params()
       params:add_control(i.. "seek", i.. " seek", controlspec.new(0, 100, "lin", 0.01, 0, "%")) params:set_action(i.. "seek", function(value) engine.seek(i, value * 0.01) end) params:lookup_param(i.."seek").save = false
     end
     params:bang()
+    params:set("reverb_mix", -40) params:set("rv_predelay", 20) params:set("rv_lffc", 500) params:set("rv_lowtime", 3.0) params:set("rv_midtime", 11.0) params:set("rv_hfdamp", 8000)
     presets.record_defaults()
 end
 
@@ -1454,8 +1476,9 @@ local function refresh_redraw_cache()
     C.pitch_rand = (pget(K.pitch_random_prob) or 0) ~= 0
   end
 end
-local _PCT_CACHE, _INT_CACHE = {}, {}
+local _PCT_CACHE, _INT_CACHE, _DB_CACHE = {}, {}, {}
 local function fast_percent(v) v = floor(v + 0.5) local s = _PCT_CACHE[v] if not s then s = v .. "%" _PCT_CACHE[v] = s end return s end
+local function fast_db(v) if v <= -40 then return "OFF" end v = floor(v + 0.5) local s = _DB_CACHE[v] if not s then s = v .. " dB" _DB_CACHE[v] = s end return s end
 local function fast_int(v) v = floor(v + 0.5) local s = _INT_CACHE[v] if not s then s = tostring(v) _INT_CACHE[v] = s end return s end
 local _VAL_TXT = {}
 local function val_text(param, val, fmt, t, aux)
@@ -1706,7 +1729,7 @@ function redraw()
   if showing_save_message then R(1, 40, 25, 48, 10); T(LEVEL.hi, 64, 33, "SAVING...", "center") end
   if fx_popup.time and (now - fx_popup.time) < FX_POPUP_DURATION then
     if fx_popup._src ~= fx_popup.label or fx_popup._val ~= fx_popup.value then
-      local txt = fx_popup.value and (fx_popup.label .. ": " .. fast_percent(fx_popup.value)) or fx_popup.label
+      local txt = fx_popup.value and (fx_popup.label .. ": " .. ((fx_popup.label == "reverb") and fast_db(fx_popup.value) or fast_percent(fx_popup.value))) or fx_popup.label
       fx_popup._src, fx_popup._val, fx_popup._txt, fx_popup._w = fx_popup.label, fx_popup.value, txt, #txt * 5 + 8
     end
     R(1, 64 - floor(fx_popup._w * 0.5), 27, fx_popup._w, 10)

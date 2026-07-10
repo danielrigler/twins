@@ -189,7 +189,7 @@ function lfo.get_parameter_range(param_name, for_randomize)
     return lo, hi
 end
 for i = 1, number_of_outputs do
-    lfo[i] = {freq = 0.05, phase = 0, waveform = "walk", shape_int = 4, slope = 0, depth = 50, offset = 0, prev = 0, walk_value = 0, walk_velocity = 0, sync_to = nil, sync_invert = false, active = false, target_idx = 1, target_name = "none", is_pitch = false, is_jitter = false, is_size = false, is_density = false, is_volume = false, is_pan = false, track_num = "1", last_val = nil, has_user_limits = false, min_key = nil, max_key = nil, def_min = 0, def_max = 100}
+    lfo[i] = {freq = 0.05, phase = 0, waveform = "walk", shape_int = 4, slope = 0, depth = 50, offset = 0, prev = 0, walk_value = 0, walk_velocity = 0, sync_to = nil, sync_invert = false, active = false, target_idx = 1, target_name = "none", is_pitch = false, is_jitter = false, is_size = false, is_density = false, is_volume = false, is_pan = false, is_filter = false, track_num = "1", last_val = nil, has_user_limits = false, min_key = nil, max_key = nil, def_min = 0, def_max = 100}
 end
 local function classify_target(i, target_idx)
     local obj = lfo[i]
@@ -207,6 +207,7 @@ local function classify_target(i, target_idx)
         obj.is_density = (suffix == "density")
         obj.is_volume  = (suffix == "volume")
         obj.is_pan     = (suffix == "pan")
+        obj.is_filter  = (suffix == "cutoff" or suffix == "hpf")
         if USER_LIMIT_PARAMS[suffix] then
             local d = USER_LIMIT_DEFAULTS[suffix]
             obj.has_user_limits = true
@@ -221,6 +222,7 @@ local function classify_target(i, target_idx)
     else
         obj.track_num = "1"
         obj.is_pitch, obj.is_jitter, obj.is_size, obj.is_density, obj.is_volume, obj.is_pan = false, false, false, false, false, false
+        obj.is_filter = false
         obj.has_user_limits = false
         obj.min_key, obj.max_key = nil, nil
     end
@@ -587,6 +589,20 @@ function lfo.process()
                 value = center + en * wh
                 if value > size_cap then value = size_cap end
             end
+        end
+        if obj.is_filter then
+            local en = mod - obj.offset
+            local maxen = d * 0.01
+            if maxen > 1 then
+                en = en / maxen
+                maxen = 1
+            end
+            local wh = (mx - mn) * 0.5
+            local half = maxen * wh
+            local center = (obj.offset + 1) * wh + mn
+            local lo, hi = mn + half, mx - half
+            if center < lo then center = lo elseif center > hi then center = hi end
+            value = center + en * wh
         end
         if value < mn then value = mn elseif value > mx then value = mx end
         if obj.is_volume and obj.offset <= -0.9875 then value = -70 end

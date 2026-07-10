@@ -1,5 +1,17 @@
 local utils = {}
 
+utils.system_param_exclude = {
+    reverb = true, rev_eng_input = true,
+    rev_pre_delay = true, rev_lf_fc = true, rev_low_time = true,
+    rev_mid_time = true, rev_hf_damping = true,
+    monitor_level = true, input_level = true, input_level_l = true, input_level_r = true,
+    output_level = true, headphone_level = true, screen_brightness = true,
+    clock_source = true, clock_tempo = true, clock_crow_in_div = true,
+    clock_crow_out_div = true, clock_link_quantum = true, clock_link_start_stop_sync = true,
+    midi_out_clock = true, midi_in_clock = true,
+    enc_sens_default = true, key_repeat_initial = true, key_repeat_period = true,
+}
+
 local running_metros = {}
 
 function utils.metro_start(m)

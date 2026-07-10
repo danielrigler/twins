@@ -50,7 +50,7 @@ end
 
 local fx_cache = {
   delay_mix       = 0,
-  reverb_mix      = 0,
+  reverb_mix      = -40,
   shimmer_mix1    = 0,
   tape_mix        = 1,
   sine_drive_wet  = 0,
@@ -193,9 +193,9 @@ local FX_SPECS = {
   {glyph = "V", lock = nil,            show = function(c) return c.analogdrive_mix > 0 end,           val = function(c) return c.analogdrive_mod == 2 and c.analogdrive_mix * _drive_mod_lfo(_draw_now) or c.analogdrive_mix end},
   {glyph = "G", lock = "lock_glitch",  show = function(c) return c.glitch_ratio > 0 and c.glitch_mix > 0 end, val = function(c) return c.glitch_ratio end},
   {glyph = "T", lock = "lock_tape",    show = tape_active,                                            val = tape_intensity},
-  {glyph = "D", lock = "lock_delay",   show = function(c) return c.delay_mix > 0 end,                 val = function(c) return c.delay_mix end, fade = function() return _delay_duck_gain end},
   {glyph = "X", lock = "lock_shimmer", show = function(c) return c.shimmer_mix1 > 0 end,              val = function(c) return c.shimmer_mod1 == 2 and c.shimmer_mix1 * _shimmer_mod_lfo(_draw_now) or c.shimmer_mix1 end},
-  {glyph = "R", lock = "lock_reverb",  show = function(c) return c.reverb_mix > 0 end,                val = function(c) return c.reverb_mix end},
+  {glyph = "D", lock = "lock_delay",   show = function(c) return c.delay_mix > 0 end,                 val = function(c) return c.delay_mix end, fade = function() return _delay_duck_gain end},
+  {glyph = "R", lock = "lock_reverb",  show = function(c) return c.reverb_mix > -40 end,              val = function(c) return util.linlin(-40, 18, 0, 100, c.reverb_mix) end},
   {glyph = "Z", lock = nil,            show = stereo_active,                                          val = stereo_intensity},
 }
 

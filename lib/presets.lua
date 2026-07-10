@@ -1,5 +1,6 @@
 local presets = {}
 local NameSizer = include("lib/preset_names")
+local utils = include("lib/utils")
 
 presets.menu_open      = false
 presets.menu_mode      = "load"
@@ -108,15 +109,7 @@ function presets.list_presets()
     return list
 end
 
-local SYSTEM_PARAMS_EXCLUDE = {
-    reverb=true, reverb_eng_cut=true, reverb_eng_dry=true,
-    monitor_level=true, input_level=true, input_level_l=true, input_level_r=true,
-    output_level=true, headphone_level=true, screen_brightness=true,
-    clock_source=true, clock_tempo=true, clock_crow_in_div=true,
-    clock_crow_out_div=true, clock_link_quantum=true, clock_link_start_stop_sync=true,
-    midi_out_clock=true, midi_in_clock=true,
-    enc_sens_default=true, key_repeat_initial=true, key_repeat_period=true,
-}
+local SYSTEM_PARAMS_EXCLUDE = utils.system_param_exclude
 
 local function params_snapshot()
     local state = {}

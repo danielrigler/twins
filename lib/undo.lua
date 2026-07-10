@@ -9,16 +9,10 @@ local keys    = nil
 local on_before_restore, on_after_restore, on_action
 local capture_extra, restore_extra
 local EXCLUDE = {
-    reverb = true, reverb_eng_cut = true, reverb_eng_dry = true,
-    monitor_level = true, input_level = true, input_level_l = true, input_level_r = true,
-    output_level = true, headphone_level = true, screen_brightness = true,
-    clock_source = true, clock_tempo = true, clock_crow_in_div = true,
-    clock_crow_out_div = true, clock_link_quantum = true, clock_link_start_stop_sync = true,
-    midi_out_clock = true, midi_in_clock = true,
-    enc_sens_default = true, key_repeat_initial = true, key_repeat_period = true,
     morph_amount = true, scene_mode = true, lfo_pause = true,
     dry_mode = true, dry_mode2 = true,
 }
+for k in pairs(utils.system_param_exclude) do EXCLUDE[k] = true end
 
 local EXCLUDE_PATTERNS = {"^%d+sample$",}
 

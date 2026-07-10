@@ -1,6 +1,6 @@
 Engine_twins : CroneEngine {
 
-var analogDriveEffect, dimensionEffect, haasEffect, bitcrushEffect, resonatorEffect, wavefoldEffect, ringmodEffect, delayEffect, reverbEffect, shimmerEffect, tapeEffect, chewEffect, widthEffect, monobassEffect, sineEffect, wobbleEffect, lossdegradeEffect, rotateEffect, glitchEffect, <silentBuffer, <buffersL, <buffersR, wobbleBuffer, glitchBuffer, mixBus, postFxBus, shimmerBus, parallelBus, <voices, bufSine, pg, <liveInputBuffersL, <liveInputBuffersR, <liveInputRecorders, <liveRecPosBuses, o, o_rec, o_grain, o_voice_peak, o_delayduck, mixToParallelRouter, parallelToPostFxRouter, finalOutputRouter, liveBufferAllocGeneration = 0, grainEnvs, pitchScaleBuffers, pitchScaleLengths, nornsAddr, voicesUsingLiveBuffer, currentSpeed, currentJitter, currentSize, currentDensity, currentDensityModAmt, currentPitch, currentPan, currentSpread, currentVolume, currentGranularGain, currentCutoff, currentHpf, currentlpf_gain, currentSubharmonics1, currentSubharmonics2, currentSubharmonics3, currentOvertones1, currentOvertones2, currentPitchMode, currentDirectionMod, currentSizeVariation, currentSmoothbass, currentLowGain, currentMidGain, currentHighGain, currentProbability, liveBufferMix = 1.0, currentPitchRandomProb, currentPitchRandomScale, currentRatchetingProb, currentPitchLag, currentGlitchRatio = 0.0, currentGlitchMix = 0.0, currentKeyHold, currentKeyGate, currentAdA, currentAdD, currentVelAmp, currentAmpRandomize, voiceBuses, filterSynths, filterRouters, eqSynths, dryGroup, drySynths, voiceAmpBuses, voiceRunning, revShimmerSynth, revShimmerSendBus, revShimmerReturnBus, currentReverbMix = 0.0, currentShimmerMix = 0.0, voiceIsStereo;
+var analogDriveEffect, dimensionEffect, haasEffect, bitcrushEffect, resonatorEffect, wavefoldEffect, ringmodEffect, delayEffect, shimmerEffect, tapeEffect, chewEffect, widthEffect, monobassEffect, sineEffect, wobbleEffect, lossdegradeEffect, rotateEffect, glitchEffect, <silentBuffer, <buffersL, <buffersR, wobbleBuffer, glitchBuffer, <voices, bufSine, pg, <liveInputBuffersL, <liveInputBuffersR, <liveInputRecorders, <liveRecPosBuses, o, o_rec, o_grain, o_voice_peak, o_delayduck, liveBufferAllocGeneration = 0, grainEnvs, pitchScaleBuffers, pitchScaleLengths, nornsAddr, voicesUsingLiveBuffer, currentSpeed, currentJitter, currentSize, currentDensity, currentDensityModAmt, currentPitch, currentPan, currentSpread, currentVolume, currentGranularGain, currentCutoff, currentHpf, currentlpf_gain, currentSubharmonics1, currentSubharmonics2, currentSubharmonics3, currentOvertones1, currentOvertones2, currentPitchMode, currentDirectionMod, currentSizeVariation, currentSmoothbass, currentLowGain, currentMidGain, currentHighGain, currentProbability, liveBufferMix = 1.0, currentPitchRandomProb, currentPitchRandomScale, currentRatchetingProb, currentPitchLag, currentGlitchRatio = 0.0, currentGlitchMix = 0.0, currentKeyHold, currentKeyGate, currentAdA, currentAdD, currentVelAmp, currentAmpRandomize, voiceBuses, filterSynths, filterRouters, eqSynths, dryGroup, drySynths, voiceAmpBuses, voiceRunning, voiceIsStereo;
 
 classvar pitchScales;
 *initClass {pitchScales = [[7, 12], [7, 12, 19, 24], [12], [12, 24], [1,2,3,4,5,6,7,8,9,10,11], [2,4,5,7,9,11], [2,3,5,7,8,10], [2,4,7,9], [2,4,6,8,10]];}
@@ -30,15 +30,9 @@ alloc {
         wobbleBuffer = Buffer.alloc(context.server, context.server.sampleRate * 5, 2);
         glitchBuffer = Buffer.alloc(context.server, context.server.sampleRate * 1, 2);
         silentBuffer = Buffer.alloc(context.server, context.server.sampleRate.asInteger);
-        mixBus = Bus.audio(context.server, 2);
-        postFxBus = Bus.audio(context.server, 2);
-        shimmerBus = Bus.audio(context.server, 2);
-        parallelBus = Bus.audio(context.server, 2);
         voiceBuses = Array.fill(2, { Bus.audio(context.server, 2); });
         voiceAmpBuses = Array.fill(2, { Bus.control(context.server, 1); });
         voiceRunning = Array.fill(2, { false });
-        revShimmerSendBus = Bus.audio(context.server, 2);
-        revShimmerReturnBus = Bus.audio(context.server, 2);
 
         grainEnvs = [
             Env.new([0, 1, 1, 0], [0.15, 0.7, 0.15], [4, 0, -4]),
@@ -238,7 +232,7 @@ alloc {
         filterRouters = Array.fill(2, { arg i;
             Synth.new(\voicerouter, [
                 \in, voiceBuses[i].index,
-                \out, mixBus.index,
+                \out, context.out_b.index,
             ], context.xg, 'addToTail');
         });
 
@@ -284,7 +278,7 @@ alloc {
         }).add;
 
         SynthDef(\delay, {
-            arg inBus, outBus, mix=0.0, delay=0.5, fb_amt=0.3, dhpf=20, lpf=20000, w_rate=0.0, w_depth=0.0, stereo=0.2, duck_amt=0.0;
+            arg bus, mix=0.0, delay=0.5, fb_amt=0.3, dhpf=20, lpf=20000, w_rate=0.0, w_depth=0.0, stereo=0.2, duck_amt=0.0;
             var input, local, fb, delayed, wet, combinedMod, lfo2Rate, lfo3Rate;
             var baseLFO, drift, wobble, steps, dryAmp, duck;
             lfo2Rate = w_rate * (1 + LFNoise1.kr(0.13, 0.18));
@@ -294,7 +288,7 @@ alloc {
             wobble = SinOsc.kr(lfo2Rate + (drift * 0.6)) * LFNoise2.kr(lfo3Rate * 0.25).range(0.5, 1.2) * 0.25;
             steps = Latch.kr(LFNoise0.kr(w_rate * 6.3), Dust.kr(w_rate * 4.7)) * 0.08;
             combinedMod = w_depth * Mix([baseLFO * 0.4, drift, wobble, steps]);
-            input = In.ar(inBus, 2);
+            input = In.ar(bus, 2);
             local = LocalIn.ar(2);
             fb = LPF.ar(HPF.ar(local, dhpf), lpf);
             fb = (1.35 * (1 - (stereo * 0.35)) * fb_amt * [fb[1], fb[0]]).softclip;
@@ -304,96 +298,14 @@ alloc {
             dryAmp = Amplitude.kr(input.sum, 0.005, 0.05);
             duck = LagUD.kr((1 - (dryAmp.sqrt * duck_amt * 6).clip(0, 1)), 0.15, 0.02);
             SendReply.kr(Impulse.kr(20), '/delay_duck', [duck]);
-            Out.ar(outBus, wet * mix * 1.4 * duck);
-        }).add;
-
-        SynthDef(\reverb, {
-            arg inBus1, inBus2, outBus, mix=0.0,
-            pre_delay=35, pre_filter=0.1, pre_hpf=60, decay=0.75, damp=0.40, mod_depth=0.35, mod_rate=1.25,
-            shimmer_mix=0.0, low_mult=1.0;
-            var combined, reverb_input, pitch_feedback;
-            var tank_fb;
-            var preTank, tank, wet, wetL, wetR, damping, preFilter, decayRate, loBand;
-            var dSR = 29761;
-            var exMax = 24;
-            var gFacT60 = { |del, gFac| gFac.sign * (-3 * del / log10(gFac.abs)); };
-            var preTankVals = [[0.75, 0.75, 0.625, 0.625], [142, 107, 379, 277] / dSR].flop;
-            var tankAP1GFac = -0.64;
-            var tankAP1Time = 672;
-            var tankDel1    = 4453/dSR;
-            var tankAP2GFac = (decay + 0.15).clip(0.25, 0.5);
-            var tankAP2Time = 1800/dSR;
-            var tankDel2    = 3720/dSR;
-            var tankAP3GFac = tankAP1GFac;
-            var tankAP3Time = 908;
-            var tankDel3    = 4217/dSR;
-            var tankAP4GFac = tankAP2GFac;
-            var tankAP4Time = 2656/dSR;
-            var tankDel4    = 3163/dSR;
-            combined = In.ar(inBus1, 2) + In.ar(inBus2, 2);
-            tank_fb = LocalIn.ar(1);
-            pitch_feedback = InFeedback.ar(revShimmerReturnBus, 2);
-            reverb_input = combined + (pitch_feedback * shimmer_mix);
-            damping   = damp.lincurve(0, 1, 0.002, 0.998, -2.2).lag3;
-            preFilter = pre_filter.linlin(0, 1, 0.002, 0.78);
-            decayRate = decay.linlin(0, 1, 0.01, 0.998);
-            preTank = (reverb_input[0] + reverb_input[1]) * -6.dbamp;
-            preTank = DelayN.ar(preTank, 0.5, pre_delay.clip(0, 500) * 0.001);
-            preTank = HPF.ar(preTank, Lag.kr(pre_hpf.clip(20, 1000), 0.1));
-            preTank = OnePole.ar(preTank, preFilter);
-            preTankVals.do({ arg pair; preTank = AllpassN.ar(preTank, pair[1], pair[1], gFacT60.value(pair[1], pair[0])); });
-            tank = AllpassC.ar(preTank + (decayRate * tank_fb), maxdelaytime: (tankAP1Time + exMax) / dSR, delaytime: (tankAP1Time/dSR) + ((exMax/dSR) * SinOsc.ar(mod_rate, 0, mod_depth)), decaytime: gFacT60.value(tankAP1Time/dSR, tankAP1GFac));
-            wetL = -0.6 * DelayN.ar(tank, 1990/dSR, 1990/dSR);
-            wetR = 0.6 * tank;
-            wetR = 0.6 * DelayN.ar(tank, 3300/dSR, 3300/dSR) + wetR;
-            tank = DelayN.ar(tank, tankDel1, tankDel1);
-            tank = OnePole.ar(tank, damping);
-            loBand = LPF.ar(tank, 350);
-            tank = (loBand * (decayRate * low_mult).clip(0, 0.998)) + ((tank - loBand) * decayRate);
-            wetL = -0.6 * tank + wetL;
-            tank = AllpassN.ar(tank, tankAP2Time, tankAP2Time, gFacT60.value(tankAP2Time, tankAP2GFac));
-            wetR = -0.6 * tank + wetR;
-            tank = DelayN.ar(tank, tankDel2, tankDel2);
-            wetR = 0.6 * tank + wetR;
-            tank = AllpassC.ar((tank * decayRate) + preTank, maxdelaytime: (tankAP3Time + exMax)/dSR, delaytime: (tankAP3Time/dSR) + ((exMax/dSR) * SinOsc.ar(mod_rate * 0.8, pi, mod_depth)), decaytime: gFacT60.value(tankAP3Time/dSR, tankAP3GFac));
-            wetL = 0.6 * tank + wetL;
-            wetL = 0.6 * DelayN.ar(tank, 2700/dSR, 2700/dSR) + wetL;
-            wetR = -0.6 * DelayN.ar(tank, 2100/dSR, 2100/dSR) + wetR;
-            tank = DelayC.ar(tank, tankDel3, tankDel3);
-            tank = OnePole.ar(tank, damping);
-            loBand = LPF.ar(tank, 350);
-            tank = (loBand * (decayRate * low_mult).clip(0, 0.998)) + ((tank - loBand) * decayRate);
-            tank = AllpassN.ar(tank, tankAP4Time, tankAP4Time, gFacT60.value(tankAP4Time, tankAP4GFac));
-            wetL = -0.6 * tank + wetL;
-            wetR = -0.6 * DelayN.ar(tank, 200/dSR, 200/dSR) + wetR;
-            tank = DelayN.ar(tank, tankDel4, tankDel4);
-            wetL = 0.6 * tank + wetL;
-            tank = tank * decayRate;
-            wet = [wetL, wetR];
-            wet = HPF.ar(wet, 60);
-            LocalOut.ar(tank);
-            Out.ar(revShimmerSendBus, wet);
-            Out.ar(outBus, wet * mix * 1.2);
-        }).add;
-
-        SynthDef(\revshimmer, {
-            arg sendBus, returnBus, shimmer_lowpass=6000, shimmer_hipass=100, shimmer_oct=2;
-            var fb_in = In.ar(sendBus, 2);
-            var clean = LeakDC.ar(fb_in).clip2(4);
-            var pit, fbk;
-            clean = clean.collect { |ch| Select.ar(CheckBadValues.ar(ch, 0, 0), [ch, DC.ar(0), DC.ar(0), ch]) };
-            pit = PitchShift.ar(clean, 0.2, shimmer_oct, 0.01, 0.05, mul: 4);
-            fbk = Limiter.ar(pit * 0.5, 0.25);
-            fbk = LPF.ar(HPF.ar(fbk, shimmer_hipass), shimmer_lowpass).clip2(1.0);
-            fbk = fbk.collect { |ch| Select.ar(CheckBadValues.ar(ch, 0, 0), [ch, DC.ar(0), DC.ar(0), ch]) };
-            Out.ar(returnBus, fbk);
+            ReplaceOut.ar(bus, input + (wet * mix * 1.6 * duck));
         }).add;
 
         SynthDef(\shimmer, {
-            arg inBus, outBus, reverbBus, mix=0.0, lowpass1=13000, hipass1=1400, pitchv1=0.02, fb1=0.0, fbDelay1=0.15, shimmer_oct1=2, mod_mix=0;
-            var input = In.ar(inBus, 2);
+            arg bus, mix=0.0, lowpass1=13000, hipass1=1400, pitchv1=0.02, fb1=0.0, fbDelay1=0.15, shimmer_oct1=2, mod_mix=0;
+            var input = In.ar(bus, 2);
             var hpf = HPF.ar(input, hipass1);
-            var pit = PitchShift.ar(hpf, 0.5, shimmer_oct1, pitchv1, 1, mul: 5);
+            var pit = PitchShift.ar(hpf, 0.5, shimmer_oct1, pitchv1, 1, mul: 8);
             var fbSig = LocalIn.ar(2);
             var fbClean = fbSig * fb1;
             var actualMix = mix * Select.kr(mod_mix, [1.0, LFNoise1.kr(0.25).range(0.0, 1.0)]);
@@ -401,8 +313,7 @@ alloc {
             pit = LPF.ar((pit + fbClean), lowpass1);
             modTime = fbDelay1 + SinOsc.ar([0.07, 0.09], [0, 0.5pi], 0.5 * 0.004);
             LocalOut.ar(DelayC.ar(pit, 1.0, modTime.clip(0.001, 1.0)));
-            Out.ar(reverbBus, pit * actualMix);
-            Out.ar(outBus, pit * actualMix * 1.4);
+            ReplaceOut.ar(bus, input + (pit * actualMix));
         }).add;
 
         SynthDef(\monobass, {
@@ -588,37 +499,26 @@ alloc {
             ReplaceOut.ar(bus, XFade2.ar(sig, wet, mix * 2 - 1));
         }).add;
 
-        SynthDef(\output, {
-            arg in, out;
-            var sig = In.ar(in, 2);
-            Out.ar(out, sig);
-        }).add;
-
         context.server.sync;
 
-        bitcrushEffect = Synth.newPaused(\bitcrush, [\bus, mixBus.index, \mix, 0.0, \mod_mix, 0], context.xg, 'addToTail');
-        resonatorEffect = Synth.newPaused(\resonator, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
-        wavefoldEffect = Synth.newPaused(\wavefold, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
-        ringmodEffect = Synth.newPaused(\ringmod, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
-        sineEffect = Synth.newPaused(\sine, [\bus, mixBus.index, \sine_drive_wet, 0.0], context.xg, 'addToTail');
-        analogDriveEffect = Synth.newPaused(\analogdrive, [\bus, mixBus.index], context.xg, 'addToTail');
-        glitchEffect = Synth.newPaused(\glitch, [\bus, mixBus.index, \glitch_ratio, 0.0], context.xg, 'addToTail');
-        tapeEffect = Synth.newPaused(\tape, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
-        wobbleEffect = Synth.newPaused(\wobble, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
-        chewEffect = Synth.newPaused(\chew, [\bus, mixBus.index, \chew_depth, 0.0], context.xg, 'addToTail');
-        lossdegradeEffect = Synth.newPaused(\lossdegrade, [\bus, mixBus.index, \mix, 0.0], context.xg, 'addToTail');
-        delayEffect = Synth.newPaused(\delay, [\inBus, mixBus.index, \outBus, parallelBus.index, \mix, 0.0], context.xg, 'addToTail');
-        shimmerEffect = Synth.newPaused(\shimmer, [\inBus, mixBus.index, \outBus, parallelBus.index, \reverbBus, shimmerBus.index, \mix, 0.0, \mod_mix, 0], context.xg, 'addToTail');
-        reverbEffect = Synth.newPaused(\reverb, [\inBus1, mixBus.index, \inBus2, shimmerBus.index, \outBus, parallelBus.index, \mix, 0.0], context.xg, 'addToTail');
-        revShimmerSynth = Synth.newPaused(\revshimmer, [\sendBus, revShimmerSendBus.index, \returnBus, revShimmerReturnBus.index], context.xg, 'addToTail');
-        mixToParallelRouter = Synth.new(\output, [\in, mixBus.index, \out, parallelBus.index], context.xg, 'addToTail');
-        parallelToPostFxRouter = Synth.new(\output, [\in, parallelBus.index, \out, postFxBus.index], context.xg, 'addToTail');
-        rotateEffect = Synth.newPaused(\rotate, [\bus, postFxBus.index], context.xg, 'addToTail');
-        dimensionEffect = Synth.newPaused(\dimension, [\bus, postFxBus.index], context.xg, 'addToTail');
-        haasEffect = Synth.newPaused(\haas, [\bus, postFxBus.index, \haas, 0.0], context.xg, 'addToTail');
-        widthEffect = Synth.newPaused(\width, [\bus, postFxBus.index, \width, 1.0], context.xg, 'addToTail');
-        monobassEffect = Synth.newPaused(\monobass, [\bus, postFxBus.index, \mix, 0.0], context.xg, 'addToTail');
-        finalOutputRouter = Synth.new(\output, [\in, postFxBus.index, \out, context.out_b.index], context.xg, 'addToTail');
+        bitcrushEffect = Synth.newPaused(\bitcrush, [\bus, context.out_b.index, \mix, 0.0, \mod_mix, 0], context.xg, 'addToTail');
+        resonatorEffect = Synth.newPaused(\resonator, [\bus, context.out_b.index, \mix, 0.0], context.xg, 'addToTail');
+        wavefoldEffect = Synth.newPaused(\wavefold, [\bus, context.out_b.index, \mix, 0.0], context.xg, 'addToTail');
+        ringmodEffect = Synth.newPaused(\ringmod, [\bus, context.out_b.index, \mix, 0.0], context.xg, 'addToTail');
+        sineEffect = Synth.newPaused(\sine, [\bus, context.out_b.index, \sine_drive_wet, 0.0], context.xg, 'addToTail');
+        analogDriveEffect = Synth.newPaused(\analogdrive, [\bus, context.out_b.index], context.xg, 'addToTail');
+        glitchEffect = Synth.newPaused(\glitch, [\bus, context.out_b.index, \glitch_ratio, 0.0], context.xg, 'addToTail');
+        tapeEffect = Synth.newPaused(\tape, [\bus, context.out_b.index, \mix, 0.0], context.xg, 'addToTail');
+        wobbleEffect = Synth.newPaused(\wobble, [\bus, context.out_b.index, \mix, 0.0], context.xg, 'addToTail');
+        chewEffect = Synth.newPaused(\chew, [\bus, context.out_b.index, \chew_depth, 0.0], context.xg, 'addToTail');
+        lossdegradeEffect = Synth.newPaused(\lossdegrade, [\bus, context.out_b.index, \mix, 0.0], context.xg, 'addToTail');
+        shimmerEffect = Synth.newPaused(\shimmer, [\bus, context.out_b.index, \mix, 0.0, \mod_mix, 0], context.xg, 'addToTail');
+        delayEffect = Synth.newPaused(\delay, [\bus, context.out_b.index, \mix, 0.0], context.xg, 'addToTail');
+        rotateEffect = Synth.newPaused(\rotate, [\bus, context.out_b.index], context.xg, 'addToTail');
+        dimensionEffect = Synth.newPaused(\dimension, [\bus, context.out_b.index], context.xg, 'addToTail');
+        haasEffect = Synth.newPaused(\haas, [\bus, context.out_b.index, \haas, 0.0], context.xg, 'addToTail');
+        widthEffect = Synth.newPaused(\width, [\bus, context.out_b.index, \width, 1.0], context.xg, 'addToTail');
+        monobassEffect = Synth.newPaused(\monobass, [\bus, context.out_b.index, \mix, 0.0], context.xg, 'addToTail');
 
         this.addCommand(\mix, "f", { arg msg; delayEffect.set(\mix, msg[1]); delayEffect.run(msg[1] > 0); });
         this.addCommand(\delay, "f", { arg msg; delayEffect.set(\delay, msg[1]); });
@@ -629,20 +529,6 @@ alloc {
         this.addCommand(\w_depth, "f", { arg msg; delayEffect.set(\w_depth, msg[1]/100); });
         this.addCommand("stereo", "f", { arg msg; delayEffect.set(\stereo, msg[1]); });
         this.addCommand("delay_duck", "f", { arg msg; delayEffect.set(\duck_amt, msg[1]); });
-
-        this.addCommand("reverb_mix", "f", { arg msg; currentReverbMix = msg[1]; reverbEffect.set(\mix, msg[1]); reverbEffect.run(msg[1] > 0); this.updateShimmerRun; });
-        this.addCommand("shimmer_mix", "f", { arg msg; currentShimmerMix = msg[1]; reverbEffect.set(\shimmer_mix, msg[1]); this.updateShimmerRun; });
-        this.addCommand("shimmer_lowpass", "f", { arg msg; revShimmerSynth.set(\shimmer_lowpass, msg[1]); });
-        this.addCommand("shimmer_hipass", "f", { arg msg; revShimmerSynth.set(\shimmer_hipass, msg[1]); });
-        this.addCommand("shimmer_oct", "f", { arg msg; revShimmerSynth.set(\shimmer_oct, msg[1]); });
-        this.addCommand("rev_predelay", "f", { arg msg; reverbEffect.set(\pre_delay, msg[1]); });
-        this.addCommand("rev_prefilter", "f", { arg msg; reverbEffect.set(\pre_filter, msg[1]); });
-        this.addCommand("rev_hpf", "f", { arg msg; reverbEffect.set(\pre_hpf, msg[1]); });
-        this.addCommand("rev_decay", "f", { arg msg; reverbEffect.set(\decay, msg[1]); });
-        this.addCommand("rev_damp", "f", { arg msg; reverbEffect.set(\damp, msg[1]); });
-        this.addCommand("rev_moddepth", "f", { arg msg; reverbEffect.set(\mod_depth, msg[1]); });
-        this.addCommand("rev_modrate", "f", { arg msg; reverbEffect.set(\mod_rate, msg[1]); });
-        this.addCommand("rev_lowmult", "f", { arg msg; reverbEffect.set(\low_mult, msg[1]); });
 
         this.addCommand("shimmer_mix1", "f", { arg msg; shimmerEffect.set(\mix, msg[1]); shimmerEffect.run(msg[1] > 0); });
         this.addCommand("shimmer_mod1", "i", { arg msg; shimmerEffect.set(\mod_mix, msg[1]); });
@@ -771,7 +657,6 @@ alloc {
 updateFilterRun { arg voice; filterSynths[voice].run((currentCutoff[voice] < 20000) || (currentHpf[voice] > 20)); }
 updateEqRun { arg voice; eqSynths[voice].run((currentLowGain[voice] != 0) || (currentMidGain[voice] != 0) || (currentHighGain[voice] != 0)); }
 updateDryRun { arg voice; drySynths[voice].run(voiceRunning[voice] && (currentGranularGain[voice] < 1)); }
-updateShimmerRun { revShimmerSynth.run((currentReverbMix > 0) && (currentShimmerMix > 0)); }
 
 free {
         voices.do({ arg voice; if (voice.notNil) { voice.free; }; });
@@ -791,10 +676,6 @@ free {
         if (wobbleBuffer.notNil) { wobbleBuffer.free; wobbleBuffer = nil; };
         if (glitchBuffer.notNil) { glitchBuffer.free; glitchBuffer = nil; };
         if (silentBuffer.notNil) { silentBuffer.free; silentBuffer = nil; };
-        if (mixBus.notNil) { mixBus.free; mixBus = nil; };
-        if (postFxBus.notNil) { postFxBus.free; postFxBus = nil; };
-        if (shimmerBus.notNil) { shimmerBus.free; shimmerBus = nil; };
-        if (parallelBus.notNil) { parallelBus.free; parallelBus = nil; };
         if (filterSynths.notNil) { filterSynths.do({ arg s; if (s.notNil) { s.free; }; }); filterSynths = nil; };
         if (eqSynths.notNil) { eqSynths.do({ arg s; if (s.notNil) { s.free; }; }); eqSynths = nil; };
         if (filterRouters.notNil) { filterRouters.do({ arg s; if (s.notNil) { s.free; }; }); filterRouters = nil; };
@@ -815,18 +696,11 @@ free {
         if (wobbleEffect.notNil) { wobbleEffect.free; wobbleEffect = nil; };
         if (glitchEffect.notNil) { glitchEffect.free; glitchEffect = nil; };
         if (delayEffect.notNil) { delayEffect.free; delayEffect = nil; };
-        if (reverbEffect.notNil) { reverbEffect.free; reverbEffect = nil; };
-        if (revShimmerSynth.notNil) { revShimmerSynth.free; revShimmerSynth = nil; };
         if (drySynths.notNil) { drySynths.do({ arg s; if (s.notNil) { s.free; }; }); drySynths = nil; };
         if (dryGroup.notNil) { dryGroup.free; dryGroup = nil; };
         if (voiceAmpBuses.notNil) { voiceAmpBuses.do({ arg b; if (b.notNil) { b.free; }; }); voiceAmpBuses = nil; };
-        if (revShimmerSendBus.notNil) { revShimmerSendBus.free; revShimmerSendBus = nil; };
-        if (revShimmerReturnBus.notNil) { revShimmerReturnBus.free; revShimmerReturnBus = nil; };
         if (rotateEffect.notNil) { rotateEffect.free; rotateEffect = nil; };
         if (haasEffect.notNil) { haasEffect.free; haasEffect = nil; };
         if (dimensionEffect.notNil) { dimensionEffect.free; dimensionEffect = nil; };
-        if (mixToParallelRouter.notNil) { mixToParallelRouter.free; mixToParallelRouter = nil; };
-        if (parallelToPostFxRouter.notNil) { parallelToPostFxRouter.free; parallelToPostFxRouter = nil; };
-        if (finalOutputRouter.notNil) { finalOutputRouter.free; finalOutputRouter = nil; };
     }
 }

@@ -250,7 +250,10 @@ local function handle(data)
     elseif t == "cc" and d.cc == 1 then
         local dest = CC1_PARAM[params:get("midi_cc1_dest")]
         if dest and params.lookup[dest] then
-            params:set(dest, floor((d.val or 0) / 127 * 100 + 0.5))
+            local ok, range = pcall(function() return params:get_range(dest) end)
+            local lo, hi = 0, 100
+            if ok and range and range[1] and range[2] then lo, hi = range[1], range[2] end
+            params:set(dest, floor(util.linlin(0, 127, lo, hi, d.val or 0) + 0.5))
         end
     elseif t == "start" then
         if on_transport_start then on_transport_start() end
