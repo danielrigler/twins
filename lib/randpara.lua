@@ -416,7 +416,6 @@ end
 
 return {
   randomize_params        = randomize_params,
-  randomize_dverb_params  = create_randomizer("dverb"),
   randomize_delay_params  = create_randomizer("delay"),
   randomize_tape_params   = create_randomizer("tape"),
   randomize_granular_params = create_track_randomizer(track_param_configs.granular),

@@ -113,6 +113,7 @@ end
 lfo.lfo_targets = {"none", "1pan", "2pan", "1seek", "2seek", "1jitter", "2jitter", "1spread", "2spread", "1size", "2size", "1density", "2density", "1volume", "2volume", "1pitch", "2pitch", "1cutoff", "2hpf", "1speed", "2speed", "1hpf", "2cutoff"}
 local LFO_TARGET_REVERSE = {}
 for i, t in ipairs(lfo.lfo_targets) do LFO_TARGET_REVERSE[t] = i end
+lfo.target_index = LFO_TARGET_REVERSE
 lfo.PRESERVE_ON_RANDOMIZE = { volume = true, cutoff = false, hpf = true }
 lfo.target_ranges = {
     ["1pan"] = {depth = {25, 90}, offset = {0, 0}, frequency = {0.1, 1}, waveform = {"walk"}, chance = 0.75},
@@ -189,7 +190,7 @@ function lfo.get_parameter_range(param_name, for_randomize)
     return lo, hi
 end
 for i = 1, number_of_outputs do
-    lfo[i] = {freq = 0.05, phase = 0, waveform = "walk", shape_int = 4, slope = 0, depth = 50, offset = 0, prev = 0, walk_value = 0, walk_velocity = 0, sync_to = nil, sync_invert = false, active = false, target_idx = 1, target_name = "none", is_pitch = false, is_jitter = false, is_size = false, is_density = false, is_volume = false, is_pan = false, is_filter = false, track_num = "1", last_val = nil, has_user_limits = false, min_key = nil, max_key = nil, def_min = 0, def_max = 100}
+    lfo[i] = {freq = 0.05, phase = 0, waveform = "walk", shape_int = 4, depth = 50, offset = 0, prev = 0, walk_value = 0, walk_velocity = 0, sync_to = nil, sync_invert = false, active = false, target_idx = 1, target_name = "none", is_pitch = false, is_jitter = false, is_size = false, is_density = false, is_volume = false, is_pan = false, is_filter = false, track_num = "1", last_val = nil, has_user_limits = false, min_key = nil, max_key = nil, def_min = 0, def_max = 100}
 end
 local function classify_target(i, target_idx)
     local obj = lfo[i]
@@ -228,16 +229,20 @@ local function classify_target(i, target_idx)
     end
 end
 local active_lfos = {}
+local has_size_lfo = false
 local function update_active_lfos()
     local count = 0
+    local hs = false
     for i = 1, number_of_outputs do
         local o = lfo[i]
         if o.active and o.target_name and o.target_name ~= "none" then
             count = count + 1
             active_lfos[count] = i
+            if o.is_size then hs = true end
         end
     end
     for i = count + 1, #active_lfos do active_lfos[i] = nil end
+    has_size_lfo = hs
 end
 function lfo.is_param_assigned(name) return assigned_params[name] == true end
 function lfo.mark_param_assigned(name) if name then assigned_params[name] = true end end
@@ -492,8 +497,11 @@ function lfo.process()
     local ranges_table = param_ranges
     local gdepth = global_depth_scale
     tick_pitch_scale = nil
-    local size_cap1 = size_cap_fn and size_cap_fn("1") or math.huge
-    local size_cap2 = size_cap_fn and size_cap_fn("2") or math.huge
+    local size_cap1, size_cap2 = math.huge, math.huge
+    if has_size_lfo and size_cap_fn then
+        size_cap1 = size_cap_fn("1") or math.huge
+        size_cap2 = size_cap_fn("2") or math.huge
+    end
     for k in pairs(tick_lim) do tick_lim[k] = nil end
     for idx = 1, #active_lfos do
         local i = active_lfos[idx]
@@ -544,7 +552,6 @@ function lfo.process()
         local d = obj.depth
         if not (obj.is_volume or obj.is_pan) then d = d * gdepth end
         local mod = slope * (d * 0.01) + obj.offset
-        obj.slope = mod
         local target = obj.target_name
         if obj.is_density and clocksync_ref and clocksync_ref.grain_synced() then
             local nt = (mod + 1) * 0.5
@@ -648,6 +655,13 @@ function lfo.apply_clock_sync(hz1, hz2)
     for i = 1, number_of_outputs do
         local hz = (lfo[i].track_num == "2") and hz2 or hz1
         lfo[i].freq = hz
+    end
+end
+function lfo.reset_phases()
+    for idx = 1, #active_lfos do
+        local o = lfo[active_lfos[idx]]
+        o.phase = 0
+        o.last_val = nil
     end
 end
 function lfo.snapshot_phases()

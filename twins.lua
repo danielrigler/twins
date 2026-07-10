@@ -163,9 +163,8 @@ local param_modes = {
     size = {param = "size", delta = 2, engine = true, has_lock = true, y = 21, label = "size:"},
     density = {param = "density", delta = 2, engine = true, has_lock = true, y = 31, label = "density:", hz = true},
     pitch = {param = "pitch", delta = 1, engine = true, has_lock = true, y = 41, label = "pitch:", st = true},
-    spread = {param = "spread", delta = 2, engine = true, has_lock = true, y = 51, label = "spread:"},
-    volume = {param = "volume", engine = true}}
-local param_rows = {} for mode, config in pairs(param_modes) do config.pkeys = {"1" .. config.param, "2" .. config.param} if config.y then local lbl = config.label local nm = lbl:match("%a+") table.insert(param_rows, {y = config.y, label = lbl, label_upper = lbl:upper(), name = nm, mode = mode, param1 = "1" .. config.param, param2 = "2" .. config.param, hz = config.hz, st = config.st, fmt_key = config.hz and "hz" or config.st and "st" or nm}) end end table.sort(param_rows, function(a, b) return a.y < b.y end)
+    spread = {param = "spread", delta = 2, engine = true, has_lock = true, y = 51, label = "spread:"}}
+local param_rows = {} for mode, config in pairs(param_modes) do config.pkeys = {"1" .. config.param, "2" .. config.param} if config.y then local lbl = config.label local nm = lbl:match("%a+") table.insert(param_rows, {y = config.y, label = lbl, label_upper = lbl:upper(), name = nm, mode = mode, params = config.pkeys, hz = config.hz, st = config.st, fmt_key = config.hz and "hz" or config.st and "st" or nm}) end end table.sort(param_rows, function(a, b) return a.y < b.y end)
 local LIMITS = {size={min=20,max=4999},density={min=0.1,max=50},pitch={min=-48,max=48}}
 local SU = lfo.scale_utils
 local audio_files_cache = nil
@@ -190,6 +189,7 @@ local function transport_enabled()
 end
 local function transport_start()
     if not transport_enabled() then return end
+    if clocksync.lfo_synced() then lfo.reset_phases() end
     for v = 1, 2 do if is_voice_loaded(v) then engine.run_voice(v, 1) end end
 end
 local function transport_stop()
@@ -244,14 +244,15 @@ function hlp.ensure_link_base(track)
     end
     return lb
 end
+local RESO_RATIOS = {}
+for i, d in ipairs(_HK.reso_degs) do RESO_RATIOS[i] = 2 ^ (d / 12) end
 function hlp.update_resonator()
     if (pget("resonator_mix") or 0) <= 0 then return end
-    local root = params:get("resonator_root")
-    local d = _HK.reso_degs
+    local f = 440 * 2 ^ ((params:get("resonator_root") - 69) / 12)
     engine.resonator_freqs(
-        440 * 2 ^ ((root + d[1] - 69) / 12), 440 * 2 ^ ((root + d[2] - 69) / 12),
-        440 * 2 ^ ((root + d[3] - 69) / 12), 440 * 2 ^ ((root + d[4] - 69) / 12),
-        440 * 2 ^ ((root + d[5] - 69) / 12))
+        f * RESO_RATIOS[1], f * RESO_RATIOS[2],
+        f * RESO_RATIOS[3], f * RESO_RATIOS[4],
+        f * RESO_RATIOS[5])
 end
 local function update_pan_positioning() if _G.preset_loading then return end; local l1,l2=audio_active[1],audio_active[2]; local function ok(v,id) return v and not is_param_locked(id,"pan") and not is_lfo_active_for_param(id.."pan") end; if l1 and l2 then if ok(l1,1) then params:set("1pan",-25) end; if ok(l2,2) then params:set("2pan",25) end else if ok(l1,1) then params:set("1pan",0) end; if ok(l2,2) then params:set("2pan",0) end end end
 
@@ -268,7 +269,16 @@ end
 
 local function setup_ui_metro()
     if ui_metro then stop_metro_safe(ui_metro) end
+    local ui_skip = 0
     ui_metro = metro.init(function()
+        if _G.preset_loading or presets.is_menu_open() then
+            ui_skip = ui_skip + 1
+            if ui_skip < 6 then return end
+            ui_skip = 0
+            redraw()
+            return
+        end
+        ui_skip = 0
         local now = util.time()
         if not animation_complete then
             animation_start_time = animation_start_time or now
@@ -347,21 +357,30 @@ local function disable_lfos_for_param(param_name, only_self)
 end
 
 local function get_audio_duration(filepath)
-    if not filepath or filepath == "" or filepath == "none" or filepath == "-" then
-        for i = 1, 2 do if params:get(i.."live_input") == 1 then return params:get("live_buffer_length") end end
-        return nil
-    end
-    if not util.file_exists(filepath) then return nil end
+    if not filepath or not util.file_exists(filepath) then return nil end
     local _, samples, rate = audio.file_info(filepath)
     if samples and rate and rate > 0 then return samples / rate end
     return nil
 end
 
-local function scan_audio_files(dir)
-    local files = {}
+local blim = {}
+function blim.apply(i, dur)
+    if not dur or dur <= 0 then return false end
+    cached_buffer_durations[i] = dur; local ms = dur * 1000
+    local mj = min(params:get(i.."max_jitter") or ms, min(ms, 99999)); params:set(i.."max_jitter", mj); params:set(i.."min_jitter", min(params:get(i.."min_jitter") or 0, mj))
+    local mz = min(params:get(i.."max_size") or 999, max(20, min(ms, 999))); params:set(i.."max_size", mz); if (params:get(i.."min_size") or 20) > mz then params:set(i.."min_size", mz) end
+    return true
+end
+function blim.load(i, f, rand_jitter)
+    local dur = get_audio_duration(f); if not blim.apply(i, dur) then return end
+    if rand_jitter then local jp = i.."jitter"; disable_lfos_for_param(jp); local up = math.random() < 0.75 and min(500, dur * 1000) or dur * 1000; params:set(jp, clamp(math.random() * up, 0, 99999)) end
+end
+
+local function scan_audio_files(dir, files)
+    files = files or {}
     for _, entry in ipairs(util.scandir(dir)) do
         local path = dir .. entry
-        if entry:sub(-1) == "/" then for _, f in ipairs(scan_audio_files(path)) do files[#files+1] = f end
+        if entry:sub(-1) == "/" then scan_audio_files(path, files)
         elseif _HK.audio_exts[path:lower():match("^.+(%..+)$") or ""] then files[#files+1] = path end
     end
     return files
@@ -408,16 +427,16 @@ end
 local function setup_params()
     params:add_separator("Input")
     for i = 1, 2 do
-      params:add_file(i.."sample","Sample "..i, _path.tape); params:set_action(i.."sample",function(f) if f~=nil and f~="" and f~="none" and f~="-" and f~=(_path.tape.."live!") and not f:match("/$") then if params:get(i.."live_input")==1 then engine.set_live_input(i,0) params:set(i.."live_input",0,true) end if params:get(i.."live_direct")==1 then engine.live_direct(i,0) params:set(i.."live_direct",0,true) end local jitter_locked=is_param_locked(i,"jitter"); if not jitter_locked then lfo.clearLFOs(tostring(i),"jitter"); end engine.read(i,f); if not _G.preset_loading then params:set(i.."seek",0) end; audio_active[i]=true; update_pan_positioning(); local is_live=params:get(i.."live_input")==1; local dur=is_live and params:get("live_buffer_length") or get_audio_duration(f); if dur then cached_buffer_durations[i]=dur; local ms=dur*1000; local jit_ceiling=min(ms,99999); local cur_max_jit=params:get(i.."max_jitter") or jit_ceiling; local new_max_jit=min(cur_max_jit,jit_ceiling); params:set(i.."max_jitter",new_max_jit); local cur_min_jit=params:get(i.."min_jitter") or 0; params:set(i.."min_jitter",min(cur_min_jit,new_max_jit)); local size_ceiling=max(20,min(ms,999)); local cur_max_size=params:get(i.."max_size") or size_ceiling; local new_max_size=min(cur_max_size,size_ceiling); params:set(i.."max_size",new_max_size); local cur_min_size=params:get(i.."min_size") or 20; if cur_min_size>new_max_size then params:set(i.."min_size",new_max_size) end; if not _G.preset_loading and not jitter_locked then local jp=i.."jitter"; disable_lfos_for_param(jp); local jitter_val; if math.random()<0.75 then local upper_limit=min(500,dur*1000); jitter_val=clamp(math.random()*upper_limit,0,99999); else jitter_val=clamp(math.random()*dur*1000,0,99999); end params:set(jp,jitter_val); end else if not jitter_locked then lfo.clearLFOs(tostring(i),"jitter"); end audio_active[i]=false; osc_positions[i]=0; update_pan_positioning(); end end end)
+      params:add_file(i.."sample","Sample "..i, _path.tape); params:set_action(i.."sample",function(f) if f~=nil and f~="" and f~="none" and f~="-" and f~=(_path.tape.."live!") and not f:match("/$") then if params:get(i.."live_input")==1 then engine.set_live_input(i,0) params:set(i.."live_input",0,true) end if params:get(i.."live_direct")==1 then engine.live_direct(i,0) params:set(i.."live_direct",0,true) end local jitter_locked=is_param_locked(i,"jitter"); if not jitter_locked then lfo.clearLFOs(tostring(i),"jitter"); end engine.read(i,f); if not _G.preset_loading then params:set(i.."seek",0) end; audio_active[i]=true; update_pan_positioning(); if _G.preset_loading then blim.apply(i, get_audio_duration(f)) else blim.load(i, f, not jitter_locked) end else if not jitter_locked then lfo.clearLFOs(tostring(i),"jitter"); end audio_active[i]=false; osc_positions[i]=0; update_pan_positioning(); end end)
     end
     params:add_binary("randomtapes", "Random Tapes", "trigger", 0) params:set_action("randomtapes", function() load_random_tape_file() end)
 
     params:add_group("LIVE!", 10)
     for i = 1, 2 do
-      params:add_binary(i.."live_input", "Live Buffer "..i.." ● ►", "toggle", 0) params:set_action(i.."live_input", function(value) if value == 1 then if params:get(i.."live_direct") == 1 then params:set(i.."live_direct", 0) end engine.set_live_input(i, 1) engine.live_mono(i, params:get("isMono") - 1) audio_active[i] = true cached_buffer_durations[i]=params:get("live_buffer_length") set_sample_live(i) update_pan_positioning() else engine.set_live_input(i, 0) if not audio_active[i] and params:get(i.."live_direct") == 0 then osc_positions[i] = 0 params:set(i.."sample", "-") pause_voice_if_idle(i) else set_sample_live(i) update_pan_positioning() end end end)
+      params:add_binary(i.."live_input", "Live Buffer "..i.." ● ►", "toggle", 0) params:set_action(i.."live_input", function(value) if value == 1 then if params:get(i.."live_direct") == 1 then params:set(i.."live_direct", 0) end engine.set_live_input(i, 1) engine.live_mono(i, params:get("isMono") - 1) audio_active[i] = true if not _G.preset_loading then blim.apply(i, params:get("live_buffer_length")) else cached_buffer_durations[i]=params:get("live_buffer_length") end set_sample_live(i) update_pan_positioning() else engine.set_live_input(i, 0) if not audio_active[i] and params:get(i.."live_direct") == 0 then osc_positions[i] = 0 params:set(i.."sample", "-") pause_voice_if_idle(i) else set_sample_live(i) update_pan_positioning() end end end)
     end
     params:add_control("live_buffer_mix", "Overdub", controlspec.new(0, 100, "lin", 1, 100, "%")) params:set_action("live_buffer_mix", function(value) engine.live_buffer_mix(value * 0.01) end)
-    params:add_taper("live_buffer_length", "Buffer Length", 0.05, 10, 1, 3, "s") params:set_action("live_buffer_length", function(value) engine.live_buffer_length(value) for i=1,2 do if params:get(i.."live_input")==1 then cached_buffer_durations[i]=value end end end)
+    params:add_taper("live_buffer_length", "Buffer Length", 0.05, 10, 1, 3, "s") params:set_action("live_buffer_length", function(value) engine.live_buffer_length(value) for i=1,2 do if params:get(i.."live_input")==1 then if not _G.preset_loading then blim.apply(i, value) else cached_buffer_durations[i]=value end end end end)
     params:add{type = "trigger", id = "save_live_buffer1", name = "Buffer1 to Tape", action = function() local timestamp = os.date("%Y%m%d_%H%M%S") local filename = "live1_"..timestamp..".wav" engine.save_live_buffer(1, filename) audio_files_cache = nil end}
     params:add{type = "trigger", id = "save_live_buffer2", name = "Buffer2 to Tape", action = function() local timestamp = os.date("%Y%m%d_%H%M%S") local filename = "live2_"..timestamp..".wav" engine.save_live_buffer(2, filename) audio_files_cache = nil end}
     for i = 1, 2 do
@@ -833,8 +852,8 @@ local function randomize(n)
     if clocksync.lfo_synced() then clocksync.randomize_lfo_div(n, symmetry and other_track or nil) end
     if next(targets) then
         m_rand.time = 1 / 30
+        local tolerance = 0.01
         m_rand.event = function(count)
-            local tolerance = 0.01
             local factor = count / steps
             local all_done = true
             for param, target in pairs(targets) do
@@ -1088,9 +1107,8 @@ local function find_or_create_lfo_for_param(track, param_name, only_existing, cr
         if lfo_state == 2 or (only_existing and lfo_state == 1) then if lfo_targets[pget(MK.target[i])] == full_param then return i end end
     end
     if only_existing then return nil end
-    local new_target_idx
-    for idx = 2, #lfo_targets do if lfo_targets[idx] == full_param then new_target_idx = idx break end end
-    if not new_target_idx then return nil end
+    local new_target_idx = lfo.target_index[full_param]
+    if not new_target_idx or new_target_idx == 1 then return nil end
     local min_val, max_val = lfo.get_parameter_range(full_param)
     if not min_val or max_val <= min_val then return nil end
     local current_val = pget(full_param)
@@ -1616,7 +1634,7 @@ function redraw()
     local size_cap2 = is_size_row and arp.max_size_ms(2) or nil
     for t = 1,2 do
       local x = TXP[t]
-      local param = t == 1 and row.param1 or row.param2
+      local param = row.params[t]
       local C = PARAM_CACHE.track[t]
       if name == "size" and PARAM_CACHE.link then draw_size_link(x, y) end
       if C.locked[name] then draw_lock(x, y - 1) end
