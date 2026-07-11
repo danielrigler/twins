@@ -1,6 +1,5 @@
 local arp = {}
 
-local MusicUtil = require("musicutil")
 local clamp = util.clamp
 local floor = math.floor
 local random = math.random
@@ -25,19 +24,6 @@ local pre_arp_prob = {nil, nil}
 local co           = {nil, nil}
 local DEG_PALETTE  = {-7, -5, -4, -3, 0, 0, 2, 4, 4, 6, 7}
 
-local ivs_cache = {}
-local function scale_intervals(scale_name)
-  scale_name = SU.normalize(scale_name)
-  if scale_name == "none" then return nil end
-  local ivs = ivs_cache[scale_name]
-  if not ivs then
-    local ok, r = pcall(MusicUtil.generate_scale, 0, scale_name, 1)
-    ivs = (ok and r) or MusicUtil.generate_scale(0, "major", 1)
-    ivs_cache[scale_name] = ivs
-  end
-  return ivs
-end
-
 local PITCH_KEYS   = {"1pitch", "2pitch"}
 local SIZE_KEYS    = {"1size", "2size"}
 local DENSITY_KEYS = {"1density", "2density"}
@@ -50,7 +36,7 @@ local function refresh_scale()
   if si ~= scale_idx then
     scale_idx = si
     scale_name = params:string("pitch_quantize_scale")
-    scale_ivs = scale_intervals(scale_name)
+    scale_ivs = SU.intervals(scale_name)
   end
 end
 
@@ -299,8 +285,8 @@ function arp.restore(s)
   tickn = {0, 0}
 end
 
-function arp.set_clocksync_reference(cs)
-  clocksync = cs
+function arp.set_context(ctx)
+  clocksync = ctx.clocksync
 end
 
 function arp.add_params()

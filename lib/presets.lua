@@ -12,10 +12,11 @@ presets.k2_mode        = "delete"
 _G.preset_loading = false
 
 presets.lfo_ref = nil
-function presets.set_lfo_reference(l) presets.lfo_ref = l end
-
 presets.arp_ref = nil
-function presets.set_arp_reference(a) presets.arp_ref = a end
+function presets.set_context(ctx)
+    presets.lfo_ref = ctx.lfo
+    presets.arp_ref = ctx.arp
+end
 
 local PRESETS_DIR         = "twins"
 local PRESETS_PATH        = _path.data .. PRESETS_DIR
@@ -110,10 +111,19 @@ function presets.list_presets()
 end
 
 local SYSTEM_PARAMS_EXCLUDE = utils.system_param_exclude
+local PRESET_EXCLUDE = { dry_mode = true, dry_mode2 = true }
+
+local function preset_capturable(p)
+    local id = p.id
+    if not id or SYSTEM_PARAMS_EXCLUDE[id] or PRESET_EXCLUDE[id] then return false end
+    return utils.capturable(p) or id:match("^%d+sample$") ~= nil
+end
 
 local function params_snapshot()
     local state = {}
-    for id in pairs(params.lookup) do if not SYSTEM_PARAMS_EXCLUDE[id] then state[id] = params:get(id) end end
+    for _, p in ipairs(params.params) do
+        if preset_capturable(p) then state[p.id] = params:get(p.id) end
+    end
     return state
 end
 
@@ -137,13 +147,11 @@ end
 presets.default_params = {}
 
 function presets.record_defaults()
-    for id in pairs(params.lookup) do
-        if not SYSTEM_PARAMS_EXCLUDE[id] then
-            local p_obj = params:lookup_param(id)
-            if p_obj and p_obj.t ~= 4 and p_obj.t ~= 6 and p_obj.t ~= 7 then
-                local ok, val = pcall(function() return params:get(id) end)
-                if ok and val ~= nil then presets.default_params[id] = val end
-            end
+    for _, p_obj in ipairs(params.params) do
+        local id = p_obj.id
+        if id and not SYSTEM_PARAMS_EXCLUDE[id] and not PRESET_EXCLUDE[id] and utils.capturable(p_obj) then
+            local ok, val = pcall(function() return params:get(id) end)
+            if ok and val ~= nil then presets.default_params[id] = val end
         end
     end
 end
@@ -218,7 +226,9 @@ local function apply_params_ordered(p)
     if p then for id, val in pairs(p) do merged[id] = val end end
 
     for id, value in pairs(merged) do
-        if params.lookup[id] and not id:match("^%d+sample$") and not id:match("^%d+volume$") and not id:match("^%d+granular_gain$") then
+        local pidx = params.lookup[id]
+        local pobj = pidx and params.params[pidx]
+        if pobj and not PRESET_EXCLUDE[id] and utils.capturable(pobj) and not id:match("^%d+volume$") and not id:match("^%d+granular_gain$") then
             local placed = false
             for i = 1, 3 do
                 if id:match(PARAM_MATCHERS[i]) then
@@ -277,9 +287,9 @@ function presets.load_complete_preset(name, scene_data, update_pan, audio_active
             if params.lookup[sp] then audio_active[i] = is_valid_sample(params:get(sp)) end
         end
         update_pan()
-        _G.preset_loading = false
         if presets.arp_ref and presets.arp_ref.restore then presets.arp_ref.restore(data.arp) end
         apply_params_ordered(data.params or {})
+        _G.preset_loading = false
         if data.lfo_phases and presets.lfo_ref then presets.lfo_ref.restore_phases(data.lfo_phases) end
         for i = 1, 2 do
             for _, suffix in ipairs({"volume", "granular_gain"}) do

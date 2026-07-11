@@ -105,10 +105,11 @@ function font.set_delay_duck(gain)
 end
 
 font.arp_ref = nil
-function font.set_arp_reference(a) font.arp_ref = a end
-
 font.clocksync_ref = nil
-function font.set_clocksync_reference(c) font.clocksync_ref = c end
+function font.set_context(ctx)
+  font.arp_ref = ctx.arp
+  font.clocksync_ref = ctx.clocksync
+end
 
 local function value_to_level(val)
   return 1 + math.floor((val / 100) * 14)

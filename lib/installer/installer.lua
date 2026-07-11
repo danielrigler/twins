@@ -56,16 +56,18 @@ function Installer:scan()
     end
   end
 
-  for _, folder in ipairs(SEARCH_FOLDERS) do
-    if remaining == 0 then break end
-    for _, file in ipairs(list_files(folder)) do
-      if not file:find("ignore") then
-        local name = basename(file)
-        for req, already in pairs(found) do
-          if not already and name:find(req, 1, true) then
-            found[req] = true
-            remaining = remaining - 1
-          end
+  if remaining > 0 then
+    local clauses = {}
+    for req in pairs(found) do clauses[#clauses + 1] = string.format("-name '*%s*'", req) end
+    local cmd = string.format("find %s \\( %s \\) -not -path '*ignore*' -type f -printf '%%p!' 2>/dev/null",
+      table.concat(SEARCH_FOLDERS, " "), table.concat(clauses, " -o "))
+    local raw = util.os_capture(cmd, true) or ""
+    for entry in raw:gmatch("([^!]+)") do
+      local name = basename(entry)
+      for req, already in pairs(found) do
+        if not already and name:find(req, 1, true) then
+          found[req] = true
+          remaining = remaining - 1
         end
       end
       if remaining == 0 then break end
@@ -91,28 +93,30 @@ function Installer:ready()
 end
 
 function Installer:install_libs()
+  if self.installing then return end
   self.installing = true
-  os.execute("mkdir -p " .. TMP_DIR)
-  os.execute("mkdir -p " .. EXTENSIONS_DIR)
   print(string.format("[installer] downloading %s", self.zip))
   self.message_progress = "Downloading..."
-  os.execute(string.format("wget -q -O %s/bundle.zip %s", TMP_DIR, self.zip))
-  print(string.format("[installer] unzipping %s", self.zip))
-  self.message_progress = "Unzipping..."
-  os.execute(string.format("cd %s && unzip -o -q bundle.zip", TMP_DIR))
-  for _, file in ipairs(list_files(TMP_DIR)) do
-    local name = basename(file)
-    for _, req in ipairs(self.missing_requirements) do
-      if name:find(req, 1, true) then
-        print("Copying " .. name .. " to Extensions...")
-        self.message_progress = "copying " .. name .. "..."
-        os.execute(string.format("cp %s %s/", file, EXTENSIONS_DIR))
+  local dl = string.format("mkdir -p %s %s && wget -q -O %s/bundle.zip %s 2>&1", TMP_DIR, EXTENSIONS_DIR, TMP_DIR, self.zip)
+  norns.system_cmd(dl, function()
+    print(string.format("[installer] unzipping %s", self.zip))
+    self.message_progress = "Unzipping..."
+    norns.system_cmd(string.format("cd %s && unzip -o -q bundle.zip 2>&1", TMP_DIR), function()
+      for _, file in ipairs(list_files(TMP_DIR)) do
+        local name = basename(file)
+        for _, req in ipairs(self.missing_requirements) do
+          if name:find(req, 1, true) then
+            print("Copying " .. name .. " to Extensions...")
+            self.message_progress = "copying " .. name .. "..."
+            os.execute(string.format("cp %s %s/", file, EXTENSIONS_DIR))
+          end
+        end
       end
-    end
-  end
-  os.execute("cd /tmp/ && rm -rf norns-installer")
-  self.ready_to_restart = true
-  self.installing       = false
+      os.execute("cd /tmp/ && rm -rf norns-installer")
+      self.ready_to_restart = true
+      self.installing       = false
+    end)
+  end)
 end
 
 function Installer:is_git()
@@ -185,7 +189,7 @@ function Installer:key(k, z)
       if k == 3 and z == 1 then self:do_restart() end
       return
     end
-    if k == 3 and z == 1 then clock.run(function() self:install_libs() end) end
+    if k == 3 and z == 1 then self:install_libs() end
     return
   end
   if z ~= 1 then return end

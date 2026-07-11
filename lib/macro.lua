@@ -33,7 +33,7 @@ local lfo_ref          = nil
 local randomize_metro  = metro.init()
 local stop_metro_safe  = utils.stop_metro_safe
 
-function macro.set_lfo_reference(lfo_module) lfo_ref = lfo_module end
+function macro.set_context(ctx) lfo_ref = ctx.lfo end
 
 local function is_param_locked(track_num, param_suffix)
     return params:get(lock_params[track_num][param_suffix]) == 2

@@ -12,6 +12,17 @@ utils.system_param_exclude = {
     enc_sens_default = true, key_repeat_initial = true, key_repeat_period = true,
 }
 
+local T_SEPARATOR, T_FILE, T_TRIGGER, T_GROUP, T_TEXT = 0, 4, 6, 7, 8
+
+function utils.capturable(p)
+    local t = p.t
+    if t == T_SEPARATOR or t == T_FILE or t == T_TRIGGER or t == T_GROUP or t == T_TEXT then
+        return false
+    end
+    if p.behavior and p.behavior ~= "toggle" then return false end
+    return true
+end
+
 local running_metros = {}
 
 function utils.metro_start(m)

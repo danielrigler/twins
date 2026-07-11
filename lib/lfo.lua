@@ -10,9 +10,12 @@ lfo.sine_all = false
 local global_depth_scale = 1
 function lfo.set_global_depth_scale(v) global_depth_scale = v or 1 end
 local clocksync_ref = nil
-function lfo.set_clocksync_reference(cs) clocksync_ref = cs end
 local size_cap_fn = nil
-function lfo.set_size_cap_fn(fn) size_cap_fn = fn end
+function lfo.set_context(ctx)
+    clocksync_ref = ctx.clocksync
+    local arp = ctx.arp
+    if arp then size_cap_fn = function(v) return arp.max_size_ms(v) end end
+end
 local TWO_PI = math.pi * 2
 local PHASE_INCREMENT = 1 / 30
 local math_sin = math.sin
@@ -86,7 +89,31 @@ local function quantize_pitch_to_scale(value, scale_name)
     end
     return out
 end
-lfo.scale_utils = {normalize = normalize_scale_name, get_array = get_scale_array, quantize = quantize_pitch_to_scale}
+local intervals_cache = {}
+local function get_scale_intervals(scale_name)
+    scale_name = normalize_scale_name(scale_name)
+    if scale_name == "none" then return nil end
+    local ivs = intervals_cache[scale_name]
+    if not ivs then
+        local ok, r = pcall(MusicUtil.generate_scale, 0, scale_name, 1)
+        ivs = (ok and r) or MusicUtil.generate_scale(0, "major", 1)
+        intervals_cache[scale_name] = ivs
+    end
+    return ivs
+end
+local function step_in_scale(pitch_value, scale_name, direction)
+    local scale_array = get_scale_array(scale_name)
+    if not scale_array then return pitch_value + direction end
+    local midi_note = MusicUtil.snap_note_to_array(60 + pitch_value, scale_array)
+    local current_idx
+    for i, note in ipairs(scale_array) do
+        if note == midi_note then current_idx = i break end
+    end
+    if not current_idx then return pitch_value end
+    local next_idx = util_clamp(current_idx + (direction > 0 and 1 or -1), 1, #scale_array)
+    return scale_array[next_idx] - 60
+end
+lfo.scale_utils = {normalize = normalize_scale_name, get_array = get_scale_array, quantize = quantize_pitch_to_scale, intervals = get_scale_intervals, step = step_in_scale}
 function lfo.scale(v, old_min, old_max, new_min, new_max) return (v - old_min) * (new_max - new_min) / (old_max - old_min) + new_min end
 function lfo.set_pause(paused) lfo_paused = paused end
 function lfo.set_sine_all(enabled)

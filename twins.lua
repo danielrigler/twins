@@ -55,21 +55,17 @@ local font = include("lib/font")
 local presets = include("lib/presets")
 local randpara = include("lib/randpara")
 local lfo = include("lib/lfo")
-presets.set_lfo_reference(lfo)
 local morph = include("lib/morph")
 local osc_positions = {[1] = 0, [2] = 0}
 local Mirror = include("lib/mirror") Mirror.init(osc_positions, lfo, morph.voice_params)
-local macro = include("lib/macro") macro.set_lfo_reference(lfo)
-local drymode = include("lib/drymode") drymode.set_lfo_reference(lfo)
+local macro = include("lib/macro")
+local drymode = include("lib/drymode")
 local undo = include("lib/undo")
 local midi_input = include("lib/midi_input")
 local arp = include("lib/arp")
-local clocksync = include("lib/clocksync") lfo.set_clocksync_reference(clocksync)
-arp.set_clocksync_reference(clocksync)
-presets.set_arp_reference(arp)
-font.set_arp_reference(arp)
-font.set_clocksync_reference(clocksync)
-lfo.set_size_cap_fn(function(v) return arp.max_size_ms(v) end)
+local clocksync = include("lib/clocksync")
+local ctx = {lfo = lfo, arp = arp, clocksync = clocksync}
+for _, m in ipairs({presets, macro, drymode, font, lfo, arp}) do m.set_context(ctx) end
 local randomize_metro = { [1] = nil, [2] = nil }
 local active_clocks = {}
 local key_state = {} for n = 1, 3 do key_state[n] = false end
@@ -168,9 +164,6 @@ local param_rows = {} for mode, config in pairs(param_modes) do config.pkeys = {
 local LIMITS = {size={min=20,max=4999},density={min=0.1,max=50},pitch={min=-48,max=48}}
 local SU = lfo.scale_utils
 local audio_files_cache = nil
-local scale_intervals_cache = {}
-local function get_scale_intervals(scale_name) scale_name = SU.normalize(scale_name) if scale_name == "none" then scale_name = "major" end if not scale_intervals_cache[scale_name] then scale_intervals_cache[scale_name] = MusicUtil.generate_scale(0, scale_name, 1) or MusicUtil.generate_scale(0, "major", 1) end return scale_intervals_cache[scale_name] end
-local function get_next_scale_note(pitch_value, scale_name, direction) local scale_array = SU.get_array(scale_name) if not scale_array then return pitch_value + direction end local midi_note = MusicUtil.snap_note_to_array(60 + pitch_value, scale_array) local current_idx for i, note in ipairs(scale_array) do if note == midi_note then current_idx = i break end end if not current_idx then return pitch_value end local next_idx = clamp(current_idx + (direction > 0 and 1 or -1), 1, #scale_array) return scale_array[next_idx] - 60 end
 local anim_offset_x = 128 local animation_complete = false local animation_start_time = nil
 local pan_indicator_x = {[1] = -80, [2] = 80} local pan_indicators_visible = false local pan_slide_start_time = nil
 local volume_bar_y = {[1] = 120, [2] = 120} local volume_bars_visible = false
@@ -753,7 +746,7 @@ local function randomize_pitch(track, other_track, symmetry)
     if min_pitch >= max_pitch then return end
     local base_pitch = params:get(other_track .. "pitch")
     local scale_name = params:string("pitch_quantize_scale")
-    local scale = get_scale_intervals(scale_name)
+    local scale = SU.intervals(scale_name) or SU.intervals("major")
     if not scale then return end
     local weighted_intervals = {}
     local larger_intervals = {}
@@ -935,7 +928,7 @@ function hlp.update_linked_params(tr, delta_mult, param, delta)
         local scale = params:string("pitch_quantize_scale")
         if scale ~= "off" then
             local direction = (delta * delta_mult) > 0 and 1 or -1
-            new_pitch = get_next_scale_note(old_pitch, scale, direction)
+            new_pitch = SU.step(old_pitch, scale, direction)
             new_pitch = clamp(new_pitch, LIMITS.pitch.min, LIMITS.pitch.max)
         else new_pitch = clamp(old_pitch + delta * delta_mult, LIMITS.pitch.min, LIMITS.pitch.max)
         end
@@ -1035,11 +1028,11 @@ local function handle_standard_param(track, config, delta)
         local lim = LIMITS[config.param] or LIMITS.pitch
         if scale ~= "off" then
             local direction = delta > 0 and 1 or -1
-            local new_value = clamp(get_next_scale_note(old_value, scale, direction), lim.min, lim.max)
+            local new_value = clamp(SU.step(old_value, scale, direction), lim.min, lim.max)
             params:set(p, new_value)
             if sym then
                 local other_p = pkeys[3 - track]
-                params:set(other_p, clamp(get_next_scale_note(params:get(other_p), scale, direction), lim.min, lim.max))
+                params:set(other_p, clamp(SU.step(params:get(other_p), scale, direction), lim.min, lim.max))
             end
         else
             params:delta(p, delta)

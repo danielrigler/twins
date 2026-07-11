@@ -59,7 +59,7 @@ local LFO_TARGETS = {
 
 local LFO_TARGET_TYPES = {"speed", "seek", "pan", "volume", "cutoff", "hpf"}
 
-function drymode.set_lfo_reference(lfo_module) lfo = lfo_module end
+function drymode.set_context(ctx) lfo = ctx.lfo end
 
 local function store_params(param_list, stereo)
     local t = {}

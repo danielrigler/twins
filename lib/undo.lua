@@ -16,8 +16,6 @@ for k in pairs(utils.system_param_exclude) do EXCLUDE[k] = true end
 
 local EXCLUDE_PATTERNS = {"^%d+sample$",}
 
-local T_SEPARATOR, T_FILE, T_TRIGGER, T_GROUP, T_TEXT = 0, 4, 6, 7, 8
-
 local lfo_slot_ids = nil
 local capture_ids  = nil
 
@@ -29,14 +27,7 @@ local function is_excluded(id)
     return false
 end
 
-local function capturable(p)
-    local t = p.t
-    if t == T_SEPARATOR or t == T_FILE or t == T_TRIGGER or t == T_GROUP or t == T_TEXT then
-        return false
-    end
-    if p.behavior and p.behavior ~= "toggle" then return false end
-    return true
-end
+local capturable = utils.capturable
 
 local function build_capture_list()
     lfo_slot_ids = {}
