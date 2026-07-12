@@ -829,7 +829,7 @@ local function setup_params()
       params:add_control(i.. "seek", i.. " seek", controlspec.new(0, 100, "lin", 0.01, 0, "%")) params:set_action(i.. "seek", function(value) engine.seek(i, value * 0.01) end) params:lookup_param(i.."seek").save = false
     end
     params:bang()
-    params:set("reverb_mix", -40) params:set("rv_predelay", 20) params:set("rv_lffc", 50) params:set("rv_lowtime", 0.1) params:set("rv_midtime", 10.5) params:set("rv_hfdamp", 6000)
+    params:set("reverb_mix", -40) params:set("rv_predelay", 20) params:set("rv_lffc", 50) params:set("rv_lowtime", 0.1) params:set("rv_midtime", 11) params:set("rv_hfdamp", 4500)
     presets.record_defaults()
 end
 
