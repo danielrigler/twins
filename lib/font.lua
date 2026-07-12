@@ -7,7 +7,7 @@ font.micro_font = {
   C = {{1,1,1},{1,0,0},{1,1,1}},
   G = {{1,1,0},{1,0,1},{1,1,1}},
   E = {{1,1,1},{1,1,0},{1,1,1}},
-  I = {{1,0},{1,0},{1,0}},
+  I = {{1},{1},{1}},
   R = {{1,1,1},{1,1,0},{1,0,1}},
   T = {{1,1,1},{0,1,0},{0,1,0}},
   S = {{0,1,1},{0,1,0},{1,1,0}},
@@ -21,7 +21,9 @@ font.micro_font = {
   W = {{1,0,1},{1,1,1},{1,1,1}},
   M = {{1,0,1},{0,1,0},{1,0,1}},
   K = {{0,1,0},{1,0,1},{0,1,0}},
-  A = {{0,0,1},{0,1,1},{1,1,1}}
+  A = {{0,0,1},{0,1,1},{1,1,1}},
+  N = {{1,1,1},{1,0,1},{1,0,1}},
+  U = {{1,0,1},{1,0,1},{1,1,1}}
 }
 
 local function plot_text(plot, x, y, text, level)
@@ -46,6 +48,20 @@ local function plot_text(plot, x, y, text, level)
     end
   end
   return cursor_x
+end
+
+local _text_cache = {}
+function font.plot_text_cached(plot, x, y, text, level)
+  local c = _text_cache[text]
+  if not c then
+    local xs, ys, n = {}, {}, 0
+    local w = plot_text(function(_, px, py) n = n + 1 xs[n] = px ys[n] = py end, 0, 0, text, 1) - 1
+    c = {xs = xs, ys = ys, n = n, w = w}
+    _text_cache[text] = c
+  end
+  local xs, ys = c.xs, c.ys
+  for i = 1, c.n do plot(level, x + xs[i], y + ys[i]) end
+  return x + c.w + 1
 end
 
 local fx_cache = {

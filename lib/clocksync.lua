@@ -12,6 +12,8 @@ local lfo_div_beats = {1.0, 1.0}
 local reseek_enabled = false
 local reseek_beats = 1.0
 local reseek_co = nil
+local ref_tempo = nil
+local speed_scale_val = 1.0
 local DIVISIONS = {
   {label="8 bar",  beats=32.0},  {label="7 bar",  beats=28.0},
   {label="6 bar",  beats=24.0},  {label="5 bar",  beats=20.0},
@@ -47,6 +49,14 @@ local function push()
   set_density(1, clamp(t * density_gpb[1], 0.1, 250))
   set_density(2, clamp(t * density_gpb[2], 0.1, 250))
   if params.lookup["delay_time"] then params:set("delay_time", clamp(delay_div / t, 0.02, 5)) end
+  if ref_tempo then
+    local s = t / ref_tempo
+    if math.abs(s - speed_scale_val) > 1e-6 then
+      speed_scale_val = s
+      params:lookup_param("1speed"):bang()
+      params:lookup_param("2speed"):bang()
+    end
+  end
   if on_push_cb then on_push_cb() end
 end
 
@@ -82,6 +92,8 @@ function clocksync.add_params()
   params:set_action("clock_sync", function(v)
     enabled = (v == 2)
     if enabled then
+      ref_tempo = t60()
+      speed_scale_val = 1.0
       if lfo_ref then lfo_ref.set_sine_all(true) end
       sync_co = sync_co or clock.run(function()
         while true do clock.sync(1) push() end
@@ -92,6 +104,12 @@ function clocksync.add_params()
       if lfo_ref then lfo_ref.apply_clock_sync(nil) lfo_ref.set_sine_all(false) end
       set_density(1, params:get("1density"))
       set_density(2, params:get("2density"))
+      ref_tempo = nil
+      if speed_scale_val ~= 1.0 then
+        speed_scale_val = 1.0
+        params:lookup_param("1speed"):bang()
+        params:lookup_param("2speed"):bang()
+      end
       if on_sync_off_cb then on_sync_off_cb() end
     end
   end)
@@ -220,6 +238,7 @@ function clocksync.div_index_to_norm(idx)
 end
 
 function clocksync.lfo_synced() return enabled end
+function clocksync.speed_scale() return speed_scale_val end
 function clocksync.grain_synced() return enabled end
 function clocksync.reseek_active() return reseek_enabled end
 function clocksync.grain_division_label(v) return density_label[v] end

@@ -290,11 +290,11 @@ end
 
 local param_configs = {
   dverb = { lock_param = "lock_reverb", params = {
-    {name="rev_pre_delay",  prob=1,    default=20,   random=function() return math.random(20,100)        end, direct_set=true},
-    {name="rev_lf_fc",      prob=0.5,  default=500,  random=function() return math.random(50,1000)       end},
-    {name="rev_low_time",   prob=0.5,  default=3,    random=function() return random_float(0.1,9)        end},
-    {name="rev_mid_time",   prob=0.5,  default=11,   random=function() return random_float(1,16)         end},
-    {name="rev_hf_damping", prob=0.5,  default=8000, random=function() return math.random(1500,12000)    end},
+    {name="rev_pre_delay",  prob=0.5,    default=20,   random=function() return math.random(20,100)        end, direct_set=true},
+    {name="rev_lf_fc",      prob=0.5,  default=50,  random=function() return math.random(50,1000)       end},
+    {name="rev_low_time",   prob=0.5,  default=0.1,    random=function() return random_float(0.1,9)        end},
+    {name="rev_mid_time",   prob=0.5,  default=10.5,   random=function() return random_float(1,16)         end},
+    {name="rev_hf_damping", prob=0.5,  default=6000, random=function() return math.random(1500,12000)    end},
   }},
   shimmer = { lock_param = "lock_shimmer", params = {
     {name="shimmer_oct1", prob=0.15, default=4,      random=function() return math.random(3,5)         end, direct_set=true},

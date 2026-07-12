@@ -2,6 +2,7 @@ local drymode = {}
 local utils = include("lib/utils")
 local dry_mode_state = false
 local dry_mode_state2 = false
+local stereo_dry = false
 local prev_settings = nil
 local prev_settings2 = nil
 local lfo
@@ -90,10 +91,10 @@ local function restore_params(settings, stereo)
     end
 end
 
-local function set_stereo_params(values)
+local function set_stereo_params(values, v1, v2)
     for param, value in pairs(values) do
-        params:set("1"..param, value)
-        params:set("2"..param, value)
+        if v1 ~= false then params:set("1"..param, value) end
+        if v2 ~= false then params:set("2"..param, value) end
     end
 end
 
@@ -126,6 +127,21 @@ local function restore_lfos(lfo_table)
     end
 
     params:set("lfo_pause", was_paused)
+end
+
+function drymode.reset_dry(v1, v2, fx)
+    local targets = {}
+    for _, t in ipairs(LFO_TARGET_TYPES) do
+        if v1 then targets["1"..t] = true end
+        if v2 then targets["2"..t] = true end
+    end
+    store_and_disable_lfos(targets, {})
+    set_stereo_params(DRY_VALUES_STEREO, v1, v2)
+    if fx then
+        for param, value in pairs(DRY_VALUES) do
+            if param ~= "reverb_mix" then params:set(param, value) end
+        end
+    end
 end
 
 function drymode.toggle_dry_mode()
@@ -171,12 +187,18 @@ function drymode.toggle_dry_mode2()
 
     if not dry_mode_state2 then
         prev_settings2 = {stereo = store_params({"granular_gain", "speed"}, true)}
+        stereo_dry = true
         set_stereo_params({granular_gain = 0, speed = 1.0})
     else
+        stereo_dry = false
         if prev_settings2 then
             restore_params(prev_settings2.stereo, true)
         end
     end
+    params:lookup_param("1speed"):bang()
+    params:lookup_param("2speed"):bang()
 end
+
+function drymode.stereo_dry_active() return stereo_dry end
 
 return drymode

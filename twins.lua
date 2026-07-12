@@ -6,7 +6,7 @@
 --            by: @dddstudio                       
 -- 
 --                          
---                           v0.72
+--                           v0.73
 -- E1: Master Volume
 -- K1+E2/E3: Volume
 -- K1+E1: Crossfade/Morph
@@ -358,11 +358,19 @@ end
 
 local blim = {}
 function blim.apply(i, dur)
-    if not dur or dur <= 0 then return false end
-    cached_buffer_durations[i] = dur; local ms = dur * 1000
-    local mj = min(params:get(i.."max_jitter") or ms, min(ms, 99999)); params:set(i.."max_jitter", mj); params:set(i.."min_jitter", min(params:get(i.."min_jitter") or 0, mj))
-    local mz = min(params:get(i.."max_size") or 999, max(20, min(ms, 999))); params:set(i.."max_size", mz); if (params:get(i.."min_size") or 20) > mz then params:set(i.."min_size", mz) end
-    return true
+  if not dur or dur <= 0 then return false end
+  cached_buffer_durations[i] = dur
+  local ms = dur * 1000
+  local mj = math.min(ms, 99999)
+  params:set(i.."max_jitter", mj)
+  params:set(i.."min_jitter", math.min(params:get(i.."min_jitter") or 0, mj))
+  local mz = math.min(ms, 999)
+  params:set(i.."max_size", mz)
+  if (params:get(i.."min_size") or 20) > mz then
+    params:set(i.."min_size", mz)
+  end
+
+  return true
 end
 function blim.load(i, f, rand_jitter)
     local dur = get_audio_duration(f); if not blim.apply(i, dur) then return end
@@ -399,6 +407,87 @@ local function load_random_tape_file(track_num)
     set_track_sample(1, file1)
     set_track_sample(2, file2)
     return true
+end
+
+local BOUNCE_DIR = _path.tape .. "twins/"
+
+function hlp.start_bounce()
+    local b = hlp.bounce_pending
+    if b and (util.time() - b.t) < (b.len + 5) then return end
+    local inplace = params:get("bounce_mode") == 2
+    local mode = inplace and 2 or params:get("bounce_source") - 1
+    local len = params:get("bounce_length")
+    local pre = params:get("bounce_volume") == 1 and mode ~= 1
+    local xf = params:get("bounce_xfade")
+    local name = "bounce_" .. os.date("%Y%m%d_%H%M%S")
+    local paths
+    if inplace then paths = {BOUNCE_DIR .. name .. "_1.wav", BOUNCE_DIR .. name .. "_2.wav"}
+    else paths = {BOUNCE_DIR .. name .. ".wav"} end
+    util.make_dir(BOUNCE_DIR)
+    hlp.bounce_pending = {paths = paths, t = util.time(), len = len + xf, mode = mode}
+    engine.bounce(mode, len, name, pre and 1 or 0, xf)
+end
+
+function hlp.finish_bounce()
+    local b = hlp.bounce_pending
+    hlp.bounce_pending = nil
+    if not b then return end
+    audio_files_cache = nil
+    if b.paths[2] then
+        for i = 1, 2 do params:set(i .. "sample", b.paths[i]) end
+    else
+        params:set("unload_all", 1)
+        params:set("1sample", b.paths[1])
+    end
+    local r = params:get("bounce_reset")
+    if r > 1 then drymode.reset_dry(r ~= 3, r ~= 2, r == 4 or b.mode == 1) end
+    hlp.bounce_done_time = util.time()
+end
+
+local function delete_unused_bounces()
+    local used_paths = {}
+    local PRESETS_PATH = _path.data .. "twins"
+    for i = 1, 2 do
+        local sample = params:get(i .. "sample")
+        if sample and sample ~= "" and sample ~= "-" and sample ~= "none" and sample ~= (_path.tape .. "live!") and util.file_exists(sample) then
+            used_paths[sample] = true
+        end
+    end
+    local preset_names = presets.list_presets()
+    for _, name in ipairs(preset_names) do
+        local path = PRESETS_PATH .. "/" .. name .. ".lua"
+        if util.file_exists(path) then
+            local chunk, err = loadfile(path)
+            if chunk then
+                local ok, data = pcall(chunk)
+                if ok and type(data) == "table" and data.params then
+                    for i = 1, 2 do
+                        local sample = data.params[i .. "sample"]
+                        if sample and sample ~= "" and sample ~= "-" and sample ~= "none" and sample ~= (_path.tape .. "live!") and util.file_exists(sample) then
+                            used_paths[sample] = true
+                        end
+                    end
+                end
+            end
+        end
+    end
+    local deleted = 0
+    if util.file_exists(BOUNCE_DIR) then
+        local files = util.scandir(BOUNCE_DIR)
+        for _, f in ipairs(files) do
+            if f:match("%.wav$") then
+                local full_path = BOUNCE_DIR .. f
+                if util.file_exists(full_path) and not used_paths[full_path] then
+                    os.remove(full_path)
+                    deleted = deleted + 1
+                end
+            end
+        end
+    end
+    audio_files_cache = nil
+    fx_popup.label = "Deleted " .. deleted .. " files"
+    fx_popup.value = nil
+    fx_popup.time = util.time()
 end
 
 local function register_tap()
@@ -506,7 +595,7 @@ local function setup_params()
         end
     end
     params:add_separator("           ")
-    params:add_option("lock_reverb", "Lock Parameters", {"off", "on"}, 1)
+    params:add_option("lock_reverb", "Lock Parameters", {"off", "on"}, 2)
 
     params:add_group("SHIMMER", 10)
     params:add_control("shimmer_mix1", "Mix", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("shimmer_mix1", function(x) engine.shimmer_mix1(x * 0.01) font.update_fx_cache("shimmer_mix1", x) end)
@@ -708,18 +797,30 @@ local function setup_params()
 
     arp.add_params()
 
-    params:add_group("OTHER", 25)
+    params:add_group("BOUNCE", 9)
+    params:add_binary("bounce", "Bounce!", "trigger", 0) params:set_action("bounce", function() hlp.start_bounce() end)
+    params:add_option("bounce_mode", "Bounce to", {"voice 1", "in place"}, 1)
+    params:add_option("bounce_source", "Source", {"dry", "final mix"}, 2)
+    params:add_option("bounce_volume", "Volume", {"pre", "post"}, 1)
+    params:add_taper("bounce_length", "Length", 0.1, 60, 5, 0, "s")
+    params:add_taper("bounce_xfade", "Crossfade", 0, 5, 1, 0, "s")
+    params:add_option("bounce_reset", "Reset After", {"off", "voice 1", "voice 2", "both"}, 2)
+    params:add_separator("                        ")
+    params:add_binary("delete_unused_bounces", "Delete Unused Files", "trigger", 0) params:set_action("delete_unused_bounces", function() delete_unused_bounces() end)
+
+    params:add_group("OTHER", 26)
     params:add_binary("dry_mode", "Dry Mode", "toggle", 0) params:set_action("dry_mode", function(x) drymode.toggle_dry_mode() end)
     params:add_binary("randomtape1", "Random Tape 1", "trigger", 0) params:set_action("randomtape1", function() load_random_tape_file(1) end)
     params:add_binary("randomtape2", "Random Tape 2", "trigger", 0) params:set_action("randomtape2", function() load_random_tape_file(2) end)
     params:add_binary("unload_all", "Unload All Audio", "trigger", 0) params:set_action("unload_all", function() for i=1, 2 do params:set(i.."seek", 0) params:set(i.."sample", "-") params:set(i.."live_input", 0) params:set(i.."live_direct", 0) audio_active[i] = false osc_positions[i] = 0 end engine.unload_all() update_pan_positioning() end)
+    params:add_option("norm_load", "Normalize Load", {"off", "on"}, 2) params:set_action("norm_load", function(x) engine.norm_load(x - 1) end)
     params:add_binary("global_pitch_size_density_link", "Linked Mode", "toggle", 0) params:set_action("global_pitch_size_density_link", function(value) if value == 1 then for i = 1, 2 do local pitch = params:get(i.."pitch") local size = params:get(i.."size") local density = (clocksync.grain_synced() and clocksync.grain_density(i)) or params:get(i.."density") if size > 0 and density > 0 then local lb = link_base[i] lb.pitch = pitch lb.size = size lb.density = density lb.product = size * density end end end end)
     params:add_option("steps", "Transition Time", {"short", "medium", "long"}, 1) params:set_action("steps", function(value) steps = ({20, 300, 800})[value] end)
     params:add_separator("                                  ")
     for i = 1, 2 do
       params:add_taper(i.. "volume", i.. " volume", -70, 10, -15, 0, "dB") params:set_action(i.. "volume", function(value) if value == -70 then engine.volume(i, 0) else engine.volume(i, math.pow(10, value / 20)) end end)
       params:add_taper(i.. "pan", i.. " pan", -100, 100, 0, 0, "%") params:set_action(i.. "pan", function(value) engine.pan(i, value * 0.01)  end)
-      params:add_taper(i.. "speed", i.. " speed", -2, 2, 0, 0) params:set_action(i.. "speed", function(value) if abs(value) < 0.01 then engine.speed(i, 0) else engine.speed(i, value) end end)
+      params:add_taper(i.. "speed", i.. " speed", -2, 2, 0, 0) params:set_action(i.. "speed", function(value) if abs(value) < 0.01 then engine.speed(i, 0) else engine.speed(i, drymode.stereo_dry_active() and value or value * clocksync.speed_scale()) end end)
       params:add_taper(i.. "density", i.. " density", 0.1, 250, 2.5, 5) params:set_action(i.. "density", function(value) engine.density(i, clocksync.grain_density(i) or value) end)
       params:add_control(i.. "pitch", i.. " pitch", controlspec.new(-48, 48, "lin", 1, 0, "st")) params:set_action(i.. "pitch", function(value) local scale = params:string("pitch_quantize_scale") local quantized = SU.quantize(value, scale) engine.pitch_offset(i, math.pow(0.5, -quantized / 12) * arp.ratio(i)) end)
       params:add_taper(i.. "jitter", i.. " jitter", 0, 999900, 250, 10, "ms") params:set_action(i.. "jitter", function(value) engine.jitter(i, value * 0.001) end)
@@ -728,7 +829,7 @@ local function setup_params()
       params:add_control(i.. "seek", i.. " seek", controlspec.new(0, 100, "lin", 0.01, 0, "%")) params:set_action(i.. "seek", function(value) engine.seek(i, value * 0.01) end) params:lookup_param(i.."seek").save = false
     end
     params:bang()
-    params:set("reverb_mix", -40) params:set("rv_predelay", 20) params:set("rv_lffc", 500) params:set("rv_lowtime", 3.0) params:set("rv_midtime", 11.0) params:set("rv_hfdamp", 8000)
+    params:set("reverb_mix", -40) params:set("rv_predelay", 20) params:set("rv_lffc", 50) params:set("rv_lowtime", 0.1) params:set("rv_midtime", 10.5) params:set("rv_hfdamp", 6000)
     presets.record_defaults()
 end
 
@@ -1440,12 +1541,13 @@ local _FULL_PARAM_KEYS = {{},{}}
 for t = 1, 2 do for i = 1, #_LOCK_PARAMS do _FULL_PARAM_KEYS[t][i] = t .. _LOCK_PARAMS[i] end end
 local _slow_refresh_countdown = 0
 local function refresh_redraw_cache()
+  local spd_scale = drymode.stereo_dry_active() and 1 or clocksync.speed_scale()
   for t = 1,2 do
     local C = PARAM_CACHE.track[t]
     local K = TRACK_KEYS[t]
     C.vol = pget(K.volume)
     C.pan = pget(K.pan)
-    C.spd = pget(K.speed)
+    C.spd = pget(K.speed) * spd_scale
     C.cut = pget(K.cutoff)
     C.hpf = pget(K.hpf)
   end
@@ -1731,7 +1833,16 @@ function redraw()
   if PARAM_CACHE.dry then for x = 7,15,4 do P(LEVEL.hi, x, 0) end end
   if PARAM_CACHE.sym then local sc = SYM_CACHE; for i = 1,62,2 do P(sc[i + 1], 85, sc[i]) end end
   if PARAM_CACHE.evo then local t2 = now * 4; for i = 0,2 do P(floor(8 + 7 * sin(t2 - i * 0.8)), (i * 2) + 6, 63) end end
-  if morph.scene_mode == "on" then
+  local bp = hlp.bounce_pending
+  if bp then
+    local bx = 7 + left_slide
+    local tw = font.plot_text_cached(P, bx, 0, "BOUNCING", LEVEL.dim) - bx - 1
+    local pw = floor(min((now - bp.t) / bp.len, 1) * tw)
+    R(1, bx, 3, tw, 1)
+    if pw > 0 then R(LEVEL.hi, bx, 3, pw, 1) end
+  elseif hlp.bounce_done_time and (now - hlp.bounce_done_time) < 2 then
+    font.plot_text_cached(P, 7 + left_slide, 0, "BOUNCED", LEVEL.hi)
+  elseif morph.scene_mode == "on" then
     R(1, 7 + left_slide, 1, 22, 1)
     if morph.amount > 0 then R(LEVEL.hi, 7 + left_slide, 1, util.linlin(0, 100, 0, 22, morph.amount), 1) end
   else
@@ -1777,6 +1888,9 @@ local osc_handlers = {
     end,
     ["/twins/save_complete"] = function(args)
         showing_save_message = false
+    end,
+    ["/twins/bounce_done"] = function(args)
+        hlp.finish_bounce()
     end}
 osc_handlers["/twins/grain_pos"]   = make_grain_handler(grain_positions)
 local function setup_osc() osc.event = function(path, args) local handler = osc_handlers[path] if handler then handler(args) end end end
