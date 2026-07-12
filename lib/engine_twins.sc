@@ -7,7 +7,9 @@ classvar pitchScales;
 *new { arg context, doneCallback; ^super.new(context, doneCallback); }
 
 readBuf { arg i, path; if(buffersL[i].notNil && buffersR[i].notNil, { if(File.exists(path), { if(normOnLoad == 1, { fork { var shm = "/dev/shm/twins_norm" ++ i ++ ".wav"; var tmp = Buffer.read(context.server, path); context.server.sync; tmp.normalize(-6.dbamp); context.server.sync; tmp.write(shm, "WAV", "float"); context.server.sync; tmp.free; this.loadSplit(i, shm); }; }, { this.loadSplit(i, path); }); }); }); }
-loadSplit { arg i, path; var numChannels = SoundFile.use(path.asString(), { |f| f.numChannels }); Buffer.readChannel(context.server, path, 0, -1, [0], { |b| var oldL = buffersL[i]; voices[i].set(\buf_l, b); drySynths[i].set(\buf_l, b); buffersL[i] = b; oldL.free; if(numChannels <= 1, { var oldR = buffersR[i]; voices[i].set(\buf_r, b, \is_stereo, 0); voiceIsStereo[i] = 0; buffersR[i] = b; if(oldR !== oldL) { oldR.free }; voices[i].set(\t_reset_pos, 1); voices[i].run(true); drySynths[i].set(\buf_r, b, \t_reset_pos, 1); voiceRunning[i] = true; this.updateDryRun(i); }, { Buffer.readChannel(context.server, path, 0, -1, [1], { |b2| var oldR = buffersR[i]; voices[i].set(\buf_r, b2, \is_stereo, 1); voiceIsStereo[i] = 1; buffersR[i] = b2; if(oldR !== oldL) { oldR.free }; voices[i].set(\t_reset_pos, 1); voices[i].run(true); drySynths[i].set(\buf_r, b2, \t_reset_pos, 1); voiceRunning[i] = true; this.updateDryRun(i); }); }); }); }
+loadSplit { arg i, path; var numChannels = SoundFile.use(path.asString(), { |f| f.numChannels }); this.sendWaveform(i, path); Buffer.readChannel(context.server, path, 0, -1, [0], { |b| var oldL = buffersL[i]; voices[i].set(\buf_l, b); drySynths[i].set(\buf_l, b); buffersL[i] = b; oldL.free; if(numChannels <= 1, { var oldR = buffersR[i]; voices[i].set(\buf_r, b, \is_stereo, 0); voiceIsStereo[i] = 0; buffersR[i] = b; if(oldR !== oldL) { oldR.free }; voices[i].set(\t_reset_pos, 1); voices[i].run(true); drySynths[i].set(\buf_r, b, \t_reset_pos, 1); voiceRunning[i] = true; this.updateDryRun(i); }, { Buffer.readChannel(context.server, path, 0, -1, [1], { |b2| var oldR = buffersR[i]; voices[i].set(\buf_r, b2, \is_stereo, 1); voiceIsStereo[i] = 1; buffersR[i] = b2; if(oldR !== oldL) { oldR.free }; voices[i].set(\t_reset_pos, 1); voices[i].run(true); drySynths[i].set(\buf_r, b2, \t_reset_pos, 1); voiceRunning[i] = true; this.updateDryRun(i); }); }); }); }
+
+sendWaveform { arg i, path; fork { var sf = SoundFile.openRead(path.asString); if(sf.notNil, { var cols = 30, ch = max(sf.numChannels, 1), frames = sf.numFrames; if(frames > 0, { var block = min(2048, max(1, frames div: cols)); var peaks = Array.fill(cols, { arg c; var raw = FloatArray.newClear(block * ch); sf.seek(frames * c div: cols, 0); sf.readData(raw); if(raw.size > 0, { raw.abs.maxItem }, { 0 }); }); sf.close; nornsAddr.sendMsg(*(["/twins/waveform", i] ++ peaks)); }, { sf.close; }); }); }; }
 
 unloadAll { fork { 2.do({ arg i; if(voices[i].notNil, { voices[i].set(\buf_l, silentBuffer, \buf_r, silentBuffer, \is_stereo, 0, \t_reset_pos, 1); voices[i].run(false); }); voiceIsStereo[i] = 0; drySynths[i].set(\buf_l, silentBuffer, \buf_r, silentBuffer, \t_reset_pos, 1); voiceRunning[i] = false; this.updateDryRun(i); voicesUsingLiveBuffer[i] = false; liveInputBuffersL[i].zero; liveInputBuffersR[i].zero; if(liveInputRecorders[i].notNil, { liveInputRecorders[i].free; liveInputRecorders[i] = nil; }); }); wobbleBuffer.zero; glitchBuffer.zero; }; }
 
@@ -260,7 +262,7 @@ alloc {
             var phasor = Phasor.ar(0, 1, 0, bufFrames);
             var oldL = BufRd.ar(1, bufL, phasor);
             var oldR = BufRd.ar(1, bufR, phasor);
-            var mixedL, mixedR, normPos;
+            var mixedL, mixedR, normPos, tick;
             in = Select.ar(isMono, [in, [Mix.ar(in), Mix.ar(in)]]);
             mixedL = XFade2.ar(oldL, in[0], mix * 2 - 1);
             mixedR = XFade2.ar(oldR, in[1], mix * 2 - 1);
@@ -268,7 +270,8 @@ alloc {
             BufWr.ar(mixedR, bufR, phasor);
             normPos = phasor / bufFrames;
             Out.kr(recPosBus, A2K.kr(normPos));
-            SendReply.kr(Impulse.kr(30), '/rec_pos', [voice, normPos]);
+            tick = Impulse.kr(30);
+            SendReply.kr(tick, '/rec_pos', [voice, normPos, Peak.kr(mixedL.abs.max(mixedR.abs), Delay1.kr(tick))]);
         }).add;
 
         SynthDef(\bufInterleave, {
@@ -666,7 +669,7 @@ alloc {
         this.addCommand("live_buffer_length","f",{ arg msg; var length=msg[1],myGeneration; liveBufferAllocGeneration=liveBufferAllocGeneration+1; myGeneration=liveBufferAllocGeneration; fork{ var newBufsL=Array.fill(2,{Buffer.alloc(context.server,(context.server.sampleRate*length).round.asInteger)}),newBufsR=Array.fill(2,{Buffer.alloc(context.server,(context.server.sampleRate*length).round.asInteger)}); context.server.sync; if(myGeneration==liveBufferAllocGeneration,{ var oldBufsL=liveInputBuffersL,oldBufsR=liveInputBuffersR; liveInputBuffersL=newBufsL; liveInputBuffersR=newBufsR; liveInputRecorders.do({ arg recorder,i; if(recorder.notNil,{ recorder.free; liveRecPosBuses[i].set(-1.0); liveInputRecorders[i]=Synth.new(\liveInputRecorder,[\bufL,liveInputBuffersL[i],\bufR,liveInputBuffersR[i],\mix,liveBufferMix,\voice,i,\recPosBus,liveRecPosBuses[i].index],context.xg,'addToHead'); voices[i].set(\buf_l,liveInputBuffersL[i],\buf_r,liveInputBuffersR[i],\rec_pos_bus,liveRecPosBuses[i].index,\t_reset_pos,1); drySynths[i].set(\buf_l,liveInputBuffersL[i],\buf_r,liveInputBuffersR[i],\rec_pos_bus,liveRecPosBuses[i].index,\t_reset_pos,1);},{ if(voicesUsingLiveBuffer[i] && voices[i].notNil,{ voices[i].set(\buf_l,liveInputBuffersL[i],\buf_r,liveInputBuffersR[i],\t_reset_pos,1); drySynths[i].set(\buf_l,liveInputBuffersL[i],\buf_r,liveInputBuffersR[i],\t_reset_pos,1); }); }); });oldBufsL.do({ arg buf; if(buf.notNil,{buf.free})}); oldBufsR.do({ arg buf; if(buf.notNil,{buf.free})});},{ newBufsL.do({ arg buf; if(buf.notNil,{buf.free})}); newBufsR.do({ arg buf; if(buf.notNil,{buf.free})});});};});
 
         o = OSCFunc({ |msg| var voice = msg[3].asInteger; nornsAddr.sendMsg("/twins/buf_pos", voice, msg[4]); nornsAddr.sendMsg("/twins/voice_peak", voice, msg[5], msg[6]);}, '/voice_state', context.server.addr);
-        o_rec = OSCFunc({ |msg| nornsAddr.sendMsg("/twins/rec_pos", msg[3].asInteger, msg[4]); }, '/rec_pos', context.server.addr);
+        o_rec = OSCFunc({ |msg| nornsAddr.sendMsg("/twins/rec_pos", msg[3].asInteger, msg[4], msg[5]); }, '/rec_pos', context.server.addr);
         o_grain = OSCFunc({ |msg| nornsAddr.sendMsg("/twins/grain_pos", msg[3].asInteger, msg[4], msg[5], msg[6]); }, '/grain_pos', context.server.addr);
         o_voice_peak = OSCFunc({ |msg| nornsAddr.sendMsg("/twins/voice_peak", msg[3].asInteger, msg[4], msg[5]); }, '/voice_peak', context.server.addr);
         o_delayduck = OSCFunc({ |msg| nornsAddr.sendMsg("/twins/delay_duck", msg[3]); }, '/delay_duck', context.server.addr);

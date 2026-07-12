@@ -64,7 +64,7 @@ local undo = include("lib/undo")
 local midi_input = include("lib/midi_input")
 local arp = include("lib/arp")
 local clocksync = include("lib/clocksync")
-local ctx = {lfo = lfo, arp = arp, clocksync = clocksync}
+local ctx = {lfo = lfo, arp = arp, clocksync = clocksync, waveforms = {[0] = {}}}
 for _, m in ipairs({presets, macro, drymode, font, lfo, arp}) do m.set_context(ctx) end
 local randomize_metro = { [1] = nil, [2] = nil }
 local active_clocks = {}
@@ -85,6 +85,9 @@ local FX_POPUP_DURATION = 1
 local longpress_metro = nil
 local grain_positions = {[1] = {}, [2] = {}}
 local rec_positions = {[1] = 0, [2] = 0}
+ctx.live_wf = {raw = {[1] = {}, [2] = {}}, norm = {[1] = {}, [2] = {}}, col = {-1, -1}, max = {0, 0}}
+function ctx.live_wf.reset(i) local raw, nm = ctx.live_wf.raw[i], ctx.live_wf.norm[i] for c = 0, 29 do raw[c] = 0 nm[c] = 0 end ctx.live_wf.col[i] = -1 ctx.live_wf.max[i] = 0 end
+ctx.live_wf.reset(1) ctx.live_wf.reset(2)
 local cached_buffer_durations = {[1] = 1, [2] = 1}
 local voice_peak_amplitudes = {[1] = {l = 0, r = 0}, [2] = {l = 0, r = 0}}
 local link_base = {[1]={pitch=nil,size=nil,density=nil,product=nil}, [2]={pitch=nil,size=nil,density=nil,product=nil}}
@@ -509,16 +512,16 @@ end
 local function setup_params()
     params:add_separator("Input")
     for i = 1, 2 do
-      params:add_file(i.."sample","Sample "..i, _path.tape); params:set_action(i.."sample",function(f) if f~=nil and f~="" and f~="none" and f~="-" and f~=(_path.tape.."live!") and not f:match("/$") then if params:get(i.."live_input")==1 then engine.set_live_input(i,0) params:set(i.."live_input",0,true) end if params:get(i.."live_direct")==1 then engine.live_direct(i,0) params:set(i.."live_direct",0,true) end local jitter_locked=is_param_locked(i,"jitter"); if not jitter_locked then lfo.clearLFOs(tostring(i),"jitter"); end engine.read(i,f); if not _G.preset_loading then params:set(i.."seek",0) end; audio_active[i]=true; update_pan_positioning(); if _G.preset_loading then blim.apply(i, get_audio_duration(f)) else blim.load(i, f, not jitter_locked) end else if not jitter_locked then lfo.clearLFOs(tostring(i),"jitter"); end audio_active[i]=false; osc_positions[i]=0; update_pan_positioning(); end end)
+      params:add_file(i.."sample","Sample "..i, _path.tape); params:set_action(i.."sample",function(f) if f~=nil and f~="" and f~="none" and f~="-" and f~=(_path.tape.."live!") and not f:match("/$") then if params:get(i.."live_input")==1 then engine.set_live_input(i,0) params:set(i.."live_input",0,true) end if params:get(i.."live_direct")==1 then engine.live_direct(i,0) params:set(i.."live_direct",0,true) end local jitter_locked=is_param_locked(i,"jitter"); if not jitter_locked then lfo.clearLFOs(tostring(i),"jitter"); end engine.read(i,f); ctx.waveforms[i]=nil; if not _G.preset_loading then params:set(i.."seek",0) end; audio_active[i]=true; update_pan_positioning(); if _G.preset_loading then blim.apply(i, get_audio_duration(f)) else blim.load(i, f, not jitter_locked) end elseif f==(_path.tape.."live!") then do end else local jitter_locked=is_param_locked(i,"jitter"); if not jitter_locked then lfo.clearLFOs(tostring(i),"jitter"); end audio_active[i]=false; osc_positions[i]=0; update_pan_positioning(); end end)
     end
     params:add_binary("randomtapes", "Random Tapes", "trigger", 0) params:set_action("randomtapes", function() load_random_tape_file() end)
 
     params:add_group("LIVE!", 10)
     for i = 1, 2 do
-      params:add_binary(i.."live_input", "Live Buffer "..i.." ● ►", "toggle", 0) params:set_action(i.."live_input", function(value) if value == 1 then if params:get(i.."live_direct") == 1 then params:set(i.."live_direct", 0) end engine.set_live_input(i, 1) engine.live_mono(i, params:get("isMono") - 1) audio_active[i] = true if not _G.preset_loading then blim.apply(i, params:get("live_buffer_length")) else cached_buffer_durations[i]=params:get("live_buffer_length") end set_sample_live(i) update_pan_positioning() else engine.set_live_input(i, 0) if not audio_active[i] and params:get(i.."live_direct") == 0 then osc_positions[i] = 0 params:set(i.."sample", "-") pause_voice_if_idle(i) else set_sample_live(i) update_pan_positioning() end end end)
+      params:add_binary(i.."live_input", "Live Buffer "..i.." ● ►", "toggle", 0) params:set_action(i.."live_input", function(value) if value == 1 then if params:get(i.."live_direct") == 1 then params:set(i.."live_direct", 0) end engine.set_live_input(i, 1) engine.live_mono(i, params:get("isMono") - 1) audio_active[i] = true ctx.waveforms[i] = ctx.live_wf.norm[i] ctx.live_wf.col[i] = -1 if not _G.preset_loading then blim.apply(i, params:get("live_buffer_length")) else cached_buffer_durations[i]=params:get("live_buffer_length") end set_sample_live(i) update_pan_positioning() else engine.set_live_input(i, 0) if not audio_active[i] and params:get(i.."live_direct") == 0 then osc_positions[i] = 0 params:set(i.."sample", "-") pause_voice_if_idle(i) else set_sample_live(i) update_pan_positioning() end end end)
     end
     params:add_control("live_buffer_mix", "Overdub", controlspec.new(0, 100, "lin", 1, 100, "%")) params:set_action("live_buffer_mix", function(value) engine.live_buffer_mix(value * 0.01) end)
-    params:add_taper("live_buffer_length", "Buffer Length", 0.05, 10, 1, 3, "s") params:set_action("live_buffer_length", function(value) engine.live_buffer_length(value) for i=1,2 do if params:get(i.."live_input")==1 then if not _G.preset_loading then blim.apply(i, value) else cached_buffer_durations[i]=value end end end end)
+    params:add_taper("live_buffer_length", "Buffer Length", 0.05, 10, 1, 3, "s") params:set_action("live_buffer_length", function(value) engine.live_buffer_length(value) ctx.live_wf.reset(1) ctx.live_wf.reset(2) for i=1,2 do if params:get(i.."live_input")==1 then if not _G.preset_loading then blim.apply(i, value) else cached_buffer_durations[i]=value end end end end)
     params:add{type = "trigger", id = "save_live_buffer1", name = "Buffer1 to Tape", action = function() local timestamp = os.date("%Y%m%d_%H%M%S") local filename = "live1_"..timestamp..".wav" engine.save_live_buffer(1, filename) audio_files_cache = nil end}
     params:add{type = "trigger", id = "save_live_buffer2", name = "Buffer2 to Tape", action = function() local timestamp = os.date("%Y%m%d_%H%M%S") local filename = "live2_"..timestamp..".wav" engine.save_live_buffer(2, filename) audio_files_cache = nil end}
     for i = 1, 2 do
@@ -812,7 +815,7 @@ local function setup_params()
     params:add_binary("dry_mode", "Dry Mode", "toggle", 0) params:set_action("dry_mode", function(x) drymode.toggle_dry_mode() end)
     params:add_binary("randomtape1", "Random Tape 1", "trigger", 0) params:set_action("randomtape1", function() load_random_tape_file(1) end)
     params:add_binary("randomtape2", "Random Tape 2", "trigger", 0) params:set_action("randomtape2", function() load_random_tape_file(2) end)
-    params:add_binary("unload_all", "Unload All Audio", "trigger", 0) params:set_action("unload_all", function() for i=1, 2 do params:set(i.."seek", 0) params:set(i.."sample", "-") params:set(i.."live_input", 0) params:set(i.."live_direct", 0) audio_active[i] = false osc_positions[i] = 0 end engine.unload_all() update_pan_positioning() end)
+    params:add_binary("unload_all", "Unload All Audio", "trigger", 0) params:set_action("unload_all", function() for i=1, 2 do params:set(i.."seek", 0) params:set(i.."sample", "-") params:set(i.."live_input", 0) params:set(i.."live_direct", 0) audio_active[i] = false osc_positions[i] = 0 ctx.live_wf.reset(i) end engine.unload_all() update_pan_positioning() end)
     params:add_option("norm_load", "Normalize Load", {"off", "on"}, 2) params:set_action("norm_load", function(x) engine.norm_load(x - 1) end)
     params:add_binary("global_pitch_size_density_link", "Linked Mode", "toggle", 0) params:set_action("global_pitch_size_density_link", function(value) if value == 1 then for i = 1, 2 do local pitch = params:get(i.."pitch") local size = params:get(i.."size") local density = (clocksync.grain_synced() and clocksync.grain_density(i)) or params:get(i.."density") if size > 0 and density > 0 then local lb = link_base[i] lb.pitch = pitch lb.size = size lb.density = density lb.product = size * density end end end end)
     params:add_option("steps", "Transition Time", {"short", "medium", "long"}, 1) params:set_action("steps", function(value) steps = ({20, 300, 800})[value] end)
@@ -1526,7 +1529,7 @@ local _ENV_LUT, _FADE_LUT = {}, {}
 do
   local sin,cos,exp,abs,pi=sin,math.cos,math.exp,abs,math.pi
   local lv_scale = LEVEL.hi - 1
-  local function bld(fn) local t={} for i=0,_GLUT_N-1 do t[i]=fn((i+0.5)/_GLUT_N)*lv_scale end return t end
+  local function bld(fn) local t={} local mx=0 for i=0,_GLUT_N-1 do local v=fn((i+0.5)/_GLUT_N)*lv_scale t[i]=v if v>mx then mx=v end end t[-1]=mx return t end
   for i=0,_GLUT_N-1 do _FADE_LUT[i]=sin(pi*(i+0.5)/_GLUT_N) end
   _ENV_LUT[1]=bld(function(p) return sin(pi*p) end)
   _ENV_LUT[2]=bld(function(p) if p<0.25 then return 0.5*(1-cos(pi*p*4)) elseif p>0.75 then return 0.5*(1-cos(pi*(1-p)*4)) else return 1.0 end end)
@@ -1610,7 +1613,7 @@ local function speed_text(t, s)
   c.v, c.s = q, str
   return str
 end
-local function draw_grains(t, x, now)
+local function draw_grains(t, x, now, col)
   local grains = grain_positions[t]
   if not grains then return end
   local C = PARAM_CACHE.track[t]
@@ -1631,43 +1634,67 @@ local function draw_grains(t, x, now)
     local g = grains[gi]
     local age = now - g.t
     local gsize = g.size
-    if age > gsize then
+    local dlife = gsize < 0.15 and 0.15 or gsize
+    if age > dlife then
       _grain_pool[#_grain_pool + 1] = g
     else
       keep = keep + 1
       grains[keep] = g
-      if drawn < 25 then
+      if drawn < 25 or not g.shown then
         drawn = drawn + 1
+        g.shown = true
         local gsz = min(gsize / dur, 1)
-        local inv_gsz = 1 / gsz
         local forward = spd_fwd ~= (g.rv < dir_mod)
         local lut = is_random_env and (_ENV_LUT[floor(g.rv * 4) + 1] or _ENV_LUT[1]) or lut_default
-        local fi = floor(age / gsize * lut_n)
+        local fi = floor(age / dlife * lut_n)
         if fi > lut_nm then fi = lut_nm end
         local fade = _FADE_LUT[fi]
         local start_pos, end_pos
         if forward then start_pos = g.pos; end_pos = g.pos + gsz else start_pos = g.pos - gsz; end_pos = g.pos end
         local dl = floor(start_pos * BAR_W)
         local dr = ceil(end_pos * BAR_W) - 1
+        if dr <= dl or gsz * BAR_W <= 1 then
+          local lv = ceil(lut[-1] * fade)
+          if lv < 1 then lv = 1 end
+          local px = floor((start_pos + end_pos) * 0.5 * BAR_W) % BAR_W
+          if col then
+            if lv > col[px] then col[px] = lv end
+          else
+            P(lv, x + px, seek_y)
+          end
+        else
+        local inv_gsz = 1 / gsz
         local sp
         if forward then sp = ((dl + 0.5) * inv_bar_w - start_pos) * inv_gsz else sp = 1 - (((dl + 0.5) * inv_bar_w - start_pos) * inv_gsz) end
         local sp_dt = inv_gsz * inv_bar_w
         if not forward then sp_dt = -sp_dt end
-        for px_unwrapped = dl, dr do
-          local idx = floor(sp * lut_n)
-          if idx < 0 then idx = 0 elseif idx > lut_nm then idx = lut_nm end
-          local lv = ceil(lut[idx] * fade)
-          if lv < 1 then lv = 1 end
-          local px = px_unwrapped % BAR_W
-          P(lv, x + px, seek_y)
-          sp = sp + sp_dt
+        if col then
+          for px_unwrapped = dl, dr do
+            local idx = floor(sp * lut_n)
+            if idx < 0 then idx = 0 elseif idx > lut_nm then idx = lut_nm end
+            local lv = ceil(lut[idx] * fade)
+            local px = px_unwrapped % BAR_W
+            if lv > col[px] then col[px] = lv end
+            sp = sp + sp_dt
+          end
+        else
+          for px_unwrapped = dl, dr do
+            local idx = floor(sp * lut_n)
+            if idx < 0 then idx = 0 elseif idx > lut_nm then idx = lut_nm end
+            local lv = ceil(lut[idx] * fade)
+            if lv < 1 then lv = 1 end
+            local px = px_unwrapped % BAR_W
+            P(lv, x + px, seek_y)
+            sp = sp + sp_dt
+          end
+        end
         end
       end
     end
   end
   for i = keep + 1, #grains do grains[i] = nil end
 end
-local function draw_seek_bar_viz(t, x, mode, now)
+local function draw_seek_bar_viz(t, x, mode, now, wf, active)
   local C = PARAM_CACHE.track[t]
   local loaded = audio_active[t] or C.in_ == 1 or C.dir_ == 1
   if mode == "speed" then
@@ -1684,6 +1711,53 @@ local function draw_seek_bar_viz(t, x, mode, now)
     return
   end
   local animated_bar_w = floor(BAR_W * seek_bar_width)
+  if wf ~= nil then
+    local wmid = Y.seek - 5
+    if wf then
+      local col
+      local grains = grain_positions[t]
+      if #grains > 0 then
+        if C.gran and C.gran > 0 then
+          col = ctx.waveforms[0]
+          for i = 0, BAR_W - 1 do col[i] = 0 end
+          draw_grains(t, x, now, col)
+        else
+          for i = #grains, 1, -1 do _grain_pool[#_grain_pool + 1] = grains[i] grains[i] = nil end
+        end
+      end
+      local base = flash_level(t, 1)
+      local run_x, run_lv, run_hh = 0, -1, 0
+      for i = 0, animated_bar_w - 1 do
+        local lv = base
+        if col then local g = col[i] if g > lv then lv = g end end
+        local hh = wf[i]
+        if lv ~= run_lv or hh ~= run_hh then
+          if run_lv > 0 then R(run_lv, x + run_x, wmid - run_hh, i - run_x, run_hh + run_hh + 1) end
+          run_x, run_lv, run_hh = i, lv, hh
+        end
+      end
+      if run_lv > 0 then R(run_lv, x + run_x, wmid - run_hh, animated_bar_w - run_x, run_hh + run_hh + 1) end
+    elseif animated_bar_w > 0 then
+      R(active and 4 or 1, x, wmid, animated_bar_w, 1)
+    end
+    if animated_bar_w > 0 then
+      local ph = floor(osc_positions[t] * animated_bar_w)
+      if ph >= BAR_W then ph = BAR_W - 1 end
+      if active then
+        R(LEVEL.hi, x + ph, wmid - 4, 1, 9)
+        R(LEVEL.hi, x + ph - 1, wmid - 4, 3, 1)
+        R(LEVEL.hi, x + ph - 1, wmid + 4, 3, 1)
+      else
+        R(15, x + ph, wmid - 4, 1, 9)
+      end
+      if C.in_ == 1 then
+        local rh = floor(rec_positions[t] * animated_bar_w)
+        if rh >= BAR_W then rh = BAR_W - 1 end
+        R(active and LEVEL.hi or LEVEL.dim, x + rh, wmid - 4, 2, 9)
+      end
+    end
+    return
+  end
   if C.dir_ ~= 1 then R(1, x, Y.seek, animated_bar_w, 1) end
   if C.gran and C.gran > 0 then draw_grains(t, x, now)
   else
@@ -1691,7 +1765,6 @@ local function draw_seek_bar_viz(t, x, mode, now)
     for i = #grains, 1, -1 do _grain_pool[#_grain_pool + 1] = grains[i] grains[i] = nil end
   end
   if loaded and C.dir_ ~= 1 then R(LEVEL.hi, x + floor(osc_positions[t] * animated_bar_w), Y.seek - 1, 1, 2) end
-  if C.in_ == 1 then R(LEVEL.hi, x + floor(rec_positions[t] * BAR_W), Y.seek - 1, 2, 2) end
 end
 
 local OFFS, TXP = {0, 0}, {0, 0}
@@ -1739,7 +1812,7 @@ function redraw()
       local sync_label = density_synced and clocksync.grain_division_label(t) or nil
       local txt = sync_label or (fmt and val_text(param, val, fmt, t, row.st and C.pitch_rand or nil) or params:string(param))
       T(flash_level(t, hi and LEVEL.hi or LEVEL.val), x, y, txt)
-      if C.lfo_on[param] and not sync_label then
+      if name ~= "spread" and C.lfo_on[param] and not sync_label then
         local rc = _LFO_RANGE_CACHE[param]
         if not rc then
           rc = {0,0,0} _LFO_RANGE_CACHE[param] = rc
@@ -1755,7 +1828,7 @@ function redraw()
           local overflow_w = max(1, floor(sqrt(overflow_ratio) * BAR_W))
           R(LEVEL.hi, x, y + 1, overflow_w, 1)
         end
-      elseif C.lfo_on[param] and sync_label then
+      elseif name ~= "spread" and C.lfo_on[param] and sync_label then
         local bar_w = clamp(floor(clocksync.grain_division_norm(t) * BAR_W), 0, BAR_W)
         R(LEVEL.dim + 2, x, y + 1, bar_w, 1)
       end
@@ -1770,11 +1843,15 @@ function redraw()
     local x = TXP[t]
     local C = PARAM_CACHE.track[t]
     local vL = active and LEVEL.hi or LEVEL.val
+    local wf
+    if mode == "seek" and C.dir_ ~= 1 then wf = (audio_active[t] or C.in_ == 1) and ctx.waveforms[t] end
     if mode == "seek" then
       if C.locked["seek"] then draw_lock(x, y_bot) end
-      local txt
-      if C.in_ == 1 then txt = "live" elseif C.dir_ == 1 then txt = "direct" else txt = fast_percent(osc_positions[t] * 100) end
-      T(flash_level(t, vL), x, y_bot + 1, txt)
+      if wf == nil then
+        local txt
+        if C.in_ == 1 then txt = "live" elseif C.dir_ == 1 then txt = "direct" else txt = fast_percent(osc_positions[t] * 100) end
+        T(flash_level(t, vL), x, y_bot + 1, txt)
+      end
     elseif mode == "speed" then
       if C.locked["speed"] then draw_lock(x, y_bot) end
       T(flash_level(t, LEVEL.hi), x, y_bot + 1, speed_text(t, C.spd))
@@ -1789,12 +1866,12 @@ function redraw()
     end
     if mode == "seek" or mode == "speed" then
       local audio_loaded = audio_active[t] or C.in_ == 1 or C.dir_ == 1
-      if audio_loaded and C.dir_ ~= 1 then
+      if audio_loaded and C.dir_ ~= 1 and not wf then
         local icon
         if abs(C.spd) < 0.01 then icon = "⏸" elseif C.spd > 0 then icon = "▶" else icon = "◀" end
         T(vL, (t == 1 and 77 or 118) + OFFS[t], y_bot + 1, icon)
       end
-      draw_seek_bar_viz(t, x, mode, now)
+      draw_seek_bar_viz(t, x, mode, now, wf, active)
     end
   end
   for t = 1,2 do
@@ -1862,7 +1939,7 @@ function redraw()
   screen.update()
 end
 
-local function make_grain_handler(bucket) return function(args) local vid = args[1]+1 if audio_active[vid] then local b = bucket[vid] local np = #_grain_pool local g if np > 0 then g = _grain_pool[np] _grain_pool[np] = nil else g = {} end g.pos, g.size, g.t, g.rv = args[2], args[3], util.time(), args[4] or 0.5 b[#b+1] = g end end end
+local function make_grain_handler(bucket) return function(args) local vid = args[1]+1 if audio_active[vid] then local b = bucket[vid] local n = #b if n < 64 then local np = #_grain_pool local g if np > 0 then g = _grain_pool[np] _grain_pool[np] = nil else g = {} end g.pos, g.size, g.t, g.rv, g.shown = args[2], args[3], util.time(), args[4] or 0.5, false b[n+1] = g end end end end
 local SEEK_KEYS = {"1seek", "2seek"}
 local LIVE_IN_KEYS = {"1live_input", "2live_input"}
 local LIVE_DIR_KEYS = {"1live_direct", "2live_direct"}
@@ -1875,8 +1952,40 @@ local osc_handlers = {
         end
     end,
     ["/twins/rec_pos"] = function(args)
-        local vid, pos = args[1] + 1, args[2]
-        if pget(LIVE_IN_KEYS[vid]) == 1 then rec_positions[vid] = pos end
+        local vid, pos, peak = args[1] + 1, args[2], args[3]
+        if pget(LIVE_IN_KEYS[vid]) == 1 then
+            rec_positions[vid] = pos
+            if peak then
+                local lw = ctx.live_wf
+                local raw = lw.raw[vid]
+                local col = floor(pos * BAR_W)
+                if col >= BAR_W then col = BAR_W - 1 end
+                local last = lw.col[vid]
+                if col ~= last then
+                    local c = last >= 0 and (last + 1) % BAR_W or col
+                    while true do raw[c] = 0 if c == col then break end c = (c + 1) % BAR_W end
+                    lw.col[vid] = col
+                end
+                local reset_happened = col ~= last
+                if peak > raw[col] then raw[col] = peak end
+                local nm = lw.norm[vid]
+                local mx = lw.max[vid]
+                if reset_happened or raw[col] > mx then
+                    if reset_happened then
+                        mx = 0
+                        for c = 0, BAR_W - 1 do local v = raw[c] if v > mx then mx = v end end
+                    else
+                        mx = raw[col]
+                    end
+                    lw.max[vid] = mx
+                    local s = mx > 0 and 4 / mx or 0
+                    for c = 0, BAR_W - 1 do nm[c] = floor(raw[c] * s + 0.5) end
+                else
+                    local s = mx > 0 and 4 / mx or 0
+                    nm[col] = floor(raw[col] * s + 0.5)
+                end
+            end
+        end
     end,
     ["/twins/voice_peak"] = function(args)
         local voice, peakL, peakR = args[1] + 1, args[2], args[3]
@@ -1893,6 +2002,14 @@ local osc_handlers = {
         hlp.finish_bounce()
     end}
 osc_handlers["/twins/grain_pos"]   = make_grain_handler(grain_positions)
+osc_handlers["/twins/waveform"] = function(args)
+    local vid = args[1] + 1
+    local wf, mx = {}, 0
+    for c = 0, BAR_W - 1 do local v = args[c + 2] or 0 wf[c] = v if v > mx then mx = v end end
+    local s = mx > 0 and 4 / mx or 0
+    for c = 0, BAR_W - 1 do wf[c] = floor(wf[c] * s + 0.5) end
+    ctx.waveforms[vid] = wf
+end
 local function setup_osc() osc.event = function(path, args) local handler = osc_handlers[path] if handler then handler(args) end end end
 
 local function setup_undo()
