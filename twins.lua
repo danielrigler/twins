@@ -1738,22 +1738,20 @@ local function draw_seek_bar_viz(t, x, mode, now, wf, active)
       end
       if run_lv > 0 then R(run_lv, x + run_x, wmid - run_hh, animated_bar_w - run_x, run_hh + run_hh + 1) end
     elseif animated_bar_w > 0 then
-      R(active and 4 or 1, x, wmid, animated_bar_w, 1)
+      T(flash_level(t, active and LEVEL.hi or LEVEL.val), x, wmid + 2, "empty")
     end
-    if animated_bar_w > 0 then
+    if loaded and animated_bar_w > 0 then
       local ph = floor(osc_positions[t] * animated_bar_w)
       if ph >= BAR_W then ph = BAR_W - 1 end
+      R(LEVEL.hi, x + ph, wmid - 4, 1, 9)
       if active then
-        R(LEVEL.hi, x + ph, wmid - 4, 1, 9)
         R(LEVEL.hi, x + ph - 1, wmid - 4, 3, 1)
         R(LEVEL.hi, x + ph - 1, wmid + 4, 3, 1)
-      else
-        R(15, x + ph, wmid - 4, 1, 9)
       end
       if C.in_ == 1 then
         local rh = floor(rec_positions[t] * animated_bar_w)
         if rh >= BAR_W then rh = BAR_W - 1 end
-        R(active and LEVEL.hi or LEVEL.dim, x + rh, wmid - 4, 2, 9)
+        R(LEVEL.hi, x + rh, wmid - 4, 2, 9)
       end
     end
     return
