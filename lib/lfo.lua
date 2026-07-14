@@ -53,7 +53,7 @@ local function limit_keys(track, suffix)
     return k[1], k[2]
 end
 function lfo.is_param_locked(track, param_name)
-    local key = track .. "lock_" .. param_name
+    local key = (param_name == "eq_tilt") and "lock_eq" or (track .. "lock_" .. param_name)
     return params.lookup[key] and pget(key) == 2
 end
 local function is_audio_loaded(track)
@@ -137,7 +137,7 @@ function lfo.set_sine_all(enabled)
         saved_shapes = {}
     end
 end
-lfo.lfo_targets = {"none", "1pan", "2pan", "1seek", "2seek", "1jitter", "2jitter", "1spread", "2spread", "1size", "2size", "1density", "2density", "1volume", "2volume", "1pitch", "2pitch", "1cutoff", "2hpf", "1speed", "2speed", "1hpf", "2cutoff"}
+lfo.lfo_targets = {"none", "1pan", "2pan", "1seek", "2seek", "1jitter", "2jitter", "1spread", "2spread", "1size", "2size", "1density", "2density", "1volume", "2volume", "1pitch", "2pitch", "1cutoff", "2hpf", "1speed", "2speed", "1hpf", "2cutoff", "1eq_tilt", "2eq_tilt"}
 local LFO_TARGET_REVERSE = {}
 for i, t in ipairs(lfo.lfo_targets) do LFO_TARGET_REVERSE[t] = i end
 lfo.target_index = LFO_TARGET_REVERSE
@@ -163,6 +163,8 @@ lfo.target_ranges = {
     ["2pitch"] = {depth = {5, 30}, offset = {-1, 1}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.0},
     ["1cutoff"] = {depth = {30, 85}, offset = {0.1, 0.9}, frequency = {0.1, 0.6}, waveform = {"sine"}, chance = 0.3},
     ["2cutoff"] = {depth = {30, 85}, offset = {0.1, 0.9}, frequency = {0.1, 0.6}, waveform = {"sine"}, chance = 0.3},
+    ["1eq_tilt"] = {depth = {5, 30}, offset = {0, 0}, frequency = {0.1, 0.6}, waveform = {"sine"}, chance = 0.3},
+    ["2eq_tilt"] = {depth = {5, 50}, offset = {0, 0}, frequency = {0.1, 0.6}, waveform = {"sine"}, chance = 0.3},
 }
 
 local param_ranges = {
@@ -176,6 +178,7 @@ local param_ranges = {
     ["1pitch"] = {-48, 48}, ["2pitch"] = {-48, 48},
     ["1cutoff"] = {20, 19999}, ["2cutoff"] = {20, 19999},
     ["1hpf"] = {20, 20000}, ["2hpf"] = {20, 20000},
+    ["1eq_tilt"] = {-1, 1}, ["2eq_tilt"] = {-1, 1},
 }
 local randomize_param_ranges = {["1size"] = {20, 599}, ["2size"] = {20, 599}, ["1density"] = {1, 30}, ["2density"] = {1, 30}}
 local USER_LIMIT_PARAMS = {
@@ -400,7 +403,7 @@ local function sibling_target(target)
     return target:gsub("^(%d)(.*)", function(n, rest) return tostring((tonumber(n) % 2) + 1) .. rest end)
 end
 function lfo.assign_to_current_row(current_mode, current_filter_mode)
-    local param_map = {seek = "seek", pan = "pan", jitter = "jitter", size = "size", density = "density", spread = "spread", speed = "speed", pitch = "pitch"}
+    local param_map = {seek = "seek", pan = "pan", jitter = "jitter", size = "size", density = "density", spread = "spread", speed = "speed", pitch = "pitch", eq = "eq_tilt"}
     local param_name = param_map[current_mode]
     if not param_name then return end
     if param_name == "seek" and clocksync_ref and clocksync_ref.reseek_active() then return end

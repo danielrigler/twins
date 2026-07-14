@@ -6,7 +6,7 @@
 --            by: @dddstudio                       
 -- 
 --                          
---                           v0.73
+--                           v0.74
 -- E1: Master Volume
 -- K1+E2/E3: Volume
 -- K1+E1: Crossfade/Morph
@@ -75,7 +75,7 @@ local tap_times = {}
 local initial_monitor_level, initial_reverb_onoff;
 local audio_active = {[1] = false, [2] = false}
 local steps = 20
-local mode_list = {"spread","pitch","density","size","jitter","lpf","pan","speed","seek"}
+local mode_list = {"spread","pitch","density","size","jitter","lpf","eq","pan","speed","seek"}
 local mode_indices = {} for i,v in ipairs(mode_list) do mode_indices[v] = i end
 local MK = lfo.keys
 local key_gesture = nil
@@ -119,7 +119,8 @@ local TRACK_KEYS = {}
 for t = 1, 2 do
     TRACK_KEYS[t] = {
         volume = t.."volume", pan = t.."pan", speed = t.."speed",
-        cutoff = t.."cutoff", hpf = t.."hpf", size = t.."size",
+        cutoff = t.."cutoff", hpf = t.."hpf", size = t.."size", lpf_gain = t.."lpf_gain",
+        eq_low = t.."eq_low_gain", eq_mid = t.."eq_mid_gain", eq_high = t.."eq_high_gain", eq_tilt = t.."eq_tilt",
         granular_gain = t.."granular_gain", live_input = t.."live_input",
         live_direct = t.."live_direct",
         direction_mod = t.."direction_mod", env_select = t.."env_select",
@@ -164,7 +165,8 @@ local param_modes = {
     size = {param = "size", delta = 2, engine = true, has_lock = true, y = 21, label = "size:"},
     density = {param = "density", delta = 2, engine = true, has_lock = true, y = 31, label = "density:", hz = true},
     pitch = {param = "pitch", delta = 1, engine = true, has_lock = true, y = 41, label = "pitch:", st = true},
-    spread = {param = "spread", delta = 2, engine = true, has_lock = true, y = 51, label = "spread:"}}
+    spread = {param = "spread", delta = 2, engine = true, has_lock = true, y = 51, label = "spread:"},
+    eq = {param = "eq_tilt", delta = 2, engine = true, has_lock = true}}
 local param_rows = {} for mode, config in pairs(param_modes) do config.pkeys = {"1" .. config.param, "2" .. config.param} if config.y then local lbl = config.label local nm = lbl:match("%a+") table.insert(param_rows, {y = config.y, label = lbl, label_upper = lbl:upper(), name = nm, mode = mode, params = config.pkeys, hz = config.hz, st = config.st, fmt_key = config.hz and "hz" or config.st and "st" or nm}) end end table.sort(param_rows, function(a, b) return a.y < b.y end)
 local LIMITS = {size={min=20,max=4999},density={min=0.1,max=50},pitch={min=-48,max=48}}
 local SU = lfo.scale_utils
@@ -1189,6 +1191,10 @@ local function handle_mode_navigation(n)
 end
 
 local function handle_parameter_lock()
+    if current_mode == "eq" then
+        params:set("lock_eq", params:get("lock_eq") == 2 and 1 or 2)
+        return
+    end
     local param_name = (current_mode == "lpf" or current_mode == "hpf") and (current_filter_mode == "lpf" and "cutoff" or "hpf") or string.match(current_mode, "%a+")
     local lock1 = "1lock_" .. param_name
     local lock2 = "2lock_" .. param_name
@@ -1534,7 +1540,7 @@ for sy = 4, 64, 2 do local lvl = max(1, floor(10 * (1 - abs(sy - 34) / 32))); SY
 local _LOG_FILTER_INV = 1.0 / log(20000 / 20)
 local _VOL_LINLIN_MUL = 64.0 / 80.0
 local LABEL_CACHE, LABEL_UPPER_CACHE = {}, {}
-for _, m in ipairs({"spread","pitch","density","size","jitter","lpf","hpf","pan","speed","seek"}) do local pad = (m == "lpf" or m == "hpf") and "       " or "      " LABEL_CACHE[m] = m .. ":" .. pad LABEL_UPPER_CACHE[m] = string.upper(m) .. ":" .. pad end
+for _, m in ipairs({"spread","pitch","density","size","jitter","lpf","hpf","pan","speed","seek","eq"}) do local pad = (m == "lpf" or m == "hpf") and "       " or "      " LABEL_CACHE[m] = m .. ":" .. pad LABEL_UPPER_CACHE[m] = string.upper(m) .. ":" .. pad end
 local _GLUT_N = 256
 local _GLUT_NM = _GLUT_N - 1
 local _ENV_LUT, _FADE_LUT = {}, {}
@@ -1549,6 +1555,38 @@ do
   _ENV_LUT[4]=bld(function(p) if p<0.1 then return p*10 elseif p<0.3 then return 1-1.75*(p-0.1) elseif p<0.75 then return 0.65 else return 0.65*(1-(p-0.75)*4) end end)
   _ENV_LUT[5]=bld(function(p) return abs(sin(pi*p))*(0.6+0.4*sin(p*11.3+2.7)) end)
 end
+_HK.eq = {zy = 58, amp = 5, low = {}, high = {}, mid = {}, tilt = {}}
+do
+  local eq = _HK.eq
+  local exp = math.exp
+  local function tanh(z) local e = exp(2 * z) return (e - 1) / (e + 1) end
+  local p_low, w_low, p_high, w_high, p_mid, w_mid, p_tilt, w_tilt = 0.15, 0.13, 0.76, 0.13, 0.51, 0.14, 0.53, 0.30
+  for c = 0, BAR_W - 1 do
+    local p = c / (BAR_W - 1)
+    eq.low[c] = 0.5 * (1 - tanh((p - p_low) / w_low))
+    eq.high[c] = 0.5 * (1 + tanh((p - p_high) / w_high))
+    local dm = (p - p_mid) / w_mid
+    eq.mid[c] = exp(-dm * dm)
+    eq.tilt[c] = tanh((p - p_tilt) / w_tilt)
+  end
+end
+_HK.filt_sh = {}
+do
+  local sh = _HK.filt_sh
+  local exp = math.exp
+  local function tanh(z) local e = exp(2 * z) return (e - 1) / (e + 1) end
+  local w = 3.5
+  for d = -(BAR_W - 1), BAR_W - 1 do sh[d] = 0.5 * (1 - tanh(d / w)) end
+end
+_HK.filt_r2 = {}
+do
+  local r2 = _HK.filt_r2
+  local exp = math.exp
+  local k = 2 * math.log(1000) / (BAR_W - 1)
+  for d = -(BAR_W - 1), BAR_W - 1 do r2[d] = exp(k * d) end
+end
+_HK.filt_cache = { {fv = -1, q = -1, lo = false, y = {}}, {fv = -1, q = -1, lo = false, y = {}} }
+_HK.eq_cache = { {lo = 1e9, mi = 1e9, hi = 1e9, ti = 1e9, y = {}}, {lo = 1e9, mi = 1e9, hi = 1e9, ti = 1e9, y = {}} }
 local PARAM_CACHE = { track = { {locked={},lfo_on={}}, {locked={},lfo_on={}} } }
 local _LFO_RANGE_CACHE = {}
 local _LOCK_PARAMS = {"jitter","size","density","spread","pitch","speed","seek","pan"}
@@ -1565,6 +1603,7 @@ local function refresh_redraw_cache()
     C.spd = pget(K.speed) * spd_scale
     C.cut = pget(K.cutoff)
     C.hpf = pget(K.hpf)
+    C.q = pget(K.lpf_gain)
   end
   _slow_refresh_countdown = _slow_refresh_countdown - 1
   if _slow_refresh_countdown > 0 then return end
@@ -1625,6 +1664,8 @@ local _PCT_CACHE, _INT_CACHE, _DB_CACHE = {}, {}, {}
 local function fast_percent(v) v = floor(v + 0.5) local s = _PCT_CACHE[v] if not s then s = v .. "%" _PCT_CACHE[v] = s end return s end
 local function fast_db(v) if v <= -40 then return "OFF" end v = floor(v + 0.5) local s = _DB_CACHE[v] if not s then s = v .. " dB" _DB_CACHE[v] = s end return s end
 local function fast_int(v) v = floor(v + 0.5) local s = _INT_CACHE[v] if not s then s = tostring(v) _INT_CACHE[v] = s end return s end
+_HK.fq_cache = {}
+_HK.fq = function(v) if v < 1000 then return fast_int(v) end local k = floor(v / 100 + 0.5) local c = _HK.fq_cache local s = c[k] if not s then s = string.format("%.1fk", k / 10) c[k] = s end return s end
 local _VAL_TXT = {}
 local function val_text(param, val, fmt, t, aux)
   local c = _VAL_TXT[param]
@@ -1743,14 +1784,13 @@ local function draw_seek_bar_viz(t, x, mode, now, wf, active)
   local C = PARAM_CACHE.track[t]
   local loaded = audio_active[t] or C.in_ == 1 or C.dir_ == 1
   if mode == "speed" then
+    local half_w = floor(BAR_W * 0.5)
+    local cx = x + half_w
+    local span = half_w - 1
     R(1, x, Y.seek, BAR_W, 1)
     if loaded then
-      local half_w = floor(BAR_W * 0.5)
-      local cx = x + half_w
-      local off = floor(clamp(C.spd * 0.5, -1, 1) * half_w)
-      local dir = off >= 0 and 1 or -1
-      local mag = abs(off)
-      for i = 0, mag, 2 do P(4 + floor((LEVEL.hi - 4) * (1 - i / max(mag, 1))), cx + dir * i, Y.seek) end
+      local off = floor(clamp(C.spd * 0.5, -1, 1) * span)
+      if off >= 0 then R(LEVEL.dim, cx, Y.seek, off + 1, 1) else R(LEVEL.dim, cx + off, Y.seek, -off + 1, 1) end
       R(LEVEL.hi, cx + off, Y.seek - 1, 1, 2)
     end
     return
@@ -1902,10 +1942,67 @@ function redraw()
       if C.locked["pan"] then draw_lock(x, y_bot) end
       local txt = (abs(C.pan) < 0.5) and "0%" or fast_percent(C.pan)
       T(flash_level(t, LEVEL.hi), x, y_bot + 1, txt)
+    elseif mode == "eq" then
+      if params:get("lock_eq") == 2 then draw_lock(x, y_bot) end
+      local K = TRACK_KEYS[t]
+      local low, mid, high, tilt = pget(K.eq_low), pget(K.eq_mid), pget(K.eq_high), pget(K.eq_tilt)
+      local cache = _HK.eq_cache[t]
+      local yv = cache.y
+      if cache.lo ~= low or cache.mi ~= mid or cache.hi ~= high or cache.ti ~= tilt then
+        cache.lo, cache.mi, cache.hi, cache.ti = low, mid, high, tilt
+        local EQ = _HK.eq
+        local zy, amp, elo, ehi, emi, eti = EQ.zy, EQ.amp, EQ.low, EQ.high, EQ.mid, EQ.tilt
+        for c = 0, BAR_W - 1 do
+          local dy = (low * elo[c] + high * ehi[c] + mid * emi[c] + tilt * eti[c]) * amp
+          if dy > amp then dy = amp elseif dy < -amp then dy = -amp end
+          yv[c] = zy - floor(dy + 0.5)
+        end
+      end
+      R(LEVEL.val, x, _HK.eq.zy, BAR_W, 1)
+      local prev_y
+      for c = 0, BAR_W - 1 do
+        local yc = yv[c]
+        if c == 0 then P(vL, x, yc) else local y0, y1 = prev_y, yc if y0 > y1 then y0, y1 = y1, y0 end R(vL, x + c, y0, 1, y1 - y0 + 1) end
+        prev_y = yc
+      end
     else
       if C.locked[cur_filter] then draw_lock(x, y_bot) end
-      local v = cur_filter == "lpf" and C.cut or C.hpf
-      T(flash_level(t, LEVEL.hi), x, y_bot + 1, fast_int(v))
+      local lo = cur_filter == "lpf"
+      local fv = lo and C.cut or C.hpf
+      local qv = lo and C.q or 0
+      local cache = _HK.filt_cache[t]
+      local yv = cache.y
+      if cache.fv ~= fv or cache.q ~= qv or cache.lo ~= lo then
+        cache.fv, cache.q, cache.lo = fv, qv, lo
+        local ln = log(fv / 20) * _LOG_FILTER_INV
+        if ln < 0 then ln = 0 elseif ln > 1 then ln = 1 end
+        local knee = floor(ln * (BAR_W - 1) + 0.5)
+        local SH = _HK.filt_sh
+        local R2 = _HK.filt_r2
+        local res = sqrt(qv)
+        local pass = 1 - res * 0.34
+        local pt = pass / 1.14
+        local iq = pt * pt
+        local b = res * 2.2
+        if b > 1 then b = 1 end
+        for c = 0, BAR_W - 1 do
+          local mag
+          if not lo then mag = SH[knee - c]
+          elseif b <= 0 then mag = pass * SH[c - knee]
+          elseif b >= 1 then local r2 = R2[c - knee] local m = 1 - r2 mag = pass / sqrt(m * m + r2 * iq)
+          else local s = pass * SH[c - knee] local r2 = R2[c - knee] local m = 1 - r2 mag = s + b * (pass / sqrt(m * m + r2 * iq) - s) end
+          if mag > 1 then mag = 1 end
+          yv[c] = Y.seek - floor(mag * 9 + 0.5)
+        end
+      end
+      local clvl = flash_level(t, 1)
+      local prev_y
+      for c = 0, BAR_W - 1 do
+        local yc = yv[c]
+        if c == 0 then P(clvl, x, yc) else local y0, y1 = prev_y, yc if y0 > y1 then y0, y1 = y1, y0 end R(clvl, x + c, y0, 1, y1 - y0 + 1) end
+        prev_y = yc
+      end
+      T(LEVEL.hi, x + 15, y_bot + 1, _HK.fq(fv), "center")
     end
     if mode == "seek" or mode == "speed" then
       local audio_loaded = audio_active[t] or C.in_ == 1 or C.dir_ == 1
@@ -1936,19 +2033,6 @@ function redraw()
     end
     local pan_pos = util.linlin(-100, 100, current_pan_x, current_pan_x + 25, C.pan)
     R(LEVEL.dim, pan_pos - 1 + pan_indicator_x[t], 1, 4, 1)
-  end
-  if cur_mode == "lpf" or cur_mode == "hpf" then
-    for t = 1,2 do
-      local C = PARAM_CACHE.track[t]
-      local x = TXP[t]
-      R(1, x, Y.seek, BAR_W, 1)
-      local filter_val = cur_filter == "lpf" and C.cut or C.hpf
-      local log_normalized = log(filter_val / 20) * _LOG_FILTER_INV
-      if log_normalized < 0 then log_normalized = 0 elseif log_normalized > 1 then log_normalized = 1 end
-      local bar_width = floor(log_normalized * BAR_W)
-      if bar_width < 1 then bar_width = 1 end
-      R(LEVEL.hi, x, Y.seek, bar_width, 1)
-    end
   end
   if PARAM_CACHE.dry then for x = 7,15,4 do P(LEVEL.hi, x, 0) end end
   if PARAM_CACHE.sym then local sc = SYM_CACHE; for i = 1,62,2 do P(sc[i + 1], 85, sc[i]) end end
