@@ -1,6 +1,6 @@
 Engine_twins : CroneEngine {
 
-var analogDriveEffect, dimensionEffect, haasEffect, bitcrushEffect, resonatorEffect, wavefoldEffect, ringmodEffect, delayEffect, shimmerEffect, tapeEffect, chewEffect, widthEffect, monobassEffect, sineEffect, wobbleEffect, lossdegradeEffect, rotateEffect, glitchEffect, <silentBuffer, <buffersL, <buffersR, wobbleBuffer, glitchBuffer, <voices, bufSine, pg, <liveInputBuffersL, <liveInputBuffersR, <liveInputRecorders, <liveRecPosBuses, o, o_rec, o_grain, o_voice_peak, o_delayduck, liveBufferAllocGeneration = 0, grainEnvs, pitchScaleBuffers, pitchScaleLengths, nornsAddr, voicesUsingLiveBuffer, currentSpeed, currentJitter, currentSize, currentDensity, currentDensityModAmt, currentPitch, currentPan, currentSpread, currentVolume, currentGranularGain, currentCutoff, currentHpf, currentlpf_gain, currentSubharmonics1, currentSubharmonics2, currentSubharmonics3, currentOvertones1, currentOvertones2, currentPitchMode, currentDirectionMod, currentSizeVariation, currentSmoothbass, currentLowGain, currentMidGain, currentHighGain, currentProbability, liveBufferMix = 1.0, currentPitchRandomProb, currentPitchRandomScale, currentRatchetingProb, currentPitchLag, currentGlitchRatio = 0.0, currentGlitchMix = 0.0, currentKeyHold, currentKeyGate, currentAdA, currentAdD, currentVelAmp, currentAmpRandomize, voiceBuses, filterSynths, filterRouters, eqSynths, dryGroup, drySynths, voiceAmpBuses, voiceRunning, voiceIsStereo, bounceTracks, normOnLoad = 0;
+var analogDriveEffect, dimensionEffect, haasEffect, bitcrushEffect, resonatorEffect, wavefoldEffect, ringmodEffect, delayEffect, shimmerEffect, tapeEffect, chewEffect, widthEffect, monobassEffect, sineEffect, wobbleEffect, lossdegradeEffect, rotateEffect, glitchEffect, <silentBuffer, <buffersL, <buffersR, wobbleBuffer, glitchBuffer, <voices, bufSine, pg, <liveInputBuffersL, <liveInputBuffersR, <liveInputRecorders, <liveRecPosBuses, o, o_rec, o_grain, o_voice_peak, o_delayduck, liveBufferAllocGeneration = 0, grainEnvs, pitchScaleBuffers, pitchScaleLengths, nornsAddr, voicesUsingLiveBuffer, currentSpeed, currentJitter, currentSize, currentDensity, currentDensityModAmt, currentPitch, currentPan, currentSpread, currentVolume, currentGranularGain, currentCutoff, currentHpf, currentlpf_gain, currentSubharmonics1, currentSubharmonics2, currentSubharmonics3, currentOvertones1, currentOvertones2, currentPitchMode, currentDirectionMod, currentSizeVariation, currentSmoothbass, currentLowGain, currentMidGain, currentHighGain, currentTiltGain, currentProbability, liveBufferMix = 1.0, currentPitchRandomProb, currentPitchRandomScale, currentRatchetingProb, currentPitchLag, currentGlitchRatio = 0.0, currentGlitchMix = 0.0, currentKeyHold, currentKeyGate, currentAdA, currentAdD, currentVelAmp, currentAmpRandomize, voiceBuses, filterSynths, filterRouters, eqSynths, tiltSynths, dryGroup, drySynths, voiceAmpBuses, voiceRunning, voiceIsStereo, bounceTracks, normOnLoad = 0;
 
 classvar pitchScales;
 *initClass {pitchScales = [[7, 12], [7, 12, 19, 24], [12], [12, 24], [1,2,3,4,5,6,7,8,9,10,11], [2,4,5,7,9,11], [2,3,5,7,8,10], [2,4,7,9], [2,4,6,8,10]];}
@@ -48,7 +48,7 @@ alloc {
         pitchScaleBuffers = pitchScales.collect { |scale| Buffer.sendCollection(context.server, scale, 1) };
         pitchScaleLengths = pitchScales.collect(_.size);
 
-        currentSpeed = [0.1, 0.1]; currentJitter = [0.25, 0.25]; currentSize = [0.1, 0.1]; currentDensity = [10, 10]; currentPitch = [1, 1]; currentPan = [0, 0]; currentSpread = [0, 0]; currentVolume = [1, 1]; currentGranularGain = [1, 1]; currentCutoff = [20000, 20000]; currentlpf_gain = [0.95, 0.95]; currentHpf = [20, 20]; currentSubharmonics1 = [0, 0]; currentSubharmonics2 = [0, 0]; currentSubharmonics3 = [0, 0]; currentOvertones1 = [0, 0]; currentOvertones2 = [0, 0]; currentPitchMode = [0, 0]; currentDirectionMod = [0, 0]; currentSizeVariation = [0, 0]; currentSmoothbass = [1, 1]; currentDensityModAmt = [0, 0]; currentLowGain = [0, 0]; currentMidGain = [0, 0]; currentHighGain = [0, 0]; currentProbability = [100, 100]; liveBufferMix = 1.0; currentPitchRandomProb = [0, 0]; currentPitchRandomScale = [0, 0]; currentRatchetingProb = [0, 0]; currentPitchLag = [0, 0];
+        currentSpeed = [0.1, 0.1]; currentJitter = [0.25, 0.25]; currentSize = [0.1, 0.1]; currentDensity = [10, 10]; currentPitch = [1, 1]; currentPan = [0, 0]; currentSpread = [0, 0]; currentVolume = [1, 1]; currentGranularGain = [1, 1]; currentCutoff = [20000, 20000]; currentlpf_gain = [0.95, 0.95]; currentHpf = [20, 20]; currentSubharmonics1 = [0, 0]; currentSubharmonics2 = [0, 0]; currentSubharmonics3 = [0, 0]; currentOvertones1 = [0, 0]; currentOvertones2 = [0, 0]; currentPitchMode = [0, 0]; currentDirectionMod = [0, 0]; currentSizeVariation = [0, 0]; currentSmoothbass = [1, 1]; currentDensityModAmt = [0, 0]; currentLowGain = [0, 0]; currentMidGain = [0, 0]; currentHighGain = [0, 0]; currentTiltGain = [0, 0]; currentProbability = [100, 100]; liveBufferMix = 1.0; currentPitchRandomProb = [0, 0]; currentPitchRandomScale = [0, 0]; currentRatchetingProb = [0, 0]; currentPitchLag = [0, 0];
         currentKeyHold = [1, 1]; currentKeyGate = [0, 0]; currentAdA = [0.005, 0.005]; currentAdD = [0.3, 0.3]; currentVelAmp = [1, 1]; currentAmpRandomize = [0, 0];
 
         context.server.sync;
@@ -143,6 +143,15 @@ alloc {
             ReplaceOut.ar(bus, sig);
         }).add;
 
+        SynthDef(\voicetilt, {
+            arg bus, tilt = 0;
+            var sig = In.ar(bus, 2);
+            var g = Lag.kr(tilt, 0.05);
+            sig = BLowShelf.ar(sig, 800, 1, g.neg);
+            sig = BHiShelf.ar(sig, 800, 1, g);
+            ReplaceOut.ar(bus, sig);
+        }).add;
+
         SynthDef(\voicefilter, {
             arg bus, cutoff = 20000, hpf = 20, lpf_gain = 0.95;
             var sig = In.ar(bus, 2);
@@ -222,6 +231,13 @@ alloc {
                 \low_gain, currentLowGain[i],
                 \mid_gain, currentMidGain[i],
                 \high_gain, currentHighGain[i],
+            ], context.xg, 'addToTail');
+        });
+
+        tiltSynths = Array.fill(2, { arg i;
+            Synth.newPaused(\voicetilt, [
+                \bus, voiceBuses[i].index,
+                \tilt, currentTiltGain[i],
             ], context.xg, 'addToTail');
         });
 
@@ -641,6 +657,7 @@ alloc {
         this.addCommand("eq_low_gain", "if", { arg msg; var voice = msg[1] - 1; currentLowGain[voice] = msg[2]; eqSynths[voice].set(\low_gain, msg[2]); this.updateEqRun(voice); });
         this.addCommand("eq_mid_gain", "if", { arg msg; var voice = msg[1] - 1; currentMidGain[voice] = msg[2]; eqSynths[voice].set(\mid_gain, msg[2]); this.updateEqRun(voice); });
         this.addCommand("eq_high_gain", "if", { arg msg; var voice = msg[1] - 1; currentHighGain[voice] = msg[2]; eqSynths[voice].set(\high_gain, msg[2]); this.updateEqRun(voice); });
+        this.addCommand("eq_tilt", "if", { arg msg; var voice = msg[1] - 1; currentTiltGain[voice] = msg[2]; tiltSynths[voice].set(\tilt, msg[2]); this.updateTiltRun(voice); });
 
         this.addCommand("width", "f", { arg msg; widthEffect.set(\width, msg[1]); widthEffect.run(msg[1] != 1); });
         this.addCommand("dimension_mix", "f", { arg msg; dimensionEffect.set(\mix, msg[1]); dimensionEffect.run(msg[1] > 0); });
@@ -677,6 +694,8 @@ alloc {
 
 updateFilterRun { arg voice; filterSynths[voice].run((currentCutoff[voice] < 20000) || (currentHpf[voice] > 20)); }
 updateEqRun { arg voice; eqSynths[voice].run((currentLowGain[voice] != 0) || (currentMidGain[voice] != 0) || (currentHighGain[voice] != 0)); }
+
+updateTiltRun { arg voice; tiltSynths[voice].run(currentTiltGain[voice] != 0); }
 updateDryRun { arg voice; drySynths[voice].run(voiceRunning[voice] && (currentGranularGain[voice] < 1)); }
 
 free {
@@ -699,6 +718,7 @@ free {
         if (silentBuffer.notNil) { silentBuffer.free; silentBuffer = nil; };
         if (filterSynths.notNil) { filterSynths.do({ arg s; if (s.notNil) { s.free; }; }); filterSynths = nil; };
         if (eqSynths.notNil) { eqSynths.do({ arg s; if (s.notNil) { s.free; }; }); eqSynths = nil; };
+        if (tiltSynths.notNil) { tiltSynths.do({ arg s; if (s.notNil) { s.free; }; }); tiltSynths = nil; };
         if (filterRouters.notNil) { filterRouters.do({ arg s; if (s.notNil) { s.free; }; }); filterRouters = nil; };
         if (voiceBuses.notNil) { voiceBuses.do({ arg b; if (b.notNil) { b.free; }; }); voiceBuses = nil; };
         if (bufSine.notNil) { bufSine.free; bufSine = nil; };

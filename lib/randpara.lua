@@ -75,9 +75,10 @@ local PARAM_SPECS = {
   ["bitcrush_bits"]       = {2,   {10,16},   "bitcrush"},
   ["chew_freq"]           = {60,  {1,60},    "tape"},
   ["chew_variance"]       = {70,  {0,70},    "tape"},
-  ["1eq_low_gain"]        = {0.2, {0,1},     "eq"}, ["2eq_low_gain"]  = {0.2,{0,1},"eq"},
-  ["1eq_mid_gain"]        = {0.2, {0,1},     "eq"}, ["2eq_mid_gain"]  = {0.2,{0,1},"eq"},
-  ["1eq_high_gain"]       = {0.2, {0,1},     "eq"}, ["2eq_high_gain"] = {0.2,{0,1},"eq"},
+  ["1eq_low_gain"]        = {0.25, {0,1},     "eq"}, ["2eq_low_gain"]    = {0.25, {0,1},"eq"},
+  ["1eq_mid_gain"]        = {0.25, {0,1},     "eq"}, ["2eq_mid_gain"]    = {0.25, {0,1},"eq"},
+  ["1eq_high_gain"]       = {0.25, {0,1},     "eq"}, ["2eq_high_gain"]   = {0.25, {0,1},"eq"},
+  ["1eq_tilt"]            = {0.75, {-0.85,0.85},"eq"}, ["2eq_tilt"]      = {0.75, {-0.85,0.85},"eq"},
   ["glitch_mix"]          = {40,  {0,100},   "glitch"},
   ["glitch_probability"]  = {5,   {0.1,20},  "glitch"},
   ["glitch_min_length"]   = {100, {10,150},  "glitch"},
@@ -350,6 +351,7 @@ local track_param_configs = {
     {name=track.."eq_low_gain",  prob=0.5, default=0,    random=function() return random_float(-0.2,0.2) end},
     {name=track.."eq_mid_gain",  prob=0.5, default=0,    random=function() return random_float(-0.1,0.1) end},
     {name=track.."eq_high_gain", prob=0.5, default=0.25, random=function() return random_float(0,0.5)    end},
+    --{name=track.."eq_tilt",      prob=0.5, default=0,    random=function() return random_float(-0.3,0.3) end},
   }} end,
 }
 

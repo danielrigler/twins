@@ -638,11 +638,12 @@ local function setup_params()
     params:add_binary("randomize_tape", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_tape", function() undo.checkpoint() randpara.randomize_tape_params(steps) end)
     params:add_option("lock_tape", "Lock Parameters", {"off", "on"}, 1)
 
-    params:add_group("EQ", 9)
+    params:add_group("EQ", 11)
     for i = 1, 2 do
     params:add_control(i.."eq_low_gain", i.." Bass", controlspec.new(-1, 1, "lin", 0.01, 0, "")) params:set_action(i.."eq_low_gain", function(value) engine.eq_low_gain(i, value*55) end)
     params:add_control(i.."eq_mid_gain", i.." Mid", controlspec.new(-1, 1, "lin", 0.01, 0, "")) params:set_action(i.."eq_mid_gain", function(value) engine.eq_mid_gain(i, value*35) end)
     params:add_control(i.."eq_high_gain", i.." Treble", controlspec.new(-1, 1, "lin", 0.01, 0, "")) params:set_action(i.."eq_high_gain", function(value) engine.eq_high_gain(i, value*45) end)
+    params:add_control(i.."eq_tilt", i.." Tilt", controlspec.new(-1, 1, "lin", 0.01, 0, "")) params:set_action(i.."eq_tilt", function(value) engine.eq_tilt(i, value*12) end)
     end
     params:add_separator("     ")
     params:add_binary("randomize_eq", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_eq", function() undo.checkpoint() for i=1, 2 do randpara.randomize_eq_params(i, steps) end end)
