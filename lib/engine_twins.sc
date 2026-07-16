@@ -64,7 +64,7 @@ alloc {
             var overtone_2_vol = overtones_2 * main_vol * 1.5;
             var trigger60 = Impulse.kr(60);
             var grain_direction, speed_dir, base_grain_trig, rand_val, rand_val2, random_interval, ratchet_gate, extra_trig, signal, envBuf, randomEnv, harmonics, volumes, l_harmonics, r_harmonics, size_mults, jitter_range, buf_frames_l, buf_dur_recip, wrapped_grain_pos;
-            var spreadMults, stereoSpreadMults, haasOffsets, detuneCents, density_phase;
+            var spreadMults, stereoSpreadMults, haasOffsets, detuneCents, density_phase, pan_u_l, pan_u_r, pan_flip, pan_alt, pan_dist_l, pan_dist_r, spread_lag, g_mid, g_side;
             speed = Lag.kr(speed, 1);
             dmod_half = density_mod_amt * 0.5;
             density_mod = density * (2 ** LFNoise1.kr(density, dmod_half, dmod_half));
@@ -96,17 +96,25 @@ alloc {
             harmonics   = [1, 1/2, 1/4, 1/8, 2, 4];
             volumes     = [main_vol, subharmonic_1_vol, subharmonic_2_vol, subharmonic_3_vol, overtone_1_vol, overtone_2_vol];
             size_mults  = [1, smoothbass, smoothbass, smoothbass, 1, 1];
-            spreadMults = [0.75, 0.5, 0.25, 0.0, 1.0, 1.0];
+            spreadMults = [1.0, 0.5, 0.25, 0.0, 1.0, 1.0];
             stereoSpreadMults = [1.0, 0.6, 0.3, 0.0, 1.0, 1.0];
             haasOffsets = [0.0015, 0.006, 0.0005, 0.0, 0.003, 0.005];
             detuneCents = [0.0, 0.0, 0.0, 0.0, 2.0, 3.0];
+            pan_u_l = TRand.kr(trig: grain_trig, lo: -1, hi: 1);
+            pan_u_r = TRand.kr(trig: grain_trig, lo: -1, hi: 1);
+            pan_flip = (ToggleFF.kr(grain_trig) * 2) - 1;
+            pan_alt = spread * spread * 0.7;
+            pan_dist_l = (pan_u_l.sign * pan_u_l.abs.sqrt * (1 - pan_alt)) + (pan_flip * pan_alt);
+            pan_dist_r = (pan_u_r.sign * pan_u_r.abs.sqrt * (1 - pan_alt)) + (pan_flip * pan_alt);
             l_harmonics = harmonics.collect { |harmonic, i|
                 var harmonic_spread = spread * spreadMults[i];
                 var sm = stereoSpreadMults[i];
                 var pan_lo = Select.kr(is_stereo, [harmonic_spread.neg, sm.neg]);
                 var pan_hi = Select.kr(is_stereo, [harmonic_spread, sm * ((2 * spread) - 1)]);
+                var pan_c = (pan_lo + pan_hi) * 0.5;
+                var pan_h = (pan_hi - pan_lo) * 0.5;
                 var trig_l = TDelay.kr(grain_trig * (volumes[i] > 0), haasOffsets[i] * spread);
-                var harmonic_pan = (pan + TRand.kr(trig: grain_trig, lo: pan_lo, hi: pan_hi)).clip(-1.0, 1.0);
+                var harmonic_pan = (pan + pan_c + (pan_h * pan_dist_l)).clip(-1.0, 1.0);
                 GrainBuf.ar(numChannels: 2, trigger: trig_l, dur: grain_size * size_mults[i], sndbuf: buf_l, rate: grain_pitch * harmonic * grain_direction, pos: buf_pos + jitter_sig, interp: 4, pan: harmonic_pan, envbufnum: envBuf, mul: volumes[i] * grain_amp_rand);
             };
             r_harmonics = harmonics.collect { |harmonic, i|
@@ -116,11 +124,17 @@ alloc {
                 var active_trig = grain_trig * (volumes[i] > 0);
                 var pan_lo = Select.kr(is_stereo, [harmonic_spread.neg, sm * (1 - (2 * spread))]);
                 var pan_hi = Select.kr(is_stereo, [harmonic_spread, sm]);
-                var harmonic_pan = (pan + TRand.kr(trig: grain_trig, lo: pan_lo, hi: pan_hi)).clip(-1.0, 1.0);
+                var pan_c = (pan_lo + pan_hi) * 0.5;
+                var pan_h = (pan_hi - pan_lo) * 0.5;
+                var harmonic_pan = (pan + pan_c + (pan_h * pan_dist_r)).clip(-1.0, 1.0);
                 GrainBuf.ar(numChannels: 2, trigger: active_trig, dur: grain_size * size_mults[i], sndbuf: buf_r, rate: grain_pitch * harmonic * grain_direction * detuneRatio, pos: buf_pos + jitter_sig, interp: 4, pan: harmonic_pan, envbufnum: envBuf, mul: volumes[i] * grain_amp_rand);
             };
             granular_sig = Mix.ar(l_harmonics) + Mix.ar(r_harmonics);
             sig_mix = (granular_sig * granular_gain).tanh;
+            spread_lag = Lag.kr(spread, 0.2);
+            g_mid = (sig_mix[0] + sig_mix[1]) * 0.5;
+            g_side = (sig_mix[0] - sig_mix[1]) * 0.5 * (1 + (spread_lag * 0.5));
+            sig_mix = [g_mid + g_side, g_mid - g_side];
             amp_scale = Lag.kr(gain) * key_env * vel_amp;
             signal = sig_mix * amp_scale;
             meter_sig = granular_sig * amp_scale;

@@ -207,6 +207,7 @@ local function is_lfo_active_for_param(param_name) local idx = lfo.get_lfo_for_p
 local hlp = {}
 hlp.link_suppress_size = false
 hlp.link_last_hz = {}
+hlp.pre_direct = {}
 function hlp.apply_lfo_or_set(full_param, val)
     local active, idx = is_lfo_active_for_param(full_param)
     if not active then params:set(full_param, val) return end
@@ -254,7 +255,7 @@ function hlp.update_resonator()
         f * RESO_RATIOS[3], f * RESO_RATIOS[4],
         f * RESO_RATIOS[5])
 end
-local function update_pan_positioning() if _G.preset_loading then return end; local l1,l2=audio_active[1],audio_active[2]; local function ok(v,id) return v and not is_param_locked(id,"pan") and not is_lfo_active_for_param(id.."pan") end; if l1 and l2 then if ok(l1,1) then params:set("1pan",-25) end; if ok(l2,2) then params:set("2pan",25) end else if ok(l1,1) then params:set("1pan",0) end; if ok(l2,2) then params:set("2pan",0) end end end
+local function update_pan_positioning() if _G.preset_loading then return end; local l1,l2=is_voice_loaded(1),is_voice_loaded(2); local function ok(v,id) return v and not is_param_locked(id,"pan") and not is_lfo_active_for_param(id.."pan") end; if l1 and l2 then if ok(l1,1) then params:set("1pan",-25) end; if ok(l2,2) then params:set("2pan",25) end else if ok(l1,1) then params:set("1pan",0) end; if ok(l2,2) then params:set("2pan",0) end end end
 
 local function set_midi_pitch(voice, pitch_value)
     pitch_value = clamp(pitch_value, LIMITS.pitch.min, LIMITS.pitch.max)
@@ -270,6 +271,7 @@ end
 local function setup_ui_metro()
     if ui_metro then stop_metro_safe(ui_metro) end
     local ui_skip = 0
+    local idle_skip = 0
     ui_metro = metro.init(function()
         if _G.preset_loading or presets.is_menu_open() then
             ui_skip = ui_skip + 1
@@ -280,6 +282,19 @@ local function setup_ui_metro()
         end
         ui_skip = 0
         local now = util.time()
+        local busy = not animation_complete or pan_slide_start_time ~= nil
+            or key_state[1] or key_state[2] or key_state[3]
+            or (now - (hlp.last_input or 0)) < 2
+            or is_voice_loaded(1) or is_voice_loaded(2)
+            or showing_save_message
+            or (fx_popup.time ~= nil and (now - fx_popup.time) < FX_POPUP_DURATION)
+            or randomize_flash[1] > 0.001 or randomize_flash[2] > 0.001
+            or randomize_flash.midi[1] > 0.001 or randomize_flash.midi[2] > 0.001
+        if not busy then
+            idle_skip = idle_skip + 1
+            if idle_skip < 4 then return end
+        end
+        idle_skip = 0
         if not animation_complete then
             animation_start_time = animation_start_time or now
             local elapsed = now - animation_start_time
@@ -529,7 +544,7 @@ local function setup_params()
     params:add{type = "trigger", id = "save_live_buffer1", name = "Buffer1 to Tape", action = function() local timestamp = os.date("%Y%m%d_%H%M%S") local filename = "live1_"..timestamp..".wav" engine.save_live_buffer(1, filename) audio_files_cache = nil end}
     params:add{type = "trigger", id = "save_live_buffer2", name = "Buffer2 to Tape", action = function() local timestamp = os.date("%Y%m%d_%H%M%S") local filename = "live2_"..timestamp..".wav" engine.save_live_buffer(2, filename) audio_files_cache = nil end}
     for i = 1, 2 do
-      params:add_binary(i.."live_direct", "Direct "..i.." ►", "toggle", 0) params:set_action(i.."live_direct", function(value) if value == 1 then local was_live = params:get(i.."live_input") if was_live == 1 then params:set(i.."live_input", 0) end engine.live_direct(i, 1) audio_active[i] = true set_sample_live(i) update_pan_positioning() else engine.live_direct(i, 0) audio_active[i] = false if not audio_active[i] and params:get(i.."live_input") == 0 then osc_positions[i] = 0 params:set(i.."sample", "-") pause_voice_if_idle(i) else set_sample_live(i) update_pan_positioning() end end end)
+      params:add_binary(i.."live_direct", "Direct "..i.." ►", "toggle", 0) params:set_action(i.."live_direct", function(value) if value == 1 then hlp.pre_direct[i] = {a = audio_active[i], s = params:get(i.."sample")} local was_live = params:get(i.."live_input") if was_live == 1 then params:set(i.."live_input", 0) end engine.live_direct(i, 1) set_sample_live(i) update_pan_positioning() else engine.live_direct(i, 0) local pd = hlp.pre_direct[i] hlp.pre_direct[i] = nil audio_active[i] = (pd and pd.a) or false if not audio_active[i] and params:get(i.."live_input") == 0 then osc_positions[i] = 0 params:set(i.."sample", "-") pause_voice_if_idle(i) else if pd and pd.s then params:set(i.."sample", pd.s, true) else set_sample_live(i) end update_pan_positioning() end end end)
     end
     params:add_option("isMono", "Input Mode", {"stereo", "mono"}, 1) params:set_action("isMono", function(value) local monoValue = value - 1 for i = 1, 2 do if params:get(i.."live_direct") == 1 then engine.isMono(i, monoValue) end if params:get(i.."live_input") == 1 then engine.live_mono(i, monoValue) end end end)
     params:add_binary("dry_mode2", "Dry Mode", "toggle", 0) params:set_action("dry_mode2", function(x) drymode.toggle_dry_mode2() end)
@@ -1355,6 +1370,7 @@ local function active_edit_mode()
 end
 
 function enc(n, d)
+    hlp.last_input = util.time()
     if not installer:ready() or installer:pending() then return end
     if presets.is_menu_open() then presets.menu_enc(n, d) return end
     local k1, k2, k3 = key_state[1], key_state[2], key_state[3]
@@ -1481,6 +1497,7 @@ local function handle_key_release()
 end
 
 function key(n, z)
+    hlp.last_input = util.time()
     if not installer:ready() or installer:pending() then installer:key(n, z) return end
     if presets.is_menu_open() then
         if n == 1 and z == 1 then presets.close_menu() return end
@@ -1587,6 +1604,25 @@ do
 end
 _HK.filt_cache = { {fv = -1, q = -1, lo = false, y = {}}, {fv = -1, q = -1, lo = false, y = {}} }
 _HK.eq_cache = { {lo = 1e9, mi = 1e9, hi = 1e9, ti = 1e9, y = {}}, {lo = 1e9, mi = 1e9, hi = 1e9, ti = 1e9, y = {}} }
+_HK.rle = function(cache)
+  local yv = cache.y
+  local segs = cache.segs
+  if not segs then segs = {} cache.segs = segs end
+  local n = 0
+  local prev, run_x, run_y0, run_y1
+  for c = 0, BAR_W - 1 do
+    local yc = yv[c]
+    local y0, y1
+    if c == 0 then y0, y1 = yc, yc else y0, y1 = prev, yc if y0 > y1 then y0, y1 = y1, y0 end end
+    if run_x == nil or y0 ~= run_y0 or y1 ~= run_y1 then
+      if run_x ~= nil then segs[n+1], segs[n+2], segs[n+3], segs[n+4] = run_x, run_y0, c - run_x, run_y1 - run_y0 + 1 n = n + 4 end
+      run_x, run_y0, run_y1 = c, y0, y1
+    end
+    prev = yc
+  end
+  segs[n+1], segs[n+2], segs[n+3], segs[n+4] = run_x, run_y0, BAR_W - run_x, run_y1 - run_y0 + 1
+  cache.nsegs = n + 4
+end
 local PARAM_CACHE = { track = { {locked={},lfo_on={}}, {locked={},lfo_on={}} } }
 local _LFO_RANGE_CACHE = {}
 local _LOCK_PARAMS = {"jitter","size","density","spread","pitch","speed","seek","pan"}
@@ -1957,14 +1993,11 @@ function redraw()
           if dy > amp then dy = amp elseif dy < -amp then dy = -amp end
           yv[c] = zy - floor(dy + 0.5)
         end
+        _HK.rle(cache)
       end
       R(LEVEL.val, x, _HK.eq.zy, BAR_W, 1)
-      local prev_y
-      for c = 0, BAR_W - 1 do
-        local yc = yv[c]
-        if c == 0 then P(vL, x, yc) else local y0, y1 = prev_y, yc if y0 > y1 then y0, y1 = y1, y0 end R(vL, x + c, y0, 1, y1 - y0 + 1) end
-        prev_y = yc
-      end
+      local segs, ns = cache.segs, cache.nsegs
+      for j = 1, ns, 4 do R(vL, x + segs[j], segs[j+1], segs[j+2], segs[j+3]) end
     else
       if C.locked[cur_filter] then draw_lock(x, y_bot) end
       local lo = cur_filter == "lpf"
@@ -1994,14 +2027,11 @@ function redraw()
           if mag > 1 then mag = 1 end
           yv[c] = Y.seek - floor(mag * 9 + 0.5)
         end
+        _HK.rle(cache)
       end
       local clvl = flash_level(t, 1)
-      local prev_y
-      for c = 0, BAR_W - 1 do
-        local yc = yv[c]
-        if c == 0 then P(clvl, x, yc) else local y0, y1 = prev_y, yc if y0 > y1 then y0, y1 = y1, y0 end R(clvl, x + c, y0, 1, y1 - y0 + 1) end
-        prev_y = yc
-      end
+      local segs, ns = cache.segs, cache.nsegs
+      for j = 1, ns, 4 do R(clvl, x + segs[j], segs[j+1], segs[j+2], segs[j+3]) end
       T(LEVEL.hi, x + 15, y_bot + 1, _HK.fq(fv), "center")
     end
     if mode == "seek" or mode == "speed" then
@@ -2066,10 +2096,10 @@ function redraw()
   screen.update()
 end
 
-local function make_grain_handler(bucket) return function(args) local vid = args[1]+1 if audio_active[vid] then local b = bucket[vid] local n = #b if n < 64 then local np = #_grain_pool local g if np > 0 then g = _grain_pool[np] _grain_pool[np] = nil else g = {} end g.pos, g.size, g.t, g.rv, g.pitch, g.shown = args[2], args[3], util.time(), args[4] or 0.5, args[5] or 1, false b[n+1] = g end end end end
 local SEEK_KEYS = {"1seek", "2seek"}
 local LIVE_IN_KEYS = {"1live_input", "2live_input"}
 local LIVE_DIR_KEYS = {"1live_direct", "2live_direct"}
+local function make_grain_handler(bucket) return function(args) local vid = args[1]+1 if audio_active[vid] or pget(LIVE_DIR_KEYS[vid]) == 1 then local b = bucket[vid] local n = #b if n < 64 then local np = #_grain_pool local g if np > 0 then g = _grain_pool[np] _grain_pool[np] = nil else g = {} end g.pos, g.size, g.t, g.rv, g.pitch, g.shown = args[2], args[3], util.time(), args[4] or 0.5, args[5] or 1, false b[n+1] = g end end end end
 local osc_handlers = {
     ["/twins/buf_pos"] = function(args)
         local vid, pos = args[1] + 1, args[2]
@@ -2185,7 +2215,7 @@ function init()
     setup_osc()
     morph.init(lfo, invalidate_lfo_cache, clocksync)
     clocksync.init({lfo = lfo, set_density = clocksync_set_density})
-    arp.init({scale_utils = SU, is_voice_active = function(v) return audio_active[v] end, checkpoint = undo.checkpoint})
+    arp.init({scale_utils = SU, is_voice_active = function(v) return is_voice_loaded(v) end, checkpoint = undo.checkpoint})
     font.init_fx_cache()
     init_longpress_checker()
     for i = 1, 2 do params:set(i.."sample", _path.tape, true) end
