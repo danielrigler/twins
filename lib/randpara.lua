@@ -357,14 +357,11 @@ end
 
 local function set_param(name, prob, default, random_fn, direct, condition)
   if condition and not condition() then return end
-  local r = random()
   local val
-  if r < prob then
+  if random() < prob then
     val = random_fn()
-  elseif r < prob + (1 - prob) * 0.5 then
-    val = type(default) == "function" and default() or default
   else
-    return
+    val = type(default) == "function" and default() or default
   end
   if direct then
     params:set(name, val)

@@ -1650,6 +1650,7 @@ local function refresh_redraw_cache()
   PARAM_CACHE.dry = pget("dry_mode") == 1
   PARAM_CACHE.sym = pget("symmetry") == 1
   PARAM_CACHE.evo = pget("evolution") == 1
+  local amap = lfo.get_active_param_map()
   for t = 1,2 do
     local C = PARAM_CACHE.track[t]
     local K = TRACK_KEYS[t]
@@ -1666,7 +1667,7 @@ local function refresh_redraw_cache()
       local nm = _LOCK_PARAMS[i]
       local fk = fullkeys[i]
       locked[nm] = is_param_locked(t, nm)
-      local act = is_lfo_active_for_param(fk)
+      local act = amap[fk] ~= nil
       lfo_on[fk] = act
       if act then
         local rc = _LFO_RANGE_CACHE[fk]
