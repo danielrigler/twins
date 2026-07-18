@@ -909,10 +909,12 @@ local function randomize_pitch(track, other_track, symmetry)
             if random_weight <= cumulative_weight then set_pitch(track, other_track, base_pitch + v.interval, symmetry) return end
         end
     end
+    local fitting = {}
     for i = 1, #larger_intervals do
         local candidate_pitch = base_pitch + larger_intervals[i]
-        if candidate_pitch >= min_pitch and candidate_pitch <= max_pitch then	set_pitch(track, other_track, candidate_pitch, symmetry) return end
+        if candidate_pitch >= min_pitch and candidate_pitch <= max_pitch then fitting[#fitting + 1] = candidate_pitch end
     end
+    if #fitting > 0 then set_pitch(track, other_track, fitting[math.random(#fitting)], symmetry) end
 end
 
 local _rand_can_randomize = {}
@@ -971,7 +973,7 @@ local function randomize(n)
         m_rand.time = 1 / 30
         local tolerance = 0.01
         m_rand.event = function(count)
-            local factor = count / steps
+            local factor = min(count / steps, 1)
             local all_done = true
             for param, target in pairs(targets) do
                 local current = params:get(param)
