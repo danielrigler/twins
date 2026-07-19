@@ -3,6 +3,8 @@ local options = {lfotypes = {"sine", "random", "square", "walk"}}
 local LFO_SHAPE_REVERSE = {}
 for i, name in ipairs(options.lfotypes) do LFO_SHAPE_REVERSE[name] = i end
 local lfo = {}
+local utils = include("lib/utils")
+local mirror_param_name = utils.mirror_param_name
 local assigned_params = {}
 local lfo_paused = false
 local saved_shapes = {}
@@ -52,10 +54,7 @@ local function limit_keys(track, suffix)
     if not k then k = {track .. "min_" .. suffix, track .. "max_" .. suffix} tk[suffix] = k end
     return k[1], k[2]
 end
-function lfo.is_param_locked(track, param_name)
-    local key = (param_name == "eq_tilt") and "lock_eq" or (track .. "lock_" .. param_name)
-    return params.lookup[key] and pget(key) == 2
-end
+lfo.is_param_locked = utils.is_param_locked
 local function is_audio_loaded(track)
     local p = pget(track .. "sample")
     return p and p ~= "" and p ~= "none" and p ~= "-"
@@ -310,11 +309,8 @@ function lfo.clearLFOs(track, param_type, except_param)
         end
     end
     if not track and not param_type then
-        if is_audio_loaded("1") and is_audio_loaded("2") then
-            pset("1pan", -25); pset("2pan", 25)
-        else
-            pset("1pan", 0); pset("2pan", 0)
-        end
+        local p1, p2 = utils.default_pans(is_audio_loaded("1") and is_audio_loaded("2"))
+        pset("1pan", p1); pset("2pan", p2)
     end
     lfo.invalidate_lfo_param_cache()
 end
@@ -399,9 +395,6 @@ local function free_slots()
     end
     return slots
 end
-local function sibling_target(target)
-    return target:gsub("^(%d)(.*)", function(n, rest) return tostring((tonumber(n) % 2) + 1) .. rest end)
-end
 function lfo.assign_to_current_row(current_mode, current_filter_mode)
     local param_map = {seek = "seek", pan = "pan", jitter = "jitter", size = "size", density = "density", spread = "spread", speed = "speed", pitch = "pitch", eq = "eq_tilt"}
     local param_name = param_map[current_mode]
@@ -471,7 +464,7 @@ function lfo.randomize_lfos(track, allow_volume_lfos)
             local slot = table.remove(slots, math_random(#slots))
             randomize_lfo(slot, target)
             if symmetry and not target:match("volume$") then
-                local mirror_target = sibling_target(target)
+                local mirror_target = mirror_param_name(target)
                 if #slots > 0 then
                     local slot2 = table.remove(slots, math_random(#slots))
                     randomize_lfo(slot2, mirror_target)
@@ -484,7 +477,7 @@ function lfo.randomize_lfos(track, allow_volume_lfos)
     end
     local function reset_cutoff(t) if not lfo.is_param_locked(t, "cutoff") and not assigned_params[t .. "cutoff"] then pset(t .. "cutoff", 20000) end end
     reset_cutoff(track)
-    if symmetry then reset_cutoff(tostring((tonumber(track) % 2) + 1)) end
+    if symmetry then reset_cutoff(mirror_param_name(track)) end
 end
 local _lfo_param_cache = {}
 local _lfo_param_cache_dirty = true

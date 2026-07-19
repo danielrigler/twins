@@ -12,6 +12,26 @@ utils.system_param_exclude = {
     enc_sens_default = true, key_repeat_initial = true, key_repeat_period = true,
 }
 
+utils.STEP_COUNTS = {20, 300, 800}
+
+local _lock_keys = {}
+function utils.is_param_locked(track, param)
+    local key
+    if param == "eq_tilt" then key = "lock_eq"
+    else
+        local tk = _lock_keys[track]
+        if not tk then tk = {} _lock_keys[track] = tk end
+        key = tk[param]
+        if not key then key = track .. "lock_" .. param tk[param] = key end
+    end
+    return params.lookup[key] ~= nil and params:get(key) == 2
+end
+
+function utils.default_pans(both_loaded)
+    if both_loaded then return -25, 25 end
+    return 0, 0
+end
+
 local T_SEPARATOR, T_FILE, T_TRIGGER, T_GROUP, T_TEXT = 0, 4, 6, 7, 8
 
 function utils.capturable(p)

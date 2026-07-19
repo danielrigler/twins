@@ -145,10 +145,11 @@ function drymode.reset_dry(v1, v2, fx)
     end
 end
 
-function drymode.toggle_dry_mode()
-    dry_mode_state = not dry_mode_state
+function drymode.set_dry_mode(on)
+    if on == dry_mode_state then return end
+    dry_mode_state = on
 
-    if not dry_mode_state then
+    if on then
         local snap = {
             stereo = store_params(STEREO_PARAMS, true),
             mono = store_params(MONO_PARAMS, false),
@@ -183,10 +184,11 @@ function drymode.toggle_dry_mode()
     end
 end
 
-function drymode.toggle_dry_mode2()
-    dry_mode_state2 = not dry_mode_state2
+function drymode.set_dry_mode2(on)
+    if on == dry_mode_state2 then return end
+    dry_mode_state2 = on
 
-    if not dry_mode_state2 then
+    if on then
         prev_settings2 = {stereo = store_params({"granular_gain", "speed"}, true)}
         stereo_dry = true
         set_stereo_params({granular_gain = 0, speed = 1.0})

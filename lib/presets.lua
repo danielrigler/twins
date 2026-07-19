@@ -49,6 +49,8 @@ end
 local function cancel_rename_clock()  rename_clock  = cancel_clock(rename_clock)  end
 local function cancel_loading_clock() loading_clock = cancel_clock(loading_clock) end
 
+local function rtrim(s) return s:match("^(.-)%s*$") or s end
+
 local function pad_text(text, len)
     return #text < len and text .. string.rep(" ", len - #text) or text:sub(1, len)
 end
@@ -361,7 +363,7 @@ local function commit_pending(conf)
 end
 
 local function update_suggested(conf)
-    local trimmed = conf.manual_text:match("^(.-)%s*$") or conf.manual_text
+    local trimmed = rtrim(conf.manual_text)
     conf.suggested_name = fmt_name(conf.suggested_number, trimmed)
 end
 
@@ -372,7 +374,7 @@ local function start_commit_clock(conf)
         rename_clock = nil
         if presets.confirmation ~= conf or conf.rename_mode ~= "manual" then return end
         commit_pending(conf)
-        local trimmed_len = #(conf.manual_text:match("^(.-)%s*$") or conf.manual_text)
+        local trimmed_len = #rtrim(conf.manual_text)
         local max_cursor  = math.min(trimmed_len + 2, RENAME_MAX_LEN)
         if conf.manual_cursor < max_cursor then
             conf.manual_cursor = conf.manual_cursor + 1
@@ -431,11 +433,11 @@ local function draw_rename_manual(conf)
     local after   = text:sub(conf.manual_cursor + 1)
     local pad        = 1
     local pipe_w     = screen.text_extents("|")
-    local num_w      = screen.text_extents(num_str:match("^(.-)%s*$") or num_str)
+    local num_w      = screen.text_extents(rtrim(num_str))
     local before_w   = screen.text_extents(before .. "|") - pipe_w
     local cur_ch_w   = screen.text_extents(cur_ch)
     local rect_w     = math.max(cur_ch_w, 4) + pad * 2
-    local full_name  = text:match("^(.-)%s*$") or text
+    local full_name  = rtrim(text)
     local name_w     = screen.text_extents(full_name)
     local total_w    = num_w + 4 + name_w + pad * 2
     local start_x    = math.floor(64 - total_w / 2)
@@ -544,7 +546,7 @@ local function handle_rename_manual(conf, n, d)
         update_suggested(conf); redraw()
     elseif n == 2 then
         cancel_rename_clock(); commit_pending(conf)
-        local trimmed_len = #(conf.manual_text:match("^(.-)%s*$") or conf.manual_text)
+        local trimmed_len = #rtrim(conf.manual_text)
         local new_cursor  = util.clamp(conf.manual_cursor + d, 1, math.min(trimmed_len + 2, RENAME_MAX_LEN))
         if new_cursor ~= conf.manual_cursor then
             if new_cursor > #conf.manual_text then conf.manual_text = conf.manual_text .. string.rep(" ", new_cursor - #conf.manual_text) end
@@ -555,7 +557,7 @@ local function handle_rename_manual(conf, n, d)
             redraw()
         end
     elseif n == 3 then
-        local trimmed_len = #(conf.manual_text:match("^(.-)%s*$") or conf.manual_text)
+        local trimmed_len = #rtrim(conf.manual_text)
         local is_new  = conf.manual_cursor > trimmed_len
         local prev_ch = conf.manual_cursor > 1 and conf.manual_text:sub(conf.manual_cursor-1, conf.manual_cursor-1) or ""
         local step    = d > 0 and 1 or -1
@@ -643,7 +645,7 @@ function presets.menu_key(n, z, scene_data, update_pan, audio_active, active_mod
                     conf.pending_char    = nil
                 else
                     conf.rename_mode    = "random"
-                    local trimmed       = conf.manual_text:match("^(.-)%s*$") or conf.manual_text
+                    local trimmed       = rtrim(conf.manual_text)
                     conf.suggested_word = trimmed
                     conf.suggested_name = fmt_name(conf.suggested_number, trimmed)
                 end
@@ -669,7 +671,7 @@ function presets.menu_key(n, z, scene_data, update_pan, audio_active, active_mod
                 presets.menu_open    = false
             elseif conf.type == "rename" then
                 cancel_rename_clock()
-                local new_name = (conf.suggested_name or conf.preset_name):match("^(.-)%s*$") or conf.preset_name
+                local new_name = rtrim(conf.suggested_name or conf.preset_name)
                 if new_name ~= conf.preset_name then
                     local dir = PRESETS_PATH .. "/"
                     os.rename(dir .. conf.preset_name .. ".lua", dir .. new_name .. ".lua")

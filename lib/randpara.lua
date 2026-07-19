@@ -287,6 +287,19 @@ local function clear_interpolation()
   interp_count = 0
 end
 
+local function interp_step(obj, target, thr, alpha, force)
+  local nv
+  if force then
+    nv = target
+  else
+    local d = target - obj:get()
+    nv = (d < thr and d > -thr) and target or target - d + d * alpha
+  end
+  obj:set(nv)
+  local diff = nv - target
+  return diff < thr and diff > -thr
+end
+
 local function interp_event(count)
   local alpha = 1 - exp(-4 * count / interp_steps)
   local force = count >= interp_max
@@ -295,29 +308,12 @@ local function interp_event(count)
     local e = interp_list[i]
     if not e.done then
       local target, thr = e.target, e.threshold
-      local obj = e.pobj
-      local nv
-      if force then
-        nv = target
-      else
-        local d = target - obj:get()
-        nv = (d < thr and d > -thr) and target or target - d + d * alpha
-      end
-      obj:set(nv)
-      local diff = nv - target
-      if diff < thr and diff > -thr then e.done = true else all_done = false end
+      e.done = interp_step(e.pobj, target, thr, alpha, force)
+      if not e.done then all_done = false end
       local mobj = e.mobj
-      if mobj then
-        local mnv
-        if force then
-          mnv = target
-        else
-          local md = target - mobj:get()
-          mnv = (md < thr and md > -thr) and target or target - md + md * alpha
-        end
-        mobj:set(mnv)
-        local mdiff = mnv - target
-        if mdiff >= thr or mdiff <= -thr then all_done = false e.done = false end
+      if mobj and not interp_step(mobj, target, thr, alpha, force) then
+        all_done = false
+        e.done = false
       end
     end
   end

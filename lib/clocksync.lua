@@ -238,8 +238,8 @@ function clocksync.div_index_to_norm(idx)
 end
 
 function clocksync.lfo_synced() return enabled end
+clocksync.grain_synced = clocksync.lfo_synced
 function clocksync.speed_scale() return speed_scale_val end
-function clocksync.grain_synced() return enabled end
 function clocksync.reseek_active() return reseek_enabled end
 function clocksync.grain_division_label(v) return density_label[v] end
 

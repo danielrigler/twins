@@ -21,23 +21,13 @@ for suffix, r in pairs(MACRO_RANGES) do
         hi = r.max - margin}
 end
 
-local lock_params = {}
-for i = 1, NUM_TRACKS do
-    lock_params[i] = {}
-    for _, suffix in ipairs(PARAMS_TO_ADJUST) do
-        lock_params[i][suffix] = i .. "lock_" .. suffix
-    end
-end
-
 local lfo_ref          = nil
 local randomize_metro  = metro.init()
 local stop_metro_safe  = utils.stop_metro_safe
 
 function macro.set_context(ctx) lfo_ref = ctx.lfo end
 
-local function is_param_locked(track_num, param_suffix)
-    return params:get(lock_params[track_num][param_suffix]) == 2
-end
+local is_param_locked = utils.is_param_locked
 
 local function process_lfo_param(param, target, factor, lfo_index, min_val, max_val)
     local current_value  = params:get(param)
@@ -94,9 +84,7 @@ local function adjust_params(multiplier)
 
     if not next(targets) then return end
 
-    local steps_option = params:get("steps")
-    local step_counts  = {20, 300, 800}
-    local steps        = step_counts[steps_option] or 20
+    local steps = utils.STEP_COUNTS[params:get("steps")] or 20
 
     randomize_metro.time  = 1 / 30
     randomize_metro.event = function(count)
