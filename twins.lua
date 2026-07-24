@@ -173,7 +173,7 @@ local FLASH_DECAY = 0.9
 local function flash_level(track, base_level) local f = randomize_flash[track] local m = randomize_flash.held[track] and 1 or randomize_flash.midi[track] if m > f then f = m end if f <= 0.001 then return base_level end return min(base_level + floor(f * FLASH_INTENSITY), 15) end
 local random_float = utils.random_float
 local stop_metro_safe = utils.stop_metro_safe
-function is_voice_loaded(i) return audio_active[i] or params:get(i.."live_input") == 1 or params:get(i.."live_direct") == 1 end
+function is_voice_loaded(i) local k = TRACK_KEYS[i] return audio_active[i] or pget(k.live_input) == 1 or pget(k.live_direct) == 1 end
 local function pause_voice_if_idle(i) if not is_voice_loaded(i) then engine.pause_voice(i) osc_positions[i] = 0 end end
 
 local function transport_enabled()
@@ -1740,6 +1740,7 @@ _HK.smear = function(x, seek_y, start_pos, end_pos, gsz, forward, lut, fade, alp
         local idx = floor(sp * _GLUT_N)
         if idx < 0 then idx = 0 elseif idx > _GLUT_NM then idx = _GLUT_NM end
         local lv = ceil(lut[idx] * fade * alpha)
+        if lv < 1 then lv = 1 end
         local px = px_unwrapped % BAR_W
         if lv > col[px] then col[px] = lv end
         sp = sp + sp_dt
@@ -1822,20 +1823,39 @@ local function draw_grains(t, x, col)
     end
   end
 end
+local _PAN_COL = {}
 _HK.draw_grain_pans = function(t, base_x)
   local grains = grain_positions[t]
   if not grains then return end
+  local n = #grains
+  if n == 0 then return end
   local slide = pan_indicator_x[t]
   local hi_x = base_x + 25
-  for gi = 1, #grains do
+  local pc = _PAN_COL
+  local origin = floor(base_x + slide + 0.5) - 1
+  for k = 0, 27 do pc[k] = 0 end
+  for gi = 1, n do
     local g = grains[gi]
-    local lv = 6 - floor(g.lf * 4)
-    if lv > 2 then
+    local lf = g.lf
+    local lv = floor(24 * lf * (1 - lf) + 0.5)
+    if lv > 0 then
       local px = base_x + (g.pan + 1) * 12.5
       if px < base_x then px = base_x elseif px > hi_x then px = hi_x end
-      R(lv, floor(px + slide + 0.5) - 1, 1, 3, 1)
+      local i0 = floor(px + slide + 0.5) - origin
+      local i1 = i0
+      if lf > 0.25 and lf < 0.75 then i0 = i0 - 1 i1 = i1 + 1 end
+      for k = i0, i1 do if lv > pc[k] then pc[k] = lv end end
     end
   end
+  local run_k, run_lv = 0, pc[0]
+  for k = 1, 27 do
+    local lv = pc[k]
+    if lv ~= run_lv then
+      if run_lv > 0 then R(run_lv, origin + run_k, 1, k - run_k, 1) end
+      run_k, run_lv = k, lv
+    end
+  end
+  if run_lv > 0 then R(run_lv, origin + run_k, 1, 28 - run_k, 1) end
 end
 local function draw_seek_bar_viz(t, x, mode, wf, active)
   local C = PARAM_CACHE.track[t]
@@ -1899,7 +1919,20 @@ local function draw_seek_bar_viz(t, x, mode, wf, active)
     return
   end
   if C.dir_ ~= 1 then R(1, x, Y.seek, animated_bar_w, 1) end
-  if C.gran and C.gran > 0 then draw_grains(t, x)
+  if C.gran and C.gran > 0 then
+    local col = ctx.waveforms[0]
+    for i = 0, BAR_W - 1 do col[i] = 0 end
+    draw_grains(t, x, col)
+    local sy = Y.seek
+    local run_x, run_lv = 0, col[0]
+    for i = 1, BAR_W - 1 do
+      local lv = col[i]
+      if lv ~= run_lv then
+        if run_lv > 0 then R(run_lv, x + run_x, sy, i - run_x, 1) end
+        run_x, run_lv = i, lv
+      end
+    end
+    if run_lv > 0 then R(run_lv, x + run_x, sy, BAR_W - run_x, 1) end
   else _HK.recycle_grains(grain_positions[t]) end
   if loaded and C.dir_ ~= 1 then R(LEVEL.hi, x + floor(osc_positions[t] * animated_bar_w), Y.seek - 1, 1, 2) end
 end
@@ -2170,6 +2203,15 @@ local osc_handlers = {
     ["/twins/bounce_done"] = function(args)
         hlp.finish_bounce()
     end}
+osc_handlers["/twins/voice_state"] = function(args)
+    local vid, pos = args[1] + 1, args[2]
+    local va = voice_peak_amplitudes[vid]
+    va.l, va.r = abs(args[3]), abs(args[4])
+    if audio_active[vid] or pget(TRACK_KEYS[vid].live_input) == 1 or pget(TRACK_KEYS[vid].live_direct) == 1 then
+        osc_positions[vid] = pos
+        pset(_HK.seek[vid], pos * 100, true)
+    end
+end
 osc_handlers["/twins/grain_pos"] = grain_pos_handler
 osc_handlers["/twins/duration"] = function(args) blim.on_duration(args[1] + 1, args[2]) end
 osc_handlers["/twins/waveform"] = function(args)
