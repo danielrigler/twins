@@ -1754,13 +1754,32 @@ _HK.smear = function(x, seek_y, start_pos, end_pos, gsz, forward, lut, fade, alp
     end
   end
 end
-local function draw_grains(t, x, now, col)
+_HK.advance_grains = function(t, now)
+  local grains = grain_positions[t]
+  if not grains then return end
+  local keep = 0
+  for gi = 1, #grains do
+    local g = grains[gi]
+    local gsize = g.size
+    local dlife = gsize < 0.15 and 0.15 or gsize
+    local age = now - g.t
+    if age > dlife then
+      _grain_pool[#_grain_pool + 1] = g
+    else
+      keep = keep + 1
+      grains[keep] = g
+      g.lf = age / dlife
+    end
+  end
+  for i = keep + 1, #grains do grains[i] = nil end
+end
+_HK.recycle_grains = function(grains) if not grains then return end for i = #grains, 1, -1 do _grain_pool[#_grain_pool + 1] = grains[i] grains[i] = nil end end
+local function draw_grains(t, x, col)
   local grains = grain_positions[t]
   if not grains then return end
   local C = PARAM_CACHE.track[t]
   local dur = cached_buffer_durations[t]
   if not dur or dur <= 0 then return end
-  local keep = 0
   local drawn = 0
   local spd_fwd = C.spd >= -0.01
   local dir_mod = C.dir_mod
@@ -1774,69 +1793,48 @@ local function draw_grains(t, x, now, col)
   local smear = _HK.smear
   for gi = 1, #grains do
     local g = grains[gi]
-    local age = now - g.t
-    local gsize = g.size
-    local dlife = gsize < 0.15 and 0.15 or gsize
-    if age > dlife then
-      _grain_pool[#_grain_pool + 1] = g
-    else
-      keep = keep + 1
-      grains[keep] = g
-      if drawn < 50 or not g.shown then
-        drawn = drawn + 1
-        g.shown = true
-        local base_w = gsize * g.pitch / dur
-        local gsz = base_w < 1 and base_w or 1
-        local forward = spd_fwd ~= (g.rv < dir_mod)
-        local lut = is_random_env and (_ENV_LUT[floor(g.rv * 4) + 1] or _ENV_LUT[1]) or lut_default
-        local fi = floor(age / dlife * lut_n)
-        if fi > lut_nm then fi = lut_nm end
-        local fade = _FADE_LUT[fi]
-        local start_pos, end_pos
-        if forward then start_pos = g.pos; end_pos = g.pos + gsz else start_pos = g.pos - gsz; end_pos = g.pos end
-        smear(x, seek_y, start_pos, end_pos, gsz, forward, lut, fade, 1, col)
-        if harm_layers and harm_layers.n > 0 then
-          for hi = 1, harm_layers.n do
-            local e = harm_layers[hi]
-            local hw = base_w * e.ratio * e.size_mult
-            if hw > 1 then hw = 1 end
-            local hs, he
-            if forward then hs = g.pos; he = g.pos + hw else hs = g.pos - hw; he = g.pos end
-            smear(x, seek_y, hs, he, hw, forward, lut, fade, e.alpha, col)
-          end
+    if drawn < 50 or not g.shown then
+      drawn = drawn + 1
+      g.shown = true
+      local base_w = g.size * g.pitch / dur
+      local gsz = base_w < 1 and base_w or 1
+      local forward = spd_fwd ~= (g.rv < dir_mod)
+      local lut = is_random_env and (_ENV_LUT[floor(g.rv * 4) + 1] or _ENV_LUT[1]) or lut_default
+      local fi = floor(g.lf * lut_n)
+      if fi > lut_nm then fi = lut_nm end
+      local fade = _FADE_LUT[fi]
+      local start_pos, end_pos
+      if forward then start_pos = g.pos; end_pos = g.pos + gsz else start_pos = g.pos - gsz; end_pos = g.pos end
+      smear(x, seek_y, start_pos, end_pos, gsz, forward, lut, fade, 1, col)
+      if harm_layers and harm_layers.n > 0 then
+        for hi = 1, harm_layers.n do
+          local e = harm_layers[hi]
+          local hw = base_w * e.ratio * e.size_mult
+          if hw > 1 then hw = 1 end
+          local hs, he
+          if forward then hs = g.pos; he = g.pos + hw else hs = g.pos - hw; he = g.pos end
+          smear(x, seek_y, hs, he, hw, forward, lut, fade, e.alpha, col)
         end
       end
     end
   end
-  for i = keep + 1, #grains do grains[i] = nil end
 end
-_HK.draw_grain_pans = function(t, base_x, now)
+_HK.draw_grain_pans = function(t, base_x)
   local grains = grain_positions[t]
   if not grains then return end
   local slide = pan_indicator_x[t]
   local hi_x = base_x + 25
-  local keep = 0
   for gi = 1, #grains do
     local g = grains[gi]
-    local age = now - g.t
-    local gsize = g.size
-    local dlife = gsize < 0.15 and 0.15 or gsize
-    if age > dlife then
-      _grain_pool[#_grain_pool + 1] = g
-    else
-      keep = keep + 1
-      grains[keep] = g
-      local lv = 6 - floor(age / dlife * 4)
-      if lv > 2 then
-        local px = base_x + (g.pan + 1) * 12.5
-        if px < base_x then px = base_x elseif px > hi_x then px = hi_x end
-        R(lv, floor(px + slide + 0.5) - 1, 1, 3, 1)
-      end
+    local lv = 6 - floor(g.lf * 4)
+    if lv > 2 then
+      local px = base_x + (g.pan + 1) * 12.5
+      if px < base_x then px = base_x elseif px > hi_x then px = hi_x end
+      R(lv, floor(px + slide + 0.5) - 1, 1, 3, 1)
     end
   end
-  for i = keep + 1, #grains do grains[i] = nil end
 end
-local function draw_seek_bar_viz(t, x, mode, now, wf, active)
+local function draw_seek_bar_viz(t, x, mode, wf, active)
   local C = PARAM_CACHE.track[t]
   local loaded = audio_active[t] or C.in_ == 1 or C.dir_ == 1
   if mode == "speed" then
@@ -1861,9 +1859,9 @@ local function draw_seek_bar_viz(t, x, mode, now, wf, active)
         if C.gran and C.gran > 0 then
           col = ctx.waveforms[0]
           for i = 0, BAR_W - 1 do col[i] = 0 end
-          draw_grains(t, x, now, col)
+          draw_grains(t, x, col)
         else
-          for i = #grains, 1, -1 do _grain_pool[#_grain_pool + 1] = grains[i] grains[i] = nil end
+          _HK.recycle_grains(grains)
         end
       end
       local base = flash_level(t, 1)
@@ -1898,11 +1896,8 @@ local function draw_seek_bar_viz(t, x, mode, now, wf, active)
     return
   end
   if C.dir_ ~= 1 then R(1, x, Y.seek, animated_bar_w, 1) end
-  if C.gran and C.gran > 0 then draw_grains(t, x, now)
-  else
-    local grains = grain_positions[t]
-    for i = #grains, 1, -1 do _grain_pool[#_grain_pool + 1] = grains[i] grains[i] = nil end
-  end
+  if C.gran and C.gran > 0 then draw_grains(t, x)
+  else _HK.recycle_grains(grain_positions[t]) end
   if loaded and C.dir_ ~= 1 then R(LEVEL.hi, x + floor(osc_positions[t] * animated_bar_w), Y.seek - 1, 1, 2) end
 end
 
@@ -1914,6 +1909,8 @@ function redraw()
   if _G.preset_loading then screen.clear(); screen.level(15); screen.move(64, 32); screen.text_center("Loading..."); screen.update(); return end
   refresh_redraw_cache()
   local now = util.time()
+  _HK.advance_grains(1, now)
+  _HK.advance_grains(2, now)
   local cur_mode = current_mode
   local cur_filter = current_filter_mode
   local upper = UPPER[cur_mode]
@@ -2055,7 +2052,7 @@ function redraw()
         if abs(C.spd) < 0.01 then icon = "⏸" elseif C.spd > 0 then icon = "▶" else icon = "◀" end
         T(vL, (t == 1 and 77 or 118) + OFFS[t], y_bot + 1, icon)
       end
-      draw_seek_bar_viz(t, x, mode, now, wf, active)
+      draw_seek_bar_viz(t, x, mode, wf, active)
     end
   end
   for t = 1,2 do
@@ -2075,7 +2072,7 @@ function redraw()
       local peak_h = pre_fader_ratio * h
       if peak_h > 0 then R(LEVEL.hi - 1, current_vol_x, 64 - peak_h + volume_bar_y[t], 2, peak_h) end
     end
-    _HK.draw_grain_pans(t, current_pan_x, now)
+    _HK.draw_grain_pans(t, current_pan_x)
     local pan_pos = util.linlin(-100, 100, current_pan_x, current_pan_x + 25, C.pan)
     R(LEVEL.hi, floor(pan_pos + pan_indicator_x[t] + 0.5) - 1, 1, 3, 1)
   end
