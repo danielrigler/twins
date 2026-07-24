@@ -2099,7 +2099,8 @@ function redraw()
     local h = (C.vol + 70) * _VOL_LINLIN_MUL
     if h < 0 then h = 0 elseif h > 64 then h = 64 end
     R(LEVEL.dim - 3, current_vol_x, 64 - h + volume_bar_y[t], 2, h)
-    local peak_amp = (audio_active[t] or C.in_ == 1 or C.dir_ == 1) and max(voice_peak_amplitudes[t].l, voice_peak_amplitudes[t].r) or 0
+    local loaded = audio_active[t] or C.in_ == 1 or C.dir_ == 1
+    local peak_amp = loaded and max(voice_peak_amplitudes[t].l, voice_peak_amplitudes[t].r) or 0
     if peak_amp > 0 then
       local peak_db = log(peak_amp) * 9
       local pre_fader_db = peak_db - C.vol
@@ -2108,9 +2109,11 @@ function redraw()
       local peak_h = pre_fader_ratio * h
       if peak_h > 0 then R(LEVEL.hi - 1, current_vol_x, 64 - peak_h + volume_bar_y[t], 2, peak_h) end
     end
-    _HK.draw_grain_pans(t, current_pan_x)
-    local pan_pos = util.linlin(-100, 100, current_pan_x, current_pan_x + 25, C.pan)
-    R(LEVEL.hi, floor(pan_pos + pan_indicator_x[t] + 0.5), 0, 1, 3)
+    if loaded then
+      _HK.draw_grain_pans(t, current_pan_x)
+      local pan_pos = util.linlin(-100, 100, current_pan_x, current_pan_x + 25, C.pan)
+      R(LEVEL.hi, floor(pan_pos + pan_indicator_x[t] + 0.5), 0, 1, 3)
+    end
   end
   if PARAM_CACHE.dry then for x = 7,15,4 do P(LEVEL.hi, x, 0) end end
   if PARAM_CACHE.sym then local sc = SYM_CACHE; for i = 1,62,2 do P(sc[i + 1], 85, sc[i]) end end
