@@ -2110,7 +2110,7 @@ function redraw()
     end
     _HK.draw_grain_pans(t, current_pan_x)
     local pan_pos = util.linlin(-100, 100, current_pan_x, current_pan_x + 25, C.pan)
-    R(LEVEL.hi, floor(pan_pos + pan_indicator_x[t] + 0.5) - 1, 1, 3, 1)
+    R(LEVEL.hi, floor(pan_pos + pan_indicator_x[t] + 0.5), 0, 1, 3)
   end
   if PARAM_CACHE.dry then for x = 7,15,4 do P(LEVEL.hi, x, 0) end end
   if PARAM_CACHE.sym then local sc = SYM_CACHE; for i = 1,62,2 do P(sc[i + 1], 85, sc[i]) end end
