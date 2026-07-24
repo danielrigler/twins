@@ -147,6 +147,7 @@ function Mirror.copy_voice_params(from_track, to_track, mirror_pan)
             end
         end
     end
+    if Mirror.lfo and Mirror.lfo.rebuild_order then Mirror.lfo.rebuild_order() end
 end
 
 return Mirror

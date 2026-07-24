@@ -725,7 +725,7 @@ local function setup_params()
 
     params:add_group("SYMMETRY", 6)
     params:add_binary("symmetry", "Symmetry", "toggle", 0)
-  params:set_action("symmetry", function(value) if value == 0 then for i=1,16 do lfo[i].sync_to=nil; lfo[i].sync_invert=false end else local active_map={} for i=1,16 do if lfo[i].active and lfo[i].target_name and lfo[i].target_name~="none" then active_map[lfo[i].target_name]=i end end for i=1,16 do local obj=lfo[i] if obj.active and obj.target_name and obj.target_name~="none" then local target=obj.target_name local track=target:sub(1,1) local pname=target:sub(2) if pname=="volume" then obj.sync_to=nil; obj.sync_invert=false elseif track=="1" then local j=active_map["2"..pname] if j then local is_pan=(pname=="pan") lfo[j].sync_to=i; lfo[j].sync_invert=is_pan; lfo[j].walk_value=obj.walk_value; lfo[j].walk_velocity=obj.walk_velocity; lfo[j].prev=is_pan and -obj.prev or obj.prev end end end end end end)
+  params:set_action("symmetry", function(value) if value == 0 then for i=1,16 do lfo[i].sync_to=nil; lfo[i].sync_invert=false end else local active_map={} for i=1,16 do lfo[i].sync_to=nil; lfo[i].sync_invert=false end for i=1,16 do if lfo[i].active and lfo[i].target_name and lfo[i].target_name~="none" then active_map[lfo[i].target_name]=i end end for i=1,16 do local obj=lfo[i] if obj.active and obj.target_name and obj.target_name~="none" then local target=obj.target_name local track=target:sub(1,1) local pname=target:sub(2) if pname=="volume" then obj.sync_to=nil; obj.sync_invert=false elseif track=="1" then local j=active_map["2"..pname] if j then local is_pan=(pname=="pan") lfo[j].sync_to=i; lfo[j].sync_invert=is_pan; lfo[j].walk_value=obj.walk_value; lfo[j].walk_velocity=obj.walk_velocity; lfo[j].prev=is_pan and -obj.prev or obj.prev end end end end end lfo.rebuild_order() end)
     params:add_separator("Copy")
     local COPY_DIRS = {{1, 2, "→"}, {2, 1, "←"}}
     for _, cd in ipairs(COPY_DIRS) do
@@ -1810,6 +1810,32 @@ local function draw_grains(t, x, now, col)
   end
   for i = keep + 1, #grains do grains[i] = nil end
 end
+_HK.draw_grain_pans = function(t, base_x, now)
+  local grains = grain_positions[t]
+  if not grains then return end
+  local slide = pan_indicator_x[t]
+  local hi_x = base_x + 25
+  local keep = 0
+  for gi = 1, #grains do
+    local g = grains[gi]
+    local age = now - g.t
+    local gsize = g.size
+    local dlife = gsize < 0.15 and 0.15 or gsize
+    if age > dlife then
+      _grain_pool[#_grain_pool + 1] = g
+    else
+      keep = keep + 1
+      grains[keep] = g
+      local lv = 6 - floor(age / dlife * 4)
+      if lv > 2 then
+        local px = base_x + (g.pan + 1) * 12.5
+        if px < base_x then px = base_x elseif px > hi_x then px = hi_x end
+        R(lv, floor(px + slide + 0.5) - 1, 1, 3, 1)
+      end
+    end
+  end
+  for i = keep + 1, #grains do grains[i] = nil end
+end
 local function draw_seek_bar_viz(t, x, mode, now, wf, active)
   local C = PARAM_CACHE.track[t]
   local loaded = audio_active[t] or C.in_ == 1 or C.dir_ == 1
@@ -2049,8 +2075,9 @@ function redraw()
       local peak_h = pre_fader_ratio * h
       if peak_h > 0 then R(LEVEL.hi - 1, current_vol_x, 64 - peak_h + volume_bar_y[t], 2, peak_h) end
     end
+    _HK.draw_grain_pans(t, current_pan_x, now)
     local pan_pos = util.linlin(-100, 100, current_pan_x, current_pan_x + 25, C.pan)
-    R(LEVEL.dim, pan_pos - 1 + pan_indicator_x[t], 1, 4, 1)
+    R(LEVEL.hi, floor(pan_pos + pan_indicator_x[t] + 0.5) - 1, 1, 3, 1)
   end
   if PARAM_CACHE.dry then for x = 7,15,4 do P(LEVEL.hi, x, 0) end end
   if PARAM_CACHE.sym then local sc = SYM_CACHE; for i = 1,62,2 do P(sc[i + 1], 85, sc[i]) end end
@@ -2084,7 +2111,7 @@ function redraw()
   screen.update()
 end
 
-local function grain_pos_handler(args) local vid = args[1]+1 if audio_active[vid] or pget(TRACK_KEYS[vid].live_direct) == 1 then local b = grain_positions[vid] local n = #b if n < 64 then local np = #_grain_pool local g if np > 0 then g = _grain_pool[np] _grain_pool[np] = nil else g = {} end g.pos, g.size, g.t, g.rv, g.pitch, g.shown = args[2], args[3], util.time(), args[4] or 0.5, args[5] or 1, false b[n+1] = g end end end
+local function grain_pos_handler(args) local vid = args[1]+1 if audio_active[vid] or pget(TRACK_KEYS[vid].live_direct) == 1 then local b = grain_positions[vid] local n = #b if n < 64 then local np = #_grain_pool local g if np > 0 then g = _grain_pool[np] _grain_pool[np] = nil else g = {} end g.pos, g.size, g.t, g.rv, g.pitch, g.pan, g.shown = args[2], args[3], util.time(), args[4] or 0.5, args[5] or 1, args[6] or 0, false b[n+1] = g end end end
 local osc_handlers = {
     ["/twins/buf_pos"] = function(args)
         local vid, pos = args[1] + 1, args[2]

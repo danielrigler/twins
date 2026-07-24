@@ -265,14 +265,24 @@ local function update_active_lfos()
     for i = 1, number_of_outputs do
         local o = lfo[i]
         if o.active and o.target_name and o.target_name ~= "none" then
+            if o.is_size then hs = true end
+            if not o.sync_to then
+                count = count + 1
+                active_lfos[count] = i
+            end
+        end
+    end
+    for i = 1, number_of_outputs do
+        local o = lfo[i]
+        if o.active and o.target_name and o.target_name ~= "none" and o.sync_to then
             count = count + 1
             active_lfos[count] = i
-            if o.is_size then hs = true end
         end
     end
     for i = count + 1, #active_lfos do active_lfos[i] = nil end
     has_size_lfo = hs
 end
+function lfo.rebuild_order() update_active_lfos() end
 function lfo.is_param_assigned(name) return assigned_params[name] == true end
 function lfo.mark_param_assigned(name) if name then assigned_params[name] = true end end
 function lfo.clear_param_assignment(name) if name then assigned_params[name] = nil end end
@@ -341,6 +351,8 @@ local function randomize_lfo(i, target)
     local full_depth = depth * (narrow_range / full_range)
     if clocksync_ref and clocksync_ref.grain_synced() and target:sub(2) == "density" then full_offset = clocksync_ref.grain_division_norm(track) * 2 - 1 end
     local obj = lfo[i]
+    obj.sync_to = nil
+    obj.sync_invert = false
     obj.depth = full_depth
     obj.offset = full_offset
     pset(DEPTH_KEYS[i], full_depth)
@@ -384,9 +396,10 @@ local function mirror_lfo(dst, src, is_pan)
         obj_d.offset = obj_s.offset
         pset(OFFSET_KEYS[dst], obj_s.offset)
     end
-    pset(FREQ_KEYS[dst], obj_s.freq)
+    pset(FREQ_KEYS[dst], pget(FREQ_KEYS[src]))
     pset(SHAPE_KEYS[dst], LFO_SHAPE_REVERSE[obj_s.waveform])
     pset(DEPTH_KEYS[dst], obj_s.depth)
+    update_active_lfos()
 end
 local function free_slots()
     local slots = {}
@@ -436,6 +449,8 @@ function lfo.randomize_lfos(track, allow_volume_lfos)
                     if should_clear and not lfo.is_param_locked(tn, pn) then
                         pset(LFO_KEYS[i], 1)
                         pset(TARGET_KEYS[i], 1)
+                        lfo[i].sync_to = nil
+                        lfo[i].sync_invert = false
                         assigned_params[target] = nil
                     end
                 end
@@ -544,7 +559,7 @@ function lfo.process()
             slope = obj.prev
         elseif shape == 4 then
             local src = obj.sync_to and lfo_table[obj.sync_to]
-            if src then
+            if src and src.active and not src.sync_to then
                 obj.walk_value = src.walk_value
                 obj.walk_velocity = src.walk_velocity
                 obj.prev = obj.sync_invert and -src.prev or src.prev
@@ -642,6 +657,13 @@ function lfo.process()
             end
             if tick_pitch_scale then
                 value = quantize_pitch_to_scale(value, tick_pitch_scale)
+                if value < mn then value = mn elseif value > mx then value = mx end
+            end
+        end
+        if obj.sync_to then
+            local s = lfo_table[obj.sync_to]
+            if s and s.active and not s.sync_to and not obj.is_volume and s.last_val ~= nil then
+                value = obj.sync_invert and -s.last_val or s.last_val
                 if value < mn then value = mn elseif value > mx then value = mx end
             end
         end
