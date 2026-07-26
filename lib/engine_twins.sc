@@ -62,7 +62,7 @@ alloc {
             var subharmonic_3_vol = subharmonics_3 * main_vol * 2;
             var overtone_1_vol = overtones_1 * main_vol * 1.5;
             var overtone_2_vol = overtones_2 * main_vol * 1.5;
-            var trigger60 = Impulse.kr(60);
+            var report_trig = Impulse.kr(30);
             var grain_direction, speed_dir, base_grain_trig, rand_val, rand_val2, random_interval, ratchet_gate, extra_trig, signal, envBuf, randomEnv, harmonics, volumes, l_harmonics, r_harmonics, size_mults, jitter_range, buf_frames_l, buf_dur_recip, wrapped_grain_pos;
             var spreadMults, stereoSpreadMults, haasOffsets, detuneCents, density_phase, pan_u_l, pan_u_r, pan_flip, pan_alt, pan_dist_l, pan_dist_r, spread_lag, g_mid, g_side, report_lo, report_hi, report_lo_r, report_hi_r, report_pan;
             speed = Lag.kr(speed, 1);
@@ -145,7 +145,7 @@ alloc {
             meter_sig = granular_sig * amp_scale;
             Out.kr(amp_bus, amp_scale);
             wrapped_grain_pos = Wrap.kr(buf_pos + jitter_sig);
-            SendReply.kr(trigger60, '/voice_state', [voice, buf_pos, Peak.kr(meter_sig[0], trigger60), Peak.kr(meter_sig[1], trigger60)]);
+            SendReply.kr(report_trig, '/voice_state', [voice, buf_pos, Peak.kr(meter_sig[0], report_trig), Peak.kr(meter_sig[1], report_trig)]);
             SendReply.kr(Trig1.kr(grain_trig, 1/30), '/grain_pos', [voice, Latch.kr(wrapped_grain_pos, grain_trig), Latch.kr(grain_size, grain_trig), Latch.kr(rand_val, grain_trig), Latch.kr(grain_pitch.abs, grain_trig), Latch.kr(report_pan, grain_trig)]);
             Out.ar(out, signal);
         }).add;
@@ -278,12 +278,12 @@ alloc {
         SynthDef(\liveDirect, {
             arg out, pan, gain, isMono, voice, key_hold = 1, key_gate = 0, ad_a = 0.005, ad_d = 0.3, vel_amp = 1;
             var sig = SoundIn.ar([0, 1]);
-            var trigger60 = Impulse.kr(60);
+            var report_trig = Impulse.kr(30);
             var key_env = EnvGen.kr(Env.asr(ad_a, 1, ad_d, \sin), gate: key_gate.max(key_hold));
             sig = Select.ar(isMono, [sig, [sig[0], sig[0]] ]);
             sig = Balance2.ar(sig[0], sig[1], pan);
             sig = (sig * Lag.kr(gain) * key_env * vel_amp).tanh;
-            SendReply.kr(trigger60, '/voice_peak', [voice, Peak.kr(sig[0], trigger60), Peak.kr(sig[1], trigger60)]);
+            SendReply.kr(report_trig, '/voice_peak', [voice, Peak.kr(sig[0], report_trig), Peak.kr(sig[1], report_trig)]);
             Out.ar(out, sig);
         }).add;
 

@@ -85,6 +85,7 @@ local FX_POPUP_DURATION = 1
 local longpress_metro = nil
 local grain_positions = {[1] = {}, [2] = {}}
 local rec_positions = {[1] = 0, [2] = 0}
+ctx.seek_pushed = {-1, -1}
 ctx.live_wf = {raw = {[1] = {}, [2] = {}}, norm = {[1] = {}, [2] = {}}, col = {-1, -1}, max = {0, 0}}
 function ctx.live_wf.reset(i) local raw, nm = ctx.live_wf.raw[i], ctx.live_wf.norm[i] for c = 0, 29 do raw[c] = 0 nm[c] = 0 end ctx.live_wf.col[i] = -1 ctx.live_wf.max[i] = 0 end
 ctx.live_wf.reset(1) ctx.live_wf.reset(2)
@@ -783,6 +784,12 @@ local function setup_params()
         params:add_taper(i.."max_speed", i.." speed (max)", -2, 2, 0.25, 0, "x")
         params:add_taper(i.."min_seek", i.." seek (min)", 0, 100, 0, 0, "%")
         params:add_taper(i.."max_seek", i.." seek (max)", 0, 100, 100, 0, "%")
+    end
+    for i = 1, 2 do
+        for _, s in ipairs({"jitter", "size", "density", "spread", "pitch", "speed", "seek"}) do
+            params:set_action(i.."min_"..s, lfo.invalidate_limits)
+            params:set_action(i.."max_"..s, lfo.invalidate_limits)
+        end
     end
 
     params:add_group("ACTIONS", 4)
@@ -2149,13 +2156,6 @@ end
 
 local function grain_pos_handler(args) local vid = args[1]+1 if audio_active[vid] or pget(TRACK_KEYS[vid].live_direct) == 1 then local b = grain_positions[vid] local n = #b if n < 64 then local np = #_grain_pool local g if np > 0 then g = _grain_pool[np] _grain_pool[np] = nil else g = {} end g.pos, g.size, g.t, g.rv, g.pitch, g.pan, g.shown = args[2], args[3], util.time(), args[4] or 0.5, args[5] or 1, args[6] or 0, false b[n+1] = g end end end
 local osc_handlers = {
-    ["/twins/buf_pos"] = function(args)
-        local vid, pos = args[1] + 1, args[2]
-        if audio_active[vid] or pget(TRACK_KEYS[vid].live_input) == 1 or pget(TRACK_KEYS[vid].live_direct) == 1 then
-            osc_positions[vid] = pos
-            pset(_HK.seek[vid], pos * 100, true)
-        end
-    end,
     ["/twins/rec_pos"] = function(args)
         local vid, pos, peak = args[1] + 1, args[2], args[3]
         if pget(TRACK_KEYS[vid].live_input) == 1 then
@@ -2210,9 +2210,14 @@ osc_handlers["/twins/voice_state"] = function(args)
     local vid, pos = args[1] + 1, args[2]
     local va = voice_peak_amplitudes[vid]
     va.l, va.r = abs(args[3]), abs(args[4])
-    if audio_active[vid] or pget(TRACK_KEYS[vid].live_input) == 1 or pget(TRACK_KEYS[vid].live_direct) == 1 then
+    local k = TRACK_KEYS[vid]
+    if audio_active[vid] or pget(k.live_input) == 1 or pget(k.live_direct) == 1 then
         osc_positions[vid] = pos
-        pset(_HK.seek[vid], pos * 100, true)
+        local pct = pos * 100
+        if abs(pct - ctx.seek_pushed[vid]) >= 0.34 then
+            ctx.seek_pushed[vid] = pct
+            pset(_HK.seek[vid], pct, true)
+        end
     end
 end
 osc_handlers["/twins/grain_pos"] = grain_pos_handler
