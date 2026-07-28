@@ -94,13 +94,20 @@ local function get_hz(v)
 end
 
 local eff_size = {nil, nil}
+local overlap = 1
+local MAX_GRAIN_MS = 10000
+
+local function grain_len(v, hz, desired, half)
+  local step = (half and 500 or 1000) / hz
+  local base = desired > step and step or desired
+  local eff = base * overlap
+  return eff > MAX_GRAIN_MS and MAX_GRAIN_MS or eff
+end
 
 local function apply_size_cap(v, hz, half)
   local id = SIZE_KEYS[v]
   if not params.lookup[id] then return end
-  local cap = (half and 500 or 1000) / hz
-  local desired = params:get(id)
-  local eff = desired > cap and cap or desired
+  local eff = grain_len(v, hz, params:get(id), half)
   if half or eff ~= eff_size[v] then
     eff_size[v] = eff
     engine.size(v, eff * 0.001)
@@ -254,6 +261,14 @@ function arp.max_size_ms(v)
   return (1 / hz) * 1000
 end
 
+function arp.overlap() return overlap end
+
+function arp.grain_size_ms(v, desired)
+  if not running then return desired end
+  v = tonumber(v)
+  return grain_len(v, clamp(get_hz(v), 0.1, 250), desired)
+end
+
 function arp.snapshot()
   local deg, vol, rat = {}, {}, {}
   for i = 1, MAX_STEPS do deg[i] = step_deg[i]; vol[i] = step_vol[i]; rat[i] = step_rat[i] end
@@ -290,9 +305,16 @@ function arp.set_context(ctx)
 end
 
 function arp.add_params()
-  params:add_group("ARP!", 2)
+  params:add_group("ARP!", 3)
   params:add_option("arp_on", "Arp!", {"off", "on"}, 1)
   params:set_action("arp_on", function(v) set_running(v == 2) end)
+  params:add_control("arp_overlap", "Overlap", controlspec.new(1, 8, "lin", 0.1, 1, "x"))
+  params:set_action("arp_overlap", function(v)
+    overlap = v
+    if running then
+      for i = 1, 2 do apply_size_cap(i, clamp(get_hz(i), 0.1, 250)) end
+    end
+  end)
   params:add_binary("arp_randomize", "RaNd0m1ze!", "trigger", 0)
   params:set_action("arp_randomize", function() randomize() end)
 end

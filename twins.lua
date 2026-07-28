@@ -432,6 +432,11 @@ function hlp.start_bounce()
     if b and (util.time() - b.t) < (b.len + 5) then return end
     local inplace = params:get("bounce_mode") == 2
     local mode = inplace and 2 or params:get("bounce_source") - 1
+    if inplace and params:get("bounce_source") == 2 then
+        fx_popup.label = "IN PLACE = DRY"
+        fx_popup.value = nil
+        fx_popup.time = util.time()
+    end
     local len = params:get("bounce_length")
     local pre = params:get("bounce_volume") == 1 and mode ~= 1
     local xf = params:get("bounce_xfade")
@@ -855,7 +860,7 @@ local function setup_params()
       params:add_taper(i.. "density", i.. " density", 0.1, 250, ({5, 2.5})[i], 5) params:set_action(i.. "density", function(value) engine.density(i, clocksync.grain_density(i) or value) end)
       params:add_control(i.. "pitch", i.. " pitch", controlspec.new(-48, 48, "lin", 1, 0, "st")) params:set_action(i.. "pitch", function(value) local scale = params:string("pitch_quantize_scale") local quantized = SU.quantize(value, scale) engine.pitch_offset(i, math.pow(0.5, -quantized / 12) * arp.ratio(i)) end)
       params:add_taper(i.. "jitter", i.. " jitter", 0, 999900, 250, 10, "ms") params:set_action(i.. "jitter", function(value) engine.jitter(i, value * 0.001) end)
-      params:add_taper(i.. "size", i.. " size", 20, 5000, ({500, 1000})[i], 1, "ms") params:set_action(i.. "size", function(value) engine.size(i, math.min(value, arp.max_size_ms(i)) * 0.001) end)
+      params:add_taper(i.. "size", i.. " size", 20, 5000, ({500, 1000})[i], 1, "ms") params:set_action(i.. "size", function(value) engine.size(i, arp.grain_size_ms(i, value) * 0.001) end)
       params:add_taper(i.. "spread", i.. " spread", 0, 100, 75, 0, "%") params:set_action(i.. "spread", function(value) engine.spread(i, value * 0.01) end)
       params:add_control(i.. "seek", i.. " seek", controlspec.new(0, 100, "lin", 0.01, 0, "%")) params:set_action(i.. "seek", function(value) engine.seek(i, value * 0.01) end) params:lookup_param(i.."seek").save = false
     end
@@ -877,104 +882,84 @@ local function randomize_pitch(track, other_track, symmetry)
     local max_pitch = min(params:get(track.."max_pitch"), current_pitch + 48)
     if min_pitch >= max_pitch then return end
     local base_pitch = params:get(other_track .. "pitch")
-    local scale_name = params:string("pitch_quantize_scale")
-    local scale = SU.intervals(scale_name) or SU.intervals("major")
+    local scale = SU.intervals(params:string("pitch_quantize_scale")) or SU.intervals("major")
     if not scale then return end
-    local weighted_intervals = {}
-    local larger_intervals = {}
+    local strong = {}
+    for i = 3, 6 do local d = scale[i] if d then strong[d] = true end end
+    local weights, wide = {}, {}
     for octave = -2, 2 do
         for _, degree in ipairs(scale) do
             local interval = octave * 12 + degree
+            local mag = abs(interval)
             if interval ~= 0 then
-                if abs(interval) <= 12 then
-                    if degree == 0 then weighted_intervals[interval] = 3
-                    elseif degree == scale[3] or degree == scale[4] then weighted_intervals[interval] = 2
-                    elseif degree == scale[5] or degree == scale[6] then weighted_intervals[interval] = 2
-                    elseif degree == scale[2] then weighted_intervals[interval] = 1
-                    else weighted_intervals[interval] = 1 end
-                elseif abs(interval) <= 24 then
-                    table.insert(larger_intervals, interval)
-                end
+                if mag <= 12 then weights[interval] = (degree == 0 and 3) or (strong[degree] and 2) or 1
+                elseif mag <= 24 then wide[#wide + 1] = interval end
             end
         end
     end
-    weighted_intervals[0] = 2
-    local valid_intervals = {}
-    local total_weight = 0
-    for interval, weight in pairs(weighted_intervals) do
-        local candidate_pitch = base_pitch + interval
-        if candidate_pitch >= min_pitch and candidate_pitch <= max_pitch then
-            valid_intervals[#valid_intervals + 1] = {interval = interval, weight = weight}
-            total_weight = total_weight + weight
+    weights[0] = 2
+    local picks, n, total = {}, 0, 0
+    for interval, weight in pairs(weights) do
+        local candidate = base_pitch + interval
+        if candidate >= min_pitch and candidate <= max_pitch then
+            picks[n + 1], picks[n + 2] = interval, weight
+            n = n + 2
+            total = total + weight
         end
     end
-    if #valid_intervals > 0 then
-        local random_weight = math.random(total_weight)
-        local cumulative_weight = 0
-        for i = 1, #valid_intervals do
-            local v = valid_intervals[i]
-            cumulative_weight = cumulative_weight + v.weight
-            if random_weight <= cumulative_weight then set_pitch(track, other_track, base_pitch + v.interval, symmetry) return end
+    if total > 0 then
+        local draw, acc = math.random(total), 0
+        for i = 2, n, 2 do
+            acc = acc + picks[i]
+            if draw <= acc then set_pitch(track, other_track, base_pitch + picks[i - 1], symmetry) return end
         end
     end
     local fitting = {}
-    for i = 1, #larger_intervals do
-        local candidate_pitch = base_pitch + larger_intervals[i]
-        if candidate_pitch >= min_pitch and candidate_pitch <= max_pitch then fitting[#fitting + 1] = candidate_pitch end
+    for i = 1, #wide do
+        local candidate = base_pitch + wide[i]
+        if candidate >= min_pitch and candidate <= max_pitch then fitting[#fitting + 1] = candidate end
     end
     if #fitting > 0 then set_pitch(track, other_track, fitting[math.random(#fitting)], symmetry) end
 end
 
-local _rand_can_randomize = {}
 local _rand_targets = {}
 local function randomize(n)
     if randomize_metro[n] then stop_metro_safe(randomize_metro[n]) else randomize_metro[n] = metro.init() end
     local m_rand = randomize_metro[n]
     local symmetry = params:get("symmetry") == 1
     local other_track = 3 - n
-    for k in pairs(_rand_can_randomize) do _rand_can_randomize[k] = nil end
     for k in pairs(_rand_targets) do _rand_targets[k] = nil end
-    local can_randomize = _rand_can_randomize
     local targets = _rand_targets
     local param_names = _HK.rand_names
     local pitch_size_density_linked = params:get("global_pitch_size_density_link") == 1
-    for i = 1, #param_names do can_randomize[param_names[i]] = not is_param_locked(n, param_names[i]) end
-    if can_randomize.pitch then randomize_pitch(n, other_track, symmetry) end
+    if not is_param_locked(n, "pitch") then randomize_pitch(n, other_track, symmetry) end
     if not m_rand then print("Error: Hardware metro limit reached!") return end
     for i = 1, #param_names do
         local key = param_names[i]
-        if key == "pitch" then goto continue end
         local cfg_name = n .. key
-        if not can_randomize[key] then goto continue end
-        if key == "seek" then
-            local min_val = params:get(n .. "min_seek")
-            local max_val = params:get(n .. "max_seek")
-            local val = random_float(min_val, max_val)
-            local val_norm = val * 0.01
-            params:set(n.."seek", val); osc_positions[n] = val_norm
-            if symmetry then params:set(other_track.."seek", val); osc_positions[other_track] = val_norm end
-        elseif key == "density" and clocksync.grain_synced() then
-            if not is_lfo_active_for_param(cfg_name) then clocksync.randomize_grain_div(n, symmetry and other_track or nil) end
-        else
-            local min_val = params:get(n .. "min_" .. key)
-            local max_val = params:get(n .. "max_" .. key)
-            if min_val and max_val and min_val < max_val and not is_lfo_active_for_param(cfg_name) then
-                local val
-                if key == "jitter" then
-                    if math.random() < 0.75 then
-                        local upper_limit = min(500, max_val)
-                        val = random_float(0, upper_limit)
+        if key ~= "pitch" and not is_param_locked(n, key) then
+            if key == "seek" then
+                local val = random_float(params:get(n .. "min_seek"), params:get(n .. "max_seek"))
+                local val_norm = val * 0.01
+                params:set(n.."seek", val); osc_positions[n] = val_norm
+                if symmetry then params:set(other_track.."seek", val); osc_positions[other_track] = val_norm end
+            elseif key == "density" and clocksync.grain_synced() then
+                if not is_lfo_active_for_param(cfg_name) then clocksync.randomize_grain_div(n, symmetry and other_track or nil) end
+            else
+                local min_val = params:get(n .. "min_" .. key)
+                local max_val = params:get(n .. "max_" .. key)
+                if min_val and max_val and min_val < max_val and not is_lfo_active_for_param(cfg_name) then
+                    local val
+                    if key == "jitter" and math.random() < 0.75 then
+                        val = random_float(0, min(500, max_val))
                     else
                         val = random_float(min_val, max_val)
                     end
-                else
-                    val = random_float(min_val, max_val)
+                    targets[cfg_name] = val
+                    if symmetry then targets[other_track .. key] = (key == "pan") and -val or val end
                 end
-                targets[cfg_name] = val
-                if symmetry then targets[other_track .. key] = (key == "pan") and -val or val end
             end
         end
-        ::continue::
     end
     if clocksync.lfo_synced() then clocksync.randomize_lfo_div(n, symmetry and other_track or nil) end
     if next(targets) then
@@ -1649,6 +1634,8 @@ local function refresh_redraw_cache()
     C.cut = pget(K.cutoff)
     C.hpf = pget(K.hpf)
     C.q = pget(K.lpf_gain)
+    C.loaded = audio_active[t] or C.in_ == 1 or C.dir_ == 1
+    C.locked.eq = pget("lock_eq") == 2
   end
   _slow_refresh_countdown = _slow_refresh_countdown - 1
   if _slow_refresh_countdown > 0 then return end
@@ -1864,9 +1851,20 @@ _HK.draw_grain_pans = function(t, base_x)
   end
   if run_lv > 0 then R(run_lv, origin + run_k, 1, 28 - run_k, 1) end
 end
+local function grain_column(t, x)
+  local gran = PARAM_CACHE.track[t].gran
+  if gran and gran > 0 then
+    local col = ctx.waveforms[0]
+    for i = 0, BAR_W - 1 do col[i] = 0 end
+    draw_grains(t, x, col)
+    return col
+  end
+  _HK.recycle_grains(grain_positions[t])
+  return nil
+end
 local function draw_seek_bar_viz(t, x, mode, wf, active)
   local C = PARAM_CACHE.track[t]
-  local loaded = audio_active[t] or C.in_ == 1 or C.dir_ == 1
+  local loaded = C.loaded
   if mode == "speed" then
     local half_w = floor(BAR_W * 0.5)
     local cx = x + half_w
@@ -1883,17 +1881,7 @@ local function draw_seek_bar_viz(t, x, mode, wf, active)
   if wf ~= nil then
     local wmid = Y.seek - 5
     if wf then
-      local col
-      local grains = grain_positions[t]
-      if #grains > 0 then
-        if C.gran and C.gran > 0 then
-          col = ctx.waveforms[0]
-          for i = 0, BAR_W - 1 do col[i] = 0 end
-          draw_grains(t, x, col)
-        else
-          _HK.recycle_grains(grains)
-        end
-      end
+      local col = #grain_positions[t] > 0 and grain_column(t, x) or nil
       local base = flash_level(t, 1)
       local run_x, run_lv, run_hh = 0, -1, 0
       for i = 0, animated_bar_w - 1 do
@@ -1926,10 +1914,8 @@ local function draw_seek_bar_viz(t, x, mode, wf, active)
     return
   end
   if C.dir_ ~= 1 then R(1, x, Y.seek, animated_bar_w, 1) end
-  if C.gran and C.gran > 0 then
-    local col = ctx.waveforms[0]
-    for i = 0, BAR_W - 1 do col[i] = 0 end
-    draw_grains(t, x, col)
+  local col = grain_column(t, x)
+  if col then
     local sy = Y.seek
     local run_x, run_lv = 0, col[0]
     for i = 1, BAR_W - 1 do
@@ -1940,7 +1926,7 @@ local function draw_seek_bar_viz(t, x, mode, wf, active)
       end
     end
     if run_lv > 0 then R(run_lv, x + run_x, sy, BAR_W - run_x, 1) end
-  else _HK.recycle_grains(grain_positions[t]) end
+  end
   if loaded and C.dir_ ~= 1 then R(LEVEL.hi, x + floor(osc_positions[t] * animated_bar_w), Y.seek - 1, 1, 2) end
 end
 
@@ -2018,22 +2004,19 @@ function redraw()
     local vL = active and LEVEL.hi or LEVEL.val
     local wf
     if mode == "seek" and C.dir_ ~= 1 then wf = (audio_active[t] or C.in_ == 1) and ctx.waveforms[t] end
+    if C.locked[(mode == "lpf" or mode == "hpf") and cur_filter or mode] then draw_lock(x, y_bot) end
     if mode == "seek" then
-      if C.locked["seek"] then draw_lock(x, y_bot) end
       if wf == nil then
         local txt
         if C.in_ == 1 then txt = "live" elseif C.dir_ == 1 then txt = "direct" else txt = fast_percent(osc_positions[t] * 100) end
         T(flash_level(t, vL), x, y_bot + 1, txt)
       end
     elseif mode == "speed" then
-      if C.locked["speed"] then draw_lock(x, y_bot) end
       T(flash_level(t, LEVEL.hi), x, y_bot + 1, speed_text(t, C.spd))
     elseif mode == "pan" then
-      if C.locked["pan"] then draw_lock(x, y_bot) end
       local txt = (abs(C.pan) < 0.5) and "0%" or fast_percent(C.pan)
       T(flash_level(t, LEVEL.hi), x, y_bot + 1, txt)
     elseif mode == "eq" then
-      if params:get("lock_eq") == 2 then draw_lock(x, y_bot) end
       local K = TRACK_KEYS[t]
       local low, mid, high, tilt = pget(K.eq_low), pget(K.eq_mid), pget(K.eq_high), pget(K.eq_tilt)
       local cache = _HK.eq_cache[t]
@@ -2053,7 +2036,6 @@ function redraw()
       local segs, ns = cache.segs, cache.nsegs
       for j = 1, ns, 4 do R(vL, x + segs[j], segs[j+1], segs[j+2], segs[j+3]) end
     else
-      if C.locked[cur_filter] then draw_lock(x, y_bot) end
       local lo = cur_filter == "lpf"
       local fv = lo and C.cut or C.hpf
       local qv = lo and C.q or 0
@@ -2089,8 +2071,7 @@ function redraw()
       T(LEVEL.hi, x + 15, y_bot + 1, _HK.fq(fv), "center")
     end
     if mode == "seek" or mode == "speed" then
-      local audio_loaded = audio_active[t] or C.in_ == 1 or C.dir_ == 1
-      if audio_loaded and C.dir_ ~= 1 and not wf then
+      if C.loaded and C.dir_ ~= 1 and not wf then
         local icon
         if abs(C.spd) < 0.01 then icon = "⏸" elseif C.spd > 0 then icon = "▶" else icon = "◀" end
         T(vL, (t == 1 and 77 or 118) + OFFS[t], y_bot + 1, icon)
@@ -2106,7 +2087,7 @@ function redraw()
     local h = (C.vol + 70) * _VOL_LINLIN_MUL
     if h < 0 then h = 0 elseif h > 64 then h = 64 end
     R(LEVEL.dim - 3, current_vol_x, 64 - h + volume_bar_y[t], 2, h)
-    local loaded = audio_active[t] or C.in_ == 1 or C.dir_ == 1
+    local loaded = C.loaded
     local peak_amp = loaded and max(voice_peak_amplitudes[t].l, voice_peak_amplitudes[t].r) or 0
     if peak_amp > 0 then
       local peak_db = log(peak_amp) * 9
@@ -2205,8 +2186,10 @@ local osc_handlers = {
     end,
     ["/twins/bounce_done"] = function(args)
         hlp.finish_bounce()
-    end}
-osc_handlers["/twins/voice_state"] = function(args)
+    end,
+    ["/twins/grain_pos"] = grain_pos_handler,
+    ["/twins/duration"] = function(args) blim.on_duration(args[1] + 1, args[2]) end,
+    ["/twins/voice_state"] = function(args)
     local vid, pos = args[1] + 1, args[2]
     local va = voice_peak_amplitudes[vid]
     va.l, va.r = abs(args[3]), abs(args[4])
@@ -2219,17 +2202,15 @@ osc_handlers["/twins/voice_state"] = function(args)
             pset(_HK.seek[vid], pct, true)
         end
     end
-end
-osc_handlers["/twins/grain_pos"] = grain_pos_handler
-osc_handlers["/twins/duration"] = function(args) blim.on_duration(args[1] + 1, args[2]) end
-osc_handlers["/twins/waveform"] = function(args)
+    end,
+    ["/twins/waveform"] = function(args)
     local vid = args[1] + 1
     local wf, mx = {}, 0
     for c = 0, BAR_W - 1 do local v = args[c + 2] or 0 wf[c] = v if v > mx then mx = v end end
     local s = mx > 0 and 4 / mx or 0
     for c = 0, BAR_W - 1 do wf[c] = floor(wf[c] * s + 0.5) end
     ctx.waveforms[vid] = wf
-end
+    end}
 local function setup_osc() osc.event = function(path, args) local handler = osc_handlers[path] if handler then handler(args) end end end
 
 local function setup_undo()

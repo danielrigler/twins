@@ -463,10 +463,7 @@ function lfo.randomize_lfos(track, allow_volume_lfos)
                     local is_vol = lfo.PRESERVE_ON_RANDOMIZE[pn]
                     local should_clear = (symmetry and not is_vol and target:match("^[12]")) or (target:match("^" .. track) and not is_vol)
                     if should_clear and not lfo.is_param_locked(tn, pn) then
-                        pset(LFO_KEYS[i], 1)
-                        pset(TARGET_KEYS[i], 1)
-                        lfo[i].sync_to = nil
-                        lfo[i].sync_invert = false
+                        clear_slot(i)
                         assigned_params[target] = nil
                     end
                 end
@@ -531,6 +528,24 @@ end
 function lfo.get_active_param_map()
     if _lfo_param_cache_dirty then rebuild_lfo_param_cache() end
     return _lfo_param_cache
+end
+-- depth window used by both size (capped by the arp max) and the filters:
+-- the filter case is exactly the size case with cap == mx
+local function windowed_value(mn, mx, cap, offset, mod, dn)
+    local wh = (cap - mn) * 0.5
+    local en = mod - offset
+    local maxen = dn
+    if maxen > 1 then
+        en = en / maxen
+        maxen = 1
+    end
+    local half = maxen * wh
+    local center = (offset + 1) * (mx - mn) * 0.5 + mn
+    local lo, hi = mn + half, cap - half
+    if center < lo then center = lo elseif center > hi then center = hi end
+    local v = center + en * wh
+    if v > cap then v = cap end
+    return v
 end
 local tick_pitch_scale = nil
 function lfo.process()
@@ -628,34 +643,9 @@ function lfo.process()
         local value = (mod + 1) * 0.5 * (mx - mn) + mn
         if kind == KIND_SIZE then
             local size_cap = (obj.track_num == "2") and size_cap2 or size_cap1
-            if size_cap < mx then
-                local wh = (size_cap - mn) * 0.5
-                local center = (offset + 1) * (mx - mn) * 0.5 + mn
-                local en = mod - offset
-                local maxen = dn
-                if maxen > 1 then
-                    en = en / maxen
-                    maxen = 1
-                end
-                local maxexc = maxen * wh
-                local lo, hi = mn + maxexc, size_cap - maxexc
-                if center < lo then center = lo elseif center > hi then center = hi end
-                value = center + en * wh
-                if value > size_cap then value = size_cap end
-            end
+            if size_cap < mx then value = windowed_value(mn, mx, size_cap, offset, mod, dn) end
         elseif kind == KIND_FILTER then
-            local en = mod - offset
-            local maxen = dn
-            if maxen > 1 then
-                en = en / maxen
-                maxen = 1
-            end
-            local wh = (mx - mn) * 0.5
-            local half = maxen * wh
-            local center = (offset + 1) * wh + mn
-            local lo, hi = mn + half, mx - half
-            if center < lo then center = lo elseif center > hi then center = hi end
-            value = center + en * wh
+            value = windowed_value(mn, mx, mx, offset, mod, dn)
         end
         if value < mn then value = mn elseif value > mx then value = mx end
         if kind == KIND_VOLUME then
