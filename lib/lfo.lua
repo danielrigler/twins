@@ -22,6 +22,7 @@ local TWO_PI = math.pi * 2
 local PHASE_INCREMENT = 1 / 30
 local math_sin = math.sin
 local math_random = math.random
+local math_log = math.log
 local util_clamp = util.clamp
 local LFO_KEYS, TARGET_KEYS, SHAPE_KEYS, FREQ_KEYS, DEPTH_KEYS, OFFSET_KEYS = {}, {}, {}, {}, {}, {}
 for i = 1, number_of_outputs do
@@ -140,7 +141,7 @@ lfo.lfo_targets = {"none", "1pan", "2pan", "1seek", "2seek", "1jitter", "2jitter
 local LFO_TARGET_REVERSE = {}
 for i, t in ipairs(lfo.lfo_targets) do LFO_TARGET_REVERSE[t] = i end
 lfo.target_index = LFO_TARGET_REVERSE
-lfo.PRESERVE_ON_RANDOMIZE = { volume = true, cutoff = false, hpf = true }
+lfo.PRESERVE_ON_RANDOMIZE = { volume = true }
 lfo.target_ranges = {
     ["1pan"] = {depth = {25, 90}, offset = {0, 0}, frequency = {0.1, 1}, waveform = {"walk"}, chance = 0.75},
     ["2pan"] = {depth = {25, 90}, offset = {0, 0}, frequency = {0.1, 1}, waveform = {"walk"}, chance = 0.75},
@@ -152,16 +153,18 @@ lfo.target_ranges = {
     ["2size"] = {depth = {5, 40}, offset = {0.1, 1}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.7},
     ["1density"] = {depth = {5, 75}, offset = {0, 1}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.7},
     ["2density"] = {depth = {5, 75}, offset = {0, 1}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.7},
-    ["1volume"] = {depth = {2, 3}, offset = {0, 1}, frequency = {0.1, 0.3}, waveform = {"walk"}, chance = 1.0},
-    ["2volume"] = {depth = {2, 3}, offset = {0, 1}, frequency = {0.1, 0.3}, waveform = {"walk"}, chance = 1.0},
+    ["1volume"] = {depth = {2, 3}, offset = {0, 1}, frequency = {0.1, 0.3}, waveform = {"sine"}, chance = 1.0},
+    ["2volume"] = {depth = {2, 3}, offset = {0, 1}, frequency = {0.1, 0.3}, waveform = {"sine"}, chance = 1.0},
     ["1seek"] = {depth = {0, 100}, offset = {0, 1}, frequency = {0.1, 0.4}, waveform = {"walk"}, chance = 0.3},
     ["2seek"] = {depth = {0, 100}, offset = {0, 1}, frequency = {0.1, 0.4}, waveform = {"walk"}, chance = 0.3},
     ["1speed"] = {depth = {10, 50}, offset = {-1, 1}, frequency = {0.1, 0.5}, waveform = {"walk"}, chance = 0.3},
     ["2speed"] = {depth = {10, 50}, offset = {-1, 1}, frequency = {0.1, 0.5}, waveform = {"walk"}, chance = 0.3},
     ["1pitch"] = {depth = {5, 30}, offset = {-1, 1}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.0},
     ["2pitch"] = {depth = {5, 30}, offset = {-1, 1}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.0},
-    ["1cutoff"] = {depth = {30, 85}, offset = {0.1, 0.9}, frequency = {0.1, 0.6}, waveform = {"sine"}, chance = 0.0},
-    ["2cutoff"] = {depth = {30, 85}, offset = {0.1, 0.9}, frequency = {0.1, 0.6}, waveform = {"sine"}, chance = 0.0},
+    ["1cutoff"] = {depth = {5, 30}, offset = {0.01, 0.9}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.15},
+    ["2cutoff"] = {depth = {5, 30}, offset = {0.01, 0.9}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.15},
+    ["1hpf"] = {depth = {5, 25}, offset = {0.01, 0.9}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.15},
+    ["2hpf"] = {depth = {5, 25}, offset = {0.01, 0.9}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.15},
     ["1eq_tilt"] = {depth = {5, 30}, offset = {0, 0}, frequency = {0.1, 0.6}, waveform = {"sine"}, chance = 0.3},
     ["2eq_tilt"] = {depth = {5, 50}, offset = {0, 0}, frequency = {0.1, 0.6}, waveform = {"sine"}, chance = 0.3},
 }
@@ -176,10 +179,26 @@ local param_ranges = {
     ["1volume"] = {-70, 10}, ["2volume"] = {-70, 10},
     ["1pitch"] = {-48, 48}, ["2pitch"] = {-48, 48},
     ["1cutoff"] = {20, 19999}, ["2cutoff"] = {20, 19999},
-    ["1hpf"] = {20, 20000}, ["2hpf"] = {20, 20000},
+    ["1hpf"] = {21, 20000}, ["2hpf"] = {21, 20000},
     ["1eq_tilt"] = {-1, 1}, ["2eq_tilt"] = {-1, 1},
 }
 local randomize_param_ranges = {["1size"] = {20, 599}, ["2size"] = {20, 599}, ["1density"] = {1, 30}, ["2density"] = {1, 30}}
+local LOG_RANGE_TARGETS = {["1cutoff"] = true, ["2cutoff"] = true, ["1hpf"] = true, ["2hpf"] = true}
+lfo.log_range_targets = LOG_RANGE_TARGETS
+function lfo.range_to_norm(param_name, lo, hi, v)
+    if hi <= lo then return 0 end
+    if LOG_RANGE_TARGETS[param_name] and lo > 0 and v > 0 then
+        return math_log(v / lo) / math_log(hi / lo)
+    end
+    return (v - lo) / (hi - lo)
+end
+function lfo.norm_to_range(param_name, lo, hi, n)
+    if hi <= lo then return lo end
+    if LOG_RANGE_TARGETS[param_name] and lo > 0 then
+        return lo * ((hi / lo) ^ n)
+    end
+    return lo + n * (hi - lo)
+end
 local USER_LIMIT_PARAMS = {
     seek = true, jitter = true, spread = true, size = true,
     density = true, pitch = true, speed = true,
@@ -219,7 +238,7 @@ function lfo.get_parameter_range(param_name, for_randomize)
     return lo, hi
 end
 for i = 1, number_of_outputs do
-    lfo[i] = {freq = 0.05, phase = 0, waveform = "walk", shape_int = 4, depth = 50, offset = 0, prev = 0, walk_value = 0, walk_velocity = 0, sync_to = nil, sync_invert = false, active = false, target_idx = 1, target_name = "none", kind = 0, no_gdepth = false, track_num = "1", last_val = nil, has_user_limits = false, min_key = nil, max_key = nil, def_min = 0, def_max = 100, lim_lo = 0, lim_hi = 100, lim_dirty = false}
+    lfo[i] = {freq = 0.05, phase = 0, waveform = "walk", shape_int = 4, depth = 50, offset = 0, prev = 0, walk_value = 0, walk_velocity = 0, sync_to = nil, sync_invert = false, active = false, target_idx = 1, target_name = "none", kind = 0, no_gdepth = false, track_num = "1", last_val = nil, has_user_limits = false, min_key = nil, max_key = nil, def_min = 0, def_max = 100, lim_lo = 0, lim_hi = 100, lim_ratio = 1, lim_dirty = false}
 end
 local KIND_SIZE, KIND_FILTER, KIND_VOLUME, KIND_PITCH, KIND_DENSITY = 1, 2, 3, 4, 5
 local KIND_BY_SUFFIX = {size = KIND_SIZE, cutoff = KIND_FILTER, hpf = KIND_FILTER, volume = KIND_VOLUME, pitch = KIND_PITCH, density = KIND_DENSITY}
@@ -249,6 +268,7 @@ local function classify_target(i, target_idx)
             local r = param_ranges[tname]
             obj.lim_lo = r and r[1] or 0
             obj.lim_hi = r and r[2] or 100
+            obj.lim_ratio = (obj.lim_lo > 0 and obj.lim_hi > obj.lim_lo) and (obj.lim_hi / obj.lim_lo) or 1
         end
     else
         obj.track_num = "1"
@@ -357,14 +377,19 @@ local function randomize_lfo(i, target)
     local offset
     if is_pan then offset = 0
     elseif is_seek then offset = (math_random() - 0.5)
-    else offset = lfo.scale(cur_val, rand_min, rand_max, -1, 1) end
+    else offset = lfo.range_to_norm(target, rand_min, rand_max, cur_val) * 2 - 1 end
     local depth = math_random(ranges.depth[1], ranges.depth[2])
-    local narrow_range = rand_max - rand_min
-    local full_range = full_max - full_min
-    local half_swing = (depth * 0.01) * narrow_range / 2
-    local center = util_clamp(lfo.scale(offset, -1, 1, rand_min, rand_max), rand_min + half_swing, rand_max - half_swing)
-    local full_offset = lfo.scale(center, full_min, full_max, -1, 1)
-    local full_depth = depth * (narrow_range / full_range)
+    local half_swing = depth * 0.005
+    local ncenter = util_clamp((offset + 1) * 0.5, half_swing, 1 - half_swing)
+    local center = lfo.norm_to_range(target, rand_min, rand_max, ncenter)
+    local full_offset = lfo.range_to_norm(target, full_min, full_max, center) * 2 - 1
+    local narrow_span, full_span
+    if LOG_RANGE_TARGETS[target] and full_min > 0 and rand_min > 0 then
+        narrow_span, full_span = math_log(rand_max / rand_min), math_log(full_max / full_min)
+    else
+        narrow_span, full_span = rand_max - rand_min, full_max - full_min
+    end
+    local full_depth = (full_span > 0) and (depth * (narrow_span / full_span)) or depth
     if clocksync_ref and clocksync_ref.grain_synced() and target:sub(2) == "density" then full_offset = clocksync_ref.grain_division_norm(track) * 2 - 1 end
     local obj = lfo[i]
     obj.sync_to = nil
@@ -503,9 +528,6 @@ function lfo.randomize_lfos(track, allow_volume_lfos)
             mirrored[target] = true
         end
     end
-    local function reset_cutoff(t) if not lfo.is_param_locked(t, "cutoff") and not assigned_params[t .. "cutoff"] then pset(t .. "cutoff", 20000) end end
-    reset_cutoff(track)
-    if symmetry then reset_cutoff(mirror_param_name(track)) end
 end
 local _lfo_param_cache = {}
 local _lfo_param_cache_dirty = true
@@ -637,6 +659,7 @@ function lfo.process()
             local hi = (lookup[max_key] and pget(params_table, max_key)) or obj.def_max
             if lo > hi then lo, hi = hi, lo end
             obj.lim_lo, obj.lim_hi = lo, hi
+            obj.lim_ratio = (lo > 0 and hi > lo) and (hi / lo) or 1
             obj.lim_dirty = false
         end
         local mn, mx = obj.lim_lo, obj.lim_hi
@@ -645,7 +668,14 @@ function lfo.process()
             local size_cap = (obj.track_num == "2") and size_cap2 or size_cap1
             if size_cap < mx then value = windowed_value(mn, mx, size_cap, offset, mod, dn) end
         elseif kind == KIND_FILTER then
-            value = windowed_value(mn, mx, mx, offset, mod, dn)
+            local ratio = obj.lim_ratio
+            if ratio > 1 then
+                local n = windowed_value(0, 1, 1, offset, mod, dn)
+                if n < 0 then n = 0 elseif n > 1 then n = 1 end
+                value = mn * (ratio ^ n)
+            else
+                value = windowed_value(mn, mx, mx, offset, mod, dn)
+            end
         end
         if value < mn then value = mn elseif value > mx then value = mx end
         if kind == KIND_VOLUME then

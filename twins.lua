@@ -6,7 +6,7 @@
 --            by: @dddstudio                       
 -- 
 --                          
---                           v0.74
+--                           v0.75
 -- E1: Master Volume
 -- K1+E2/E3: Volume
 -- K1+E1: Crossfade/Morph
@@ -86,6 +86,7 @@ local longpress_metro = nil
 local grain_positions = {[1] = {}, [2] = {}}
 local rec_positions = {[1] = 0, [2] = 0}
 ctx.seek_pushed = {-1, -1}
+ctx.grain_seq = {-1, -1}
 ctx.live_wf = {raw = {[1] = {}, [2] = {}}, norm = {[1] = {}, [2] = {}}, col = {-1, -1}, max = {0, 0}}
 function ctx.live_wf.reset(i) local raw, nm = ctx.live_wf.raw[i], ctx.live_wf.norm[i] for c = 0, 29 do raw[c] = 0 nm[c] = 0 end ctx.live_wf.col[i] = -1 ctx.live_wf.max[i] = 0 end
 ctx.live_wf.reset(1) ctx.live_wf.reset(2)
@@ -132,7 +133,6 @@ end
 local _HK = {
     size = {"1size", "2size"}, den = {"1density", "2density"}, pitch = {"1pitch", "2pitch"},
     vol = {"1volume", "2volume"}, seek = {"1seek", "2seek"},
-    reso_degs = {0, 7, 12, 19, 24},
     rand_names = {"speed", "jitter", "size", "density", "spread", "pitch", "seek"},
     TAP_TIMEOUT = 2, LONGPRESS = 1, UI_FPS = 60,
     audio_exts = {[".wav"]=true,[".aif"]=true,[".aiff"]=true,[".flac"]=true}}
@@ -140,7 +140,7 @@ local _grain_pool = {}
 local invalidate_lfo_cache = lfo.invalidate_lfo_param_cache
 local function do_capture_temp_scene() morph.capture_to_temp_scene(lfo.get_active_param_map()) end
 local function combo_longpress_fire()
-    if current_mode == "lpf" or current_mode == "hpf" then
+    if current_mode == "lpf" then
         current_filter_mode = current_filter_mode == "lpf" and "hpf" or "lpf"
     else
         undo.checkpoint()
@@ -236,8 +236,16 @@ function hlp.ensure_link_base(track)
     end
     return lb
 end
+_HK.reso_voicings = {
+    {0, 7, 12, 19, 24}, {0, 7, 14, 21, 28}, {0, 4, 7, 12, 16}, {0, 3, 7, 12, 15},
+    {0, 4, 7, 11, 14}, {0, 3, 7, 10, 14}, {0, 12, 19.0196, 24, 27.8631}, {0, 12, 24, 36, 48}}
+_HK.reso_names = {"5th+oct", "fifths", "major", "minor", "maj7", "min7", "harmonic", "octaves"}
 local RESO_RATIOS = {}
-for i, d in ipairs(_HK.reso_degs) do RESO_RATIOS[i] = 2 ^ (d / 12) end
+function hlp.set_reso_voicing(idx)
+    local degs = _HK.reso_voicings[idx] or _HK.reso_voicings[1]
+    for i = 1, 5 do RESO_RATIOS[i] = 2 ^ (degs[i] / 12) end
+end
+hlp.set_reso_voicing(1)
 function hlp.update_resonator()
     if (pget("resonator_mix") or 0) <= 0 then return end
     local f = 440 * 2 ^ ((params:get("resonator_root") - 69) / 12)
@@ -393,12 +401,15 @@ function blim.on_duration(i, dur)
     if p.rj then local jp = i.."jitter"; disable_lfos_for_param(jp); local up = math.random() < 0.75 and min(500, dur * 1000) or dur * 1000; params:set(jp, clamp(math.random() * up, 0, 99999)) end
 end
 
-local function scan_audio_files(dir, files)
+local function scan_audio_files(dir, files, budget)
     files = files or {}
+    budget = budget or {256}
     for _, entry in ipairs(util.scandir(dir)) do
         local path = dir .. entry
-        if entry:sub(-1) == "/" then scan_audio_files(path, files)
+        if entry:sub(-1) == "/" then scan_audio_files(path, files, budget)
         elseif _HK.audio_exts[path:lower():match("^.+(%..+)$") or ""] then files[#files+1] = path end
+        budget[1] = budget[1] - 1
+        if budget[1] <= 0 then budget[1] = 256 clock.sleep(0) end
     end
     return files
 end
@@ -411,8 +422,7 @@ end
 
 local function set_sample_live(i) params:set(i.."sample", _path.tape.."live!") end
 
-local function load_random_tape_file(track_num)
-    if not audio_files_cache then audio_files_cache = scan_audio_files(_path.tape) end
+local function apply_random_tape(track_num)
     if #audio_files_cache == 0 then return false end
     if track_num then
         local file = audio_files_cache[math.random(#audio_files_cache)]
@@ -423,6 +433,21 @@ local function load_random_tape_file(track_num)
     set_track_sample(1, file1)
     set_track_sample(2, file2)
     return true
+end
+
+local function load_random_tape_file(track_num)
+    if audio_files_cache then return apply_random_tape(track_num) end
+    hlp.scan_pending = track_num or 0
+    if hlp.scan_co then return false end
+    hlp.scan_co = clock.run(function()
+        local files = scan_audio_files(_path.tape, nil, {256})
+        audio_files_cache = files
+        hlp.scan_co = nil
+        local p = hlp.scan_pending
+        hlp.scan_pending = nil
+        if p then apply_random_tape(p ~= 0 and p or nil) end
+    end)
+    return false
 end
 
 local BOUNCE_DIR = _path.tape .. "twins/"
@@ -689,11 +714,12 @@ local function setup_params()
     params:add_taper("bitcrush_rate", "Rate", 1, 48000, 4500, 3, "Hz") params:set_action("bitcrush_rate", function(value) engine.bitcrush_rate(value) end)
     params:add_taper("bitcrush_bits", "Bits", 1, 24, 14, 1) params:set_action("bitcrush_bits", function(value) engine.bitcrush_bits(value) end)
 
-    params:add_group("RESONATE", 4)
+    params:add_group("RESONATE", 5)
     params:add_control("resonator_mix", "Mix", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("resonator_mix", function(v) engine.resonator_mix(v * 0.01) font.update_fx_cache("resonator_mix", v) if v > 0 then hlp.update_resonator() end end)
     params:add_control("resonator_decay", "Decay", controlspec.new(0.01, 5, "exp", 0, 2, "s")) params:set_action("resonator_decay", function(v) engine.resonator_decay(v) end)
     params:add_number("resonator_root", "Root", 24, 128, 48, function(p) return MusicUtil.note_num_to_name(p:get(), true) end) params:set_action("resonator_root", function(v) hlp.update_resonator() end)
     params:add_control("resonator_tone", "LPF", controlspec.new(200, 16000, "exp", 0, 8000, "Hz")) params:set_action("resonator_tone", function(v) engine.resonator_tone(v) end)
+    params:add_option("resonator_voicing", "Voicing", _HK.reso_names, 1) params:set_action("resonator_voicing", function(v) hlp.set_reso_voicing(v) hlp.update_resonator() end)
 
     params:add_group("WAVEFOLD", 3)
     params:add_control("wavefold_mix", "Mix", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("wavefold_mix", function(v) engine.wavefold_mix(v * 0.01) font.update_fx_cache("wavefold_mix", v) end)
@@ -755,7 +781,7 @@ local function setup_params()
       params:add_taper(i.."lpf_gain", i.." Q", 0, 1, 0, 1, "") params:set_action(i.."lpf_gain", function(value) engine.lpf_gain(i, 4 * value) end)
     end
     params:add_separator("                   ")
-    params:add_binary("randomizefilters", "RaNd0m1ze!", "trigger", 0) params:set_action("randomizefilters", function(value) for i = 1, 2 do local cutoff if is_param_locked(i, "cutoff") then cutoff = params:get(i.."cutoff") else cutoff = is_lfo_active_for_param(i.."cutoff") and math.random(20, 20000) or 20000 params:set(i.."cutoff", cutoff) params:set(i.."lpf_gain", math.random()) end if not is_param_locked(i, "hpf") then params:set(i.."hpf", math.random(20, floor(cutoff))) end end end)
+    params:add_binary("randomizefilters", "RaNd0m1ze!", "trigger", 0) params:set_action("randomizefilters", function(value) for i = 1, 2 do local band = 2 ^ (2 + math.random() * 5) local cutoff, hpf if is_param_locked(i, "cutoff") or is_lfo_active_for_param(i.."cutoff") then cutoff = params:get(i.."cutoff") hpf = 20 * ((max(cutoff / band, 20) / 20) ^ math.random()) else hpf = 20 * ((max(19999 / band, 20) / 20) ^ math.random()) cutoff = clamp(hpf * band, 20, 19999) params:set(i.."cutoff", cutoff) params:set(i.."lpf_gain", math.random() * 0.85) end if not is_param_locked(i, "hpf") then params:set(i.."hpf", hpf) end end end)
     params:add_binary("resetfilters", "Reset", "trigger", 0) params:set_action("resetfilters", function(value) for i=1, 2 do params:set(i.."cutoff", 20000) params:set(i.."hpf", 20) params:set(i.."lpf_gain", 0.0) end end)
 
     params:add_group("LOCKING", 20)
@@ -768,8 +794,8 @@ local function setup_params()
         params:add_option(i.. "lock_speed", i.. " Lock Speed", {"off", "on"}, 1)
         params:add_option(i.. "lock_seek", i.. " Lock Seek", {"off", "on"}, 1)
         params:add_option(i.. "lock_pan", i.. " Lock Pan", {"off", "on"}, 1)
-        params:add_option(i.. "lock_cutoff", i.. " Lock LPF", {"off", "on"}, 1)
-        params:add_option(i.. "lock_hpf", i.. " Lock HPF", {"off", "on"}, 1)
+        params:add_option(i.. "lock_cutoff", i.. " Lock LPF", {"off", "on"}, 2)
+        params:add_option(i.. "lock_hpf", i.. " Lock HPF", {"off", "on"}, 2)
     end
 
     params:add_group("LIMITS", 30)
@@ -926,6 +952,7 @@ local _rand_targets = {}
 local function randomize(n)
     if randomize_metro[n] then stop_metro_safe(randomize_metro[n]) else randomize_metro[n] = metro.init() end
     local m_rand = randomize_metro[n]
+    if not m_rand then print("Error: Hardware metro limit reached!") return end
     local symmetry = params:get("symmetry") == 1
     local other_track = 3 - n
     for k in pairs(_rand_targets) do _rand_targets[k] = nil end
@@ -933,7 +960,6 @@ local function randomize(n)
     local param_names = _HK.rand_names
     local pitch_size_density_linked = params:get("global_pitch_size_density_link") == 1
     if not is_param_locked(n, "pitch") then randomize_pitch(n, other_track, symmetry) end
-    if not m_rand then print("Error: Hardware metro limit reached!") return end
     for i = 1, #param_names do
         local key = param_names[i]
         local cfg_name = n .. key
@@ -1226,7 +1252,7 @@ local function find_or_create_lfo_for_param(track, param_name, only_existing, cr
     local min_val, max_val = lfo.get_parameter_range(full_param)
     if not min_val or max_val <= min_val then return nil end
     local current_val = pget(full_param)
-    local offset = (current_val - min_val) / (max_val - min_val) * 2 - 1
+    local offset = lfo.range_to_norm(full_param, min_val, max_val, current_val) * 2 - 1
     if param_name == "density" and clocksync.grain_synced() then
         offset = clocksync.grain_division_norm(track) * 2 - 1
     end
@@ -1285,7 +1311,7 @@ local function adjust_lfo_depth(lfo_idx, delta)
         local min_val, max_val = full_min, full_max
         if min_val and max_val and max_val > min_val then
             local current_val = pget(target_param)
-            local normalized = (current_val - min_val) / (max_val - min_val)
+            local normalized = lfo.range_to_norm(target_param, min_val, max_val, current_val)
             local initial_depth = abs(step)
             local initial_offset = clamp(normalized * 2 - 1, -0.9999, 0.9999)
             lfo[lfo_idx].depth = initial_depth
@@ -2135,7 +2161,7 @@ function redraw()
   screen.update()
 end
 
-local function grain_pos_handler(args) local vid = args[1]+1 if audio_active[vid] or pget(TRACK_KEYS[vid].live_direct) == 1 then local b = grain_positions[vid] local n = #b if n < 64 then local np = #_grain_pool local g if np > 0 then g = _grain_pool[np] _grain_pool[np] = nil else g = {} end g.pos, g.size, g.t, g.rv, g.pitch, g.pan, g.shown = args[2], args[3], util.time(), args[4] or 0.5, args[5] or 1, args[6] or 0, false b[n+1] = g end end end
+local function push_grain(vid, pos, size, rv, pitch, pan, now) if audio_active[vid] or pget(TRACK_KEYS[vid].live_direct) == 1 then local b = grain_positions[vid] local n = #b if n < 64 then local np = #_grain_pool local g if np > 0 then g = _grain_pool[np] _grain_pool[np] = nil else g = {} end g.pos, g.size, g.t, g.rv, g.pitch, g.pan, g.shown = pos, size, now, rv or 0.5, pitch or 1, pan or 0, false b[n+1] = g end end end
 local osc_handlers = {
     ["/twins/rec_pos"] = function(args)
         local vid, pos, peak = args[1] + 1, args[2], args[3]
@@ -2187,12 +2213,16 @@ local osc_handlers = {
     ["/twins/bounce_done"] = function(args)
         hlp.finish_bounce()
     end,
-    ["/twins/grain_pos"] = grain_pos_handler,
     ["/twins/duration"] = function(args) blim.on_duration(args[1] + 1, args[2]) end,
     ["/twins/voice_state"] = function(args)
     local vid, pos = args[1] + 1, args[2]
     local va = voice_peak_amplitudes[vid]
     va.l, va.r = abs(args[3]), abs(args[4])
+    local gc = args[5]
+    if gc and gc ~= ctx.grain_seq[vid] then
+        ctx.grain_seq[vid] = gc
+        push_grain(vid, args[6], args[7], args[8], args[9], args[10], util.time())
+    end
     local k = TRACK_KEYS[vid]
     if audio_active[vid] or pget(k.live_input) == 1 or pget(k.live_direct) == 1 then
         osc_positions[vid] = pos
@@ -2274,6 +2304,7 @@ end
 function cleanup()
     flush_finalize()
     if boot_clock then pcall(clock.cancel, boot_clock) boot_clock = nil end
+    if hlp.scan_co then pcall(clock.cancel, hlp.scan_co) hlp.scan_co = nil end
     stop_metro_safe(ui_metro)
     stop_metro_safe(longpress_metro)
     stop_metro_safe(finalize_metro)
