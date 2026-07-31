@@ -401,8 +401,8 @@ local function randomize_lfo(i, target)
     local min_f = math.floor(ranges.frequency[1] * 100)
     local max_f = math.floor(ranges.frequency[2] * 100)
     local freq = math_random(min_f, max_f) / 100
-    obj.freq = freq
     pset(FREQ_KEYS[i], freq)
+    lfo.recompute_freq(i)
     obj.phase = math_random()
     obj.walk_value = (math_random() - 0.5) * 1.5
     obj.walk_velocity = 0
@@ -713,22 +713,22 @@ function lfo.process()
     end
 end
 local lfo_metro = nil
+local sync_hz1, sync_hz2 = nil, nil
 function lfo.recompute_freq(i)
     local gs = pget("global_lfo_freq_scale") or 1
-    local base = pget(FREQ_KEYS[i]) or 0.05
+    local base
+    if sync_hz1 then
+        base = (lfo[i].track_num == "2") and sync_hz2 or sync_hz1
+    else
+        base = pget(FREQ_KEYS[i]) or 0.05
+    end
     lfo[i].freq = base * gs
 end
 function lfo.apply_clock_sync(hz1, hz2)
-    if hz1 == nil then
-        for i = 1, number_of_outputs do
-            lfo.recompute_freq(i)
-        end
-        return
-    end
-    hz2 = hz2 or hz1
+    sync_hz1 = hz1
+    sync_hz2 = hz1 and (hz2 or hz1) or nil
     for i = 1, number_of_outputs do
-        local hz = (lfo[i].track_num == "2") and hz2 or hz1
-        lfo[i].freq = hz
+        lfo.recompute_freq(i)
     end
 end
 function lfo.reset_phases()

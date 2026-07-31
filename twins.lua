@@ -1370,7 +1370,7 @@ local function apply_freq_step(idx, dir)
     local step = max(cur * 0.06, 0.005) * (dir > 0 and 1 or -1)
     local new_freq = max(cur + step, 0.01)
     pset(fk, new_freq)
-    lfo[idx].freq = new_freq * pget("global_lfo_freq_scale")
+    lfo.recompute_freq(idx)
 end
 
 local FX_MAP = { "reverb_mix", "delay_mix", "shimmer_mix1" }
