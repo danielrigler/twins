@@ -45,7 +45,9 @@ end
 local function held_push(note, vel)
     local i = held_index(note)
     if i then table.remove(held, i) end
-    held[#held + 1] = { note = note, vel = vel }
+    local e = { note = note, vel = vel }
+    held[#held + 1] = e
+    return e
 end
 
 local function held_remove(note)
@@ -155,8 +157,8 @@ local function unsounded_held()
 end
 
 local function para_note_on(note, vel)
-    held_push(note, vel)
-    set_voice(alloc_voice(), { note = note, vel = vel })
+    local e = held_push(note, vel)
+    set_voice(alloc_voice(), e)
 end
 
 local function para_note_off(note)
@@ -198,7 +200,6 @@ local function recompute_routing()
     local vmode = params.lookup["midi_voice_mode"] and params:get("midi_voice_mode") or 1
     local drone = (params:get("midi_gate") == 2)
     para_mode = (vmode == 2)
-
     if vmode == 3 or vmode == 4 then
         local s = (vmode == 3) and 1 or 2
         local o = (s == 1) and 2 or 1
@@ -250,7 +251,7 @@ local function handle(data)
     elseif t == "cc" and d.cc == 1 then
         local dest = CC1_PARAM[params:get("midi_cc1_dest")]
         if dest and params.lookup[dest] then
-            local ok, range = pcall(function() return params:get_range(dest) end)
+            local ok, range = pcall(params.get_range, params, dest)
             local lo, hi = 0, 100
             if ok and range and range[1] and range[2] then lo, hi = range[1], range[2] end
             params:set(dest, floor(util.linlin(0, 127, lo, hi, d.val or 0) + 0.5))

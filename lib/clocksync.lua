@@ -31,10 +31,16 @@ local DIV_LABELS = {}
 for i = 1, NDIV do DIV_LABELS[i] = DIVISIONS[i].label end
 local DIV = {}
 for i = 1, NDIV do DIV[DIVISIONS[i].label] = i end
+local DIV_BEATS = {}
+for i = 1, NDIV do DIV_BEATS[i] = DIVISIONS[i].beats end
+local DIV_RAND_MIN, DIV_RAND_MAX = DIV["1/2"], DIV["1/32"]
+local DIV_RAND_SPAN = DIV_RAND_MAX - DIV_RAND_MIN
+local function norm_of(idx) return clamp((idx - DIV_RAND_MIN) / DIV_RAND_SPAN, 0, 1) end
 local function gpb_of(idx) return 1 / DIVISIONS[idx].beats end
 local density_idx   = { DIV["1/8"], DIV["1/4"] }
 local density_gpb   = { gpb_of(density_idx[1]), gpb_of(density_idx[2]) }
 local density_label = { DIVISIONS[density_idx[1]].label, DIVISIONS[density_idx[2]].label }
+local density_norm  = { norm_of(density_idx[1]), norm_of(density_idx[2]) }
 local function t60() return (clock.get_tempo() or 120) / 60 end
 local function symmetry_on() return params and params.lookup and params.lookup["symmetry"] and params:get("symmetry") == 1 end
 
@@ -144,13 +150,12 @@ function clocksync.add_params()
   end)
 end
 
-local DIV_RAND_MIN, DIV_RAND_MAX = DIV["1/2"], DIV["1/32"]
-
 local function apply_div(voice, idx)
   local d = DIVISIONS[idx]
   density_idx[voice] = idx
   density_gpb[voice] = 1 / d.beats
   density_label[voice] = d.label
+  density_norm[voice] = norm_of(idx)
 end
 
 function clocksync.step_grain_div(voice, delta, mirror_voice)
@@ -163,13 +168,16 @@ end
 
 local LFO_DIV_MIN, LFO_DIV_MAX = DIV["4 bar"], DIV["1/16"]
 local LFO_DIV_RAND_MIN, LFO_DIV_RAND_MAX = DIV["4 bar"], DIV["1/2"]
+local LFO_DIV_KEY = {"clock_lfo_div", "clock_lfo_div2"}
+local function lfo_div_key(voice) return LFO_DIV_KEY[tonumber(voice)] or LFO_DIV_KEY[1] end
 
 function clocksync.step_lfo_div(voice, delta, symmetry)
-  local key = (tonumber(voice) == 2) and "clock_lfo_div2" or "clock_lfo_div"
+  local v = (tonumber(voice) == 2) and 2 or 1
+  local key = LFO_DIV_KEY[v]
   local nidx = clamp(params:get(key) + delta, LFO_DIV_MIN, LFO_DIV_MAX)
   params:set(key, nidx)
   if symmetry then
-    local okey = (key == "clock_lfo_div2") and "clock_lfo_div" or "clock_lfo_div2"
+    local okey = LFO_DIV_KEY[3 - v]
     local onidx = clamp(params:get(okey) + delta, LFO_DIV_MIN, LFO_DIV_MAX)
     params:set(okey, onidx)
   end
@@ -178,12 +186,8 @@ end
 function clocksync.randomize_lfo_div(voice, mirror_voice)
   if not enabled then return end
   local idx = math_random(LFO_DIV_RAND_MIN, LFO_DIV_RAND_MAX)
-  local key = (tonumber(voice) == 2) and "clock_lfo_div2" or "clock_lfo_div"
-  params:set(key, idx)
-  if mirror_voice then
-    local mkey = (tonumber(mirror_voice) == 2) and "clock_lfo_div2" or "clock_lfo_div"
-    params:set(mkey, idx)
-  end
+  params:set(lfo_div_key(voice), idx)
+  if mirror_voice then params:set(lfo_div_key(mirror_voice), idx) end
 end
 
 function clocksync.randomize_grain_div(voice, mirror_voice)
@@ -222,28 +226,25 @@ end
 function clocksync.div_index_for_density(hz)
   if not enabled or not hz or hz <= 0 then return nil end
   local t = t60()
-  local target = math.log(clamp(hz, 0.1, 250))
-  local best_idx, best_dist = density_idx[1], math.huge
+  local log, abs = math.log, math.abs
+  local target = log(clamp(hz, 0.1, 250))
+  local best_idx, best_dist = 1, math.huge
   for i = 1, NDIV do
-    local dist = math.abs(math.log(t / DIVISIONS[i].beats) - target)
+    local dist = abs(log(t / DIV_BEATS[i]) - target)
     if dist < best_dist then best_dist = dist; best_idx = i end
   end
   return best_idx
 end
 
-function clocksync.div_index_to_norm(idx)
-  local span = DIV_RAND_MAX - DIV_RAND_MIN
-  if span == 0 then return 0 end
-  return clamp((idx - DIV_RAND_MIN) / span, 0, 1)
-end
+function clocksync.div_index_to_norm(idx) return norm_of(idx) end
 
 function clocksync.lfo_synced() return enabled end
 clocksync.grain_synced = clocksync.lfo_synced
 function clocksync.speed_scale() return speed_scale_val end
 function clocksync.reseek_active() return reseek_enabled end
-function clocksync.grain_division_label(v) return density_label[v] end
+function clocksync.grain_division_label(v) return density_label[tonumber(v)] end
 
-function clocksync.grain_division_norm(voice) return clocksync.div_index_to_norm(density_idx[tonumber(voice)]) end
+function clocksync.grain_division_norm(voice) return density_norm[tonumber(voice)] end
 
 function clocksync.grain_density(v)
   if not enabled then return nil end

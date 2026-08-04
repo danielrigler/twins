@@ -9,16 +9,6 @@ local _LFO_KEYS, _TARGET_KEYS, _SHAPE_KEYS, _FREQ_KEYS, _DEPTH_KEYS, _OFFSET_KEY
 local function safe_get(name) return params_lookup[name] and params:get(name) or 0 end
 local function safe_set(name, value) if params_lookup[name] and value ~= nil then params:set(name, value) end end
 
-local track_pattern_cache = {}
-local function get_track_pattern(track)
-    local pattern = track_pattern_cache[track]
-    if not pattern then
-        pattern = "^" .. track
-        track_pattern_cache[track] = pattern
-    end
-    return pattern
-end
-
 function Mirror.init(osc_positions_ref, lfo_ref, voice_params)
     Mirror.osc_positions = osc_positions_ref or {}
     Mirror.lfo = lfo_ref
@@ -37,12 +27,13 @@ end
 
 function Mirror.copy_voice_params(from_track, to_track, mirror_pan)
     local function clear_destination_lfos(to_track_num)
-        local pattern = get_track_pattern(to_track_num)
+        local prefix = tostring(to_track_num)
+        local plen = #prefix
         for lfo_num = 1, 16 do
             local t_index = safe_get(_TARGET_KEYS[lfo_num])
             if t_index > 0 then
                 local tname = lfo_targets[t_index]
-                if tname and tname:match(pattern) then
+                if tname and tname:sub(1, plen) == prefix then
                     params:set(_LFO_KEYS[lfo_num], 1)
                     local obj = Mirror.lfo[lfo_num]
                     if obj then obj.sync_to = nil; obj.sync_invert = false end
@@ -53,7 +44,7 @@ function Mirror.copy_voice_params(from_track, to_track, mirror_pan)
             local obj = Mirror.lfo[lfo_num]
             if obj and obj.sync_to then
                 local src = Mirror.lfo[obj.sync_to]
-                if src and src.target_name and src.target_name:match(pattern) then
+                if src and src.target_name and src.target_name:sub(1, plen) == prefix then
                     obj.sync_to = nil; obj.sync_invert = false
                 end
             end
@@ -63,18 +54,6 @@ function Mirror.copy_voice_params(from_track, to_track, mirror_pan)
     local from_num = tonumber(from_track)
     local to_num = tonumber(to_track)
     if Mirror.osc_positions[from_num] then Mirror.osc_positions[to_num] = Mirror.osc_positions[from_num] end
-    local volume_has_lfo = false
-    local from_volume_target = from_track .. "volume"
-    for i = 1, 16 do
-        if safe_get(_LFO_KEYS[i]) == 2 then
-            local t_idx = safe_get(_TARGET_KEYS[i])
-            if t_idx > 0 then
-                local target_name = lfo_targets[t_idx]
-                if target_name == from_volume_target then volume_has_lfo = true; break end
-            end
-        end
-    end
-    if not volume_has_lfo then safe_set(to_track .. "volume", safe_get(from_track .. "volume")) end
     local static_params = Mirror.voice_params or {}
     for _, param in ipairs(static_params) do
         local value = safe_get(from_track .. param)
@@ -89,6 +68,7 @@ function Mirror.copy_voice_params(from_track, to_track, mirror_pan)
     local next_available = 1
     local from_len = #from_track
     local global_freq_scale = params:get("global_lfo_freq_scale") or 1
+    local in_symmetry = params.lookup["symmetry"] and params:get("symmetry") == 1
     for src_lfo = 1, 16 do
         if safe_get(_LFO_KEYS[src_lfo]) == 2 then
             local src_target_index = safe_get(_TARGET_KEYS[src_lfo])
@@ -129,7 +109,6 @@ function Mirror.copy_voice_params(from_track, to_track, mirror_pan)
                             d_obj.depth = src_depth
                             d_obj.offset = src_offset
                             d_obj.phase = current_phase
-                            local in_symmetry = params.lookup["symmetry"] and params:get("symmetry") == 1
                             if in_symmetry and src_param_name ~= "volume" and s_obj then
                                 local is_pan = (src_param_name == "pan")
                                 d_obj.sync_to       = src_lfo

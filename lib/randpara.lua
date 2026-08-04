@@ -2,7 +2,7 @@ local randomize_metro = metro.init()
 local evolution_metro = metro.init()
 local interpolation_speed = 1 / 30
 
-local abs, exp, random = math.abs, math.exp, math.random
+local exp, random = math.exp, math.random
 local utils = include("lib/utils")
 local random_float      = utils.random_float
 local stop_metro_safe   = utils.stop_metro_safe
@@ -64,6 +64,12 @@ local GROUP_LOCK = {
   glitch   = "lock_glitch",
 }
 
+local GROUP_IDS, GROUP_ID_OF = {}, {}
+for group in pairs(GROUP_LOCK) do GROUP_IDS[#GROUP_IDS + 1] = group end
+table.sort(GROUP_IDS)
+for i = 1, #GROUP_IDS do GROUP_ID_OF[GROUP_IDS[i]] = i end
+local NGROUPS = #GROUP_IDS
+
 local evolution_active      = false
 local evolution_range       = 0.15
 local evolution_states      = {}
@@ -74,6 +80,8 @@ local evolution_group_enabled = {
   shimmer = true, eq = true, glitch = true, bitcrush = true}
 
 local evo_names, evo_groups, evo_pobjs, evo_mirror_idx = {}, {}, {}, {}
+local evo_gid = {}
+local evo_count = 0
 local evo_index_of = {}
 local lock_pobj = {}
 local sym_pobj
@@ -96,15 +104,18 @@ local function build_evolvable_params_cache()
       n = n + 1
       evo_names[n]  = param
       evo_groups[n] = group
+      evo_gid[n]    = GROUP_ID_OF[group] or 0
       evo_pobjs[n]  = pp[idx]
     end
   end
-  for i = n + 1, #evo_names do
+  for i = n + 1, evo_count do
     evo_names[i]      = nil
     evo_groups[i]     = nil
+    evo_gid[i]        = nil
     evo_pobjs[i]      = nil
     evo_mirror_idx[i] = nil
   end
+  evo_count = n
   clear_table(evo_index_of)
   for i = 1, n do evo_index_of[evo_names[i]] = i end
   for i = 1, n do
@@ -124,6 +135,18 @@ local function build_evolvable_params_cache()
   cache_dirty = false
 end
 
+local function set_drift_range(state, mx)
+  state.max_drift_range = mx
+  state.kick   = mx / 50
+  state.jitter = mx / 30
+end
+
+local function recenter(state, v)
+  state.center_value  = v
+  state.current_drift = 0
+  state.velocity      = 0
+end
+
 local function init_evolution_state(name, cur)
   local spec = PARAM_SPECS[name]
   local max_range = spec and spec[1] or 1
@@ -136,8 +159,8 @@ local function init_evolution_state(name, cur)
     direction_change_prob= random_float(0.03, 0.08),
     bound_lo             = bounds and bounds[1] or nil,
     bound_hi             = bounds and bounds[2] or nil,
-    range_base           = max_range,
-    max_drift_range      = max_range * evolution_range}
+    range_base           = max_range}
+  set_drift_range(state, max_range * evolution_range)
   evolution_states[name] = state
   return state
 end
@@ -146,9 +169,10 @@ local function evolve_parameter(state)
   local mx = state.max_drift_range
   local v  = state.velocity
   if random() < state.direction_change_prob then
-    v = random_float(-mx / 50, mx / 50)
+    local k = state.kick
+    v = random_float(-k, k)
   end
-  v = v * state.momentum_decay + random_float(-1, 1) * (mx / 30)
+  v = v * state.momentum_decay + random_float(-1, 1) * state.jitter
   local d = state.current_drift + v
   if d > mx then d = mx elseif d < -mx then d = -mx end
   local new_value = state.center_value + d
@@ -169,21 +193,24 @@ local function evolve_parameter(state)
   return new_value
 end
 
-local evo_updated, evo_locked = {}, {}
+local evo_updated, evo_locked_by_id = {}, {}
+local evo_gen = 0
 local function evolution_update()
   if not evolution_active then return end
   build_evolvable_params_cache()
-  local n = #evo_names
+  local n = evo_count
   if n == 0 then return end
   local states   = evolution_states
   local symmetry = sym_pobj ~= nil and sym_pobj:get() == 1
-  for group in pairs(GROUP_LOCK) do
-    local obj = lock_pobj[group]
-    evo_locked[group] = obj ~= nil and obj:get() == 2
+  for g = 1, NGROUPS do
+    local obj = lock_pobj[GROUP_IDS[g]]
+    evo_locked_by_id[g] = obj ~= nil and obj:get() == 2
   end
-  for i = 1, n do evo_updated[i] = false end
+  evo_gen = evo_gen + 1
+  local gen = evo_gen
   for i = 1, n do
-    if not evo_updated[i] and not evo_locked[evo_groups[i]] then
+    local gid = evo_gid[i]
+    if evo_updated[i] ~= gen and not (gid ~= 0 and evo_locked_by_id[gid]) then
       local name  = evo_names[i]
       local obj   = evo_pobjs[i]
       local cur   = obj:get()
@@ -191,25 +218,21 @@ local function evolution_update()
       if not state then
         state = init_evolution_state(name, cur)
       elseif state.last_set ~= nil and cur ~= state.last_set then
-        state.center_value  = cur
-        state.current_drift = 0
-        state.velocity      = 0
+        recenter(state, cur)
       end
       obj:set(evolve_parameter(state))
       local set_value = obj:get()
       state.last_set = set_value
-      evo_updated[i] = true
+      evo_updated[i] = gen
       local mi = evo_mirror_idx[i]
-      if symmetry and mi and not evo_updated[mi] then
+      if symmetry and mi and evo_updated[mi] ~= gen then
         local mobj  = evo_pobjs[mi]
         local mname = evo_names[mi]
         local ms = states[mname] or init_evolution_state(mname, set_value)
-        ms.center_value  = set_value
-        ms.current_drift = 0
-        ms.velocity      = 0
+        recenter(ms, set_value)
         mobj:set(set_value)
         ms.last_set = mobj:get()
-        evo_updated[mi] = true
+        evo_updated[mi] = gen
       end
     end
   end
@@ -233,17 +256,15 @@ end
 
 local function reset_evolution_centers()
   for name, state in pairs(evolution_states) do
-    state.center_value  = params:get(name)
-    state.current_drift = 0
-    state.velocity      = 0
-    state.last_set      = nil
+    recenter(state, params:get(name))
+    state.last_set = nil
   end
 end
 
 local function set_evolution_range(range_pct)
   evolution_range = util.clamp(range_pct / 100, 0.001, 1.0)
   for _, state in pairs(evolution_states) do
-    state.max_drift_range = state.range_base * evolution_range
+    set_drift_range(state, state.range_base * evolution_range)
   end
 end
 
@@ -507,9 +528,12 @@ local function cleanup()
   clear_table(evolution_states)
   clear_table(evo_names)
   clear_table(evo_groups)
+  clear_table(evo_gid)
   clear_table(evo_pobjs)
   clear_table(evo_mirror_idx)
   clear_table(evo_index_of)
+  clear_table(evo_updated)
+  evo_count = 0
   cache_dirty = true
 end
 

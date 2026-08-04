@@ -94,19 +94,9 @@ local cached_buffer_durations = {[1] = 1, [2] = 1}
 local voice_peak_amplitudes = {[1] = {l = 0, r = 0}, [2] = {l = 0, r = 0}}
 local link_base = {[1]={pitch=nil,size=nil,density=nil,product=nil}, [2]={pitch=nil,size=nil,density=nil,product=nil}}
 local ui_metro = nil
-local floor, abs, log, max, min, sqrt, ceil, sin = math.floor, math.abs, math.log, math.max, math.min, math.sqrt, math.ceil, math.sin
+local floor, abs, log, max, min, sqrt, sin = math.floor, math.abs, math.log, math.max, math.min, math.sqrt, math.sin
 local clamp = util.clamp
-local _param_obj = {}
-local function _pobj(id)
-    local o = _param_obj[id]
-    if o == nil then
-        local idx = params.lookup and params.lookup[id]
-        if not idx then return nil end
-        o = params.params[idx]
-        _param_obj[id] = o
-    end
-    return o
-end
+local _pobj = utils.param_obj
 local function pget(id) local o = _pobj(id) if o then return o:get() end return nil end
 local function pset(id, v, silent) local o = _pobj(id) if o then o:set(v, silent) end end
 local function nrev_set_mix(db)
@@ -171,7 +161,7 @@ local seek_bar_width = 0 local seek_bars_visible = false
 local randomize_flash = {[1] = 0, [2] = 0, held = {false, false}, midi = {0, 0}}
 local FLASH_INTENSITY = 12
 local FLASH_DECAY = 0.9
-local function flash_level(track, base_level) local f = randomize_flash[track] local m = randomize_flash.held[track] and 1 or randomize_flash.midi[track] if m > f then f = m end if f <= 0.001 then return base_level end return min(base_level + floor(f * FLASH_INTENSITY), 15) end
+local function flash_level(track, base_level) local f = randomize_flash[track] local m = randomize_flash.held[track] and 1 or randomize_flash.midi[track] if m > f then f = m end if f <= 0.001 then return base_level end return min(base_level + f * FLASH_INTENSITY // 1, 15) end
 local random_float = utils.random_float
 local stop_metro_safe = utils.stop_metro_safe
 function is_voice_loaded(i) local k = TRACK_KEYS[i] return audio_active[i] or pget(k.live_input) == 1 or pget(k.live_direct) == 1 end
@@ -383,15 +373,14 @@ function blim.apply(i, dur)
   if not dur or dur <= 0 then return false end
   cached_buffer_durations[i] = dur
   local ms = dur * 1000
-  local mj = math.min(ms, 99999)
+  local mj = min(ms, 99999)
   params:set(i.."max_jitter", mj)
-  params:set(i.."min_jitter", math.min(params:get(i.."min_jitter") or 0, mj))
-  local mz = math.min(ms, 999)
+  params:set(i.."min_jitter", min(params:get(i.."min_jitter") or 0, mj))
+  local mz = min(ms, 999)
   params:set(i.."max_size", mz)
   if (params:get(i.."min_size") or 20) > mz then
     params:set(i.."min_size", mz)
   end
-
   return true
 end
 function blim.on_duration(i, dur)
@@ -407,7 +396,10 @@ local function scan_audio_files(dir, files, budget)
     for _, entry in ipairs(util.scandir(dir)) do
         local path = dir .. entry
         if entry:sub(-1) == "/" then scan_audio_files(path, files, budget)
-        elseif _HK.audio_exts[path:lower():match("^.+(%..+)$") or ""] then files[#files+1] = path end
+        else
+            local ext = path:match("^.+(%..+)$")
+            if ext and _HK.audio_exts[ext:lower()] then files[#files+1] = path end
+        end
         budget[1] = budget[1] - 1
         if budget[1] <= 0 then budget[1] = 256 clock.sleep(0) end
     end
@@ -557,7 +549,6 @@ local function setup_params()
       params:add_file(i.."sample","Sample "..i, _path.tape); params:set_action(i.."sample",function(f) if f~=nil and f~="" and f~="none" and f~="-" and f~=(_path.tape.."live!") and not f:match("/$") then if params:get(i.."live_input")==1 then engine.set_live_input(i,0) params:set(i.."live_input",0,true) end if params:get(i.."live_direct")==1 then engine.live_direct(i,0) params:set(i.."live_direct",0,true) end local jitter_locked=is_param_locked(i,"jitter"); if not jitter_locked then lfo.clearLFOs(tostring(i),"jitter"); end engine.read(i,f); ctx.waveforms[i]=nil; if not _G.preset_loading then params:set(i.."seek",0) end; audio_active[i]=true; update_pan_positioning(); if _G.preset_loading then blim.apply(i, get_audio_duration(f)) else blim.pending[i] = { rj = not jitter_locked } end elseif f~=(_path.tape.."live!") then local jitter_locked=is_param_locked(i,"jitter"); if not jitter_locked then lfo.clearLFOs(tostring(i),"jitter"); end audio_active[i]=false; osc_positions[i]=0; update_pan_positioning(); end end)
     end
     params:add_binary("randomtapes", "Random Tapes", "trigger", 0) params:set_action("randomtapes", function() load_random_tape_file() end)
-
     params:add_group("LIVE!", 10)
     for i = 1, 2 do
       params:add_binary(i.."live_input", "Live Buffer "..i.." ● ►", "toggle", 0) params:set_action(i.."live_input", function(value) if value == 1 then if params:get(i.."live_direct") == 1 then params:set(i.."live_direct", 0) end engine.set_live_input(i, 1) engine.live_mono(i, params:get("isMono") - 1) audio_active[i] = true ctx.waveforms[i] = ctx.live_wf.norm[i] ctx.live_wf.col[i] = -1 if not _G.preset_loading then blim.apply(i, params:get("live_buffer_length")) else cached_buffer_durations[i]=params:get("live_buffer_length") end set_sample_live(i) update_pan_positioning() else engine.set_live_input(i, 0) if not audio_active[i] and params:get(i.."live_direct") == 0 then osc_positions[i] = 0 params:set(i.."sample", "-") pause_voice_if_idle(i) else set_sample_live(i) update_pan_positioning() end end end)
@@ -572,10 +563,8 @@ local function setup_params()
     end
     params:add_option("isMono", "Input Mode", {"stereo", "mono"}, 1) params:set_action("isMono", function(value) local monoValue = value - 1 for i = 1, 2 do if params:get(i.."live_direct") == 1 then engine.isMono(i, monoValue) end if params:get(i.."live_input") == 1 then engine.live_mono(i, monoValue) end end end)
     params:add_binary("dry_mode2", "Dry Mode", "toggle", 0) params:set_action("dry_mode2", function(x) drymode.set_dry_mode2(x == 1) end)
-
     params:add{type = "trigger", id = "save_preset", name = "Save Preset", action = function() presets.save_complete_preset(nil, morph.scene_data, current_mode, current_filter_mode) end}
     params:add{type = "trigger", id = "load_preset_menu", name = "Preset Browser", action = function() presets.open_menu() end}
-
     params:add_separator("Settings")
     params:add_group("GRANULAR", 39)
     for i = 1, 2 do
@@ -597,7 +586,6 @@ local function setup_params()
     params:add_separator(" ")
     params:add_binary("randomize_granular", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_granular", function() undo.checkpoint() for i=1, 2 do randpara.randomize_granular_params(i, steps) end end)
     params:add_option("lock_granular", "Lock Parameters", {"off", "on"}, 1)
-
     params:add_group("DELAY", 13)
     params:add_control("delay_mix", "Mix", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("delay_mix", function(x) engine.mix(x * 0.01) font.update_fx_cache("delay_mix", x) end)
     params:add_taper("delay_time", "Time", 0.02, 5, 0.5, 0.1, "s") params:set_action("delay_time", function(value) engine.delay(value) end)
@@ -612,7 +600,6 @@ local function setup_params()
     params:add_separator("   ")
     params:add_binary("randomize_delay_params", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_delay_params", function() undo.checkpoint() randpara.randomize_delay_params(steps) end)
     params:add_option("lock_delay", "Lock Parameters", {"off", "on"}, 1)
-
     local rev_sync = false
     local rev_proxies = {
         {"rv_predelay", "rev_pre_delay",    "Pre-delay"},
@@ -622,7 +609,6 @@ local function setup_params()
         {"rv_hfdamp",   "rev_hf_damping",   "Damping"}}
     local rev_present = {}
     for _, p in ipairs(rev_proxies) do if params.lookup[p[2]] then rev_present[#rev_present + 1] = p end end
-    
     params:add_group("R3VERB", 3 + #rev_present)
     params:add_taper("reverb_mix", "Mix", -40, 18, -40, 0, "dB") params:set_action("reverb_mix", function(value) nrev_set_mix(value) font.update_fx_cache("reverb_mix", value) end)
     for _, p in ipairs(rev_present) do
@@ -642,7 +628,6 @@ local function setup_params()
     end
     params:add_separator("           ")
     params:add_option("lock_reverb", "Lock Parameters", {"off", "on"}, 2)
-
     params:add_group("SHIMMER", 10)
     params:add_control("shimmer_mix1", "Mix", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("shimmer_mix1", function(x) engine.shimmer_mix1(x * 0.01) font.update_fx_cache("shimmer_mix1", x) end)
     params:add_option("shimmer_mod1", "Mix Mod", {"off", "on"}, 1) params:set_action("shimmer_mod1", function(x) engine.shimmer_mod1(x - 1) font.update_fx_cache("shimmer_mod1", x) end)
@@ -654,14 +639,12 @@ local function setup_params()
     params:add_control("fb1", "Feedback", controlspec.new(0, 100, "lin", 1, 20, "%")) params:set_action("fb1", function(x) engine.fb1(x * 0.01) end)
     params:add_separator("        ")
     params:add_option("lock_shimmer", "Lock Parameters", {"off", "on"}, 1)
-
-    params:add_group("DRIVE", 5) 
+    params:add_group("DRIVE", 5)
     params:add_control("analogdrive_mix", "Mix", controlspec.new(0, 100, 'lin', 1, 0, "%")) params:set_action("analogdrive_mix", function(v) engine.analogdrive_mix(v * 0.01) font.update_fx_cache("analogdrive_mix", v) end)
     params:add_option("analogdrive_mod", "Mix Mod", {"off", "on"}, 1) params:set_action("analogdrive_mod", function(v) engine.analogdrive_mod(v - 1) font.update_fx_cache("analogdrive_mod", v) end)
     params:add_control("analogdrive_drive", "Drive", controlspec.new(0, 100, 'lin', 1, 60, "%")) params:set_action("analogdrive_drive", function(v) engine.analogdrive_drive(v * 0.01) end)
     params:add_control("analogdrive_tone", "Tone", controlspec.new(0, 100, 'lin', 1, 60, "%")) params:set_action("analogdrive_tone", function(v) engine.analogdrive_tone(v * 0.01) end)
     params:add_control("analogdrive_mode", "Style", controlspec.new(0, 100, 'lin', 1, 75, "%")) params:set_action("analogdrive_mode", function(v) engine.analogdrive_mode(v * 0.01) end)
-
     params:add_group("TAPE", 15)
     params:add_option("tape_mix", "Analog Tape", {"off", "on"}, 1) params:set_action("tape_mix", function(x) engine.tape_mix(x-1) font.update_fx_cache("tape_mix", x) end)
     params:add_control("sine_drive_wet", "Shaper Drive", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("sine_drive_wet", function(value) engine.sine_drive_wet(value * 0.01) font.update_fx_cache("sine_drive_wet", value) end)
@@ -678,7 +661,6 @@ local function setup_params()
     params:add_separator("    ")
     params:add_binary("randomize_tape", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_tape", function() undo.checkpoint() randpara.randomize_tape_params(steps) end)
     params:add_option("lock_tape", "Lock Parameters", {"off", "on"}, 1)
-
     params:add_group("EQ", 11)
     for i = 1, 2 do
     params:add_control(i.."eq_low_gain", i.." Bass", controlspec.new(-1, 1, "lin", 0.01, 0, "")) params:set_action(i.."eq_low_gain", function(value) engine.eq_low_gain(i, value*55) end)
@@ -689,7 +671,6 @@ local function setup_params()
     params:add_separator("     ")
     params:add_binary("randomize_eq", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_eq", function() undo.checkpoint() for i=1, 2 do randpara.randomize_eq_params(i, steps) end end)
     params:add_option("lock_eq", "Lock Parameters", {"off", "on"}, 1)
-
     params:add_group("LFO", 120)
     params:add_binary("randomize_lfos", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_lfos", function() undo.checkpoint() lfo.clearLFOs() local allow_vol = params:get("allow_volume_lfos") == 2 for i = 1, 2 do lfo.randomize_lfos(i, allow_vol) end invalidate_lfo_cache() end)
     params:add_binary("lfo.assign_to_current_row", "Assign to Selection", "trigger", 0) params:set_action("lfo.assign_to_current_row", function() undo.checkpoint() lfo.assign_to_current_row(current_mode, current_filter_mode) invalidate_lfo_cache() end)
@@ -700,37 +681,31 @@ local function setup_params()
     params:add_binary("ClearLFOs", "Clear All", "trigger", 0) params:set_action("ClearLFOs", function() undo.checkpoint() lfo.clearLFOs() invalidate_lfo_cache() update_pan_positioning() end)
     params:add_option("allow_volume_lfos", "Allow Volume LFOs", {"no", "yes"}, 1) params:set_action("allow_volume_lfos", function(value) if value == 2 then lfo.clearLFOs("1", "volume") lfo.clearLFOs("2", "volume") lfo.assign_volume_lfos() else lfo.clearLFOs("1", "volume") lfo.clearLFOs("2", "volume") end invalidate_lfo_cache() end)
     lfo.init()
-
     params:add_group("STEREO", 5)
     params:add_control("Width", "Stereo Width", controlspec.new(0, 200, "lin", 2, 100, "%")) params:set_action("Width", function(value) engine.width(value * 0.01) font.update_fx_cache("Width", value) end)
     params:add_control("dimension_mix", "Dimension", controlspec.new(0, 100, "lin", 2, 0, "%")) params:set_action("dimension_mix", function(value) engine.dimension_mix(value * 0.01) font.update_fx_cache("dimension_mix", value) end)
     params:add_option("haas", "Haas Effect", {"off", "on"}, 1) params:set_action("haas", function(x) engine.haas(x-1) font.update_fx_cache("haas", x) end)
     params:add_taper("rspeed", "Rotation", 0, 1, 0, 1, "Hz") params:set_action("rspeed", function(value) engine.rspeed(value) font.update_fx_cache("rspeed", value) end)
     params:add_option("monobass_mix", "Mono Bass", {"off", "on"}, 1) params:set_action("monobass_mix", function(x) engine.monobass_mix(x-1) font.update_fx_cache("monobass_mix", x) end)
-
     params:add_group("BITCRUSH", 4)
     params:add_taper("bitcrush_mix", "Mix", 0, 100, 0.0, 0, "%") params:set_action("bitcrush_mix", function(value) engine.bitcrush_mix(value * 0.01) font.update_fx_cache("bitcrush_mix", value) end)
     params:add_option("bitcrush_mod", "Mix Mod", {"off", "on"}, 1) params:set_action("bitcrush_mod", function(value) engine.bitcrush_mod(value - 1) font.update_fx_cache("bitcrush_mod", value) end)
     params:add_taper("bitcrush_rate", "Rate", 1, 48000, 4500, 3, "Hz") params:set_action("bitcrush_rate", function(value) engine.bitcrush_rate(value) end)
     params:add_taper("bitcrush_bits", "Bits", 1, 24, 14, 1) params:set_action("bitcrush_bits", function(value) engine.bitcrush_bits(value) end)
-
     params:add_group("RESONATE", 5)
     params:add_control("resonator_mix", "Mix", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("resonator_mix", function(v) engine.resonator_mix(v * 0.01) font.update_fx_cache("resonator_mix", v) if v > 0 then hlp.update_resonator() end end)
     params:add_control("resonator_decay", "Decay", controlspec.new(0.01, 5, "exp", 0, 2, "s")) params:set_action("resonator_decay", function(v) engine.resonator_decay(v) end)
     params:add_number("resonator_root", "Root", 24, 128, 48, function(p) return MusicUtil.note_num_to_name(p:get(), true) end) params:set_action("resonator_root", function(v) hlp.update_resonator() end)
     params:add_control("resonator_tone", "LPF", controlspec.new(200, 16000, "exp", 0, 8000, "Hz")) params:set_action("resonator_tone", function(v) engine.resonator_tone(v) end)
     params:add_option("resonator_voicing", "Voicing", _HK.reso_names, 1) params:set_action("resonator_voicing", function(v) hlp.set_reso_voicing(v) hlp.update_resonator() end)
-
     params:add_group("WAVEFOLD", 3)
     params:add_control("wavefold_mix", "Mix", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("wavefold_mix", function(v) engine.wavefold_mix(v * 0.01) font.update_fx_cache("wavefold_mix", v) end)
     params:add_control("wavefold_drive", "Drive", controlspec.new(0, 100, "lin", 1, 75, "%")) params:set_action("wavefold_drive", function(v) engine.wavefold_drive(v * 0.01) end)
     params:add_control("wavefold_sym", "Symmetry", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("wavefold_sym", function(v) engine.wavefold_sym(v * 0.01) end)
-
     params:add_group("RINGMOD", 3)
     params:add_control("ringmod_mix", "Mix", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("ringmod_mix", function(v) engine.ringmod_mix(v * 0.01) font.update_fx_cache("ringmod_mix", v) end)
     params:add_control("ringmod_rate", "Rate", controlspec.new(0.1, 4000, "exp", 0, 200, "Hz")) params:set_action("ringmod_rate", function(v) engine.ringmod_rate(v) end)
     params:add_option("ringmod_freqmod", "Freq Mod", {"off", "on"}, 1) params:set_action("ringmod_freqmod", function(value) engine.ringmod_freqmod(value - 1) end)
-
     params:add_group("GLITCH", 11)
     params:add_control("glitch_ratio", "Glitch", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("glitch_ratio", function(value) engine.glitch_ratio(value * 0.01) font.update_fx_cache("glitch_ratio", value) end)
     params:add_control("glitch_mix", "Mix", controlspec.new(0, 100, "lin", 1, 100, "%")) params:set_action("glitch_mix", function(value) engine.glitch_mix(value * 0.01) font.update_fx_cache("glitch_mix", value) end)
@@ -743,7 +718,6 @@ local function setup_params()
     params:add_separator("       ")
     params:add_binary("randomize_glitch", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_glitch", function() if params:get("lock_glitch") == 1 then undo.checkpoint() params:set("glitch_probability", math.random(1, 150) / 10) params:set("glitch_min_length", math.random(10, 200)) params:set("glitch_max_length", math.random(100, 500)) params:set("glitch_reverse", math.random(0, 100)) params:set("glitch_pitch", math.random(0, 100)) end end)
     params:add_option("lock_glitch", "Lock Parameters", {"off", "on"}, 1)
-
     params:add_group("EVOLVE", 12)
     params:add_binary("evolution", "Evolve!", "toggle", 0) params:set_action("evolution", function(value) if value == 1 then randpara.reset_evolution_centers() randpara.start_evolution() else randpara.stop_evolution() end end)
     params:add_control("evolution_range", "Evolution Range", controlspec.new(0, 100, "lin", 1, 10, "%")) params:set_action("evolution_range", function(value) randpara.set_evolution_range(value) end)
@@ -757,7 +731,6 @@ local function setup_params()
     params:add_option("evolve_eq", "Evolve EQ", {"off", "on"}, 2) params:set_action("evolve_eq", function(value) randpara.set_group_evolution("eq", value == 2) end)
     params:add_option("evolve_bitcrush", "Evolve Bitcrush", {"off", "on"}, 2) params:set_action("evolve_bitcrush", function(value) randpara.set_group_evolution("bitcrush", value == 2) end)
     params:add_option("evolve_glitch", "Evolve Glitch", {"off", "on"}, 2) params:set_action("evolve_glitch", function(value) randpara.set_group_evolution("glitch", value == 2) end)
-
     params:add_group("SYMMETRY", 6)
     params:add_binary("symmetry", "Symmetry", "toggle", 0)
   params:set_action("symmetry", function(value) if value == 0 then for i=1,16 do lfo[i].sync_to=nil; lfo[i].sync_invert=false end else local active_map={} for i=1,16 do lfo[i].sync_to=nil; lfo[i].sync_invert=false end for i=1,16 do if lfo[i].active and lfo[i].target_name and lfo[i].target_name~="none" then active_map[lfo[i].target_name]=i end end for i=1,16 do local obj=lfo[i] if obj.active and obj.target_name and obj.target_name~="none" then local target=obj.target_name local track=target:sub(1,1) local pname=target:sub(2) if pname=="volume" then obj.sync_to=nil; obj.sync_invert=false elseif track=="1" then local j=active_map["2"..pname] if j then local is_pan=(pname=="pan") lfo[j].sync_to=i; lfo[j].sync_invert=is_pan; lfo[j].walk_value=obj.walk_value; lfo[j].walk_velocity=obj.walk_velocity; lfo[j].prev=is_pan and -obj.prev or obj.prev end end end end end lfo.rebuild_order() end)
@@ -773,7 +746,6 @@ local function setup_params()
       local id = "copy_buffer_"..from.."_to_"..to
       params:add_binary(id, "Sample 1 "..ar.." 2", "trigger", 0) params:set_action(id, function() local f = params:get(from.."sample") if f and f ~= "" and f ~= "-" and f ~= "none" then set_track_sample(to, f) audio_active[to] = audio_active[from] update_pan_positioning() end end)
     end
-
     params:add_group("FILTER", 9)
     for i = 1, 2 do
       params:add_control(i.."cutoff",i.." LPF",controlspec.new(20,20000,"exp",0,20000,"Hz")) params:set_action(i.."cutoff", function(value) engine.cutoff(i, value) font.update_fx_cache(i.."cutoff", value) end)
@@ -783,7 +755,6 @@ local function setup_params()
     params:add_separator("                   ")
     params:add_binary("randomizefilters", "RaNd0m1ze!", "trigger", 0) params:set_action("randomizefilters", function(value) for i = 1, 2 do local band = 2 ^ (2 + math.random() * 5) local cutoff, hpf if is_param_locked(i, "cutoff") or is_lfo_active_for_param(i.."cutoff") then cutoff = params:get(i.."cutoff") hpf = 20 * ((max(cutoff / band, 20) / 20) ^ math.random()) else hpf = 20 * ((max(19999 / band, 20) / 20) ^ math.random()) cutoff = clamp(hpf * band, 20, 19999) params:set(i.."cutoff", cutoff) params:set(i.."lpf_gain", math.random() * 0.85) end if not is_param_locked(i, "hpf") then params:set(i.."hpf", hpf) end end end)
     params:add_binary("resetfilters", "Reset", "trigger", 0) params:set_action("resetfilters", function(value) for i=1, 2 do params:set(i.."cutoff", 20000) params:set(i.."hpf", 20) params:set(i.."lpf_gain", 0.0) end end)
-
     params:add_group("LOCKING", 20)
     for i = 1, 2 do
         params:add_option(i.. "lock_jitter", i.. " Lock Jitter", {"off", "on"}, 1)
@@ -797,7 +768,6 @@ local function setup_params()
         params:add_option(i.. "lock_cutoff", i.. " Lock LPF", {"off", "on"}, 2)
         params:add_option(i.. "lock_hpf", i.. " Lock HPF", {"off", "on"}, 2)
     end
-
     params:add_group("LIMITS", 30)
     for i = 1, 2 do
         params:add_separator("Voice "..i)
@@ -822,26 +792,22 @@ local function setup_params()
             params:set_action(i.."max_"..s, lfo.invalidate_limits)
         end
     end
-
     params:add_group("ACTIONS", 4)
     params:add_binary("undo_action", "UNDO", "trigger", 0) params:set_action("undo_action", function() undo.undo() end)
     params:add_binary("redo_action", "REDO", "trigger", 0) params:set_action("redo_action", function() undo.redo() end)
     params:add_binary("macro_more", "More+", "trigger", 0) params:set_action("macro_more", function() undo.checkpoint() macro.macro_more() end)
     params:add_binary("macro_less", "Less-", "trigger", 0) params:set_action("macro_less", function() undo.checkpoint() macro.macro_less() end)
-
     params:add_group("MORPHING", 5)
     params:add_option("scene_mode", "Morph Mode", {"off", "on"}, 1) params:set_action("scene_mode", function(value) morph.scene_mode = (value == 2) and "on" or "off" if morph.scene_mode == "on" then local scenes_empty = true for track = 1, 2 do for scene = 1, 2 do if morph.scene_data[track] and morph.scene_data[track][scene] and next(morph.scene_data[track][scene]) ~= nil then scenes_empty = false break end end if not scenes_empty then break end end if scenes_empty then morph.initialize_scenes_with_current_params() end end end)
     params:add_control("morph_amount", "Morph", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("morph_amount", function(value) local prev = morph.amount if (prev == 0 or prev == 100) and value ~= prev then morph.auto_save_to_scene() end morph.amount = value morph.apply() end)
     params:add{type = "trigger", id = "save_to_scene1", name = "Morph Target A", action = function() morph.store_scene(1, 1) morph.store_scene(2, 1) end}
     params:add{type = "trigger", id = "save_to_scene2", name = "Morph Target B", action = function() morph.store_scene(1, 2) morph.store_scene(2, 2) end}
     params:add{type = "trigger", id = "delete_morph_data", name = "Delete Morph Data", action = function() morph.scene_data = {[1] = {[1] = {}, [2] = {}}, [2] = {[1] = {}, [2] = {}}} morph.amount = 0 params:set("morph_amount", 0) params:set("scene_mode", 1) morph.scene_mode = "off" end}
-
     params:add_group("PITCH", 4)
     params:add_option("pitch_quantize_scale", "Pitch Quantize", {"off", "major", "minor", "dorian", "phrygian", "lydian", "mixolydian", "locrian", "major pent.", "minor pent.", "blues", "whole tone"}, 2) params:set_action("pitch_quantize_scale", function(value) local scale = params:string("pitch_quantize_scale") if scale ~= "off" then for i = 1, 2 do local current_pitch = params:get(i.."pitch") local quantized = SU.quantize(current_pitch, scale) if current_pitch ~= quantized then params:set(i.."pitch", quantized) end end end end)
     params:add_option("pitch_lag", "Pitch Lag", {"off", "very small", "small", "medium", "high", "very high"}, 1) params:set_action("pitch_lag", function(value) local lag_times = {0, 1, 2, 4, 8, 16} local lag_time = lag_times[value] for i = 1, 2 do engine.pitch_lag(i, lag_time) end end)
     params:add_separator("                                   ")
     params:add_option("lock_pitch", "Lock Parameters", {"off", "on"}, 1)
-
     params:add_group("MIDI/SYNC", 16)
     midi_input.add_params({set_pitch = set_midi_pitch, on_voice_trigger = function(v) randomize_flash.midi[v] = 1; randomize_flash.held[v] = true end, on_voice_release = function(v) randomize_flash.held[v] = false end, voice_loaded = is_voice_loaded, on_transport_start = transport_start, on_transport_stop = transport_stop, on_transport_continue = transport_continue})
     params:add_option("midi_gate", "Drone Mode", { "off", "on" }, 2) params:set_action("midi_gate", function() if midi_input then midi_input.set_gate_mode() end end)
@@ -855,9 +821,7 @@ local function setup_params()
     params:add_option("midi_transport", "Transport", { "off", "on" }, 2)
     params:add_separator("                                    ")
     params:add_option("lock_sync", "Lock Parameters", {"off", "on"}, 1)
-
     arp.add_params()
-
     params:add_group("BOUNCE", 9)
     params:add_binary("bounce", "Bounce!", "trigger", 0) params:set_action("bounce", function() hlp.start_bounce() end)
     params:add_option("bounce_mode", "Bounce to", {"voice 1", "in place"}, 1)
@@ -868,7 +832,6 @@ local function setup_params()
     params:add_option("bounce_reset", "Reset After", {"off", "voice 1", "voice 2", "both"}, 2)
     params:add_separator("                        ")
     params:add_binary("delete_unused_bounces", "Delete Unused Files", "trigger", 0) params:set_action("delete_unused_bounces", function() delete_unused_bounces() end)
-
     params:add_group("OTHER", 26)
     params:add_binary("dry_mode", "Dry Mode", "toggle", 0) params:set_action("dry_mode", function(x) drymode.set_dry_mode(x == 1) end)
     for i = 1, 2 do
@@ -1528,9 +1491,9 @@ function key(n, z)
 end
 
 local function format_speed(s)
-  local abs = abs(s)
-  if abs < 0.01 then return ".00x" end
-  if abs < 1    then return string.format("%s.%02dx", s < 0 and "-" or "", floor(abs * 100)) end
+  local a = abs(s)
+  if a < 0.01 then return ".00x" end
+  if a < 1    then return string.format("%s.%02dx", s < 0 and "-" or "", floor(a * 100)) end
   return string.format("%.2fx", s)
 end
 
@@ -1554,16 +1517,45 @@ local FORMAT = {
   jitter = function(value) if value > 999 then return string.format("%.1f s", value / 1000) else return string.format("%.0f ms", value) end end,
   size = function(value) if value > 999 then return string.format("%.2f s", value / 1000) else return string.format("%.0f ms", value) end end}
 local buckets = {}
-for _i = 1, 15 do buckets[_i] = {r={}, p={}, t={}, r_len=0, p_len=0, t_len=0} end
+for _i = 1, 15 do
+  buckets[_i] = {rx={}, ry={}, rw={}, rh={}, px={}, py={},
+                 tx={}, ty={}, ts={}, ta={}, r_len=0, p_len=0, t_len=0}
+end
 local function clear_ops() for i=1,15 do local b=buckets[i] b.r_len, b.p_len, b.t_len = 0, 0, 0 end end
-local function R(l,x,y,w,h) local b=buckets[l]; local i=b.r_len+1; b.r_len=i local t=b.r[i]; if t then t[1],t[2],t[3],t[4]=x,y,w,h else b.r[i]={x,y,w,h} end end
-local function P(l,x,y) local b=buckets[l]; local i=b.p_len+1; b.p_len=i local t=b.p[i]; if t then t[1],t[2]=x,y else b.p[i]={x,y} end end
-local function T(l,x,y,s,a) local b=buckets[l]; local i=b.t_len+1; b.t_len=i local t=b.t[i]; if t then t[1],t[2],t[3],t[4]=x,y,s,a else b.t[i]={x,y,s,a} end end
+local function R(l,x,y,w,h) local b=buckets[l] local i=b.r_len+1 b.r_len=i b.rx[i]=x b.ry[i]=y b.rw[i]=w b.rh[i]=h end
+local function P(l,x,y) local b=buckets[l] local i=b.p_len+1 b.p_len=i b.px[i]=x b.py[i]=y end
+local function T(l,x,y,s,a) local b=buckets[l] local i=b.t_len+1 b.t_len=i b.tx[i]=x b.ty[i]=y b.ts[i]=s b.ta[i]=a end
 local LOCK_OFFSETS = {{-3,0},{-4,0},{-4,-1},{-4,-2}} local function draw_lock(x,y) for i=1,4 do local o=LOCK_OFFSETS[i] P(LEVEL.dim, x+o[1], y+o[2]) end end
 local SIZE_LINK_PTS = {}
 for _, offset in ipairs({1,3,5,7,9,11,13,15}) do local level = floor(10 * (1 - abs(offset - 8) / 8)) SIZE_LINK_PTS[#SIZE_LINK_PTS+1] = level SIZE_LINK_PTS[#SIZE_LINK_PTS+1] = offset end
 local function draw_size_link(x,y) for i = 1, 16, 2 do P(SIZE_LINK_PTS[i], x-4, y+SIZE_LINK_PTS[i+1]) end end
-local function flush() for l=1,15 do local b=buckets[l] if b.r_len>0 or b.p_len>0 or b.t_len>0 then screen.level(l) local filled=false for i=1,b.r_len do local r=b.r[i] screen.rect(r[1],r[2],r[3],r[4]) filled=true end for i=1,b.p_len do local p=b.p[i] screen.pixel(p[1],p[2]) filled=true end if filled then screen.fill() end for i=1,b.t_len do local t=b.t[i] screen.move(t[1],t[2]) if t[4]=="center" then screen.text_center(t[3]) else screen.text(t[3]) end end end end end
+local function flush()
+  local s_level, s_rect, s_pixel, s_fill = screen.level, screen.rect, screen.pixel, screen.fill
+  local s_move, s_text, s_text_center = screen.move, screen.text, screen.text_center
+  for l = 1, 15 do
+    local b = buckets[l]
+    local rn, pn, tn = b.r_len, b.p_len, b.t_len
+    if rn > 0 or pn > 0 or tn > 0 then
+      s_level(l)
+      if rn > 0 then
+        local rx, ry, rw, rh = b.rx, b.ry, b.rw, b.rh
+        for i = 1, rn do s_rect(rx[i], ry[i], rw[i], rh[i]) end
+      end
+      if pn > 0 then
+        local px, py = b.px, b.py
+        for i = 1, pn do s_pixel(px[i], py[i]) end
+      end
+      if rn > 0 or pn > 0 then s_fill() end
+      if tn > 0 then
+        local tx, ty, ts, ta = b.tx, b.ty, b.ts, b.ta
+        for i = 1, tn do
+          s_move(tx[i], ty[i])
+          if ta[i] == "center" then s_text_center(ts[i]) else s_text(ts[i]) end
+        end
+      end
+    end
+  end
+end
 local SYM_CACHE = {}
 for sy = 4, 64, 2 do local lvl = max(1, floor(10 * (1 - abs(sy - 34) / 32))); SYM_CACHE[#SYM_CACHE+1] = sy; SYM_CACHE[#SYM_CACHE+1] = lvl end
 local _LOG_FILTER_INV = 1.0 / log(20000 / 20)
@@ -1573,10 +1565,11 @@ for _, m in ipairs({"spread","pitch","density","size","jitter","lpf","hpf","pan"
 local _GLUT_N = 256
 local _GLUT_NM = _GLUT_N - 1
 local _ENV_LUT, _FADE_LUT = {}, {}
+local _ENV_PEAK = {}
 do
   local sin,cos,exp,abs,pi=sin,math.cos,math.exp,abs,math.pi
   local lv_scale = LEVEL.hi - 1
-  local function bld(fn) local t={} local mx=0 for i=0,_GLUT_N-1 do local v=fn((i+0.5)/_GLUT_N)*lv_scale t[i]=v if v>mx then mx=v end end t[-1]=mx return t end
+  local function bld(fn) local t={} local mx=0 for i=0,_GLUT_N-1 do local v=fn((i+0.5)/_GLUT_N)*lv_scale t[i]=v if v>mx then mx=v end end _ENV_PEAK[t]=mx return t end
   for i=0,_GLUT_N-1 do _FADE_LUT[i]=sin(pi*(i+0.5)/_GLUT_N) end
   _ENV_LUT[1]=bld(function(p) return sin(pi*p) end)
   _ENV_LUT[2]=bld(function(p) if p<0.25 then return 0.5*(1-cos(pi*p*4)) elseif p>0.75 then return 0.5*(1-cos(pi*(1-p)*4)) else return 1.0 end end)
@@ -1584,11 +1577,12 @@ do
   _ENV_LUT[4]=bld(function(p) if p<0.1 then return p*10 elseif p<0.3 then return 1-1.75*(p-0.1) elseif p<0.75 then return 0.65 else return 0.65*(1-(p-0.75)*4) end end)
   _ENV_LUT[5]=bld(function(p) return abs(sin(pi*p))*(0.6+0.4*sin(p*11.3+2.7)) end)
 end
+local function _tanh(z) local e = math.exp(2 * z) return (e - 1) / (e + 1) end
 _HK.eq = {zy = 58, amp = 5, low = {}, high = {}, mid = {}, tilt = {}}
 do
   local eq = _HK.eq
   local exp = math.exp
-  local function tanh(z) local e = exp(2 * z) return (e - 1) / (e + 1) end
+  local tanh = _tanh
   local p_low, w_low, p_high, w_high, p_mid, w_mid, p_tilt, w_tilt = 0.15, 0.13, 0.76, 0.13, 0.51, 0.14, 0.53, 0.30
   for c = 0, BAR_W - 1 do
     local p = c / (BAR_W - 1)
@@ -1602,8 +1596,7 @@ end
 _HK.filt_sh = {}
 do
   local sh = _HK.filt_sh
-  local exp = math.exp
-  local function tanh(z) local e = exp(2 * z) return (e - 1) / (e + 1) end
+  local tanh = _tanh
   local w = 3.5
   for d = -(BAR_W - 1), BAR_W - 1 do sh[d] = 0.5 * (1 - tanh(d / w)) end
 end
@@ -1651,6 +1644,7 @@ for t = 1, 2 do for i = 1, #_LOCK_PARAMS do _FULL_PARAM_KEYS[t][i] = t .. _LOCK_
 local _slow_refresh_countdown = 0
 local function refresh_redraw_cache()
   local spd_scale = drymode.stereo_dry_active() and 1 or clocksync.speed_scale()
+  local eq_locked = pget("lock_eq") == 2
   for t = 1,2 do
     local C = PARAM_CACHE.track[t]
     local K = TRACK_KEYS[t]
@@ -1661,7 +1655,7 @@ local function refresh_redraw_cache()
     C.hpf = pget(K.hpf)
     C.q = pget(K.lpf_gain)
     C.loaded = audio_active[t] or C.in_ == 1 or C.dir_ == 1
-    C.locked.eq = pget("lock_eq") == 2
+    C.locked.eq = eq_locked
   end
   _slow_refresh_countdown = _slow_refresh_countdown - 1
   if _slow_refresh_countdown > 0 then return end
@@ -1737,12 +1731,12 @@ local function speed_text(t, s)
   return str
 end
 _HK.smear = function(x, seek_y, start_pos, end_pos, gsz, forward, lut, fade, alpha, col)
-  local dl = floor(start_pos * BAR_W)
-  local dr = ceil(end_pos * BAR_W) - 1
+  local dl = start_pos * BAR_W // 1
+  local dr = -(-(end_pos * BAR_W) // 1) - 1
   if dr <= dl or gsz * BAR_W <= 1 then
-    local lv = ceil(lut[-1] * fade * alpha)
+    local lv = -(-(_ENV_PEAK[lut] * fade * alpha) // 1)
     if lv < 1 then lv = 1 end
-    local px = floor((start_pos + end_pos) * 0.5 * BAR_W) % BAR_W
+    local px = (start_pos + end_pos) * 0.5 * BAR_W // 1 % BAR_W
     if col then
       if lv > col[px] then col[px] = lv end
     else
@@ -1755,24 +1749,29 @@ _HK.smear = function(x, seek_y, start_pos, end_pos, gsz, forward, lut, fade, alp
     if forward then sp = ((dl + 0.5) * inv_bar_w - start_pos) * inv_gsz else sp = 1 - (((dl + 0.5) * inv_bar_w - start_pos) * inv_gsz) end
     local sp_dt = inv_gsz * inv_bar_w
     if not forward then sp_dt = -sp_dt end
+    local N, NM, BW = _GLUT_N, _GLUT_NM, BAR_W
+    local lo_v, hi_v = lut[0], lut[NM]
     if col then
       for px_unwrapped = dl, dr do
-        local idx = floor(sp * _GLUT_N)
-        if idx < 0 then idx = 0 elseif idx > _GLUT_NM then idx = _GLUT_NM end
-        local lv = ceil(lut[idx] * fade * alpha)
+        local idx = sp * N // 1
+        local L = lut[idx]
+        if L == nil then L = idx < 0 and lo_v or hi_v end
+        local lv = -(-(L * fade * alpha) // 1)
         if lv < 1 then lv = 1 end
-        local px = px_unwrapped % BAR_W
+        local px = px_unwrapped % BW
         if lv > col[px] then col[px] = lv end
         sp = sp + sp_dt
       end
     else
+      local plot = P
       for px_unwrapped = dl, dr do
-        local idx = floor(sp * _GLUT_N)
-        if idx < 0 then idx = 0 elseif idx > _GLUT_NM then idx = _GLUT_NM end
-        local lv = ceil(lut[idx] * fade * alpha)
+        local idx = sp * N // 1
+        local L = lut[idx]
+        if L == nil then L = idx < 0 and lo_v or hi_v end
+        local lv = -(-(L * fade * alpha) // 1)
         if lv < 1 then lv = 1 end
-        local px = px_unwrapped % BAR_W
-        P(lv, x + px, seek_y)
+        local px = px_unwrapped % BW
+        plot(lv, x + px, seek_y)
         sp = sp + sp_dt
       end
     end
@@ -1823,8 +1822,8 @@ local function draw_grains(t, x, col)
       local base_w = g.size * g.pitch / dur
       local gsz = base_w < 1 and base_w or 1
       local forward = spd_fwd ~= (g.rv < dir_mod)
-      local lut = is_random_env and (_ENV_LUT[floor(g.rv * 4) + 1] or _ENV_LUT[1]) or lut_default
-      local fi = floor(g.lf * lut_n)
+      local lut = is_random_env and (_ENV_LUT[g.rv * 4 // 1 + 1] or _ENV_LUT[1]) or lut_default
+      local fi = g.lf * lut_n // 1
       if fi > lut_nm then fi = lut_nm end
       local fade = _FADE_LUT[fi]
       local start_pos, end_pos
@@ -1857,11 +1856,11 @@ _HK.draw_grain_pans = function(t, base_x)
   for gi = 1, n do
     local g = grains[gi]
     local lf = g.lf
-    local lv = floor(24 * lf * (1 - lf) + 0.5)
+    local lv = (24 * lf * (1 - lf) + 0.5) // 1
     if lv > 0 then
       local px = base_x + (g.pan + 1) * 12.5
       if px < base_x then px = base_x elseif px > hi_x then px = hi_x end
-      local i0 = floor(px + slide + 0.5) - origin
+      local i0 = (px + slide + 0.5) // 1 - origin
       local i1 = i0
       if lf > 0.25 and lf < 0.75 then i0 = i0 - 1 i1 = i1 + 1 end
       for k = i0, i1 do if lv > pc[k] then pc[k] = lv end end
@@ -2243,6 +2242,13 @@ local osc_handlers = {
     end}
 local function setup_osc() osc.event = function(path, args) local handler = osc_handlers[path] if handler then handler(args) end end end
 
+local function snapshot_scene_data()
+    local sd = morph.scene_data
+    local s1, s2 = sd[1], sd[2]
+    return {[1] = {s1 and s1[1], s1 and s1[2]},
+            [2] = {s2 and s2[1], s2 and s2[2]}}
+end
+
 local function setup_undo()
     undo.init{
         lfo = lfo,
@@ -2250,7 +2256,7 @@ local function setup_undo()
             return {
                 morph_amount = params:get("morph_amount"),
                 scene_mode   = params:get("scene_mode"),
-                scene_data   = utils.deep_copy(morph.scene_data),
+                scene_data   = snapshot_scene_data(),
                 temp_scene   = utils.deep_copy(morph.temp_scene),
                 arp          = arp.snapshot()}
         end,

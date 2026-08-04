@@ -55,7 +55,6 @@ function Installer:scan()
       remaining = remaining + 1
     end
   end
-
   if remaining > 0 then
     local clauses = {}
     for req in pairs(found) do clauses[#clauses + 1] = string.format("-name '*%s*'", req) end
@@ -73,7 +72,6 @@ function Installer:scan()
       if remaining == 0 then break end
     end
   end
-
   self.missing_requirements = {}
   for req, ok in pairs(found) do
     if not ok then
@@ -81,7 +79,6 @@ function Installer:scan()
       self.missing_requirements[#self.missing_requirements + 1] = req
     end
   end
-
   self.satisfied = (#self.missing_requirements == 0)
   if self.satisfied then print("[installer] all libraries installed.") end
   self.message_needed = table.concat(self.missing_requirements, ",")

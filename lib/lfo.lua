@@ -16,7 +16,7 @@ local size_cap_fn = nil
 function lfo.set_context(ctx)
     clocksync_ref = ctx.clocksync
     local arp = ctx.arp
-    if arp then size_cap_fn = function(v) return arp.max_size_ms(v) end end
+    if arp then size_cap_fn = arp.max_size_ms end
 end
 local TWO_PI = math.pi * 2
 local PHASE_INCREMENT = 1 / 30
@@ -551,8 +551,6 @@ function lfo.get_active_param_map()
     if _lfo_param_cache_dirty then rebuild_lfo_param_cache() end
     return _lfo_param_cache
 end
--- depth window used by both size (capped by the arp max) and the filters:
--- the filter case is exactly the size case with cap == mx
 local function windowed_value(mn, mx, cap, offset, mod, dn)
     local wh = (cap - mn) * 0.5
     local en = mod - offset

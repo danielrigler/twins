@@ -3,6 +3,8 @@ local arp = {}
 local clamp = util.clamp
 local floor = math.floor
 local random = math.random
+local max = math.max
+local HUGE = math.huge
 local MAX_STEPS = 8
 local DEG_MIN, DEG_MAX = -14, 14
 local SU = nil
@@ -28,7 +30,7 @@ local PITCH_KEYS   = {"1pitch", "2pitch"}
 local SIZE_KEYS    = {"1size", "2size"}
 local DENSITY_KEYS = {"1density", "2density"}
 local RAT_KEYS     = {"1ratcheting_prob", "2ratcheting_prob"}
-local scale_idx, scale_name, scale_ivs = nil, "off", nil
+local scale_idx, scale_name, scale_ivs, scale_n = nil, "off", nil, nil
 local last_po = {nil, nil}
 
 local function refresh_scale()
@@ -37,13 +39,14 @@ local function refresh_scale()
     scale_idx = si
     scale_name = params:string("pitch_quantize_scale")
     scale_ivs = SU.intervals(scale_name)
+    scale_n = scale_ivs and (#scale_ivs - 1) or nil
   end
 end
 
 local function degree_to_st(deg)
   local ivs = scale_ivs
   if not ivs then return deg end
-  local n = #ivs - 1
+  local n = scale_n
   local oct = floor(deg / n)
   return ivs[deg - oct * n + 1] + oct * 12
 end
@@ -89,15 +92,15 @@ end
 
 local function get_hz(v)
   local cs = clocksync
-  if cs and cs.grain_synced() then return cs.grain_density(v) or params:get(DENSITY_KEYS[v]) end
-  return params:get(DENSITY_KEYS[v])
+  if cs and cs.grain_synced() then return cs.grain_density(v) or params:get(DENSITY_KEYS[v]), true end
+  return params:get(DENSITY_KEYS[v]), false
 end
 
 local eff_size = {nil, nil}
 local overlap = 1
 local MAX_GRAIN_MS = 10000
 
-local function grain_len(v, hz, desired, half)
+local function grain_len(hz, desired, half)
   local step = (half and 500 or 1000) / hz
   local base = desired > step and step or desired
   local eff = base * overlap
@@ -107,7 +110,7 @@ end
 local function apply_size_cap(v, hz, half)
   local id = SIZE_KEYS[v]
   if not params.lookup[id] then return end
-  local eff = grain_len(v, hz, params:get(id), half)
+  local eff = grain_len(hz, params:get(id), half)
   if half or eff ~= eff_size[v] then
     eff_size[v] = eff
     engine.size(v, eff * 0.001)
@@ -150,16 +153,18 @@ local function start_clock()
     co[v] = clock.run(function()
       local carry = 0
       while true do
-        local hz = clamp(get_hz(v), 0.1, 250)
-        if clocksync.grain_synced() then
+        local hz, synced = get_hz(v)
+        hz = clamp(hz, 0.1, 250)
+        if synced then
           sync(get_tempo() / (60 * hz))
         else
           sleep((1 - carry) / hz)
         end
         carry = 0
-        hz = clamp(get_hz(v), 0.1, 250)
+        hz, synced = get_hz(v)
+        hz = clamp(hz, 0.1, 250)
         if tick(v, hz) then
-          if clocksync.grain_synced() then
+          if synced then
             sync(get_tempo() / (60 * hz) * 0.5)
           else
             sleep(0.5 / hz)
@@ -176,9 +181,9 @@ local function set_running(on)
   if on == running then return end
   running = on
   if on then
-    tickn = {0, 0}
-    last_po = {nil, nil}
-    eff_size = {nil, nil}
+    tickn[1], tickn[2] = 0, 0
+    last_po[1], last_po[2] = nil, nil
+    eff_size[1], eff_size[2] = nil, nil
     for v = 1, 2 do
       local id_size = SIZE_KEYS[v]
       local id_prob = v .. "probability"
@@ -193,7 +198,7 @@ local function set_running(on)
     start_clock()
   else
     stop_clock()
-    last_po = {nil, nil}
+    last_po[1], last_po[2] = nil, nil
     for v = 1, 2 do
       ratio[v] = 1
       engine.vel_amp(v, 1)
@@ -211,6 +216,15 @@ local function set_running(on)
       pre_arp_prob[v] = nil
     end
   end
+end
+
+local function deg_span()
+  local lo, hi = step_deg[1], step_deg[1]
+  for i = 2, nsteps do
+    local d = step_deg[i]
+    if d < lo then lo = d elseif d > hi then hi = d end
+  end
+  return lo, hi
 end
 
 local function randomize()
@@ -231,8 +245,7 @@ local function randomize()
     repeat d = DEG_PALETTE[random(#DEG_PALETTE)] until d ~= step_deg[1] and d ~= step_deg[nsteps - 1]
     step_deg[nsteps] = d
   end
-  local lo, hi = step_deg[1], step_deg[1]
-  for i = 2, nsteps do lo = math.min(lo, step_deg[i]); hi = math.max(hi, step_deg[i]) end
+  local lo, hi = deg_span()
   local guard = 0
   while (hi - lo) < 4 and guard < 20 do
     local i = random(1, nsteps)
@@ -240,15 +253,14 @@ local function randomize()
     repeat d = DEG_PALETTE[random(#DEG_PALETTE)]
     until d ~= step_deg[(i - 2) % nsteps + 1] and d ~= step_deg[i % nsteps + 1]
     step_deg[i] = d
-    lo, hi = step_deg[1], step_deg[1]
-    for k = 2, nsteps do lo = math.min(lo, step_deg[k]); hi = math.max(hi, step_deg[k]) end
+    lo, hi = deg_span()
     guard = guard + 1
   end
   for i = 1, MAX_STEPS do
     step_vol[i] = (random(6) == 1) and 0 or random(55, 100)
     step_rat[i] = random()
   end
-  step_vol[1] = math.max(step_vol[1], 80)
+  step_vol[1] = max(step_vol[1], 80)
 end
 
 function arp.ratio(v) return ratio[v] end
@@ -256,17 +268,15 @@ function arp.ratio(v) return ratio[v] end
 function arp.is_running() return running end
 
 function arp.max_size_ms(v)
-  if not running then return math.huge end
+  if not running then return HUGE end
   local hz = get_hz(tonumber(v)) or 1
   return (1 / hz) * 1000
 end
 
-function arp.overlap() return overlap end
-
 function arp.grain_size_ms(v, desired)
   if not running then return desired end
   v = tonumber(v)
-  return grain_len(v, clamp(get_hz(v), 0.1, 250), desired)
+  return grain_len(clamp(get_hz(v), 0.1, 250), desired)
 end
 
 function arp.snapshot()
@@ -297,7 +307,7 @@ function arp.restore(s)
   end
   pre_arp_size[1], pre_arp_size[2] = tonumber(s.pre_size1), tonumber(s.pre_size2)
   pre_arp_prob[1], pre_arp_prob[2] = tonumber(s.pre_prob1), tonumber(s.pre_prob2)
-  tickn = {0, 0}
+  tickn[1], tickn[2] = 0, 0
 end
 
 function arp.set_context(ctx)

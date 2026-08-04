@@ -12,6 +12,12 @@ local MACRO_RANGES = {
 local TARGET_DEPTH_FACTOR = TARGET_DEPTH_PERCENT * 0.01
 local PARAMS_TO_ADJUST    = {"speed", "size", "jitter", "density"}
 local NUM_TRACKS          = 2
+local MACRO_PARAM_IDS     = {}
+for i = 1, NUM_TRACKS do
+    local t = {}
+    for _, suffix in ipairs(PARAMS_TO_ADJUST) do t[suffix] = i .. suffix end
+    MACRO_PARAM_IDS[i] = t
+end
 local param_limits = {}
 for suffix, r in pairs(MACRO_RANGES) do
     local span   = r.max - r.min
@@ -28,22 +34,25 @@ local stop_metro_safe  = utils.stop_metro_safe
 function macro.set_context(ctx) lfo_ref = ctx.lfo end
 
 local is_param_locked = utils.is_param_locked
+local m_min, m_abs = math.min, math.abs
+local u_linlin = util.linlin
+local TOLERANCE = 0.01
 
-local function process_lfo_param(param, target, factor, lfo_index, min_val, max_val)
+local function process_lfo_param(param, target, factor, offset_param, depth_param, min_val, max_val)
     local current_value  = params:get(param)
     local new_value      = current_value + (target - current_value) * factor
     local range          = max_val - min_val
     local target_depth   = TARGET_DEPTH_FACTOR * range
-    local max_safe_depth = math.min(new_value - min_val, max_val - new_value) * 2
-    local safe_depth     = math.min(target_depth, max_safe_depth)
+    local max_safe_depth = m_min(new_value - min_val, max_val - new_value) * 2
+    local safe_depth     = m_min(target_depth, max_safe_depth)
     local new_depth      = safe_depth / range * 100
-    local new_offset     = util.linlin(min_val, max_val, -1, 1, new_value)
-    local offset_param   = lfo_index .. "offset"
-    local depth_param    = lfo_index .. "lfo_depth"
-    params:set(offset_param, params:get(offset_param) + (new_offset - params:get(offset_param)) * factor)
-    params:set(depth_param,  params:get(depth_param)  + (new_depth  - params:get(depth_param))  * factor)
+    local new_offset     = u_linlin(min_val, max_val, -1, 1, new_value)
+    local cur_offset     = params:get(offset_param)
+    params:set(offset_param, cur_offset + (new_offset - cur_offset) * factor)
+    local cur_depth      = params:get(depth_param)
+    params:set(depth_param, cur_depth + (new_depth - cur_depth) * factor)
     params:set(param, new_value)
-    return math.abs(new_value - target) < 0.01
+    return m_abs(new_value - target) < TOLERANCE
 end
 
 local function adjust_params(multiplier)
@@ -55,7 +64,7 @@ local function adjust_params(multiplier)
     for i = 1, NUM_TRACKS do
         for _, param_suffix in ipairs(PARAMS_TO_ADJUST) do
             if not is_param_locked(i, param_suffix) then
-                local param         = i .. param_suffix
+                local param         = MACRO_PARAM_IDS[i][param_suffix]
                 local current_value = params:get(param)
                 local limits        = param_limits[param_suffix]
                 local lo, hi        = limits.lo, limits.hi
@@ -75,39 +84,36 @@ local function adjust_params(multiplier)
                 if lfo_ref then
                     local lfo_index = lfo_ref.get_lfo_for_param(param)
                     if lfo_index then
-                        lfo_ranges[param] = {lfo_index = lfo_index, min = lfo_min, max = lfo_max}
+                        local keys = lfo_ref.keys
+                        lfo_ranges[param] = {offset_id = keys.offset[lfo_index],
+                                             depth_id  = keys.depth[lfo_index],
+                                             min = lfo_min, max = lfo_max}
                     end
                 end
             end
         end
     end
-
     if not next(targets) then return end
-
     local steps = utils.STEP_COUNTS[params:get("steps")] or 20
-
     randomize_metro.time  = 1 / 30
     randomize_metro.event = function(count)
-        local tolerance = 0.01
         local factor    = count / steps
         local all_done  = true
-
         for param, target in pairs(targets) do
             local lfo_data = lfo_ranges[param]
             if lfo_data then
                 local done = process_lfo_param(
                     param, target, factor,
-                    lfo_data.lfo_index, lfo_data.min, lfo_data.max
+                    lfo_data.offset_id, lfo_data.depth_id, lfo_data.min, lfo_data.max
                 )
                 if not done then all_done = false end
             else
                 local current = params:get(param)
                 local new_val = current + (target - current) * factor
                 params:set(param, new_val)
-                if math.abs(new_val - target) >= tolerance then all_done = false end
+                if m_abs(new_val - target) >= TOLERANCE then all_done = false end
             end
         end
-
         if all_done then stop_metro_safe(randomize_metro) end
     end
     utils.metro_start(randomize_metro)

@@ -103,8 +103,10 @@ function presets.list_presets()
         end
         f:close()
     end
+    local nums = {}
+    for i = 1, #list do nums[list[i]] = parse_preset_name(list[i]) or 0 end
     table.sort(list, function(a, b)
-        local na, nb = parse_preset_name(a) or 0, parse_preset_name(b) or 0
+        local na, nb = nums[a], nums[b]
         if na ~= nb then return na > nb end
         return (mtimes[a] or 0) > (mtimes[b] or 0)
     end)
@@ -226,7 +228,6 @@ local function apply_params_ordered(p)
     local merged = {}
     for id, def_val in pairs(presets.default_params) do merged[id] = def_val end
     if p then for id, val in pairs(p) do merged[id] = val end end
-
     for id, value in pairs(merged) do
         local pidx = params.lookup[id]
         local pobj = pidx and params.params[pidx]
@@ -259,7 +260,6 @@ function presets.load_complete_preset(name, scene_data, update_pan, audio_active
     local ok, data = pcall(chunk)
     if not ok or not data then print("✗ Parse error: " .. (data or "?")); return false end
     if data.version and data.version > PRESET_VERSION then print("⚠ Newer preset version") end
-
     local saved_output_level
     if params.lookup["output_level"] then
         saved_output_level = params:get("output_level")
@@ -425,7 +425,8 @@ local function draw_rename_manual(conf)
     screen.clear()
     screen.level(15); screen.move(64,  9); screen.text_center("RENAME")
     screen.level(3);  screen.move(64, 17); screen.text_center("manual mode")
-    local num_str = format_number(conf.suggested_number) .. " "
+    local num_txt = format_number(conf.suggested_number)
+    local num_str = num_txt .. " "
     local text    = conf.manual_cursor > #conf.manual_text and pad_text(conf.manual_text, conf.manual_cursor) or conf.manual_text
     local before  = text:sub(1, conf.manual_cursor - 1)
     local cur_ch  = conf.pending_char or text:sub(conf.manual_cursor, conf.manual_cursor)
@@ -433,7 +434,7 @@ local function draw_rename_manual(conf)
     local after   = text:sub(conf.manual_cursor + 1)
     local pad        = 1
     local pipe_w     = screen.text_extents("|")
-    local num_w      = screen.text_extents(rtrim(num_str))
+    local num_w      = screen.text_extents(num_txt)
     local before_w   = screen.text_extents(before .. "|") - pipe_w
     local cur_ch_w   = screen.text_extents(cur_ch)
     local rect_w     = math.max(cur_ch_w, 4) + pad * 2
@@ -468,6 +469,20 @@ local function draw_rename_random(conf)
     screen.update()
 end
 
+local MODE_BRIGHT = { load = 1, save = 15, rename = 8 }
+local MODE_K3     = { load = "K3: Load", rename = "K3: Edit", save = "K3: Save" }
+local _row_cache = {}
+local function row_display(raw)
+    local d = _row_cache[raw]
+    if not d then
+        local name = raw:gsub("twins_", "")
+        local _, word, num = parse_preset_name(name)
+        d = {name = name, word = word, num = num}
+        _row_cache[raw] = d
+    end
+    return d
+end
+
 local function draw_confirm(title, name)
     screen.clear()
     screen.level(15); screen.move(64, 12); screen.text_center(title)
@@ -490,37 +505,36 @@ function presets.draw_menu()
     end
     screen.clear()
     screen.level(15); screen.move(64, 6); screen.text_center("PRESET BROWSER")
-    local count     = math.min(5, #presets.preset_list)
-    local start_idx = math.max(1, math.min(presets.selected_index - 2, #presets.preset_list - count + 1))
+    local list      = presets.preset_list
+    local total     = #list
+    local count     = math.min(5, total)
+    local start_idx = math.max(1, math.min(presets.selected_index - 2, total - count + 1))
     for i = 1, count do
         local idx = start_idx + i - 1
-        if idx <= #presets.preset_list then
+        if idx <= total then
             local sel  = idx == presets.selected_index
             local y    = 11 + (i * 8)
-            local name = presets.preset_list[idx]:gsub("twins_", "")
-            local _, word, n = parse_preset_name(name)
+            local d    = row_display(list[idx])
             screen.level(sel and 15 or 1)
             screen.move(2, y)
             screen.text(sel and (presets.k2_mode == "move" and "▶" or ">") or "")
-            if n then
-                screen.move(18, y); screen.level(sel and 15 or 1); screen.text_right(n)
-                screen.move(22, y); screen.level(sel and 15 or 4); screen.text(word)
+            if d.num then
+                screen.move(18, y); screen.level(sel and 15 or 1); screen.text_right(d.num)
+                screen.move(22, y); screen.level(sel and 15 or 4); screen.text(d.word)
             else
-                screen.move(22, y); screen.text(name)
+                screen.move(22, y); screen.text(d.name)
             end
         end
     end
-    if #presets.preset_list > count then
+    if total > count then
         screen.level(2)
-        if start_idx > 1                               then screen.move(122, 19); screen.text("↑") end
-        if start_idx + count - 1 < #presets.preset_list then screen.move(122, 51); screen.text("↓") end
+        if start_idx > 1                  then screen.move(122, 19); screen.text("↑") end
+        if start_idx + count - 1 < total  then screen.move(122, 51); screen.text("↓") end
     end
-    local bright = { load=1, save=15, rename=8 }
-    local labels  = { load="Load", rename="Edit", save="Save" }
     screen.level(1); screen.move(2,  64); screen.text("[K1]: Exit")
     screen.level(1); screen.move(50, 64); screen.text("K2: Del")
-    screen.level(bright[presets.menu_mode] or 1)
-    screen.move(91, 64); screen.text("K3: " .. (labels[presets.menu_mode] or "Load"))
+    screen.level(MODE_BRIGHT[presets.menu_mode] or 1)
+    screen.move(91, 64); screen.text(MODE_K3[presets.menu_mode] or "K3: Load")
     screen.update()
     return true
 end

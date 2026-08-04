@@ -61,6 +61,19 @@ local LFO_TARGETS = {
 
 local LFO_TARGET_TYPES = {"speed", "seek", "pan", "volume", "cutoff", "hpf"}
 
+local RESET_TARGETS = {t1 = {}, t2 = {}, both = {}, none = {}}
+for _, t in ipairs(LFO_TARGET_TYPES) do
+    local a, b = "1" .. t, "2" .. t
+    RESET_TARGETS.t1[a] = true
+    RESET_TARGETS.t2[b] = true
+    RESET_TARGETS.both[a] = true
+    RESET_TARGETS.both[b] = true
+end
+
+local DRY2_PARAMS = {"granular_gain", "speed"}
+local DRY2_VALUES = {granular_gain = DRY_VALUES_STEREO.granular_gain,
+                     speed = DRY_VALUES_STEREO.speed}
+
 function drymode.set_context(ctx) lfo = ctx.lfo end
 
 local function store_params(param_list, stereo)
@@ -79,7 +92,6 @@ end
 
 local function restore_params(settings, stereo)
     if not settings then return end
-
     if stereo then
         for p, vals in pairs(settings) do
             params:set("1"..p, vals[1])
@@ -102,41 +114,35 @@ end
 local function store_and_disable_lfos(targets, storage)
     if not lfo or not lfo.lfo_targets then return end
     local keys = lfo.keys
-
     for i = 1, 16 do
         local target_index = params:get(keys.target[i])
         local target = lfo.lfo_targets[target_index]
-
         if targets[target] then
-            storage[i] = utils.capture_lfo_slot(i, keys)
+            if storage then storage[i] = utils.capture_lfo_slot(i, keys) end
             params:set(keys.lfo[i], 1)
         end
     end
 end
 
 local function restore_lfos(lfo_table)
-    if not lfo_table then return end
+    if not lfo_table or not lfo then return end
     local keys = lfo.keys
-
     local was_paused = params:get("lfo_pause")
     params:set("lfo_pause", 1)
-
     for i, data in pairs(lfo_table) do
         if data then
             utils.apply_lfo_slot(i, keys, data)
         end
     end
-
     params:set("lfo_pause", was_paused)
 end
 
 function drymode.reset_dry(v1, v2, fx)
-    local targets = {}
-    for _, t in ipairs(LFO_TARGET_TYPES) do
-        if v1 then targets["1"..t] = true end
-        if v2 then targets["2"..t] = true end
-    end
-    store_and_disable_lfos(targets, {})
+    local targets = (v1 and v2 and RESET_TARGETS.both)
+                 or (v1 and RESET_TARGETS.t1)
+                 or (v2 and RESET_TARGETS.t2)
+                 or RESET_TARGETS.none
+    store_and_disable_lfos(targets, nil)
     set_stereo_params(DRY_VALUES_STEREO, v1, v2)
     if fx then
         for param, value in pairs(DRY_VALUES) do
@@ -148,7 +154,6 @@ end
 function drymode.set_dry_mode(on)
     if on == dry_mode_state then return end
     dry_mode_state = on
-
     if on then
         local snap = {
             stereo = store_params(STEREO_PARAMS, true),
@@ -164,12 +169,10 @@ function drymode.set_dry_mode(on)
             store_and_disable_lfos(LFO_TARGETS[target_type], snap.lfos[target_type])
         end
         prev_settings = snap
-
         for param, value in pairs(DRY_VALUES) do
             params:set(param, value)
         end
         set_stereo_params(DRY_VALUES_STEREO)
-
     else
         if prev_settings then
             restore_params(prev_settings.stereo, true)
@@ -187,11 +190,10 @@ end
 function drymode.set_dry_mode2(on)
     if on == dry_mode_state2 then return end
     dry_mode_state2 = on
-
     if on then
-        prev_settings2 = {stereo = store_params({"granular_gain", "speed"}, true)}
+        prev_settings2 = {stereo = store_params(DRY2_PARAMS, true)}
         stereo_dry = true
-        set_stereo_params({granular_gain = 0, speed = 1.0})
+        set_stereo_params(DRY2_VALUES)
     else
         stereo_dry = false
         if prev_settings2 then

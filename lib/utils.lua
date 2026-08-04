@@ -14,6 +14,20 @@ utils.system_param_exclude = {
 
 utils.STEP_COUNTS = {20, 300, 800}
 
+local _param_obj = {}
+function utils.param_obj(id)
+    local o = _param_obj[id]
+    if o == nil then
+        local lookup = params and params.lookup
+        local idx = lookup and lookup[id]
+        if not idx then return nil end
+        o = params.params[idx]
+        _param_obj[id] = o
+    end
+    return o
+end
+local param_obj = utils.param_obj
+
 local _lock_keys = {}
 function utils.is_param_locked(track, param)
     local key
@@ -24,7 +38,8 @@ function utils.is_param_locked(track, param)
         key = tk[param]
         if not key then key = track .. "lock_" .. param tk[param] = key end
     end
-    return params.lookup[key] ~= nil and params:get(key) == 2
+    local o = param_obj(key)
+    return o ~= nil and o:get() == 2
 end
 
 function utils.default_pans(both_loaded)
@@ -53,17 +68,20 @@ end
 function utils.stop_metro_safe(m)
     if m and running_metros[m] then
         running_metros[m] = nil
-        pcall(function() m:stop() end)
+        pcall(m.stop, m)
         m.event = nil
     end
 end
 
-function utils.deep_copy(t)
+local function deep_copy(t)
     if type(t) ~= "table" then return t end
     local copy = {}
-    for k, v in pairs(t) do copy[k] = utils.deep_copy(v) end
+    for k, v in pairs(t) do
+        if type(v) == "table" then copy[k] = deep_copy(v) else copy[k] = v end
+    end
     return copy
 end
+utils.deep_copy = deep_copy
 
 function utils.clear_table(t)
     for k in pairs(t) do t[k] = nil end
@@ -82,6 +100,16 @@ function utils.capture_lfo_slot(i, keys)
         depth  = params:get(keys.depth[i]),
         offset = params:get(keys.offset[i]),
     }
+end
+
+function utils.fill_lfo_slot(i, keys, t)
+    t.state  = params:get(keys.lfo[i])
+    t.target = params:get(keys.target[i])
+    t.shape  = params:get(keys.shape[i])
+    t.freq   = params:get(keys.freq[i])
+    t.depth  = params:get(keys.depth[i])
+    t.offset = params:get(keys.offset[i])
+    return t
 end
 
 function utils.apply_lfo_slot(i, keys, data)
