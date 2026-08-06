@@ -178,7 +178,7 @@ local function evolve_parameter(state)
     local k = state.kick
     v = random_float(-k, k)
   end
-  v = v * state.momentum_decay + random_float(-1, 1) * state.jitter
+  v = v * state.momentum_decay + (random() * 2 - 1) * state.jitter
   local d = state.current_drift + v
   if d > mx then d = mx elseif d < -mx then d = -mx end
   local new_value = state.center_value + d
@@ -206,7 +206,6 @@ local function evolution_update()
   build_evolvable_params_cache()
   local n = evo_count
   if n == 0 then return end
-  local states   = evolution_states
   local symmetry = sym_pobj ~= nil and sym_pobj:get() == 1
   for g = 1, NGROUPS do
     local obj = lock_pobj_by_id[g]
@@ -218,30 +217,38 @@ local function evolution_update()
     local gid = evo_gid[i]
     if evo_updated[i] ~= gen and not (gid ~= 0 and evo_locked_by_id[gid]) then
       local obj   = evo_pobjs[i]
-      local cur   = obj:get()
       local state = evo_states[i]
+      local raw   = obj.raw
+      local forced = false
       if not state then
-        state = init_evolution_state(evo_names[i], cur, i)
-      elseif state.last_set ~= nil and cur ~= state.last_set then
-        recenter(state, cur)
+        state = init_evolution_state(evo_names[i], obj:get(), i)
+        forced = true
+      elseif state.last_raw ~= nil and raw ~= state.last_raw then
+        local cur = obj:get()
+        obj.raw = state.last_raw
+        local was = obj:get()
+        obj.raw = raw
+        if cur ~= was then
+          recenter(state, cur)
+          forced = true
+        end
       end
       local nv = evolve_parameter(state)
-      local set_value
-      if nv ~= cur then
+      if forced or nv ~= state.last_nv then
         obj:set(nv)
-        set_value = obj:get()
-      else
-        set_value = cur
+        state.last_nv = nv
       end
-      state.last_set = set_value
+      state.last_raw = obj.raw
       evo_updated[i] = gen
       local mi = evo_mirror_idx[i]
       if symmetry and mi and evo_updated[mi] ~= gen then
-        local mobj  = evo_pobjs[mi]
+        local set_value = obj:get()
+        local mobj = evo_pobjs[mi]
         local ms = evo_states[mi] or init_evolution_state(evo_names[mi], set_value, mi)
         recenter(ms, set_value)
         if mobj:get() ~= set_value then mobj:set(set_value) end
-        ms.last_set = mobj:get()
+        ms.last_nv  = set_value
+        ms.last_raw = mobj.raw
         evo_updated[mi] = gen
       end
     end
@@ -267,7 +274,8 @@ end
 local function reset_evolution_centers()
   for name, state in pairs(evolution_states) do
     recenter(state, params:get(name))
-    state.last_set = nil
+    state.last_nv  = nil
+    state.last_raw = nil
   end
 end
 

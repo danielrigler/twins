@@ -248,7 +248,7 @@ function lfo.get_parameter_range(param_name, for_randomize)
     return lo, hi
 end
 for i = 1, number_of_outputs do
-    lfo[i] = {freq = 0.05, phase = 0, waveform = "walk", shape_int = 4, depth = 50, offset = 0, prev = 0, walk_value = 0, walk_velocity = 0, sync_to = nil, sync_invert = false, active = false, target_idx = 1, target_name = "none", kind = 0, no_gdepth = false, track_num = "1", last_val = nil, has_user_limits = false, min_key = nil, max_key = nil, def_min = 0, def_max = 100, lim_lo = 0, lim_hi = 100, lim_ratio = 1, lim_dirty = false}
+    lfo[i] = {freq = 0.05, phase = 0, waveform = "walk", shape_int = 4, depth = 50, offset = 0, prev = 0, walk_value = 0, walk_velocity = 0, sync_to = nil, sync_invert = false, active = false, target_idx = 1, target_name = "none", kind = 0, no_gdepth = false, track_num = "1", is_t2 = false, morph_range = false, last_val = nil, has_user_limits = false, min_key = nil, max_key = nil, def_min = 0, def_max = 100, lim_lo = 0, lim_hi = 100, lim_half = 50, lim_ratio = 1, lim_dirty = false}
 end
 local KIND_SIZE, KIND_FILTER, KIND_VOLUME, KIND_PITCH, KIND_DENSITY = 1, 2, 3, 4, 5
 local KIND_BY_SUFFIX = {size = KIND_SIZE, cutoff = KIND_FILTER, hpf = KIND_FILTER, volume = KIND_VOLUME, pitch = KIND_PITCH, density = KIND_DENSITY}
@@ -259,9 +259,11 @@ local function classify_target(i, target_idx)
     obj.target_name = tname
     obj.pobj = nil
     obj.last_val = nil
+    obj.morph_range = false
     if tname and tname ~= "none" then
         local track, suffix = split_target(tname)
         obj.track_num = track
+        obj.is_t2 = (track == "2")
         obj.kind = KIND_BY_SUFFIX[suffix] or 0
         obj.no_gdepth = (suffix == "volume" or suffix == "pan")
         if USER_LIMIT_PARAMS[suffix] then
@@ -278,19 +280,48 @@ local function classify_target(i, target_idx)
             local r = param_ranges[tname]
             obj.lim_lo = r and r[1] or 0
             obj.lim_hi = r and r[2] or 100
+            obj.lim_half = (obj.lim_hi - obj.lim_lo) * 0.5
             obj.lim_ratio = (obj.lim_lo > 0 and obj.lim_hi > obj.lim_lo) and (obj.lim_hi / obj.lim_lo) or 1
         end
     else
         obj.track_num = "1"
+        obj.is_t2 = false
         obj.kind = 0
         obj.no_gdepth = false
         obj.has_user_limits = false
         obj.min_key, obj.max_key = nil, nil
         obj.lim_dirty = false
         obj.lim_lo, obj.lim_hi = 0, 100
+        obj.lim_half = 50
     end
 end
+function lfo.set_morph_range(i, lo, hi)
+    local o = lfo[i]
+    if lo == nil then
+        if not o.morph_range then return end
+        o.morph_range = false
+        if o.has_user_limits then
+            o.lim_dirty = true
+        else
+            local r = param_ranges[o.target_name]
+            local a = r and r[1] or 0
+            local b = r and r[2] or 100
+            o.lim_lo, o.lim_hi = a, b
+            o.lim_half = (b - a) * 0.5
+            o.lim_ratio = (a > 0 and b > a) and (b / a) or 1
+        end
+        return
+    end
+    o.morph_range = true
+    o.lim_lo, o.lim_hi = lo, hi
+    o.lim_half = (hi - lo) * 0.5
+    o.lim_ratio = (lo > 0 and hi > lo) and (hi / lo) or 1
+    o.lim_dirty = false
+end
+lfo.limits_gen = 0
+lfo.slots_gen = 0
 function lfo.invalidate_limits()
+    lfo.limits_gen = lfo.limits_gen + 1
     for i = 1, number_of_outputs do
         local o = lfo[i]
         if o.has_user_limits then o.lim_dirty = true end
@@ -313,7 +344,7 @@ local function update_active_lfos()
             end
             if not o.sync_to then
                 count = count + 1
-                active_lfos[count] = i
+                active_lfos[count] = o
             end
         end
     end
@@ -321,7 +352,7 @@ local function update_active_lfos()
         local o = lfo[i]
         if o.active and o.target_name and o.target_name ~= "none" and o.sync_to then
             count = count + 1
-            active_lfos[count] = i
+            active_lfos[count] = o
         end
     end
     for i = count + 1, #active_lfos do active_lfos[i] = nil end
@@ -566,7 +597,7 @@ function lfo.get_active_param_map()
     if _lfo_param_cache_dirty then rebuild_lfo_param_cache() end
     return _lfo_param_cache
 end
-local function windowed_value(mn, mx, cap, offset, mod, dn)
+local function windowed_value(mn, mx, cap, offset, mod, dn, half_span)
     local wh = (cap - mn) * 0.5
     local en = mod - offset
     local maxen = dn
@@ -575,7 +606,7 @@ local function windowed_value(mn, mx, cap, offset, mod, dn)
         maxen = 1
     end
     local half = maxen * wh
-    local center = (offset + 1) * (mx - mn) * 0.5 + mn
+    local center = (offset + 1) * half_span + mn
     local lo, hi = mn + half, cap - half
     if center < lo then center = lo elseif center > hi then center = hi end
     local v = center + en * wh
@@ -610,11 +641,11 @@ function lfo.process()
     end
     local grain_synced = has_density_lfo and clocksync_ref ~= nil and clocksync_ref.grain_synced()
     for idx = 1, active_count do
-        local i = active_lfos[idx]
-        local obj = lfo_table[i]
+        local obj = active_lfos[idx]
         local old_phase = obj.phase
         local freq = obj.freq
-        local phase = (old_phase + freq * phase_inc) % 1.0
+        local phase = old_phase + freq * phase_inc
+        if phase >= 1.0 or phase < 0.0 then phase = phase % 1.0 end
         obj.phase = phase
         local kind = obj.kind
         if obj.lim_dirty then
@@ -623,6 +654,7 @@ function lfo.process()
             local hi = (lookup[max_key] and pget(params_table, max_key)) or obj.def_max
             if lo > hi then lo, hi = hi, lo end
             obj.lim_lo, obj.lim_hi = lo, hi
+            obj.lim_half = (hi - lo) * 0.5
             obj.lim_ratio = (lo > 0 and hi > lo) and (hi / lo) or 1
             obj.lim_dirty = false
         end
@@ -694,7 +726,6 @@ function lfo.process()
         local dn = d * 0.01
         local offset = obj.offset
         local mod = slope * dn + offset
-        local target = obj.target_name
         if kind == KIND_DENSITY and grain_synced then
             local nt = (mod + 1) * 0.5
             if nt < 0 then nt = 0 elseif nt > 1 then nt = 1 end
@@ -702,19 +733,28 @@ function lfo.process()
             goto continue_lfo
         end
         local mn, mx = obj.lim_lo, obj.lim_hi
-        local value = (mod + 1) * 0.5 * (mx - mn) + mn
+        local half_span = obj.lim_half
+        local value
         if kind == KIND_SIZE then
-            local size_cap = (obj.track_num == "2") and size_cap2 or size_cap1
-            if size_cap < mx then value = windowed_value(mn, mx, size_cap, offset, mod, dn) end
+            local size_cap = obj.is_t2 and size_cap2 or size_cap1
+            if size_cap < mx then
+                local k = dn * 4
+                if k > 1 then k = 1 end
+                value = windowed_value(mn, mx, size_cap + (mx - size_cap) * (1 - k), offset, mod, dn, half_span)
+            else
+                value = (mod + 1) * half_span + mn
+            end
         elseif kind == KIND_FILTER then
             local ratio = obj.lim_ratio
             if ratio > 1 then
-                local n = windowed_value(0, 1, 1, offset, mod, dn)
+                local n = windowed_value(0, 1, 1, offset, mod, dn, 0.5)
                 if n < 0 then n = 0 elseif n > 1 then n = 1 end
                 value = mn * (ratio ^ n)
             else
-                value = windowed_value(mn, mx, mx, offset, mod, dn)
+                value = windowed_value(mn, mx, mx, offset, mod, dn, half_span)
             end
+        else
+            value = (mod + 1) * half_span + mn
         end
         if value < mn then value = mn elseif value > mx then value = mx end
         if kind == KIND_VOLUME then
@@ -742,14 +782,18 @@ function lfo.process()
         if value ~= obj.last_val then
             obj.last_val = value
             local pobj = obj.pobj
-            if not pobj then
-                local pidx = lookup[target]
-                if pidx then pobj = param_objs[pidx] obj.pobj = pobj end
-            end
             if pobj then
                 pobj:set(value)
-            elseif pget(params_table, target) ~= value then
-                pset(params_table, target, value)
+            else
+                local target = obj.target_name
+                local pidx = lookup[target]
+                if pidx then
+                    pobj = param_objs[pidx]
+                    obj.pobj = pobj
+                    pobj:set(value)
+                elseif pget(params_table, target) ~= value then
+                    pset(params_table, target, value)
+                end
             end
         end
         ::continue_lfo::
@@ -780,7 +824,7 @@ function lfo.apply_clock_sync(hz1, hz2)
 end
 function lfo.reset_phases()
     for idx = 1, active_count do
-        local o = lfo[active_lfos[idx]]
+        local o = active_lfos[idx]
         o.phase = 0
         o.last_val = nil
     end
@@ -813,12 +857,14 @@ function lfo.init()
         params:set_action(LFO_KEYS[i], function(v)
             lfo[i].active = (v == 2)
             lfo[i].last_val = nil
+            lfo.slots_gen = lfo.slots_gen + 1
             update_active_lfos()
             lfo.invalidate_lfo_param_cache()
         end)
         params:add_option(TARGET_KEYS[i], i .. " target", lfo.lfo_targets, 1)
         params:set_action(TARGET_KEYS[i], function(v)
             classify_target(i, v)
+            lfo.slots_gen = lfo.slots_gen + 1
             update_active_lfos()
             lfo.invalidate_lfo_param_cache()
         end)

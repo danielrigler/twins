@@ -24,17 +24,131 @@ local invalidate_lfo_cache_ref = nil
 local MORPH_LFO_KEYS, MORPH_TARGET_KEYS, MORPH_SHAPE_KEYS, MORPH_FREQ_KEYS, MORPH_DEPTH_KEYS, MORPH_OFFSET_KEYS
 local O_LFO, O_TARGET, O_SHAPE, O_FREQ, O_DEPTH, O_OFFSET = {}, {}, {}, {}, {}, {}
 local OBJ_BY_NAME = {}
-local skip_param_set = {}
-local used_slots = {}
-local pending = {}
-for i = 1, 16 do pending[i] = {lfo = nil, param = nil} end
+local skip_g = 0
+local ENTRY_CAP = 32
+local entries = {}
+for i = 1, ENTRY_CAP do entries[i] = {} end
+local entry_by_target, order, slot_taken, slot_of_target = {}, {}, {}, {}
+local live_target, wrote = {}, {}
+local assign_valid, sc_changed = false, true
+local slots_gen_seen = -1
 local _t, _t_inv, _morph_dir, _pitch_scale, _get_range_ref
+local _limits_gen = -1
 local _has_lfo_tracking = nil
+local ITEM_BY_NAME = {}
+local moving, moving_count = {}, 0
+local simple, simple_count = {}, 0
+local special, special_count = {}, 0
+local _quantize = nil
+local _range_to_norm = nil
+local set_morph_range = nil
+local _scale_pobj = nil
+local _grain_synced, _ready = nil, false
+local sc_lfo_count = 0
+local sc_entry_count = 0
+local sc_targets, sc_target_count = nil, 0
+local sc_dirty = true
+local sc_a1, sc_a2, sc_b1, sc_b2 = nil, nil, nil, nil
+
+function morph.invalidate_scene_cache() sc_dirty = true end
+
+local function resolve_scenes()
+    local s1 = morph.scene_data[1] or EMPTY
+    local s2 = morph.scene_data[2] or EMPTY
+    local scene1_1, scene1_2 = s1[1] or EMPTY, s1[2] or EMPTY
+    local scene2_1, scene2_2 = s2[1] or EMPTY, s2[2] or EMPTY
+    if not sc_dirty and scene1_1 == sc_a1 and scene1_2 == sc_a2
+       and scene2_1 == sc_b1 and scene2_2 == sc_b2 then
+        return scene1_1, scene1_2, scene2_1, scene2_2
+    end
+    sc_a1, sc_a2, sc_b1, sc_b2 = scene1_1, scene1_2, scene2_1, scene2_2
+    sc_dirty = false
+    sc_changed = true
+    local n, ns, nx = 0, 0, 0
+    for ri = 1, registry_count do
+        local item = param_registry[ri]
+        local p = item.name
+        local vA, vB
+        if item.t2 then
+            vA = scene2_1[p] or scene1_1[p]
+            vB = scene2_2[p] or scene1_2[p]
+        else
+            vA = scene1_1[p] or scene2_1[p]
+            vB = scene1_2[p] or scene2_2[p]
+        end
+        item.vA, item.vB = vA, vB
+        local is_moving = item.obj ~= nil and (vA ~= vB) and not (vA == nil and vB == nil)
+        item.moving = is_moving
+        if is_moving then
+            n = n + 1
+            moving[n] = item
+            if vA ~= nil and vB ~= nil and not item.is_pitch then
+                ns = ns + 1
+                simple[ns] = item
+            else
+                nx = nx + 1
+                special[nx] = item
+            end
+        end
+    end
+    for i = n + 1, #moving do moving[i] = nil end
+    for i = ns + 1, #simple do simple[i] = nil end
+    for i = nx + 1, #special do special[i] = nil end
+    moving_count, simple_count, special_count = n, ns, nx
+    local la = (scene1_1.lfo_data or scene2_1.lfo_data) or EMPTY
+    local lb = (scene1_2.lfo_data or scene2_2.lfo_data) or EMPTY
+    local c = 0
+    for i = 1, 16 do
+        local a, b = la[i], lb[i]
+        if (a and a.enabled) or (b and b.enabled) then c = c + 1 end
+    end
+    sc_lfo_count = c
+    for k in pairs(entry_by_target) do entry_by_target[k] = nil end
+    local ec = 0
+    for side = 1, 2 do
+        local ld = (side == 1) and la or lb
+        for i = 1, 16 do
+            local e = ld[i]
+            if e and e.enabled and type(e.target) == "number"
+               and e.target >= 1 and e.target <= sc_target_count then
+                local name = sc_targets[e.target]
+                if name and name ~= "none" then
+                    local it = entry_by_target[name]
+                    if not it and ec < ENTRY_CAP then
+                        ec = ec + 1
+                        it = entries[ec]
+                        it.target, it.tidx, it.a, it.b, it.slot = name, e.target, nil, nil, nil
+                        it.rgen = -1
+                        it.item = ITEM_BY_NAME[name]
+                        it.cA = scene1_1[name] or scene2_1[name]
+                        it.cB = scene1_2[name] or scene2_2[name]
+                        entry_by_target[name] = it
+                    end
+                    if it then
+                        if side == 1 then
+                            if not it.a then it.a = e end
+                        elseif not it.b then it.b = e end
+                    end
+                end
+            end
+        end
+    end
+    sc_entry_count = ec
+    return scene1_1, scene1_2, scene2_1, scene2_2
+end
 
 function morph.init(lfo_module, invalidate_fn, clocksync_module)
     lfo_ref = lfo_module
     clocksync_ref = clocksync_module
     invalidate_lfo_cache_ref = invalidate_fn
+    _quantize = lfo_ref.scale_utils.quantize
+    _get_range_ref = lfo_ref.get_parameter_range
+    _grain_synced = clocksync_module and clocksync_module.grain_synced or nil
+    _ready = (_get_range_ref ~= nil) and (lfo_ref.lfo_targets ~= nil)
+    _range_to_norm = lfo_ref.range_to_norm or function(_, lo, hi, v) return (v - lo) / (hi - lo) end
+    set_morph_range = lfo_ref.set_morph_range or function() end
+    sc_targets = lfo_ref.lfo_targets
+    sc_target_count = #sc_targets
     MORPH_LFO_KEYS    = lfo_ref.keys.lfo
     MORPH_TARGET_KEYS = lfo_ref.keys.target
     MORPH_SHAPE_KEYS  = lfo_ref.keys.shape
@@ -53,14 +167,26 @@ function morph.init(lfo_module, invalidate_fn, clocksync_module)
         O_DEPTH[i]  = obj_of(MORPH_DEPTH_KEYS[i])
         O_OFFSET[i] = obj_of(MORPH_OFFSET_KEYS[i])
     end
+    _scale_pobj = obj_of("pitch_quantize_scale")
     param_registry = {}
     OBJ_BY_NAME = {}
+    ITEM_BY_NAME = {}
     local n = 0
     local function reg(name, is_pitch, t2)
         local o = obj_of(name)
         OBJ_BY_NAME[name] = o
         n = n + 1
-        param_registry[n] = {name = name, is_pitch = is_pitch, t2 = t2, obj = o}
+        local eps = nil
+        local cs = o and o.controlspec
+        if cs and cs.minval and cs.maxval and (not cs.step or cs.step == 0) then
+            local span = cs.maxval - cs.minval
+            if span < 0 then span = -span end
+            if span > 0 and span < math.huge then eps = span * 5e-4 end
+        end
+        local item = {name = name, is_pitch = is_pitch, t2 = t2, obj = o, eps = eps,
+                      setfn = o and o.set or nil, skip_g = -1}
+        param_registry[n] = item
+        ITEM_BY_NAME[name] = item
     end
     for track = 1, 2 do
         for _, p in ipairs(morph.voice_params) do
@@ -69,6 +195,7 @@ function morph.init(lfo_module, invalidate_fn, clocksync_module)
     end
     for _, p in ipairs(morph.global_params) do reg(p, false, false) end
     registry_count = n
+    sc_dirty = true
 end
 
 function morph.sync_amount(v)
@@ -79,6 +206,7 @@ end
 function morph.store_scene_pair(scene)
     morph.store_scene(1, scene)
     morph.scene_data[2][scene] = morph.scene_data[1][scene]
+    sc_dirty = true
 end
 
 function morph.store_scene(track, scene)
@@ -93,6 +221,7 @@ function morph.store_scene(track, scene)
         scene_params[DENSITY_DIV_KEYS[1]] = clocksync_ref.grain_division_index(1)
         scene_params[DENSITY_DIV_KEYS[2]] = clocksync_ref.grain_division_index(2)
     end
+    sc_dirty = true
     local lfo_data = {}
     scene_params.lfo_data = lfo_data
     for i = 1, 16 do
@@ -113,6 +242,8 @@ end
 function morph.recall_scene(track, scene)
     local scene_params = morph.scene_data[track][scene]
     if not scene_params then return end
+    assign_valid = false
+    for i = 1, 16 do set_morph_range(i, nil) end
     for i = 1, 16 do O_LFO[i]:set(1) end
     for param_name, value in pairs(scene_params) do
         if param_name ~= "lfo_data" and not legacy_rev[param_name] then
@@ -170,13 +301,31 @@ end
 
 local function _morph_clamp(x) return x < -1 and -1 or (x > 1 and 1 or x) end
 
-local function _compute_offset(lfo_offset, const_val, target, t_weight, const_weight, forced_off)
+local function _by_depth(x, y)
+    if x.depth ~= y.depth then return x.depth > y.depth end
+    return x.target < y.target
+end
+
+local function _compute_offset(lfo_offset, const_val, it, t_weight, const_weight, forced_off)
+    it.rng_lo = nil
     if forced_off ~= nil then return _morph_clamp(lfo_offset * t_weight + forced_off * const_weight) end
     if not const_val then return _morph_clamp(lfo_offset * t_weight) end
-    local min_val, max_val = _get_range_ref(target)
+    local min_val, max_val = it.rlo, it.rhi
+    if it.rgen ~= _limits_gen then
+        min_val, max_val = _get_range_ref(it.target)
+        it.rlo, it.rhi, it.rgen = min_val, max_val, _limits_gen
+    end
     if not min_val or not max_val or max_val <= min_val then return _morph_clamp(lfo_offset * t_weight) end
-    const_val = const_val < min_val and min_val or (const_val > max_val and max_val or const_val)
-    local tgt_off = ((const_val - min_val) / (max_val - min_val)) * 2 - 1
+    local lo, hi = min_val, max_val
+    if const_val < min_val then
+        lo = min_val + (const_val - min_val) * const_weight
+        it.rng_lo, it.rng_hi = lo, hi
+    elseif const_val > max_val then
+        hi = max_val + (const_val - max_val) * const_weight
+        it.rng_lo, it.rng_hi = lo, hi
+    end
+    const_val = const_val < lo and lo or (const_val > hi and hi or const_val)
+    local tgt_off = _range_to_norm(it.target, lo, hi, const_val) * 2 - 1
     return _morph_clamp(lfo_offset * t_weight + tgt_off * const_weight)
 end
 
@@ -218,37 +367,36 @@ local function write_lfo_slot(slot, target, shape, freq, depth, offset)
     O_LFO[slot]:set((depth >= DEPTH_THRESHOLD or (morph.amount > 0 and morph.amount < 100)) and 2 or 1)
 end
 
-local function _interp_prebuilt(item, valA, valB)
+local function _interp_item(item, ts)
     local obj = item.obj
-    if not obj then return end
+    local vA, vB = item.vA, item.vB
     local fparam = item.name
-    if not valA and not valB then return end
-    if not valA then obj:set(valB) return end
-    if not valB then obj:set(valA) return end
-    local temp = morph.temp_scene[fparam]
+    if vA == nil then if vB ~= nil then obj:set(vB) end return end
+    if vB == nil then obj:set(vA) return end
+    local temp = ts[fparam]
     local new_val
     if not temp then
-        if valA == valB then return end
-        new_val = valA * _t_inv + valB * _t
+        if vA == vB then return end
+        new_val = vA * _t_inv + vB * _t
     else
-        local chased, done = chase_temp(temp, valA, valB)
+        local chased, done = chase_temp(temp, vA, vB)
         if done then
-            morph.temp_scene[fparam] = nil
+            ts[fparam] = nil
             obj:set(chased)
             return
         end
         new_val = chased
     end
-    if item.is_pitch then new_val = lfo_ref.scale_utils.quantize(new_val, _pitch_scale) end
-    obj:set(new_val)
+    if item.is_pitch then new_val = _quantize(new_val, _pitch_scale) end
+    item.setfn(obj, new_val)
     if temp then
-        local diff = new_val - ( (_morph_dir > 0 and valB) or valA )
-        morph.temp_scene[fparam] = (diff > -0.01 and diff < 0.01) and nil or new_val
+        local diff = new_val - ((_morph_dir > 0 and vB) or vA)
+        ts[fparam] = (diff > -0.01 and diff < 0.01) and nil or new_val
     end
 end
 
 function morph.apply()
-    if not lfo_ref or not lfo_ref.get_parameter_range or not lfo_ref.lfo_targets then return end
+    if not _ready then return end
     local current_time = util_time()
     local morph_direction = morph.amount - last_morph_amount
     if morph_direction == 0 and morph.amount > 0 and morph.amount < 100 then return end
@@ -268,131 +416,191 @@ function morph.apply()
     _t = morph.amount * 0.01
     _t_inv = 1.0 - _t
     _morph_dir = morph_direction
-    _pitch_scale = params:string("pitch_quantize_scale")
-    _get_range_ref = lfo_ref.get_parameter_range
-    _synced_density = clocksync_ref and clocksync_ref.grain_synced() or false
-    local s1 = morph.scene_data[1] or EMPTY
-    local s2 = morph.scene_data[2] or EMPTY
-    local scene1_1, scene1_2 = s1[1] or EMPTY, s1[2] or EMPTY
-    local scene2_1, scene2_2 = s2[1] or EMPTY, s2[2] or EMPTY
-    local lfo_data_A = (scene1_1.lfo_data or scene2_1.lfo_data) or EMPTY
-    local lfo_data_B = (scene1_2.lfo_data or scene2_2.lfo_data) or EMPTY
-    local lfo_targets = lfo_ref.lfo_targets
-    local lfo_targets_count = #lfo_targets
+    _pitch_scale = _scale_pobj and _scale_pobj:string() or "off"
+    _limits_gen = lfo_ref.limits_gen or 0
+    _synced_density = _grain_synced and _grain_synced() or false
+    local scene1_1, scene1_2, scene2_1, scene2_2 = resolve_scenes()
+    local has_temp = next(morph.temp_scene) ~= nil
+    local lfo_targets = sc_targets
     if _has_lfo_tracking == nil then _has_lfo_tracking = (lfo_ref.clear_param_assignment and true or false) end
-    if _has_lfo_tracking then
+    local stable = assign_valid and not sc_changed and sc_entry_count <= 16
+                   and lfo_ref.slots_gen == slots_gen_seen
+    sc_changed = false
+    if not stable then
         for i = 1, 16 do
+            local nm = nil
             if O_LFO[i]:get() == 2 then
-                local target_param = lfo_targets[O_TARGET[i]:get()]
-                if target_param and target_param ~= "none" then lfo_ref.clear_param_assignment(target_param) end
+                nm = lfo_targets[O_TARGET[i]:get()]
+                if nm == "none" then nm = nil end
             end
+            live_target[i] = nm
         end
     end
-    for k in pairs(skip_param_set) do skip_param_set[k] = nil end
-    for i = 1, 16 do used_slots[i] = nil end
-    local pending_count = 0
-    for i = 1, 16 do
-        local lfo_A, lfo_B = lfo_data_A[i], lfo_data_B[i]
-        local lfo_A_enabled, lfo_B_enabled = (lfo_A and lfo_A.enabled), (lfo_B and lfo_B.enabled)
-        if not (lfo_A_enabled or lfo_B_enabled) then
+    skip_g = skip_g + 1
+    if sc_lfo_count == 0 then
+        assign_valid = false
+        for i = 1, 16 do
+            set_morph_range(i, nil)
             local o = O_LFO[i]
             if o:get() == 2 then o:set(1) end
-            goto continue
         end
-        used_slots[i] = true
-        if lfo_A_enabled and type(lfo_A.target) ~= "number" then lfo_A_enabled = false end
-        if lfo_B_enabled and type(lfo_B.target) ~= "number" then lfo_B_enabled = false end
-        local target_A = lfo_A_enabled and lfo_targets[lfo_A.target]
-        local target_B = lfo_B_enabled and lfo_targets[lfo_B.target]
-        if lfo_A_enabled and (lfo_A.target < 1 or lfo_A.target > lfo_targets_count) then lfo_A_enabled = false; target_A = nil end
-        if lfo_B_enabled and (lfo_B.target < 1 or lfo_B.target > lfo_targets_count) then lfo_B_enabled = false; target_B = nil end
-        if not (lfo_A_enabled or lfo_B_enabled) then goto continue end
-        if lfo_A_enabled and lfo_B_enabled and target_A ~= target_B and target_B and target_B ~= "none" then
-            pending_count = pending_count + 1
-            local m = pending[pending_count]
-            m.lfo, m.param = lfo_B, target_B
-        end
-        local target = target_A or target_B
-        if not target or target == "none" then goto continue end
-        _ensure_unique_assignment(target, i)
-        skip_param_set[target] = true
-        if lfo_A_enabled and lfo_B_enabled and target_A == target_B then
-            write_lfo_slot(i, lfo_A.target,
-                _t < 0.5 and lfo_A.shape or lfo_B.shape,
-                lfo_A.freq * _t_inv + lfo_B.freq * _t,
-                lfo_A.depth * _t_inv + lfo_B.depth * _t,
-                _morph_clamp(lfo_A.offset * _t_inv + lfo_B.offset * _t))
-        elseif lfo_A_enabled and target_A == target then
-            local forced = _density_forced_off(target, scene1_2, scene2_2)
-            local const_val = scene1_2[target] or scene2_2[target]
-            local temp = forced == nil and morph.temp_scene[target]
+    else
+    local ec = sc_entry_count
+    for k = 1, ec do
+        local it = entries[k]
+        local a, b, target = it.a, it.b, it.target
+        if a and b then
+            it.tidx = a.target
+            it.rng_lo = nil
+            it.shape = _t < 0.5 and a.shape or b.shape
+            it.freq = a.freq * _t_inv + b.freq * _t
+            it.depth = a.depth * _t_inv + b.depth * _t
+            it.offset = _morph_clamp(a.offset * _t_inv + b.offset * _t)
+        elseif a then
+            local forced = _synced_density and _density_forced_off(target, scene1_2, scene2_2) or nil
+            local const_val = it.cB
+            local temp = forced == nil and has_temp and morph.temp_scene[target]
             if temp then
-                const_val = chase_temp(temp, scene1_1[target] or scene2_1[target], const_val)
+                const_val = chase_temp(temp, it.cA, const_val)
             end
-            write_lfo_slot(i, lfo_A.target, lfo_A.shape, lfo_A.freq,
-                lfo_A.depth * _t_inv,
-                _compute_offset(lfo_A.offset, const_val, target, _t_inv, _t, forced))
+            it.tidx, it.shape, it.freq = a.target, a.shape, a.freq
+            it.depth = a.depth * _t_inv
+            it.offset = _compute_offset(a.offset, const_val, it, _t_inv, _t, forced)
         else
-            local lfo_val = (lfo_B_enabled and lfo_B) or (lfo_A_enabled and lfo_A)
-            if not lfo_val then goto continue end
-            local forced = _density_forced_off(target, scene1_1, scene2_1)
-            local const_val = scene1_1[target] or scene2_1[target]
-            local temp = forced == nil and morph.temp_scene[target]
+            local forced = _synced_density and _density_forced_off(target, scene1_1, scene2_1) or nil
+            local const_val = it.cA
+            local temp = forced == nil and has_temp and morph.temp_scene[target]
             if temp then
-                const_val = chase_temp(temp, const_val, scene1_2[target] or scene2_2[target])
+                const_val = chase_temp(temp, const_val, it.cB)
             end
-            write_lfo_slot(i, lfo_val.target, lfo_val.shape, lfo_val.freq,
-                lfo_val.depth * _t,
-                _compute_offset(lfo_val.offset, const_val, target, _t, _t_inv, forced))
+            it.tidx, it.shape, it.freq = b.target, b.shape, b.freq
+            it.depth = b.depth * _t
+            it.offset = _compute_offset(b.offset, const_val, it, _t, _t_inv, forced)
         end
-        ::continue::
+        order[k] = it
     end
-    if pending_count > 0 then
-        for idx = 1, pending_count do
-            local m = pending[idx]
-            local slot
-            for i = 1, 16 do if not used_slots[i] then slot = i; used_slots[i] = true; break end end
-            if slot then
-                _ensure_unique_assignment(m.param, slot)
-                skip_param_set[m.param] = true
-                local forced = _density_forced_off(m.param, scene1_1, scene2_1)
-                local const_val = scene1_1[m.param] or scene2_1[m.param]
-                local temp = forced == nil and morph.temp_scene[m.param]
-                if temp then
-                    const_val = chase_temp(temp, const_val, scene1_2[m.param] or scene2_2[m.param])
-                end
-                write_lfo_slot(slot, m.lfo.target, m.lfo.shape, m.lfo.freq,
-                    m.lfo.depth * _t,
-                    _compute_offset(m.lfo.offset, const_val, m.param, _t, _t_inv, forced))
+    for k = ec + 1, #order do order[k] = nil end
+    if ec > 16 then table.sort(order, _by_depth) end
+    if not stable then
+        local clear_assign = _has_lfo_tracking and lfo_ref.clear_param_assignment or nil
+        for k in pairs(slot_of_target) do slot_of_target[k] = nil end
+        for i = 1, 16 do
+            slot_taken[i] = nil
+            local nm = live_target[i]
+            if nm then
+                if clear_assign then clear_assign(nm) end
+                if slot_of_target[nm] == nil then slot_of_target[nm] = i end
             end
         end
+        if ec > 16 then table.sort(order, _by_depth) end
+        for k = 1, ec do order[k].slot = nil end
+        local assign_n = ec < 16 and ec or 16
+        for k = 1, assign_n do
+            local it = order[k]
+            local cur = slot_of_target[it.target]
+            if cur and not slot_taken[cur] then
+                slot_taken[cur] = true
+                it.slot = cur
+            end
+        end
+        local next_free = 1
+        for k = 1, assign_n do
+            local it = order[k]
+            if not it.slot then
+                while next_free <= 16 and slot_taken[next_free] do next_free = next_free + 1 end
+                if next_free <= 16 then
+                    slot_taken[next_free] = true
+                    it.slot = next_free
+                end
+            end
+        end
+        for i = 1, 16 do
+            wrote[i] = nil
+            if not slot_taken[i] then
+                set_morph_range(i, nil)
+                local o = O_LFO[i]
+                if o:get() == 2 then o:set(1) end
+            end
+        end
+    end
+    for k = 1, ec do
+        local it = order[k]
+        local slot = it.slot
+        if slot then
+            if not stable then
+                _ensure_unique_assignment(it.target, slot)
+                wrote[slot] = it.target
+            end
+            local mi = it.item
+            if mi then mi.skip_g = skip_g end
+            write_lfo_slot(slot, it.tidx, it.shape, it.freq, it.depth, it.offset)
+            set_morph_range(slot, it.rng_lo, it.rng_hi)
+        end
+    end
+    assign_valid = true
+    slots_gen_seen = lfo_ref.slots_gen
     end
     if _synced_density then
         for v = 1, 2 do
-            local dkey = DENSITY_KEYS[v]
-            if not skip_param_set[dkey] then
+            local ditem = ITEM_BY_NAME[DENSITY_KEYS[v]]
+            if ditem and ditem.skip_g ~= skip_g then
                 local ddiv = DENSITY_DIV_KEYS[v]
                 local dA = scene1_1[ddiv] or scene2_1[ddiv]
                 local dB = scene1_2[ddiv] or scene2_2[ddiv]
                 local idx = _lerp_div_index(dA, dB, _t, _t_inv)
                 if idx then clocksync_ref.set_grain_div_index(v, idx) end
+                ditem.skip_g = skip_g
             end
-            skip_param_set[dkey] = true
         end
     end
-    for ri = 1, registry_count do
-        local item = param_registry[ri]
-        local p = item.name
-        if not skip_param_set[p] then
-            local sA, sB
-            if item.t2 then
-                sA = scene2_1[p] or scene1_1[p]
-                sB = scene2_2[p] or scene1_2[p]
-            else
-                sA = scene1_1[p] or scene2_1[p]
-                sB = scene1_2[p] or scene2_2[p]
+    local ts = morph.temp_scene
+    local sg = skip_g
+    local t, ti, q, ps = _t, _t_inv, _quantize, _pitch_scale
+    if has_temp then
+        for k = 1, moving_count do
+            local item = moving[k]
+            if item.skip_g ~= sg then
+                if ts[item.name] then
+                    _interp_item(item, ts)
+                else
+                    local vA, vB = item.vA, item.vB
+                    if vA == nil then
+                        item.setfn(item.obj, vB)
+                    elseif vB == nil then
+                        item.setfn(item.obj, vA)
+                    else
+                        local nv = vA * ti + vB * t
+                        if item.is_pitch then nv = q(nv, ps) end
+                        item.setfn(item.obj, nv)
+                    end
+                end
             end
-            _interp_prebuilt(item, sA, sB)
+        end
+        for name in pairs(ts) do
+            local item = ITEM_BY_NAME[name]
+            if item and not item.moving and item.obj and item.skip_g ~= sg then
+                _interp_item(item, ts)
+            end
+        end
+    else
+        for k = 1, simple_count do
+            local item = simple[k]
+            if item.skip_g ~= sg then
+                item.setfn(item.obj, item.vA * ti + item.vB * t)
+            end
+        end
+        for k = 1, special_count do
+            local item = special[k]
+            if item.skip_g ~= sg then
+                local vA, vB = item.vA, item.vB
+                if vA == nil then
+                    item.setfn(item.obj, vB)
+                elseif vB == nil then
+                    item.setfn(item.obj, vA)
+                else
+                    item.setfn(item.obj, q(vA * ti + vB * t, ps))
+                end
+            end
         end
     end
     if invalidate_lfo_cache_ref then invalidate_lfo_cache_ref() end
@@ -400,13 +608,30 @@ end
 
 function morph.capture_to_temp_scene(lfo_cache)
     if morph.amount == 0 or morph.amount == 100 then return end
+    resolve_scenes()
     local ts = morph.temp_scene
+    local t = morph.amount * 0.01
+    local t_inv = 1.0 - t
     for ri = 1, registry_count do
         local item = param_registry[ri]
         local o = item.obj
         if o then
             local p = item.name
-            if (not lfo_cache or not lfo_cache[p]) then ts[p] = o:get() end
+            if (not lfo_cache or not lfo_cache[p]) then
+                local cur = o:get()
+                local vA, vB = item.vA, item.vB
+                local expected
+                if vA == nil then expected = vB
+                elseif vB == nil then expected = vA
+                else expected = vA * t_inv + vB * t end
+                if expected == nil then
+                    ts[p] = cur
+                else
+                    local d = cur - expected
+                    local eps = item.eps or 0
+                    if d > eps or d < -eps then ts[p] = cur else ts[p] = nil end
+                end
+            end
         end
     end
 end

@@ -22,7 +22,7 @@
 -- Hold K2+K3: HPF/LPF
 -- Hold K2+K3: Add Random LFOs
 -- Hold K1+K2: Clock Sync
--- Hold K1+K3: Arp Mode 
+-- Hold K1+K3: Arp Mode
 -- Hold K1+K2+K3: Randomize Arp
 --
 --
@@ -64,7 +64,7 @@ local undo = include("lib/undo")
 local midi_input = include("lib/midi_input")
 local arp = include("lib/arp")
 local clocksync = include("lib/clocksync")
-local ctx = {lfo = lfo, arp = arp, clocksync = clocksync, waveforms = {[0] = {}}}
+local ctx = {lfo = lfo, arp = arp, clocksync = clocksync, checkpoint = undo.checkpoint, waveforms = {[0] = {}}}
 for _, m in ipairs({presets, macro, drymode, font, lfo, arp}) do m.set_context(ctx) end
 local randomize_metro = { [1] = nil, [2] = nil }
 local boot_clock = nil
@@ -1986,7 +1986,7 @@ function redraw()
       T(LEVEL.hi, 6 + left_slide, y, row.label)
     end
     local fmt = FORMAT[row.fmt_key]
-    local density_synced = (row.name == "density" and clocksync.grain_synced())
+    local density_synced = (name == "density" and clocksync.grain_synced())
     local is_size_row = (name == "size")
     local size_cap1 = is_size_row and arp.max_size_ms(1) or nil
     local size_cap2 = is_size_row and arp.max_size_ms(2) or nil
