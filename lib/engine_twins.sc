@@ -6,7 +6,7 @@ classvar pitchScales;
 *initClass {pitchScales = [[7, 12], [7, 12, 19, 24], [12], [12, 24], [1,2,3,4,5,6,7,8,9,10,11], [2,4,5,7,9,11], [2,3,5,7,8,10], [2,4,7,9], [2,4,6,8,10]];}
 *new { arg context, doneCallback; ^super.new(context, doneCallback); }
 
-readBuf { arg i, path; if(buffersL[i].notNil && buffersR[i].notNil, { if(File.exists(path), { if(normOnLoad == 1, { fork { var shm = "/dev/shm/twins_norm" ++ i ++ ".wav"; var tmp = Buffer.read(context.server, path); context.server.sync; tmp.normalize(-6.dbamp); context.server.sync; tmp.write(shm, "WAV", "float"); context.server.sync; tmp.free; this.loadSplit(i, shm); }; }, { this.loadSplit(i, path); }); }); }); }
+readBuf { arg i, path; if(buffersL[i].notNil && buffersR[i].notNil, { if(File.exists(path), { if(normOnLoad == 1, { fork { var shm = "/dev/shm/twins_norm" ++ i ++ ".wav"; var tmp = Buffer.read(context.server, path); context.server.sync; tmp.normalize(-6.dbamp); context.server.sync; tmp.write(shm, "WAV", "float"); context.server.sync; tmp.free; this.loadSplit(i, shm); 5.0.wait; File.delete(shm); }; }, { this.loadSplit(i, path); }); }); }); }
 loadSplit { arg i, path; var numChannels = SoundFile.use(path.asString(), { |f| f.numChannels }); this.sendWaveform(i, path); Buffer.readChannel(context.server, path, 0, -1, [0], { |b| var oldL = buffersL[i]; voices[i].set(\buf_l, b); drySynths[i].set(\buf_l, b); buffersL[i] = b; oldL.free; if(numChannels <= 1, { var oldR = buffersR[i]; voices[i].set(\buf_r, b, \is_stereo, 0); voiceIsStereo[i] = 0; buffersR[i] = b; if(oldR !== oldL) { oldR.free }; voices[i].set(\t_reset_pos, 1); voices[i].run(true); drySynths[i].set(\buf_r, b, \t_reset_pos, 1); voiceRunning[i] = true; this.updateDryRun(i); }, { Buffer.readChannel(context.server, path, 0, -1, [1], { |b2| var oldR = buffersR[i]; voices[i].set(\buf_r, b2, \is_stereo, 1); voiceIsStereo[i] = 1; buffersR[i] = b2; if(oldR !== oldL) { oldR.free }; voices[i].set(\t_reset_pos, 1); voices[i].run(true); drySynths[i].set(\buf_r, b2, \t_reset_pos, 1); voiceRunning[i] = true; this.updateDryRun(i); }); }); }); }
 
 sendWaveform { arg i, path; fork { var sf = SoundFile.openRead(path.asString); if(sf.notNil, { var cols = 30, ch = max(sf.numChannels, 1), frames = sf.numFrames, sr = sf.sampleRate; if(frames > 0, { var block = min(2048, max(1, frames div: cols)); var peaks = Array.fill(cols, { arg c; var raw = FloatArray.newClear(block * ch); sf.seek(frames * c div: cols, 0); sf.readData(raw); if(raw.size > 0, { raw.abs.maxItem }, { 0 }); }); sf.close; nornsAddr.sendMsg(*(["/twins/waveform", i] ++ peaks)); if(sr > 0, { nornsAddr.sendMsg("/twins/duration", i, frames / sr) }); }, { sf.close; }); }); }; }
@@ -30,7 +30,7 @@ alloc {
         liveRecPosBuses = Array.fill(2, { Bus.control(context.server, 1) });
         liveRecPosBuses.do({ |b| b.set(-1.0); });
 
-        bufSine = Buffer.alloc(context.server, 1024 * 16, 1);
+        bufSine = Buffer.alloc(context.server, 4096, 1);
         bufSine.sine2([2], [0.5], false);
         wobbleBuffer = Buffer.alloc(context.server, context.server.sampleRate * 5, 2);
         glitchBuffer = Buffer.alloc(context.server, context.server.sampleRate * 1, 2);
@@ -121,7 +121,7 @@ alloc {
                 var pan_h = (pan_hi - pan_lo) * 0.5;
                 var trig_l = TDelay.kr(grain_trig * (volumes[i] > 0), haasOffsets[i] * spread);
                 var harmonic_pan = (pan + ((pan_c + (pan_h * pan_dist_l)) * (1 - pan.abs))).clip(-1.0, 1.0);
-                GrainBuf.ar(numChannels: 2, trigger: trig_l, dur: grain_size * size_mults[i], sndbuf: buf_l, rate: grain_pitch * harmonic * grain_direction, pos: buf_pos + jitter_sig, interp: 4, pan: harmonic_pan, envbufnum: envBuf, mul: volumes[i] * grain_amp_rand);
+                GrainBuf.ar(numChannels: 2, trigger: trig_l, dur: grain_size * size_mults[i], sndbuf: buf_l, rate: grain_pitch * harmonic * grain_direction, pos: buf_pos + jitter_sig, interp: 2, pan: harmonic_pan, envbufnum: envBuf, mul: volumes[i] * grain_amp_rand);
             };
             r_harmonics = harmonics.collect { |harmonic, i|
                 var detuneRatio = ((detuneCents[i] * spread) / 1200).midiratio;
@@ -133,7 +133,7 @@ alloc {
                 var pan_c = (pan_lo + pan_hi) * 0.5;
                 var pan_h = (pan_hi - pan_lo) * 0.5;
                 var harmonic_pan = (pan + ((pan_c + (pan_h * pan_dist_r)) * (1 - pan.abs))).clip(-1.0, 1.0);
-                GrainBuf.ar(numChannels: 2, trigger: active_trig, dur: grain_size * size_mults[i], sndbuf: buf_r, rate: grain_pitch * harmonic * grain_direction * detuneRatio, pos: buf_pos + jitter_sig, interp: 4, pan: harmonic_pan, envbufnum: envBuf, mul: volumes[i] * grain_amp_rand);
+                GrainBuf.ar(numChannels: 2, trigger: active_trig, dur: grain_size * size_mults[i], sndbuf: buf_r, rate: grain_pitch * harmonic * grain_direction * detuneRatio, pos: buf_pos + jitter_sig, interp: 2, pan: harmonic_pan, envbufnum: envBuf, mul: volumes[i] * grain_amp_rand);
             };
             granular_sig = Mix.ar(l_harmonics) + Mix.ar(r_harmonics);
             sig_mix = (granular_sig * granular_gain).tanh;
@@ -293,10 +293,10 @@ alloc {
         SynthDef(\liveInputRecorder, {
             arg bufL, bufR, isMono=0, mix, voice, recPosBus;
             var in = SoundIn.ar([0, 1]);
-            var bufFrames = BufFrames.kr(bufL);
+            var bufFrames = BufFrames.ir(bufL);
             var phasor = Phasor.ar(0, 1, 0, bufFrames);
-            var oldL = BufRd.ar(1, bufL, phasor);
-            var oldR = BufRd.ar(1, bufR, phasor);
+            var oldL = BufRd.ar(1, bufL, phasor, interpolation: 1);
+            var oldR = BufRd.ar(1, bufR, phasor, interpolation: 1);
             var mixedL, mixedR, normPos, tick;
             in = Select.ar(isMono, [in, [Mix.ar(in), Mix.ar(in)]]);
             mixedL = XFade2.ar(oldL, in[0], mix * 2 - 1);
@@ -365,8 +365,8 @@ alloc {
             var actualMix = mix * Select.kr(mod_mix, [1.0, LFNoise1.kr(0.25).range(0.0, 1.0)]);
             var modTime;
             pit = LPF.ar((pit + fbClean), lowpass1);
-            modTime = fbDelay1 + SinOsc.ar([0.07, 0.09], [0, 0.5pi], 0.5 * 0.004);
-            LocalOut.ar(DelayC.ar(pit, 1.0, modTime.clip(0.001, 1.0)));
+            modTime = fbDelay1 + SinOsc.kr([0.07, 0.09], [0, 0.5pi], 0.5 * 0.004);
+            LocalOut.ar(DelayC.ar(pit, 1.0, modTime.clip(0.001, 1.0)).softclip);
             ReplaceOut.ar(bus, input + (pit * actualMix));
         }).add;
 
@@ -396,16 +396,14 @@ alloc {
         SynthDef(\dimension, {
             arg bus, mix=0;
             var sig = In.ar(bus, 2);
-            var wet, depth = 0.2, rate = 0.6, predelay = 0.025, voice1, voice2, voice3, voice4, mid, side, wide;
-            var chorus = { |input, delayTime, rate, depth| var mod = SinOsc.kr(rate, [0, pi/2, pi, 3*pi/2]).range(-1, 1) * depth; var delays = delayTime + (mod * 0.02); DelayC.ar(input, 0.05, delays); };
+            var wet, depth = 0.2, rate = 0.6, predelay = 0.025, voice1, voice2, voice3, voice4, wide;
+            var chorus = { |input, delayTime, rate, depth| var mod = SinOsc.kr(rate, [0, pi/2]).range(-1, 1) * depth; var delays = delayTime + (mod * 0.02); DelayC.ar(input, 0.05, delays); };
             voice1 = chorus.(sig, predelay * 0.5, rate * 0.99, depth * 0.8);
             voice2 = chorus.(sig, predelay * 0.65, rate * 1.01, depth * 0.9);
             voice3 = chorus.(sig, predelay * 0.85, rate * 0.98, depth * 1.0);
             voice4 = chorus.(sig, predelay * 1.05, rate * 1.02, depth * 0.7);
             wet = [voice1[0] * 0.25 + voice2[0] * 0.25 + voice3[1] * 0.25 + voice4[1] * 0.25, voice1[1] * 0.25 + voice2[1] * 0.25 + voice3[0] * 0.25 + voice4[0] * 0.25];
-            mid = (wet[0] + wet[1]);
-            side = (wet[0] - wet[1]);
-            wide = [mid + side, mid - side] * 4;
+            wide = wet * 8;
             ReplaceOut.ar(bus, XFade2.ar(sig, wide, mix * 2 - 1));
         }).add;
 
@@ -423,9 +421,9 @@ alloc {
             wow = wobble_amp * SinOsc.kr(wobble_rpm/60, mul: 0.2);
             flutter = flutter_amp * SinOsc.kr(flutter_freq + LFNoise2.kr(flutter_var), mul: 0.1);
             rate = 1 + (wow + flutter);
-            pw = Phasor.ar(0, BufRateScale.kr(wobbleBuffer), 0, BufFrames.kr(wobbleBuffer));
+            pw = Phasor.ar(0, BufRateScale.ir(wobbleBuffer), 0, BufFrames.ir(wobbleBuffer));
             BufWr.ar(dry, wobbleBuffer, pw);
-            pr = DelayL.ar(Phasor.ar(0, BufRateScale.kr(wobbleBuffer)*rate, 0, BufFrames.kr(wobbleBuffer)), 0.2, 0.2);
+            pr = DelayL.ar(Phasor.ar(0, BufRateScale.ir(wobbleBuffer)*rate, 0, BufFrames.ir(wobbleBuffer)), 0.2, 0.2);
             wet = BufRd.ar(2, wobbleBuffer, pr, interpolation: 4);
             ReplaceOut.ar(bus, XFade2.ar(dry, wet, mix * 2 - 1));
         }).add;
@@ -443,10 +441,10 @@ alloc {
             rawTrigOn = Dust.kr(probability * glitch_ratio);
             trigOn = rawTrigOn * (1 - isGlitching_fb);
             capturePos = Latch.kr(writePos, trigOn);
-            chunkLength = Demand.kr(trigOn, 0, Dwhite(minLength * sr, maxLength * sr));
-            stutterCount = Demand.kr(trigOn, 0, Diwhite(2, maxStutters));
-            isReverse = Demand.kr(trigOn, 0, Dwhite(0, 1)) < reverse;
-            pitchShift = 1.0 + ((Demand.kr(trigOn, 0, Dwhite(0, 1)) < pitch) * (Select.kr(Demand.kr(trigOn, 0, Diwhite(0, 3)), [0.707, 0.841, 1.189, 1.414]) - 1.0));
+            chunkLength = TRand.kr(minLength * sr, maxLength * sr, trigOn);
+            stutterCount = TIRand.kr(2, maxStutters, trigOn);
+            isReverse = TRand.kr(0, 1, trigOn) < reverse;
+            pitchShift = 1.0 + ((TRand.kr(0, 1, trigOn) < pitch) * (Select.kr(TIRand.kr(0, 3, trigOn), [0.707, 0.841, 1.189, 1.414]) - 1.0));
             chunkStart = (capturePos - chunkLength).wrap(0, bufFrames - 1);
             autoOff = TDelay.kr(trigOn, stutterCount * (chunkLength / sr) / pitchShift);
             earlyOff = Dust.kr(probability * (1.0 - glitch_ratio).max(0.001)) * isGlitching_fb;
@@ -506,7 +504,7 @@ alloc {
         SynthDef(\haas, {
             arg bus;
             var sig = In.ar(bus, 2);
-            var out = [sig[0], DelayC.ar(sig[1], 0.05, 0.02)];
+            var out = [sig[0], DelayN.ar(sig[1], 0.05, 0.02)];
             ReplaceOut.ar(bus, out);
         }).add;
 
@@ -720,6 +718,6 @@ free {
         buffersL.do({ arg b; if(b.notNil, { b.free }); });
         buffersR.do({ arg b, i; if(b.notNil && (b !== buffersL[i]), { b.free }); });
         [liveInputBuffersL, liveInputBuffersR, liveRecPosBuses, pitchScaleBuffers, grainEnvs, voiceBuses, voiceAmpBuses].do({ arg col; col.do({ arg b; if(b.notNil, { b.free }); }); });
-        [o, o_rec, o_voice_peak, o_delayduck, wobbleBuffer, glitchBuffer, silentBuffer, bufSine, bitcrushEffect, shimmerEffect, analogDriveEffect, resonatorEffect, wavefoldEffect, ringmodEffect, tapeEffect, chewEffect, widthEffect, monobassEffect, lossdegradeEffect, sineEffect, wobbleEffect, glitchEffect, delayEffect, rotateEffect, haasEffect, dimensionEffect, dryGroup].do({ arg x; if(x.notNil, { x.free }); });
+        [o, o_rec, o_voice_peak, o_delayduck, wobbleBuffer, glitchBuffer, silentBuffer, bufSine, bitcrushEffect, shimmerEffect, analogDriveEffect, resonatorEffect, wavefoldEffect, ringmodEffect, tapeEffect, chewEffect, widthEffect, monobassEffect, lossdegradeEffect, sineEffect, wobbleEffect, glitchEffect, delayEffect, rotateEffect, haasEffect, dimensionEffect, dryGroup, pg].do({ arg x; if(x.notNil, { x.free }); });
     }
 }

@@ -2,6 +2,7 @@ local morph = {}
 morph.voice_params = {"speed","pitch","jitter","size","density","spread","pan","seek","cutoff","hpf","lpf_gain","granular_gain","subharmonics_3","subharmonics_2","subharmonics_1","overtones_1","overtones_2","smoothbass","ratcheting_prob","size_variation","amp_randomize","direction_mod","density_mod_amt","pitch_random_scale_type","pitch_random_prob","pitch_mode","probability","eq_low_gain","eq_mid_gain","eq_high_gain","eq_tilt","env_select","volume"}
 morph.global_params = {"delay_mix","delay_time","delay_feedback","delay_lowpass","delay_highpass","wiggle_depth","wiggle_rate","stereo","reverb_mix","rv_predelay","rv_lffc","rv_lowtime","rv_midtime","rv_hfdamp","lock_shimmer","tape_mix","sine_drive_wet","wobble_mix","wobble_amp","wobble_rpm","flutter_amp","flutter_freq","flutter_var","chew_depth","chew_freq","chew_variance","lossdegrade_mix","Width","dimension_mix","haas","rspeed","monobass_mix","bitcrush_mix","bitcrush_rate","bitcrush_bits","evolution","evolution_range","evolution_rate","lock_eq","lock_tape","lock_reverb","lock_delay","global_lfo_freq_scale","global_lfo_depth_scale","pitch_quantize_scale","pitch_lag","shimmer_mix1","shimmer_oct1","pitchv1","lowpass1","hipass1","fbDelay1","fb1", "glitch_probability", "glitch_ratio", "glitch_mix", "glitch_min_length", "glitch_max_length", "glitch_reverse", "glitch_pitch", "sine_lfos", "shimmer_mod1", "bitcrush_mod", "clock_lfo_div", "clock_lfo_div2", "clock_sync_delay_div", "clock_reseek_div", "resonator_mix", "resonator_decay", "resonator_root", "resonator_tone", "wavefold_mix", "wavefold_drive", "wavefold_sym", "ringmod_mix", "ringmod_rate", "delay_duck", "analogdrive_mix", "analogdrive_drive", "analogdrive_tone", "analogdrive_mode", "analogdrive_mod" }
 local param_registry = {}
+local registry_count = 0
 local legacy_rev = {rev_pre_delay=true, rev_lf_fc=true, rev_low_time=true, rev_mid_time=true, rev_hf_damping=true}
 morph.amount = 0
 morph.scene_mode = "off"
@@ -67,6 +68,7 @@ function morph.init(lfo_module, invalidate_fn, clocksync_module)
         end
     end
     for _, p in ipairs(morph.global_params) do reg(p, false, false) end
+    registry_count = n
 end
 
 function morph.sync_amount(v)
@@ -74,10 +76,16 @@ function morph.sync_amount(v)
     last_morph_amount = v
 end
 
+function morph.store_scene_pair(scene)
+    morph.store_scene(1, scene)
+    morph.scene_data[2][scene] = morph.scene_data[1][scene]
+end
+
 function morph.store_scene(track, scene)
     morph.scene_data[track][scene] = {}
     local scene_params = morph.scene_data[track][scene]
-    for _, item in ipairs(param_registry) do
+    for ri = 1, registry_count do
+        local item = param_registry[ri]
         local o = item.obj
         if o then scene_params[item.name] = o:get() end
     end
@@ -243,17 +251,20 @@ function morph.apply()
     if not lfo_ref or not lfo_ref.get_parameter_range or not lfo_ref.lfo_targets then return end
     local current_time = util_time()
     local morph_direction = morph.amount - last_morph_amount
-    last_morph_amount = morph.amount
     if morph_direction == 0 and morph.amount > 0 and morph.amount < 100 then return end
     if morph.amount == 0 or morph.amount == 100 then
+        last_morph_amount = morph.amount
         local scene = morph.amount == 0 and 1 or 2
-        for track = 1, 2 do morph.recall_scene(track, scene) end
+        local sd = morph.scene_data
+        local src = (sd[1] and sd[1][scene] and next(sd[1][scene]) ~= nil) and 1 or 2
+        morph.recall_scene(src, scene)
         local ts = morph.temp_scene
         for k in pairs(ts) do ts[k] = nil end
         return
     end
     if (current_time - last_morph_update_time) < MORPH_THROTTLE_INTERVAL then return end
     last_morph_update_time = current_time
+    last_morph_amount = morph.amount
     _t = morph.amount * 0.01
     _t_inv = 1.0 - _t
     _morph_dir = morph_direction
@@ -289,10 +300,13 @@ function morph.apply()
             goto continue
         end
         used_slots[i] = true
-        local target_A = lfo_A_enabled and lfo_A.target and lfo_targets[lfo_A.target]
-        local target_B = lfo_B_enabled and lfo_B.target and lfo_targets[lfo_B.target]
+        if lfo_A_enabled and type(lfo_A.target) ~= "number" then lfo_A_enabled = false end
+        if lfo_B_enabled and type(lfo_B.target) ~= "number" then lfo_B_enabled = false end
+        local target_A = lfo_A_enabled and lfo_targets[lfo_A.target]
+        local target_B = lfo_B_enabled and lfo_targets[lfo_B.target]
         if lfo_A_enabled and (lfo_A.target < 1 or lfo_A.target > lfo_targets_count) then lfo_A_enabled = false; target_A = nil end
         if lfo_B_enabled and (lfo_B.target < 1 or lfo_B.target > lfo_targets_count) then lfo_B_enabled = false; target_B = nil end
+        if not (lfo_A_enabled or lfo_B_enabled) then goto continue end
         if lfo_A_enabled and lfo_B_enabled and target_A ~= target_B and target_B and target_B ~= "none" then
             pending_count = pending_count + 1
             local m = pending[pending_count]
@@ -366,7 +380,8 @@ function morph.apply()
             skip_param_set[dkey] = true
         end
     end
-    for _, item in ipairs(param_registry) do
+    for ri = 1, registry_count do
+        local item = param_registry[ri]
         local p = item.name
         if not skip_param_set[p] then
             local sA, sB
@@ -386,7 +401,8 @@ end
 function morph.capture_to_temp_scene(lfo_cache)
     if morph.amount == 0 or morph.amount == 100 then return end
     local ts = morph.temp_scene
-    for _, item in ipairs(param_registry) do
+    for ri = 1, registry_count do
+        local item = param_registry[ri]
         local o = item.obj
         if o then
             local p = item.name
@@ -399,14 +415,14 @@ function morph.auto_save_to_scene()
     if next(morph.temp_scene) ~= nil then return end
     local scene = (morph.amount == 0 and 1) or (morph.amount == 100 and 2)
     if scene then
-        for track = 1, 2 do morph.store_scene(track, scene) end
+        morph.store_scene_pair(scene)
         local ts = morph.temp_scene
         for k in pairs(ts) do ts[k] = nil end
     end
 end
 
 function morph.initialize_scenes_with_current_params()
-    for track = 1, 2 do for scene = 1, 2 do morph.store_scene(track, scene) end end
+    for scene = 1, 2 do morph.store_scene_pair(scene) end
 end
 
 return morph

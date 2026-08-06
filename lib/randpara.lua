@@ -45,9 +45,9 @@ local PARAM_SPECS = {
   ["fbDelay1"]            = {0.5, {0.02,1},  "shimmer"},
   ["bitcrush_rate"]       = {5500,{2000,5500},"bitcrush"},
   ["bitcrush_bits"]       = {2,   {10,16},   "bitcrush"},
-  ["1eq_low_gain"]        = {0.4, {0,1},     "eq"}, ["2eq_low_gain"]    = {0.4, {0,1},"eq"},
-  ["1eq_mid_gain"]        = {0.4, {0,1},     "eq"}, ["2eq_mid_gain"]    = {0.4, {0,1},"eq"},
-  ["1eq_high_gain"]       = {0.4, {0,1},     "eq"}, ["2eq_high_gain"]   = {0.4, {0,1},"eq"},
+  ["1eq_low_gain"]        = {0.4, {-1,1},    "eq"}, ["2eq_low_gain"]    = {0.4, {-1,1},"eq"},
+  ["1eq_mid_gain"]        = {0.4, {-1,1},    "eq"}, ["2eq_mid_gain"]    = {0.4, {-1,1},"eq"},
+  ["1eq_high_gain"]       = {0.4, {-1,1},    "eq"}, ["2eq_high_gain"]   = {0.4, {-1,1},"eq"},
   ["glitch_mix"]          = {40,  {0,100},   "glitch"},
   ["glitch_probability"]  = {5,   {0.1,20},  "glitch"},
   ["glitch_min_length"]   = {100, {10,150},  "glitch"},
@@ -84,6 +84,8 @@ local evo_gid = {}
 local evo_count = 0
 local evo_index_of = {}
 local lock_pobj = {}
+local lock_pobj_by_id = {}
+local evo_states = {}
 local sym_pobj
 
 local function set_group_evolution(group, enabled)
@@ -127,6 +129,9 @@ local function build_evolvable_params_cache()
     local li = lk[lock]
     lock_pobj[group] = li and pp[li] or nil
   end
+  for g = 1, NGROUPS do lock_pobj_by_id[g] = lock_pobj[GROUP_IDS[g]] end
+  for i = 1, n do evo_states[i] = evolution_states[evo_names[i]] end
+  for i = n + 1, #evo_states do evo_states[i] = nil end
   local si = lk["symmetry"]
   sym_pobj = si and pp[si] or nil
   for name in pairs(evolution_states) do
@@ -147,7 +152,7 @@ local function recenter(state, v)
   state.velocity      = 0
 end
 
-local function init_evolution_state(name, cur)
+local function init_evolution_state(name, cur, slot)
   local spec = PARAM_SPECS[name]
   local max_range = spec and spec[1] or 1
   local bounds = spec and spec[2]
@@ -162,6 +167,7 @@ local function init_evolution_state(name, cur)
     range_base           = max_range}
   set_drift_range(state, max_range * evolution_range)
   evolution_states[name] = state
+  if slot then evo_states[slot] = state end
   return state
 end
 
@@ -203,7 +209,7 @@ local function evolution_update()
   local states   = evolution_states
   local symmetry = sym_pobj ~= nil and sym_pobj:get() == 1
   for g = 1, NGROUPS do
-    local obj = lock_pobj[GROUP_IDS[g]]
+    local obj = lock_pobj_by_id[g]
     evo_locked_by_id[g] = obj ~= nil and obj:get() == 2
   end
   evo_gen = evo_gen + 1
@@ -211,26 +217,30 @@ local function evolution_update()
   for i = 1, n do
     local gid = evo_gid[i]
     if evo_updated[i] ~= gen and not (gid ~= 0 and evo_locked_by_id[gid]) then
-      local name  = evo_names[i]
       local obj   = evo_pobjs[i]
       local cur   = obj:get()
-      local state = states[name]
+      local state = evo_states[i]
       if not state then
-        state = init_evolution_state(name, cur)
+        state = init_evolution_state(evo_names[i], cur, i)
       elseif state.last_set ~= nil and cur ~= state.last_set then
         recenter(state, cur)
       end
-      obj:set(evolve_parameter(state))
-      local set_value = obj:get()
+      local nv = evolve_parameter(state)
+      local set_value
+      if nv ~= cur then
+        obj:set(nv)
+        set_value = obj:get()
+      else
+        set_value = cur
+      end
       state.last_set = set_value
       evo_updated[i] = gen
       local mi = evo_mirror_idx[i]
       if symmetry and mi and evo_updated[mi] ~= gen then
         local mobj  = evo_pobjs[mi]
-        local mname = evo_names[mi]
-        local ms = states[mname] or init_evolution_state(mname, set_value)
+        local ms = evo_states[mi] or init_evolution_state(evo_names[mi], set_value, mi)
         recenter(ms, set_value)
-        mobj:set(set_value)
+        if mobj:get() ~= set_value then mobj:set(set_value) end
         ms.last_set = mobj:get()
         evo_updated[mi] = gen
       end

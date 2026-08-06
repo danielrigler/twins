@@ -33,6 +33,8 @@ local DIV = {}
 for i = 1, NDIV do DIV[DIVISIONS[i].label] = i end
 local DIV_BEATS = {}
 for i = 1, NDIV do DIV_BEATS[i] = DIVISIONS[i].beats end
+local LOG_DIV_BEATS = {}
+for i = 1, NDIV do LOG_DIV_BEATS[i] = math.log(DIVISIONS[i].beats) end
 local DIV_RAND_MIN, DIV_RAND_MAX = DIV["1/2"], DIV["1/32"]
 local DIV_RAND_SPAN = DIV_RAND_MAX - DIV_RAND_MIN
 local function norm_of(idx) return clamp((idx - DIV_RAND_MIN) / DIV_RAND_SPAN, 0, 1) end
@@ -225,12 +227,12 @@ end
 
 function clocksync.div_index_for_density(hz)
   if not enabled or not hz or hz <= 0 then return nil end
-  local t = t60()
   local log, abs = math.log, math.abs
+  local log_t = log(t60())
   local target = log(clamp(hz, 0.1, 250))
   local best_idx, best_dist = 1, math.huge
   for i = 1, NDIV do
-    local dist = abs(log(t / DIV_BEATS[i]) - target)
+    local dist = abs(log_t - LOG_DIV_BEATS[i] - target)
     if dist < best_dist then best_dist = dist; best_idx = i end
   end
   return best_idx
@@ -262,7 +264,7 @@ function clocksync.init(opts)
   lfo_div_beats[2] = DIVISIONS[params:get("clock_lfo_div2")].beats
   reseek_beats = DIVISIONS[params:get("clock_reseek_div")].beats
   reseek_enabled = params:get("clock_reseek") == 2
-  if params:get("clock_sync") == 2 then params:set("clock_sync", 2) end
+  if params:get("clock_sync") == 2 then params:lookup_param("clock_sync"):bang() end
   refresh_reseek()
 end
 

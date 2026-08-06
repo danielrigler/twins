@@ -47,7 +47,21 @@ local function cancel_clock(c)
     return nil
 end
 local function cancel_rename_clock()  rename_clock  = cancel_clock(rename_clock)  end
-local function cancel_loading_clock() loading_clock = cancel_clock(loading_clock) end
+local held_output_level = nil
+local function restore_output_level()
+    if held_output_level ~= nil and params.lookup["output_level"] then
+        params:set("output_level", held_output_level)
+    end
+    held_output_level = nil
+end
+local function cancel_loading_clock()
+    local was = loading_clock
+    loading_clock = cancel_clock(loading_clock)
+    if was then
+        _G.preset_loading = false
+        restore_output_level()
+    end
+end
 
 local function rtrim(s) return s:match("^(.-)%s*$") or s end
 
@@ -260,14 +274,13 @@ function presets.load_complete_preset(name, scene_data, update_pan, audio_active
     local ok, data = pcall(chunk)
     if not ok or not data then print("✗ Parse error: " .. (data or "?")); return false end
     if data.version and data.version > PRESET_VERSION then print("⚠ Newer preset version") end
-    local saved_output_level
+    cancel_loading_clock()
     if params.lookup["output_level"] then
-        saved_output_level = params:get("output_level")
+        if held_output_level == nil then held_output_level = params:get("output_level") end
         params:set("output_level", -math.huge)
     end
     for i = 1, 2 do if params.lookup[i .. "volume"] then params:set(i .. "volume", -70) end end
     _G.preset_loading = true
-    cancel_loading_clock()
     loading_clock = clock.run(function()
         if params.lookup["unload_all"] then params:set("unload_all", 1); clock.sleep(0.1) end
         for _, k in ipairs(LFO_KEYS) do if params.lookup[k] then params:set(k, 1) end end
@@ -309,7 +322,7 @@ function presets.load_complete_preset(name, scene_data, update_pan, audio_active
             _G.master_vol_diff = params:get("1volume") - params:get("2volume")
         end
         clock.sleep(0.4)
-        if saved_output_level ~= nil and params.lookup["output_level"] then params:set("output_level", saved_output_level) end
+        restore_output_level()
         restore_clock_settings(data.clock)
         redraw()
         print("✓ Loaded: " .. name)
@@ -414,11 +427,22 @@ local function swap_preset_numbers(idx_a, idx_b)
     local na, wa = parse_preset_name(name_a)
     local nb, wb = parse_preset_name(name_b)
     if not (na and nb and wa and wb) then return nil end
+    if na == nb then return nil end
     local dir   = PRESETS_PATH .. "/"
     local new_a = fmt_name(nb, wa)
-    os.rename(dir .. name_a .. ".lua", dir .. new_a .. ".lua")
-    os.rename(dir .. name_b .. ".lua", dir .. fmt_name(na, wb) .. ".lua")
-    return new_a
+    local new_b = fmt_name(na, wb)
+    if new_a == name_b or new_b == name_a then
+        local tmp = dir .. "__twins_swap_tmp.lua"
+        os.rename(dir .. name_a .. ".lua", tmp)
+        os.rename(dir .. name_b .. ".lua", dir .. new_b .. ".lua")
+        os.rename(tmp, dir .. new_a .. ".lua")
+    else
+        os.rename(dir .. name_a .. ".lua", dir .. new_a .. ".lua")
+        os.rename(dir .. name_b .. ".lua", dir .. new_b .. ".lua")
+    end
+    local ma, mb = preset_mtimes[name_a], preset_mtimes[name_b]
+    preset_mtimes[new_a], preset_mtimes[new_b] = ma, mb
+    return new_a, new_b
 end
 
 local function draw_rename_manual(conf)
@@ -623,12 +647,12 @@ function presets.menu_enc(n, d)
         if presets.k2_mode == "move" then
             local neighbor = presets.selected_index + (d > 0 and 1 or -1)
             if neighbor >= 1 and neighbor <= #presets.preset_list then
-                local moved = swap_preset_numbers(presets.selected_index, neighbor)
-                presets.preset_list = presets.list_presets()
+                local from = presets.selected_index
+                local moved, other = swap_preset_numbers(from, neighbor)
                 if moved then
-                    for i, name in ipairs(presets.preset_list) do
-                        if name == moved then presets.selected_index = i; break end
-                    end
+                    presets.preset_list[from]     = other
+                    presets.preset_list[neighbor] = moved
+                    presets.selected_index        = neighbor
                 end
             end
         else

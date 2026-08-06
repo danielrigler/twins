@@ -26,18 +26,21 @@ font.micro_font = {
   U = {{1,0,1},{1,0,1},{1,1,1}}
 }
 
+local micro_font_by_byte = {}
+for ch, glyph in pairs(font.micro_font) do micro_font_by_byte[ch:byte()] = glyph end
+
 local function plot_text(plot, x, y, text, level)
   local cursor_x = x
+  local col_levels = type(level) == "table" and level or nil
+  local col_last = col_levels and col_levels[#col_levels] or nil
   for i = 1, #text do
-    local char  = text:sub(i, i)
-    local glyph = font.micro_font[char]
+    local glyph = micro_font_by_byte[text:byte(i)]
     if glyph then
       local w = #glyph[1]
-      local col_levels = type(level) == "table" and level or nil
       for row = 1, 3 do
         for col = 1, w do
           if glyph[row][col] == 1 then
-            local lvl = col_levels and (col_levels[col] or col_levels[#col_levels]) or level
+            local lvl = col_levels and (col_levels[col] or col_last) or level
             plot(lvl or 1, cursor_x + col - 1, y + row - 1)
           end
         end
@@ -156,7 +159,8 @@ local function stereo_intensity(cache)
   local dim = cache.dimension_mix / 100
   local haas_val = cache.haas == 2 and (BINARY_ON_INTENSITY / 100) or 0
   local rspeed_val = cache.rspeed
-  local maxv = math.max(width_dev, dim, haas_val, rspeed_val)
+  local mb = cache.monobass_mix == 2 and (BINARY_ON_INTENSITY / 100) or 0
+  local maxv = math.max(width_dev, dim, haas_val, rspeed_val, mb)
   return maxv * 100
 end
 
@@ -224,8 +228,8 @@ local function column_gradient(peak)
   return _gradient
 end
 
-local function refresh_draw_caches()
-  local phase = (util.time() * 2) % 1
+local function refresh_draw_caches(now)
+  local phase = (now * 2) % 1
   _blink_level = phase < 0.5 and 4 or 1
   for _, spec in ipairs(FX_SPECS) do
     if spec.lock then _lock_cache[spec.lock] = is_locked(spec.lock) end
@@ -248,7 +252,7 @@ function font.draw_fx_status_bucketed(P_func)
   if now - _last_update >= _update_interval then
     _last_update = now
     _draw_now = now
-    refresh_draw_caches()
+    refresh_draw_caches(now)
     _collect_n = 0
     local x = 7
     for i = 1, #FX_SPECS do

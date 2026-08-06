@@ -8,6 +8,16 @@ local mirror_param_name = utils.mirror_param_name
 local assigned_params = {}
 local lfo_paused = false
 local saved_shapes = {}
+local lfo_metro = nil
+local lfo_metro_running = false
+local active_count_ref = 0
+local function update_metro_run()
+    if not lfo_metro then return end
+    local want = (active_count_ref > 0) and not lfo_paused
+    if want == lfo_metro_running then return end
+    lfo_metro_running = want
+    if want then lfo_metro:start() else pcall(function() lfo_metro:stop() end) end
+end
 lfo.sine_all = false
 local global_depth_scale = 1
 function lfo.set_global_depth_scale(v) global_depth_scale = v or 1 end
@@ -63,10 +73,10 @@ end
 local MusicUtil = require("musicutil")
 local scale_array_cache = {}
 local snap_lut_cache = {}
+local SCALE_ALIASES = {["major pent."] = "major pentatonic", ["minor pent."] = "minor pentatonic"}
 local function normalize_scale_name(name)
     if name == "none" or name == "off" then return "none" end
-    local map = {["major pent."] = "major pentatonic", ["minor pent."] = "minor pentatonic"}
-    return map[name] or name
+    return SCALE_ALIASES[name] or name
 end
 local function get_scale_array(scale_name)
     scale_name = normalize_scale_name(scale_name)
@@ -115,7 +125,7 @@ local function step_in_scale(pitch_value, scale_name, direction)
 end
 lfo.scale_utils = {normalize = normalize_scale_name, get_array = get_scale_array, quantize = quantize_pitch_to_scale, intervals = get_scale_intervals, step = step_in_scale}
 function lfo.scale(v, old_min, old_max, new_min, new_max) return (v - old_min) * (new_max - new_min) / (old_max - old_min) + new_min end
-function lfo.set_pause(paused) lfo_paused = paused end
+function lfo.set_pause(paused) lfo_paused = paused update_metro_run() end
 function lfo.set_sine_all(enabled)
     lfo.sine_all = enabled
     if enabled then
@@ -316,7 +326,9 @@ local function update_active_lfos()
     end
     for i = count + 1, #active_lfos do active_lfos[i] = nil end
     active_count = count
+    active_count_ref = count
     has_size1, has_size2, has_density_lfo = hs1, hs2, hd
+    update_metro_run()
 end
 function lfo.rebuild_order() update_active_lfos() end
 function lfo.is_param_assigned(name) return assigned_params[name] == true end
@@ -329,9 +341,10 @@ local function clear_slot(i)
     lfo[i].sync_invert = false
 end
 function lfo.clearLFOs(track, param_type, except_param)
+    if track ~= nil then track = tostring(track) end
     local function matches(target)
         if track and param_type then return target == track .. param_type
-        elseif track then return target:match("^" .. track)
+        elseif track then return target:sub(1, 1) == track
         else return true end
     end
     local function excluded(target)
@@ -477,6 +490,7 @@ function lfo.assign_volume_lfos()
     if #slots > 0 and not lfo.is_param_locked("2", "volume") then randomize_lfo(table.remove(slots, 1), "2volume") end
 end
 function lfo.randomize_lfos(track, allow_volume_lfos)
+    track = tostring(track)
     local symmetry = pget("symmetry") == 1
     for i = 1, number_of_outputs do
         if params.lookup[LFO_KEYS[i]] and params.lookup[TARGET_KEYS[i]] then
@@ -486,7 +500,8 @@ function lfo.randomize_lfos(track, allow_volume_lfos)
                 if target then
                     local tn, pn = split_target(target)
                     local is_vol = lfo.PRESERVE_ON_RANDOMIZE[pn]
-                    local should_clear = (symmetry and not is_vol and target:match("^[12]")) or (target:match("^" .. track) and not is_vol)
+                    local t1 = target:sub(1, 1)
+                    local should_clear = (symmetry and not is_vol and (t1 == "1" or t1 == "2")) or (t1 == track and not is_vol)
                     if should_clear and not lfo.is_param_locked(tn, pn) then
                         clear_slot(i)
                         assigned_params[target] = nil
@@ -499,7 +514,7 @@ function lfo.randomize_lfos(track, allow_volume_lfos)
     for target, ranges in pairs(lfo.target_ranges) do
         local tn, pn = split_target(target)
         local is_vol = target:match("volume$")
-        local ok = (symmetry and not is_vol) or target:match("^" .. track)
+        local ok = (symmetry and not is_vol) or (target:sub(1, 1) == track)
         if ok and not lfo.is_param_locked(tn, pn) and (not is_vol or allow_volume_lfos) then
             if target:match("seek$") then
                 if pget(tn .. "granular_gain") >= 100 and math_random() < ranges.chance then candidates[#candidates + 1] = target end
@@ -568,6 +583,9 @@ local function windowed_value(mn, mx, cap, offset, mod, dn)
     return v
 end
 local tick_pitch_scale = nil
+local MATH_HUGE = math.huge
+local pitch_scale_pobj = nil
+function lfo.invalidate_pitch_scale_obj() pitch_scale_pobj = nil end
 function lfo.process()
     if lfo_paused or not params or not params.lookup then return end
     if active_count == 0 then return end
@@ -584,7 +602,7 @@ function lfo.process()
     local two_pi = TWO_PI
     local gdepth = global_depth_scale
     tick_pitch_scale = nil
-    local huge = math.huge
+    local huge = MATH_HUGE
     local size_cap1, size_cap2 = huge, huge
     if size_cap_fn then
         if has_size1 then size_cap1 = size_cap_fn("1") or huge end
@@ -598,6 +616,39 @@ function lfo.process()
         local freq = obj.freq
         local phase = (old_phase + freq * phase_inc) % 1.0
         obj.phase = phase
+        local kind = obj.kind
+        if obj.lim_dirty then
+            local min_key, max_key = obj.min_key, obj.max_key
+            local lo = (lookup[min_key] and pget(params_table, min_key)) or obj.def_min
+            local hi = (lookup[max_key] and pget(params_table, max_key)) or obj.def_max
+            if lo > hi then lo, hi = hi, lo end
+            obj.lim_lo, obj.lim_hi = lo, hi
+            obj.lim_ratio = (lo > 0 and hi > lo) and (hi / lo) or 1
+            obj.lim_dirty = false
+        end
+        if obj.sync_to and kind ~= KIND_VOLUME and not (kind == KIND_DENSITY and grain_synced) then
+            local s = lfo_table[obj.sync_to]
+            if s and s.active and not s.sync_to and s.last_val ~= nil then
+                if obj.shape_int == 4 then
+                    obj.walk_value = s.walk_value
+                    obj.walk_velocity = s.walk_velocity
+                    obj.prev = obj.sync_invert and -s.prev or s.prev
+                end
+                local mn, mx = obj.lim_lo, obj.lim_hi
+                local value = obj.sync_invert and -s.last_val or s.last_val
+                if value < mn then value = mn elseif value > mx then value = mx end
+                if value ~= obj.last_val then
+                    obj.last_val = value
+                    local pobj = obj.pobj
+                    if not pobj then
+                        local pidx = lookup[obj.target_name]
+                        if pidx then pobj = param_objs[pidx] obj.pobj = pobj end
+                    end
+                    if pobj then pobj:set(value) end
+                end
+                goto continue_lfo
+            end
+        end
         local slope
         local shape = obj.shape_int
         if shape == 4 then
@@ -638,7 +689,6 @@ function lfo.process()
         else
             slope = 0
         end
-        local kind = obj.kind
         local d = obj.depth
         if not obj.no_gdepth then d = d * gdepth end
         local dn = d * 0.01
@@ -650,15 +700,6 @@ function lfo.process()
             if nt < 0 then nt = 0 elseif nt > 1 then nt = 1 end
             clocksync_ref.set_grain_div_norm(obj.track_num, nt)
             goto continue_lfo
-        end
-        if obj.lim_dirty then
-            local min_key, max_key = obj.min_key, obj.max_key
-            local lo = (lookup[min_key] and pget(params_table, min_key)) or obj.def_min
-            local hi = (lookup[max_key] and pget(params_table, max_key)) or obj.def_max
-            if lo > hi then lo, hi = hi, lo end
-            obj.lim_lo, obj.lim_hi = lo, hi
-            obj.lim_ratio = (lo > 0 and hi > lo) and (hi / lo) or 1
-            obj.lim_dirty = false
         end
         local mn, mx = obj.lim_lo, obj.lim_hi
         local value = (mod + 1) * 0.5 * (mx - mn) + mn
@@ -680,7 +721,11 @@ function lfo.process()
             if offset <= -0.9875 then value = -70 end
         elseif kind == KIND_PITCH then
             if tick_pitch_scale == nil then
-                tick_pitch_scale = params_table:string("pitch_quantize_scale") or false
+                if not pitch_scale_pobj then
+                    local pi = lookup["pitch_quantize_scale"]
+                    pitch_scale_pobj = pi and param_objs[pi] or false
+                end
+                tick_pitch_scale = (pitch_scale_pobj and pitch_scale_pobj:string()) or false
             end
             if tick_pitch_scale then
                 value = quantize_pitch_to_scale(value, tick_pitch_scale)
@@ -710,10 +755,14 @@ function lfo.process()
         ::continue_lfo::
     end
 end
-local lfo_metro = nil
 local sync_hz1, sync_hz2 = nil, nil
+local freq_scale_pobj = nil
 function lfo.recompute_freq(i)
-    local gs = pget("global_lfo_freq_scale") or 1
+    if freq_scale_pobj == nil then
+        local fi = params and params.lookup and params.lookup["global_lfo_freq_scale"]
+        freq_scale_pobj = fi and params.params[fi] or false
+    end
+    local gs = (freq_scale_pobj and freq_scale_pobj:get()) or 1
     local base
     if sync_hz1 then
         base = (lfo[i].track_num == "2") and sync_hz2 or sync_hz1
@@ -790,18 +839,19 @@ function lfo.init()
         lfo[i].active = pget(LFO_KEYS[i]) == 2
         classify_target(i, pget(TARGET_KEYS[i]) or 1)
     end
-    update_active_lfos()
     lfo_metro = metro.init()
     lfo_metro.time = PHASE_INCREMENT
     lfo_metro.count = -1
     lfo_metro.event = lfo.process
-    lfo_metro:start()
+    update_active_lfos()
+    update_metro_run()
 end
 function lfo.cleanup()
     if lfo_metro then
         pcall(function() lfo_metro:stop() end)
         lfo_metro.event = nil
         lfo_metro = nil
+        lfo_metro_running = false
     end
 end
 return lfo

@@ -23,6 +23,7 @@ local ratio     = {1, 1}
 local tickn        = {0, 0}
 local pre_arp_size = {nil, nil}
 local pre_arp_prob = {nil, nil}
+local have_prob    = {false, false}
 local co           = {nil, nil}
 local DEG_PALETTE  = {-7, -5, -4, -3, 0, 0, 2, 4, 4, 6, 7}
 
@@ -33,22 +34,43 @@ local RAT_KEYS     = {"1ratcheting_prob", "2ratcheting_prob"}
 local scale_idx, scale_name, scale_ivs, scale_n = nil, "off", nil, nil
 local last_po = {nil, nil}
 
+local _po = {}
+local function pobj(id)
+  local o = _po[id]
+  if o == nil then
+    local i = params.lookup and params.lookup[id]
+    if not i then return nil end
+    o = params.params[i]
+    _po[id] = o
+  end
+  return o
+end
+local function pv(id) local o = pobj(id) if o then return o:get() end return nil end
 local function refresh_scale()
-  local si = params:get("pitch_quantize_scale")
+  local o = pobj("pitch_quantize_scale")
+  local si = o and o:get()
   if si ~= scale_idx then
     scale_idx = si
-    scale_name = params:string("pitch_quantize_scale")
+    scale_name = o and o:string() or "off"
     scale_ivs = SU.intervals(scale_name)
     scale_n = scale_ivs and (#scale_ivs - 1) or nil
   end
 end
-
+local _deg_cache, _deg_cache_scale = {}, nil
 local function degree_to_st(deg)
   local ivs = scale_ivs
   if not ivs then return deg end
+  if _deg_cache_scale ~= scale_name then
+    _deg_cache_scale = scale_name
+    _deg_cache = {}
+  end
+  local c = _deg_cache[deg]
+  if c then return c end
   local n = scale_n
   local oct = floor(deg / n)
-  return ivs[deg - oct * n + 1] + oct * 12
+  c = ivs[deg - oct * n + 1] + oct * 12
+  _deg_cache[deg] = c
+  return c
 end
 
 local function fire(v, idx, invert, oct)
@@ -56,7 +78,7 @@ local function fire(v, idx, invert, oct)
   refresh_scale()
   local deg   = step_deg[idx] * (invert and -1 or 1)
   local st    = degree_to_st(deg) + oct * 12
-  local base  = SU.quantize(params:get(PITCH_KEYS[v]), scale_name)
+  local base  = SU.quantize(pv(PITCH_KEYS[v]), scale_name)
   local total = clamp(base + st, -48, 48)
   ratio[v] = 2 ^ ((total - base) / 12)
   local po = 2 ^ (total / 12)
@@ -92,8 +114,8 @@ end
 
 local function get_hz(v)
   local cs = clocksync
-  if cs and cs.grain_synced() then return cs.grain_density(v) or params:get(DENSITY_KEYS[v]), true end
-  return params:get(DENSITY_KEYS[v]), false
+  if cs and cs.grain_synced() then return cs.grain_density(v) or pv(DENSITY_KEYS[v]), true end
+  return pv(DENSITY_KEYS[v]), false
 end
 
 local eff_size = {nil, nil}
@@ -108,9 +130,9 @@ local function grain_len(hz, desired, half)
 end
 
 local function apply_size_cap(v, hz, half)
-  local id = SIZE_KEYS[v]
-  if not params.lookup[id] then return end
-  local eff = grain_len(hz, params:get(id), half)
+  local o = pobj(SIZE_KEYS[v])
+  if not o then return end
+  local eff = grain_len(hz, o:get(), half)
   if half or eff ~= eff_size[v] then
     eff_size[v] = eff
     engine.size(v, eff * 0.001)
@@ -134,7 +156,7 @@ local function tick(v, hz)
   local i1  = index_for(t, count)
   local idx = (v == 1) and i1 or twin_index(i1, count)
   local oct = floor((t - 1) / count) % octaves
-  local ratchet = (step_rat[idx] * 100) < params:get(RAT_KEYS[v])
+  local ratchet = (step_rat[idx] * 100) < (pv(RAT_KEYS[v]) or 0)
   apply_size_cap(v, hz, ratchet)
   fire(v, idx, v == 2 and twin == 3, oct)
   return ratchet
@@ -189,8 +211,7 @@ local function set_running(on)
       local id_prob = v .. "probability"
       if params.lookup[id_size] and pre_arp_size[v] == nil then pre_arp_size[v] = params:get(id_size) end
       if params.lookup[id_prob] then
-        local cur = params:get(id_prob)
-        if pre_arp_prob[v] == nil and cur > 0 then pre_arp_prob[v] = cur end
+        if not have_prob[v] then pre_arp_prob[v] = params:get(id_prob) have_prob[v] = true end
         params:set(id_prob, 0)
       end
       apply_size_cap(v, clamp(get_hz(v), 0.1, 250))
@@ -208,12 +229,12 @@ local function set_running(on)
       if pre_arp_size[v] and params.lookup[id_size] then params:set(id_size, pre_arp_size[v]) end
       rebang_size(v)
       eff_size[v] = nil
-      if params.lookup[id_prob] then
-        local pp = pre_arp_prob[v]
-        params:set(id_prob, (pp and pp > 0) and pp or 100)
+      if params.lookup[id_prob] and have_prob[v] then
+        params:set(id_prob, pre_arp_prob[v])
       end
       pre_arp_size[v] = nil
       pre_arp_prob[v] = nil
+      have_prob[v] = false
     end
   end
 end
@@ -307,6 +328,7 @@ function arp.restore(s)
   end
   pre_arp_size[1], pre_arp_size[2] = tonumber(s.pre_size1), tonumber(s.pre_size2)
   pre_arp_prob[1], pre_arp_prob[2] = tonumber(s.pre_prob1), tonumber(s.pre_prob2)
+  have_prob[1], have_prob[2] = pre_arp_prob[1] ~= nil, pre_arp_prob[2] ~= nil
   tickn[1], tickn[2] = 0, 0
 end
 

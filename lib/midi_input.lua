@@ -173,6 +173,13 @@ end
 
 local function all_off()
     cancel_retrig(1); cancel_retrig(2)
+    for v = 1, 2 do
+        local a = applied[v]
+        if a and a ~= 0 then
+            local k = PITCH_KEY[v]
+            if params.lookup[k] then params:set(k, clamp(params:get(k) - a, -48, 48)) end
+        end
+    end
     held = {}; voice_note = { nil, nil }
     applied = { 0, 0 }; rr = 2
     engine.key_gate(1, 0); engine.key_gate(2, 0)
@@ -238,7 +245,27 @@ local function refresh()
     end
 end
 
+local _cc_lo, _cc_hi = {}, {}
+local function cc_range(dest)
+    local lo = _cc_lo[dest]
+    if lo ~= nil then return lo, _cc_hi[dest] end
+    lo = 0
+    local hi = 100
+    local ok, range = pcall(params.get_range, params, dest)
+    if ok and range and range[1] and range[2] then lo, hi = range[1], range[2] end
+    _cc_lo[dest], _cc_hi[dest] = lo, hi
+    return lo, hi
+end
+
+local IGNORED_STATUS = {[0xF8] = true, [0xF9] = true, [0xFD] = true, [0xFE] = true, [0xF1] = true}
+local ready = false
+
 local function handle(data)
+    if IGNORED_STATUS[data[1]] then return end
+    if not ready then
+        if not (params.lookup and params.lookup["midi_cc1_dest"]) then return end
+        ready = true
+    end
     local d = midi.to_msg(data)
     if not d then return end
     local t = d.type
@@ -251,9 +278,7 @@ local function handle(data)
     elseif t == "cc" and d.cc == 1 then
         local dest = CC1_PARAM[params:get("midi_cc1_dest")]
         if dest and params.lookup[dest] then
-            local ok, range = pcall(params.get_range, params, dest)
-            local lo, hi = 0, 100
-            if ok and range and range[1] and range[2] then lo, hi = range[1], range[2] end
+            local lo, hi = cc_range(dest)
             params:set(dest, floor(util.linlin(0, 127, lo, hi, d.val or 0) + 0.5))
         end
     elseif t == "start" then

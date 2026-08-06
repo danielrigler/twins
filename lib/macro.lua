@@ -83,7 +83,7 @@ local function adjust_params(multiplier)
                 targets[param] = target_value
                 if lfo_ref then
                     local lfo_index = lfo_ref.get_lfo_for_param(param)
-                    if lfo_index then
+                    if lfo_index and lfo_min and lfo_max and lfo_max > lfo_min then
                         local keys = lfo_ref.keys
                         lfo_ranges[param] = {offset_id = keys.offset[lfo_index],
                                              depth_id  = keys.depth[lfo_index],
@@ -114,7 +114,7 @@ local function adjust_params(multiplier)
                 if m_abs(new_val - target) >= TOLERANCE then all_done = false end
             end
         end
-        if all_done then stop_metro_safe(randomize_metro) end
+        if all_done or count >= steps then stop_metro_safe(randomize_metro) end
     end
     utils.metro_start(randomize_metro)
 end
