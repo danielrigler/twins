@@ -31,7 +31,8 @@ for ch, glyph in pairs(font.micro_font) do micro_font_by_byte[ch:byte()] = glyph
 
 local function plot_text(plot, x, y, text, level)
   local cursor_x = x
-  local col_levels = type(level) == "table" and level or nil
+  local level_is_fn = type(level) == "function"
+  local col_levels = (not level_is_fn) and type(level) == "table" and level or nil
   local col_last = col_levels and col_levels[#col_levels] or nil
   for i = 1, #text do
     local glyph = micro_font_by_byte[text:byte(i)]
@@ -40,7 +41,12 @@ local function plot_text(plot, x, y, text, level)
       for row = 1, 3 do
         for col = 1, w do
           if glyph[row][col] == 1 then
-            local lvl = col_levels and (col_levels[col] or col_last) or level
+            local lvl
+            if level_is_fn then
+              lvl = level(row, col)
+            else
+              lvl = col_levels and (col_levels[col] or col_last) or level
+            end
             plot(lvl or 1, cursor_x + col - 1, y + row - 1)
           end
         end
@@ -118,6 +124,9 @@ end
 local _lock_cache = {}
 local _blink_level = 1
 local _delay_duck_gain = 1.0
+local _beat_level = 100
+local _beat_last = -1
+local BEAT_FLOOR, BEAT_DOWNBEAT, BEAT_OFFBEAT, BEAT_DECAY = 18, 100, 55, 0.62
 
 function font.set_delay_duck(gain)
   _delay_duck_gain = gain
@@ -203,8 +212,19 @@ local _bitcrush_mod_lfo = make_mix_mod()
 local _shimmer_mod_lfo = make_mix_mod()
 local _drive_mod_lfo = make_mix_mod()
 
+local _clock_order = {{1,2},{2,3},{3,2},{2,1}}
+local CLOCK_DIM_LEVEL = 3
+
 local FX_SPECS = {
-  {glyph = "K", lock = nil,            show = function() return font.clocksync_ref and font.clocksync_ref.grain_synced() end, val = function() return 100 end},
+  {glyph = "K", lock = nil,            show = function() return font.clocksync_ref and font.clocksync_ref.grain_synced() end,
+    custom_level = function()
+      local beats = (clock and clock.get_beats) and clock.get_beats() or 0
+      local pos = _clock_order[(math.floor(beats) % 4) + 1]
+      return function(row, col)
+        if row == pos[1] and col == pos[2] then return 15 end
+        return CLOCK_DIM_LEVEL
+      end
+    end},
   {glyph = "A", lock = nil,            show = function() return font.arp_ref and font.arp_ref.is_running() end, val = function() return 100 end, gradient = true},
   {glyph = "F", lock = "lock_filter",  show = filter_active,                                          val = filter_intensity},
   {glyph = "B", lock = nil,            show = function(c) return c.bitcrush_mix > 0 end,              val = function(c) return c.bitcrush_mod == 2 and c.bitcrush_mix * _bitcrush_mod_lfo(_draw_now) or c.bitcrush_mix end},
@@ -231,6 +251,19 @@ end
 local function refresh_draw_caches(now)
   local phase = (now * 2) % 1
   _blink_level = phase < 0.5 and 4 or 1
+  local cl = clock
+  if cl and cl.get_beats then
+    local bi = math.floor(cl.get_beats())
+    if bi ~= _beat_last then
+      _beat_last = bi
+      _beat_level = (bi % 4 == 0) and BEAT_DOWNBEAT or BEAT_OFFBEAT
+    else
+      local v = _beat_level * BEAT_DECAY
+      _beat_level = v > BEAT_FLOOR and v or BEAT_FLOOR
+    end
+  else
+    _beat_level = BEAT_DOWNBEAT
+  end
   for _, spec in ipairs(FX_SPECS) do
     if spec.lock then _lock_cache[spec.lock] = is_locked(spec.lock) end
   end
@@ -258,16 +291,21 @@ function font.draw_fx_status_bucketed(P_func)
     for i = 1, #FX_SPECS do
       local spec = FX_SPECS[i]
       if spec.show(fx_cache) then
-        local level = value_to_level(spec.val(fx_cache))
-        if spec.lock and _lock_cache[spec.lock] then
-          level = min(15, level + (_blink_level == 4 and 2 or 0))
-        end
-        if spec.fade then
-          local f = max(0, min(1, spec.fade(fx_cache)))
-          level = max(1, 1 + floor((level - 1) * f))
-        end
-        if spec.gradient then
-          level = column_gradient(level)
+        local level
+        if spec.custom_level then
+          level = spec.custom_level()
+        else
+          level = value_to_level(spec.val(fx_cache))
+          if spec.lock and _lock_cache[spec.lock] then
+            level = min(15, level + (_blink_level == 4 and 2 or 0))
+          end
+          if spec.fade then
+            local f = max(0, min(1, spec.fade(fx_cache)))
+            level = max(1, 1 + floor((level - 1) * f))
+          end
+          if spec.gradient then
+            level = column_gradient(level)
+          end
         end
         x = plot_text(collect, x, 0, spec.glyph, level)
       end
