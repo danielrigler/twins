@@ -6,7 +6,7 @@
 --            by: @dddstudio                       
 -- 
 --                          
---                           v0.75
+--                           v0.76
 -- E1: Master Volume
 -- K1+E2/E3: Volume
 -- K1+E1: Crossfade/Morph
@@ -144,11 +144,11 @@ local param_modes = {
     pan = {param = "pan", delta = 5},
     lpf = {param = "cutoff", delta = 1},
     hpf = {param = "hpf", delta = 1},
-    jitter = {param = "jitter", delta = 2, y = 11, label = "jitter:"},
-    size = {param = "size", delta = 2, y = 21, label = "size:"},
-    density = {param = "density", delta = 2, y = 31, label = "density:", hz = true},
-    pitch = {param = "pitch", delta = 1, y = 41, label = "pitch:", st = true},
-    spread = {param = "spread", delta = 2, y = 51, label = "spread:"},
+    jitter = {param = "jitter", delta = 2, y = 12, label = "jitter:"},
+    size = {param = "size", delta = 2, y = 22, label = "size:"},
+    density = {param = "density", delta = 2, y = 32, label = "density:", hz = true},
+    pitch = {param = "pitch", delta = 1, y = 42, label = "pitch:", st = true},
+    spread = {param = "spread", delta = 2, y = 52, label = "spread:"},
     eq = {param = "eq_tilt", delta = 2}}
 local param_rows = {} for mode, config in pairs(param_modes) do config.pkeys = {"1" .. config.param, "2" .. config.param} if config.y then local lbl = config.label local nm = lbl:match("%a+") table.insert(param_rows, {y = config.y, label = lbl, label_upper = lbl:upper(), name = nm, mode = mode, params = config.pkeys, hz = config.hz, st = config.st, fmt_key = config.hz and "hz" or config.st and "st" or nm}) end end table.sort(param_rows, function(a, b) return a.y < b.y end)
 local LIMITS = {size={min=20,max=4999},density={min=0.1,max=50},pitch={min=-48,max=48}}
@@ -1499,7 +1499,7 @@ end
 
 local LEVEL = {hi=15, dim=9, val=2}
 local TRACK_X, VOL_X, PAN_X = {51, 92}, {0,126}, {52,93}
-local BAR_W, Y = 30, {bottom=60, seek=63}
+local BAR_W, Y = 30, {bottom=61, seek=63}
 _HK.inv_bar_w = 1 / BAR_W
 _HK.harm_alpha = 0.55
 _HK.harm_def = {
@@ -1578,7 +1578,7 @@ do
   _ENV_LUT[5]=bld(function(p) return abs(sin(pi*p))*(0.6+0.4*sin(p*11.3+2.7)) end)
 end
 local function _tanh(z) local e = math.exp(2 * z) return (e - 1) / (e + 1) end
-_HK.eq = {zy = 58, amp = 5, low = {}, high = {}, mid = {}, tilt = {}}
+_HK.eq = {zy = 59, amp = 5, low = {}, high = {}, mid = {}, tilt = {}}
 do
   local eq = _HK.eq
   local exp = math.exp
@@ -1904,7 +1904,7 @@ local function draw_seek_bar_viz(t, x, mode, wf, active)
   end
   local animated_bar_w = floor(BAR_W * seek_bar_width)
   if wf ~= nil then
-    local wmid = Y.seek - 5
+    local wmid = Y.seek - 4
     if wf then
       local col = #grain_positions[t] > 0 and grain_column(t, x) or nil
       local base = flash_level(t, 1)
@@ -2086,7 +2086,7 @@ function redraw()
           elseif b >= 1 then local r2 = R2[c - knee] local m = 1 - r2 mag = pass / sqrt(m * m + r2 * iq)
           else local s = pass * SH[c - knee] local r2 = R2[c - knee] local m = 1 - r2 mag = s + b * (pass / sqrt(m * m + r2 * iq) - s) end
           if mag > 1 then mag = 1 end
-          yv[c] = Y.seek - floor(mag * 9 + 0.5)
+          yv[c] = Y.seek - floor(mag * 8 + 0.5)
         end
         _HK.rle(cache)
       end
@@ -2140,11 +2140,12 @@ function redraw()
     if pw > 0 then R(LEVEL.hi, bx, 3, pw, 1) end
   elseif hlp.bounce_done_time and (now - hlp.bounce_done_time) < 2 then
     font.plot_text_cached(P, 7 + left_slide, 0, "BOUNCED", LEVEL.hi)
-  elseif morph.scene_mode == "on" then
-    R(1, 7 + left_slide, 1, 22, 1)
-    if morph.amount > 0 then R(LEVEL.hi, 7 + left_slide, 1, util.linlin(0, 100, 0, 22, morph.amount), 1) end
   else
     font.draw_fx_status_bucketed(P)
+    if morph.scene_mode == "on" then
+      R(1, 7 + left_slide, 4, 22, 1)
+      if morph.amount > 0 then R(LEVEL.hi, 7 + left_slide, 4, util.linlin(0, 100, 0, 22, morph.amount), 1) end
+    end
   end
   if showing_save_message then R(1, 40, 25, 48, 10); T(LEVEL.hi, 64, 33, "SAVING...", "center") end
   if fx_popup.time and (now - fx_popup.time) < FX_POPUP_DURATION then
