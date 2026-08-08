@@ -6,7 +6,7 @@ A randomized dual granular sample playground for Monome Norns.
 
 Inspired by @cfd90’s Twine and contains influence and code from a lot of other norns users. This is basically Twine on steroids. A granular playground. It contains lot of effects and extra granular parameters. You can turn off granular processing and use this as a normal sample player with effects. Live input processing and MIDI input is also possible. No problem if you do not have external controllers: I have tweaked the GUI and controls, so it is very playable even with only a norns. Let me know if you find this useful.
 
-![Screenshot](https://llllllll.co/uploads/default/original/3X/7/d/7d0d8431253b4f904a04397f4162c6fa2e794e1a.png)
+![Screenshot](https://llllllll.co/uploads/default/original/3X/3/f/3f7a18cf86f733ed6d0e88ab2b002b1e2c22a1db.png)
 
 **Some of the new features:**
 
