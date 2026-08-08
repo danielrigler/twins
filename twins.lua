@@ -74,6 +74,7 @@ local current_filter_mode = "lpf"
 local tap_times = {}
 local initial_monitor_level, initial_reverb_onoff;
 local audio_active = {[1] = false, [2] = false}
+local live_state = {[1] = {input = false, direct = false}, [2] = {input = false, direct = false}}
 local steps = 20
 local mode_list = {"spread","pitch","density","size","jitter","lpf","eq","pan","speed","seek"}
 local mode_indices = {} for i,v in ipairs(mode_list) do mode_indices[v] = i end
@@ -164,7 +165,7 @@ local FLASH_DECAY = 0.9
 local function flash_level(track, base_level) local f = randomize_flash[track] local m = randomize_flash.held[track] and 1 or randomize_flash.midi[track] if m > f then f = m end if f <= 0.001 then return base_level end return min(base_level + f * FLASH_INTENSITY // 1, 15) end
 local random_float = utils.random_float
 local stop_metro_safe = utils.stop_metro_safe
-function is_voice_loaded(i) local k = TRACK_KEYS[i] return audio_active[i] or pget(k.live_input) == 1 or pget(k.live_direct) == 1 end
+function is_voice_loaded(i) return audio_active[i] or live_state[i].input or live_state[i].direct end
 local function pause_voice_if_idle(i) if not is_voice_loaded(i) then engine.pause_voice(i) osc_positions[i] = 0 end end
 
 local function transport_enabled()
@@ -546,12 +547,12 @@ end
 local function setup_params()
     params:add_separator("Input")
     for i = 1, 2 do
-      params:add_file(i.."sample","Sample "..i, _path.tape); params:set_action(i.."sample",function(f) if f~=nil and f~="" and f~="none" and f~="-" and f~=(_path.tape.."live!") and not f:match("/$") then if params:get(i.."live_input")==1 then engine.set_live_input(i,0) params:set(i.."live_input",0,true) end if params:get(i.."live_direct")==1 then engine.live_direct(i,0) params:set(i.."live_direct",0,true) end local jitter_locked=is_param_locked(i,"jitter"); if not jitter_locked then lfo.clearLFOs(tostring(i),"jitter"); end engine.read(i,f); ctx.waveforms[i]=nil; if not _G.preset_loading then params:set(i.."seek",0) end; audio_active[i]=true; update_pan_positioning(); if _G.preset_loading then blim.apply(i, get_audio_duration(f)) else blim.pending[i] = { rj = not jitter_locked } end elseif f~=(_path.tape.."live!") then local jitter_locked=is_param_locked(i,"jitter"); if not jitter_locked then lfo.clearLFOs(tostring(i),"jitter"); end audio_active[i]=false; osc_positions[i]=0; update_pan_positioning(); end end)
+      params:add_file(i.."sample","Sample "..i, _path.tape); params:set_action(i.."sample",function(f) if f~=nil and f~="" and f~="none" and f~="-" and f~=(_path.tape.."live!") and not f:match("/$") then if params:get(i.."live_input")==1 then engine.set_live_input(i,0) params:set(i.."live_input",0,true) live_state[i].input=false end if params:get(i.."live_direct")==1 then engine.live_direct(i,0) params:set(i.."live_direct",0,true) live_state[i].direct=false end local jitter_locked=is_param_locked(i,"jitter"); if not jitter_locked then lfo.clearLFOs(tostring(i),"jitter"); end engine.read(i,f); ctx.waveforms[i]=nil; if not _G.preset_loading then params:set(i.."seek",0) end; audio_active[i]=true; update_pan_positioning(); if _G.preset_loading then blim.apply(i, get_audio_duration(f)) else blim.pending[i] = { rj = not jitter_locked } end elseif f~=(_path.tape.."live!") then local jitter_locked=is_param_locked(i,"jitter"); if not jitter_locked then lfo.clearLFOs(tostring(i),"jitter"); end audio_active[i]=false; osc_positions[i]=0; update_pan_positioning(); end end)
     end
     params:add_binary("randomtapes", "Random Tapes", "trigger", 0) params:set_action("randomtapes", function() load_random_tape_file() end)
     params:add_group("LIVE!", 10)
     for i = 1, 2 do
-      params:add_binary(i.."live_input", "Live Buffer "..i.." ● ►", "toggle", 0) params:set_action(i.."live_input", function(value) if value == 1 then if params:get(i.."live_direct") == 1 then params:set(i.."live_direct", 0) end engine.set_live_input(i, 1) engine.live_mono(i, params:get("isMono") - 1) audio_active[i] = true ctx.waveforms[i] = ctx.live_wf.norm[i] ctx.live_wf.col[i] = -1 if not _G.preset_loading then blim.apply(i, params:get("live_buffer_length")) else cached_buffer_durations[i]=params:get("live_buffer_length") end set_sample_live(i) update_pan_positioning() else engine.set_live_input(i, 0) if not audio_active[i] and params:get(i.."live_direct") == 0 then osc_positions[i] = 0 params:set(i.."sample", "-") pause_voice_if_idle(i) else set_sample_live(i) update_pan_positioning() end end end)
+      params:add_binary(i.."live_input", "Live Buffer "..i.." ● ►", "toggle", 0) params:set_action(i.."live_input", function(value) live_state[i].input = (value == 1) if value == 1 then if params:get(i.."live_direct") == 1 then params:set(i.."live_direct", 0) end engine.set_live_input(i, 1) engine.live_mono(i, params:get("isMono") - 1) audio_active[i] = true ctx.waveforms[i] = ctx.live_wf.norm[i] ctx.live_wf.col[i] = -1 if not _G.preset_loading then blim.apply(i, params:get("live_buffer_length")) else cached_buffer_durations[i]=params:get("live_buffer_length") end set_sample_live(i) update_pan_positioning() else engine.set_live_input(i, 0) if not audio_active[i] and params:get(i.."live_direct") == 0 then osc_positions[i] = 0 params:set(i.."sample", "-") pause_voice_if_idle(i) else set_sample_live(i) update_pan_positioning() end end end)
     end
     params:add_control("live_buffer_mix", "Overdub", controlspec.new(0, 100, "lin", 1, 100, "%")) params:set_action("live_buffer_mix", function(value) engine.live_buffer_mix(value * 0.01) end)
     params:add_taper("live_buffer_length", "Buffer Length", 0.05, 10, 1, 3, "s") params:set_action("live_buffer_length", function(value) engine.live_buffer_length(value) ctx.live_wf.reset(1) ctx.live_wf.reset(2) for i=1,2 do if params:get(i.."live_input")==1 then if not _G.preset_loading then blim.apply(i, value) else cached_buffer_durations[i]=value end end end end)
@@ -559,7 +560,7 @@ local function setup_params()
       params:add{type = "trigger", id = "save_live_buffer"..i, name = "Buffer"..i.." to Tape", action = function() engine.save_live_buffer(i, "live"..i.."_"..os.date("%Y%m%d_%H%M%S")..".wav") audio_files_cache = nil end}
     end
     for i = 1, 2 do
-      params:add_binary(i.."live_direct", "Direct "..i.." ►", "toggle", 0) params:set_action(i.."live_direct", function(value) if value == 1 then hlp.pre_direct[i] = {a = audio_active[i], s = params:get(i.."sample")} local was_live = params:get(i.."live_input") if was_live == 1 then params:set(i.."live_input", 0) end engine.live_direct(i, 1) set_sample_live(i) update_pan_positioning() else engine.live_direct(i, 0) local pd = hlp.pre_direct[i] hlp.pre_direct[i] = nil audio_active[i] = (pd and pd.a) or false if not audio_active[i] and params:get(i.."live_input") == 0 then osc_positions[i] = 0 params:set(i.."sample", "-") pause_voice_if_idle(i) else if pd and pd.s then params:set(i.."sample", pd.s, true) else set_sample_live(i) end update_pan_positioning() end end end)
+      params:add_binary(i.."live_direct", "Direct "..i.." ►", "toggle", 0) params:set_action(i.."live_direct", function(value) live_state[i].direct = (value == 1) if value == 1 then hlp.pre_direct[i] = {a = audio_active[i], s = params:get(i.."sample")} local was_live = params:get(i.."live_input") if was_live == 1 then params:set(i.."live_input", 0) end engine.live_direct(i, 1) set_sample_live(i) update_pan_positioning() else engine.live_direct(i, 0) local pd = hlp.pre_direct[i] hlp.pre_direct[i] = nil audio_active[i] = (pd and pd.a) or false if not audio_active[i] and params:get(i.."live_input") == 0 then osc_positions[i] = 0 params:set(i.."sample", "-") pause_voice_if_idle(i) else if pd and pd.s then params:set(i.."sample", pd.s, true) else set_sample_live(i) end update_pan_positioning() end end end)
     end
     params:add_option("isMono", "Input Mode", {"stereo", "mono"}, 1) params:set_action("isMono", function(value) local monoValue = value - 1 for i = 1, 2 do if params:get(i.."live_direct") == 1 then engine.isMono(i, monoValue) end if params:get(i.."live_input") == 1 then engine.live_mono(i, monoValue) end end end)
     params:add_binary("dry_mode2", "Dry Mode", "toggle", 0) params:set_action("dry_mode2", function(x) drymode.set_dry_mode2(x == 1) end)
@@ -671,15 +672,14 @@ local function setup_params()
     params:add_separator("     ")
     params:add_binary("randomize_eq", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_eq", function() undo.checkpoint() for i=1, 2 do randpara.randomize_eq_params(i, steps) end end)
     params:add_option("lock_eq", "Lock Parameters", {"off", "on"}, 1)
-    params:add_group("LFO", 120)
-    params:add_binary("randomize_lfos", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_lfos", function() undo.checkpoint() lfo.clearLFOs() local allow_vol = params:get("allow_volume_lfos") == 2 for i = 1, 2 do lfo.randomize_lfos(i, allow_vol) end invalidate_lfo_cache() end)
+    params:add_group("LFO", 119)
+    params:add_binary("randomize_lfos", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_lfos", function() undo.checkpoint() lfo.clearLFOs() for i = 1, 2 do lfo.randomize_lfos(i, false) end invalidate_lfo_cache() end)
     params:add_binary("lfo.assign_to_current_row", "Assign to Selection", "trigger", 0) params:set_action("lfo.assign_to_current_row", function() undo.checkpoint() lfo.assign_to_current_row(current_mode, current_filter_mode) invalidate_lfo_cache() end)
     params:add_control("global_lfo_freq_scale", "Freq Scale", controlspec.new(0.01, 10, "exp", 0.01, 1, "x")) params:set_action("global_lfo_freq_scale", function(value) for i = 1, 16 do lfo.recompute_freq(i) end end)
     params:add_control("global_lfo_depth_scale", "Depth Scale", controlspec.new(0, 2, "lin", 0.01, 1, "x")) params:set_action("global_lfo_depth_scale", function(value) lfo.set_global_depth_scale(value) end)
     params:add_binary("sine_lfos", "Sine LFOs", "toggle", 0) params:set_action("sine_lfos", function(v) lfo.set_sine_all(v == 1) end)
     params:add_binary("lfo_pause", "Pause ⏸︎", "toggle", 0) params:set_action("lfo_pause", function(value) lfo.set_pause(value == 1) end)
     params:add_binary("ClearLFOs", "Clear All", "trigger", 0) params:set_action("ClearLFOs", function() undo.checkpoint() lfo.clearLFOs() invalidate_lfo_cache() update_pan_positioning() end)
-    params:add_option("allow_volume_lfos", "Allow Volume LFOs", {"no", "yes"}, 1) params:set_action("allow_volume_lfos", function(value) if value == 2 then lfo.clearLFOs("1", "volume") lfo.clearLFOs("2", "volume") lfo.assign_volume_lfos() else lfo.clearLFOs("1", "volume") lfo.clearLFOs("2", "volume") end invalidate_lfo_cache() end)
     lfo.init()
     params:add_group("STEREO", 5)
     params:add_control("Width", "Stereo Width", controlspec.new(0, 200, "lin", 2, 100, "%")) params:set_action("Width", function(value) engine.width(value * 0.01) font.update_fx_cache("Width", value) end)
@@ -992,35 +992,35 @@ end
 local function db_to_offset_value(db)
     return clamp((db + 70) / 40 - 1, -0.99, 0.99)
 end
+function hlp.volume_lfo_key(track)
+    local active, idx = is_lfo_active_for_param(_HK.vol[track])
+    return active and MK.offset[idx]
+end
+function hlp.volume_db(track, k)
+    return offset_key_to_db(k or hlp.volume_lfo_key(track), _HK.vol[track])
+end
+function hlp.adjust_volume(track, delta, k)
+    k = k or hlp.volume_lfo_key(track)
+    if k then params:delta(k, delta * 1.5) else params:delta(_HK.vol[track], delta * 3) end
+    return k
+end
 local function handle_volume_lfo(track, delta, crossfade_mode)
     if key_state[2] or key_state[3] then return end
-    local p = _HK.vol[track]
-    local op = _HK.vol[3 - track]
-    local a1, i1 = is_lfo_active_for_param(p)
-    local a2, i2 = is_lfo_active_for_param(op)
-    local k1 = a1 and MK.offset[i1]
-    local k2 = a2 and MK.offset[i2]
-    local lfo_delta = delta * 1.5
-    local vol_delta = delta * 3
     if crossfade_mode then
-        local od = -delta
-        if k1 then params:delta(k1, lfo_delta) else params:delta(p, vol_delta) end
-        if k2 then params:delta(k2, od * 1.5)  else params:delta(op, od * 3)    end
-        local c1 = offset_key_to_db(k1, p)
-        local c2 = offset_key_to_db(k2, op)
-        _G.master_vol_diff = c1 - c2
+        local k1 = hlp.adjust_volume(track, delta)
+        local k2 = hlp.adjust_volume(3 - track, -delta)
+        _G.master_vol_diff = hlp.volume_db(track, k1) - hlp.volume_db(3 - track, k2)
         return
     end
-    local c1 = offset_key_to_db(k1, p)
-    local c2 = offset_key_to_db(k2, op)
+    local k1, k2 = hlp.volume_lfo_key(track), hlp.volume_lfo_key(3 - track)
+    local c1, c2 = offset_key_to_db(k1, _HK.vol[track]), offset_key_to_db(k2, _HK.vol[3 - track])
     if c1 > (k1 and -69.5 or -70) and c2 > (k2 and -69.5 or -70) then _G.master_vol_diff = c1 - c2 end
     local diff = _G.master_vol_diff or 0
-    local lk, lp, fk, fp, sign
-    if diff >= 0 then lk, lp, fk, fp, sign = k1, p, k2, op, -1 else lk, lp, fk, fp, sign = k2, op, k1, p,  1 end
-    if lk then params:delta(lk, lfo_delta) else params:delta(lp, vol_delta) end
-    local lead = offset_key_to_db(lk, lp)
-    local fdb  = clamp(lead + sign * diff, -70, 10)
-    if fk then params:set(fk, db_to_offset_value(fdb)) else params:set(fp, fdb) end
+    local lead, follow, lead_k, follow_k, sign = track, 3 - track, k1, k2, -1
+    if diff < 0 then lead, follow, lead_k, follow_k, sign = 3 - track, track, k2, k1, 1 end
+    lead_k = hlp.adjust_volume(lead, delta, lead_k)
+    local fdb = clamp(hlp.volume_db(lead, lead_k) + sign * diff, -70, 10)
+    if follow_k then params:set(follow_k, db_to_offset_value(fdb)) else params:set(_HK.vol[follow], fdb) end
 end
 
 local _LINK_SPEED = {pitch = 1, size = 5, density = 0.5}
@@ -1172,7 +1172,7 @@ local function handle_randomize_track(n)
     undo.checkpoint()
     stop_metro_safe(randomize_metro[track])
     lfo.clearLFOs(tostring(track), nil, lfo.PRESERVE_ON_RANDOMIZE)
-    lfo.randomize_lfos(tostring(track), params:get("allow_volume_lfos") == 2)
+    lfo.randomize_lfos(tostring(track), false)
     invalidate_lfo_cache()
     randomize(track)
     randpara.randomize_params(steps, track)
@@ -1423,11 +1423,8 @@ function enc(n, d)
         local r_metro = randomize_metro[track]
         if r_metro then stop_metro_safe(r_metro) end
         if k1 then
-            local p = _HK.vol[track]
-            disable_lfos_for_param(p, true)
-            if params:get("symmetry") == 1 then disable_lfos_for_param(p) end
-            params:delta(p, 3 * d)
-            _G.master_vol_diff = params:get("1volume") - params:get("2volume")
+            local k = hlp.adjust_volume(track, d)
+            _G.master_vol_diff = hlp.volume_db(track, k) - hlp.volume_db(3 - track)
         else
             local mode = active_edit_mode()
             if mode == "density" and clocksync.grain_synced() then
@@ -2161,11 +2158,11 @@ function redraw()
   screen.update()
 end
 
-local function push_grain(vid, pos, size, rv, pitch, pan, now) if audio_active[vid] or pget(TRACK_KEYS[vid].live_direct) == 1 then local b = grain_positions[vid] local n = #b if n < 64 then local np = #_grain_pool local g if np > 0 then g = _grain_pool[np] _grain_pool[np] = nil else g = {} end g.pos, g.size, g.t, g.rv, g.pitch, g.pan, g.shown = pos, size, now, rv or 0.5, pitch or 1, pan or 0, false b[n+1] = g end end end
+local function push_grain(vid, pos, size, rv, pitch, pan, now) if audio_active[vid] or live_state[vid].direct then local b = grain_positions[vid] local n = #b if n < 64 then local np = #_grain_pool local g if np > 0 then g = _grain_pool[np] _grain_pool[np] = nil else g = {} end g.pos, g.size, g.t, g.rv, g.pitch, g.pan, g.shown = pos, size, now, rv or 0.5, pitch or 1, pan or 0, false b[n+1] = g end end end
 local osc_handlers = {
     ["/twins/rec_pos"] = function(args)
         local vid, pos, peak = args[1] + 1, args[2], args[3]
-        if pget(TRACK_KEYS[vid].live_input) == 1 then
+        if live_state[vid].input then
             rec_positions[vid] = pos
             if peak then
                 local lw = ctx.live_wf
@@ -2223,8 +2220,7 @@ local osc_handlers = {
         ctx.grain_seq[vid] = gc
         push_grain(vid, args[6], args[7], args[8], args[9], args[10], util.time())
     end
-    local k = TRACK_KEYS[vid]
-    if audio_active[vid] or pget(k.live_input) == 1 or pget(k.live_direct) == 1 then
+    if is_voice_loaded(vid) then
         osc_positions[vid] = pos
         local pct = pos * 100
         if abs(pct - ctx.seek_pushed[vid]) >= 0.34 then
