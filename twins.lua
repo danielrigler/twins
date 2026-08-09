@@ -1922,10 +1922,12 @@ local function draw_seek_bar_viz(t, x, mode, wf, active)
     if loaded and animated_bar_w > 0 then
       local ph = floor(osc_positions[t] * animated_bar_w)
       if ph >= BAR_W then ph = BAR_W - 1 end
-      R(LEVEL.hi, x + ph, wmid - 4, 1, 9)
       if active then
+        R(LEVEL.hi, x + ph, wmid - 4, 1, 9)
         R(LEVEL.hi, x + ph - 1, wmid - 4, 3, 1)
         R(LEVEL.hi, x + ph - 1, wmid + 4, 3, 1)
+      else
+        for dy = wmid - 4, wmid + 4, 2 do P(LEVEL.hi, x + ph, dy) end
       end
       if C.in_ == 1 then
         local rh = floor(rec_positions[t] * animated_bar_w)
