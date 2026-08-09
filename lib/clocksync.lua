@@ -31,8 +31,6 @@ local DIV_LABELS = {}
 for i = 1, NDIV do DIV_LABELS[i] = DIVISIONS[i].label end
 local DIV = {}
 for i = 1, NDIV do DIV[DIVISIONS[i].label] = i end
-local DIV_BEATS = {}
-for i = 1, NDIV do DIV_BEATS[i] = DIVISIONS[i].beats end
 local LOG_DIV_BEATS = {}
 for i = 1, NDIV do LOG_DIV_BEATS[i] = math.log(DIVISIONS[i].beats) end
 local DIV_RAND_MIN, DIV_RAND_MAX = DIV["1/2"], DIV["1/32"]

@@ -493,7 +493,7 @@ local function free_slots()
     end
     return slots
 end
-function lfo.assign_to_current_row(current_mode, current_filter_mode)
+function lfo.assign_to_current_row(current_mode)
     local param_map = {seek = "seek", pan = "pan", jitter = "jitter", size = "size", density = "density", spread = "spread", speed = "speed", pitch = "pitch", eq = "eq_tilt"}
     local param_name = param_map[current_mode]
     if not param_name then return end
