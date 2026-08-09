@@ -1423,8 +1423,8 @@ function enc(n, d)
         local r_metro = randomize_metro[track]
         if r_metro then stop_metro_safe(r_metro) end
         if k1 then
-            local k = hlp.adjust_volume(track, d)
-            _G.master_vol_diff = hlp.volume_db(track, k) - hlp.volume_db(3 - track)
+            hlp.adjust_volume(track, d)
+            _G.master_vol_diff = hlp.volume_db(1) - hlp.volume_db(2)
         else
             local mode = active_edit_mode()
             if mode == "density" and clocksync.grain_synced() then
