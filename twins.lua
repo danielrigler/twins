@@ -547,7 +547,17 @@ end
 local function setup_params()
     params:add_separator("Input")
     for i = 1, 2 do
-      params:add_file(i.."sample","Sample "..i, _path.tape); params:set_action(i.."sample",function(f) if f~=nil and f~="" and f~="none" and f~="-" and f~=(_path.tape.."live!") and not f:match("/$") then if params:get(i.."live_input")==1 then engine.set_live_input(i,0) params:set(i.."live_input",0,true) live_state[i].input=false end if params:get(i.."live_direct")==1 then engine.live_direct(i,0) params:set(i.."live_direct",0,true) live_state[i].direct=false end local jitter_locked=is_param_locked(i,"jitter"); if not jitter_locked then lfo.clearLFOs(tostring(i),"jitter"); end engine.read(i,f); ctx.waveforms[i]=nil; if not _G.preset_loading then params:set(i.."seek",0) end; audio_active[i]=true; update_pan_positioning(); if _G.preset_loading then blim.apply(i, get_audio_duration(f)) else blim.pending[i] = { rj = not jitter_locked } end elseif f~=(_path.tape.."live!") then local jitter_locked=is_param_locked(i,"jitter"); if not jitter_locked then lfo.clearLFOs(tostring(i),"jitter"); end audio_active[i]=false; osc_positions[i]=0; update_pan_positioning(); end end)
+      params:add_file(i.."sample","S"..i, _path.tape)
+      do
+        local sid = i.."sample"
+        params:lookup_param(sid).string = function()
+          local v = params:get(sid)
+          if type(v) ~= "string" or v == "" or v == "-" or v:sub(-1) == "/" then return "-" end
+          local b = v:match("([^/]+)%.%w%w?%w?%w?$") or v:match("[^/]+$")
+          return #b > 24 and b:sub(1, 22) .. ".." or b
+        end
+      end
+      params:set_action(i.."sample",function(f) if f~=nil and f~="" and f~="none" and f~="-" and f~=(_path.tape.."live!") and not f:match("/$") then if params:get(i.."live_input")==1 then engine.set_live_input(i,0) params:set(i.."live_input",0,true) live_state[i].input=false end if params:get(i.."live_direct")==1 then engine.live_direct(i,0) params:set(i.."live_direct",0,true) live_state[i].direct=false end local jitter_locked=is_param_locked(i,"jitter"); if not jitter_locked then lfo.clearLFOs(tostring(i),"jitter"); end engine.read(i,f); ctx.waveforms[i]=nil; if not _G.preset_loading then params:set(i.."seek",0) end; audio_active[i]=true; update_pan_positioning(); if _G.preset_loading then blim.apply(i, get_audio_duration(f)) else blim.pending[i] = { rj = not jitter_locked } end elseif f~=(_path.tape.."live!") then local jitter_locked=is_param_locked(i,"jitter"); if not jitter_locked then lfo.clearLFOs(tostring(i),"jitter"); end audio_active[i]=false; osc_positions[i]=0; update_pan_positioning(); end end)
     end
     params:add_binary("randomtapes", "Random Tapes", "trigger", 0) params:set_action("randomtapes", function() load_random_tape_file() end)
     params:add_group("LIVE!", 10)
