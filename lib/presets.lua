@@ -97,7 +97,7 @@ end
 
 local function is_valid_sample(p)
     if not p or p == "-" or p == "" or p == "none" then return false end
-    if p == _path.tape or p == (_path.tape .. "live!") then return false end
+    if p == _path.audio or p == _path.tape or p == (_path.tape .. "live!") then return false end
     return util.file_exists(p)
 end
 

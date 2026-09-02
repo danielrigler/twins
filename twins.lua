@@ -433,7 +433,7 @@ local function load_random_tape_file(track_num)
     hlp.scan_pending = track_num or 0
     if hlp.scan_co then return false end
     hlp.scan_co = clock.run(function()
-        local files = scan_audio_files(_path.tape, nil, {256})
+        local files = scan_audio_files(_path.audio, nil, {256})
         audio_files_cache = files
         hlp.scan_co = nil
         local p = hlp.scan_pending
@@ -547,7 +547,7 @@ end
 local function setup_params()
     params:add_separator("Input")
     for i = 1, 2 do
-      params:add_file(i.."sample","S"..i, _path.tape)
+      params:add_file(i.."sample","S"..i, _path.audio)
       do
         local sid = i.."sample"
         params:lookup_param(sid).string = function()
@@ -2307,7 +2307,7 @@ function init()
     arp.init({scale_utils = SU, is_voice_active = function(v) return is_voice_loaded(v) end, checkpoint = undo.checkpoint})
     font.init_fx_cache()
     init_longpress_checker()
-    for i = 1, 2 do params:set(i.."sample", _path.tape, true) end
+    for i = 1, 2 do params:set(i.."sample", _path.audio, true) end
     for i = 1, 2 do engine.pause_voice(i) end
     clock.transport.start = transport_start
     clock.transport.stop  = transport_stop
