@@ -12,16 +12,6 @@ local RESTART_CMD = "sudo systemctl restart norns-jack.service norns-crone.servi
 
 local function basename(path) return path:match("([^\\/]+)$") or path end
 
-local function list_files(dir)
-  local delim = "!"
-  local raw   = util.os_capture(string.format("find %s -type f -printf '%%p%s'", dir, delim))
-  local files = {}
-  for entry in raw:gmatch("([^" .. delim .. "]+)") do
-    if #entry > 2 then files[#files + 1] = entry end
-  end
-  return files
-end
-
 local function trim(s)
   s = (s or ""):gsub("^%s+", "")
   s = s:gsub("%s+$", "")
@@ -41,45 +31,57 @@ function Installer:new(args)
   return m
 end
 
+local function halves(req)
+  return { string.format("%s.sc", req), "sc" },
+         { string.format("%s.so", req), "so" },
+         { string.format("%s_scsynth.so", req), "so" }
+end
+
+local function probe(requirements)
+  local found, order = {}, {}
+  for _, req in ipairs(requirements) do
+    if found[req] == nil then
+      found[req] = { sc = false, so = false }
+      order[#order + 1] = req
+    end
+  end
+  if #order == 0 then return {}, found end
+  local clauses, wanted = {}, {}
+  for _, req in ipairs(order) do
+    for _, h in ipairs({ halves(req) }) do
+      clauses[#clauses + 1] = string.format("-name '%s'", h[1])
+      wanted[h[1]] = { req = req, half = h[2] }
+    end
+  end
+  local cmd = string.format("find %s \\( %s \\) -not -path '*ignore*' -type f -printf '%%p!' 2>/dev/null",
+    table.concat(SEARCH_FOLDERS, " "), table.concat(clauses, " -o "))
+  local raw = util.os_capture(cmd, true) or ""
+  for entry in raw:gmatch("([^!]+)") do
+    local w = wanted[basename(entry)]
+    if w then found[w.req][w.half] = true end
+  end
+  local missing = {}
+  for _, req in ipairs(order) do
+    local rec = found[req]
+    if not (rec.sc and rec.so) then missing[#missing + 1] = req end
+  end
+  return missing, found
+end
+
 function Installer:scan()
   if self.zip == nil or self.zip == "" then print("[installer] NEED TO SPECIFY ZIP FILE") end
   self.requirements     = self.requirements or {}
   self.ready_to_restart = false
   self.installing       = false
   self.satisfied        = false
-  local found = {}
-  local remaining = 0
-  for _, req in ipairs(self.requirements) do
-    if found[req] == nil then
-      found[req] = false
-      remaining = remaining + 1
-    end
+  self.install_error    = nil
+  local missing, detail = probe(self.requirements)
+  for _, req in ipairs(missing) do
+    print(string.format("[installer] missing %s (class file: %s, server plugin: %s)",
+      req, detail[req].sc and "yes" or "NO", detail[req].so and "yes" or "NO"))
   end
-  if remaining > 0 then
-    local clauses = {}
-    for req in pairs(found) do clauses[#clauses + 1] = string.format("-name '*%s*'", req) end
-    local cmd = string.format("find %s \\( %s \\) -not -path '*ignore*' -type f -printf '%%p!' 2>/dev/null",
-      table.concat(SEARCH_FOLDERS, " "), table.concat(clauses, " -o "))
-    local raw = util.os_capture(cmd, true) or ""
-    for entry in raw:gmatch("([^!]+)") do
-      local name = basename(entry)
-      for req, already in pairs(found) do
-        if not already and name:find(req, 1, true) then
-          found[req] = true
-          remaining = remaining - 1
-        end
-      end
-      if remaining == 0 then break end
-    end
-  end
-  self.missing_requirements = {}
-  for req, ok in pairs(found) do
-    if not ok then
-      print(string.format("[installer] missing %s", req))
-      self.missing_requirements[#self.missing_requirements + 1] = req
-    end
-  end
-  self.satisfied = (#self.missing_requirements == 0)
+  self.missing_requirements = missing
+  self.satisfied = (#missing == 0)
   if self.satisfied then print("[installer] all libraries installed.") end
   self.message_needed = table.concat(self.missing_requirements, ",")
   return self.satisfied
@@ -91,28 +93,39 @@ end
 
 function Installer:install_libs()
   if self.installing then return end
-  self.installing = true
+  self.installing    = true
+  self.install_error = nil
   print(string.format("[installer] downloading %s", self.zip))
   self.message_progress = "Downloading..."
-  local dl = string.format("mkdir -p %s %s && wget -q -O %s/bundle.zip %s 2>&1", TMP_DIR, EXTENSIONS_DIR, TMP_DIR, self.zip)
-  norns.system_cmd(dl, function()
-    print(string.format("[installer] unzipping %s", self.zip))
-    self.message_progress = "Unzipping..."
-    norns.system_cmd(string.format("cd %s && unzip -o -q bundle.zip 2>&1", TMP_DIR), function()
-      for _, file in ipairs(list_files(TMP_DIR)) do
-        local name = basename(file)
-        for _, req in ipairs(self.missing_requirements) do
-          if name:find(req, 1, true) then
-            print("Copying " .. name .. " to Extensions...")
-            self.message_progress = "copying " .. name .. "..."
-            os.execute(string.format("cp %s %s/", file, EXTENSIONS_DIR))
-          end
-        end
-      end
-      os.execute("cd /tmp/ && rm -rf norns-installer")
+  local names = {}
+  for _, req in ipairs(self.missing_requirements) do
+    for _, h in ipairs({ halves(req) }) do
+      names[#names + 1] = string.format("-name '%s'", h[1])
+    end
+  end
+  local cmd = table.concat({
+    string.format("rm -rf %s", TMP_DIR),
+    string.format("mkdir -p %s '%s'", TMP_DIR, EXTENSIONS_DIR),
+    string.format("wget -q -O %s/bundle.zip '%s'", TMP_DIR, self.zip),
+    string.format("cd %s", TMP_DIR),
+    "unzip -o -q bundle.zip",
+    string.format("find . \\( %s \\) -type f -exec cp {} '%s/' ';'",
+      table.concat(names, " -o "), EXTENSIONS_DIR),
+    "cd /tmp",
+    "rm -rf norns-installer",
+  }, " && ")
+  norns.system_cmd(cmd .. " 2>&1; echo _done_", function(out)
+    local still_missing = probe(self.requirements)
+    self.installing = false
+    self.message_progress = nil
+    if #still_missing == 0 then
+      print("[installer] install complete; restart needed to load the engine.")
       self.ready_to_restart = true
-      self.installing       = false
-    end)
+    else
+      self.install_error = "could not install " .. table.concat(still_missing, ",")
+      print("[installer] " .. self.install_error)
+      print("[installer] shell output: " .. tostring(out))
+    end
   end)
 end
 
@@ -137,7 +150,7 @@ function Installer:check()
   if not self.satisfied then return end
   if not self:is_git() then return end
   self.update.state = "checking"
-  norns.system_cmd("git -C '" .. self.path .. "' fetch --quiet 2>/dev/null; echo _done_", function()
+  norns.system_cmd("timeout -k 5 20 git -C '" .. self.path .. "' fetch --quiet 2>/dev/null; echo _done_", function()
     self.update.behind = self:count_behind()
     if self.update.behind <= 0 then
       self.update.state = nil
@@ -186,7 +199,10 @@ function Installer:key(k, z)
       if k == 3 and z == 1 then self:do_restart() end
       return
     end
-    if k == 3 and z == 1 then self:install_libs() end
+    if k == 3 and z == 1 then
+      self.install_error = nil
+      self:install_libs()
+    end
     return
   end
   if z ~= 1 then return end
@@ -223,12 +239,19 @@ function Installer:redraw()
       if self.message_progress then
         screen.move(64, 42); screen.text_center(self.message_progress)
       end
+    elseif self.install_error then
+      screen.move(64, 20); screen.text_center("Install Failed")
+      screen.level(1);
+      screen.move(64, 32); screen.text_center(self.install_error)
+      screen.move(64, 40); screen.text_center("see maiden for details")
+      screen.level(15);
+      screen.move(64, 52); screen.text_center("K3: Retry")
     else
       screen.move(64, 22); screen.text_center("Missing SuperCollider Libraries:")
       screen.level(1);
       screen.move(64, 32); screen.text_center(self.message_needed)
       screen.level(15);
-      screen.move(64, 42); screen.text_center("Press K3 to Install.")
+      screen.move(64, 42); screen.text_center("K3: Install")
     end
     screen.update()
     return
