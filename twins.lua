@@ -1337,12 +1337,11 @@ local function adjust_lfo_with_symmetry(track, param_name, lfo_idx, adjustment_f
     end
 end
 
-local function apply_freq_step(idx, dir)
+local function apply_freq_step(idx, d)
     local fk = MK.freq[idx]
     local cur = pget(fk)
-    local step = max(cur * 0.06, 0.005) * (dir > 0 and 1 or -1)
-    local new_freq = max(cur + step, 0.01)
-    pset(fk, new_freq)
+    local step = max(cur * 0.06, 0.001) * (d > 0 and 1 or -1)
+    pset(fk, clamp(cur + step, 0.01, 10))
     lfo.recompute_freq(idx)
 end
 

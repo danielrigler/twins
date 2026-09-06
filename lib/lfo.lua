@@ -155,28 +155,28 @@ lfo.PRESERVE_ON_RANDOMIZE = { volume = true }
 lfo.target_ranges = {
     ["1pan"] = {depth = {25, 90}, offset = {0, 0}, frequency = {0.1, 1}, waveform = {"walk"}, chance = 0.75},
     ["2pan"] = {depth = {25, 90}, offset = {0, 0}, frequency = {0.1, 1}, waveform = {"walk"}, chance = 0.75},
-    ["1jitter"] = {depth = {20, 70}, offset = {0, 1}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.7},
-    ["2jitter"] = {depth = {20, 70}, offset = {0, 1}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.7},
-    ["1spread"] = {depth = {10, 30}, offset = {0, 1}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.7},
-    ["2spread"] = {depth = {10, 30}, offset = {0, 1}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.7},
-    ["1size"] = {depth = {5, 40}, offset = {0.1, 1}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.7},
-    ["2size"] = {depth = {5, 40}, offset = {0.1, 1}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.7},
-    ["1density"] = {depth = {5, 75}, offset = {0, 1}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.7},
-    ["2density"] = {depth = {5, 75}, offset = {0, 1}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.7},
-    ["1volume"] = {depth = {2, 3}, offset = {0, 1}, frequency = {0.1, 0.3}, waveform = {"sine"}, chance = 1.0},
-    ["2volume"] = {depth = {2, 3}, offset = {0, 1}, frequency = {0.1, 0.3}, waveform = {"sine"}, chance = 1.0},
-    ["1seek"] = {depth = {0, 100}, offset = {0, 1}, frequency = {0.1, 0.4}, waveform = {"walk"}, chance = 0.3},
-    ["2seek"] = {depth = {0, 100}, offset = {0, 1}, frequency = {0.1, 0.4}, waveform = {"walk"}, chance = 0.3},
-    ["1speed"] = {depth = {10, 50}, offset = {-1, 1}, frequency = {0.1, 0.5}, waveform = {"walk"}, chance = 0.3},
-    ["2speed"] = {depth = {10, 50}, offset = {-1, 1}, frequency = {0.1, 0.5}, waveform = {"walk"}, chance = 0.3},
-    ["1pitch"] = {depth = {5, 30}, offset = {-1, 1}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.0},
-    ["2pitch"] = {depth = {5, 30}, offset = {-1, 1}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.0},
-    ["1cutoff"] = {depth = {5, 30}, offset = {0.01, 0.9}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.15},
-    ["2cutoff"] = {depth = {5, 30}, offset = {0.01, 0.9}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.15},
-    ["1hpf"] = {depth = {5, 25}, offset = {0.01, 0.9}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.15},
-    ["2hpf"] = {depth = {5, 25}, offset = {0.01, 0.9}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.15},
-    ["1eq_tilt"] = {depth = {5, 30}, offset = {0, 0}, frequency = {0.1, 0.6}, waveform = {"sine"}, chance = 0.3},
-    ["2eq_tilt"] = {depth = {5, 50}, offset = {0, 0}, frequency = {0.1, 0.6}, waveform = {"sine"}, chance = 0.3},
+    ["1jitter"] = {depth = {20, 70}, offset = {0, 1}, frequency = {0.1, 0.75}, waveform = {"walk"}, chance = 0.7},
+    ["2jitter"] = {depth = {20, 70}, offset = {0, 1}, frequency = {0.1, 0.75}, waveform = {"walk"}, chance = 0.7},
+    ["1spread"] = {depth = {10, 30}, offset = {0, 1}, frequency = {0.1, 0.75}, waveform = {"walk"}, chance = 0.7},
+    ["2spread"] = {depth = {10, 30}, offset = {0, 1}, frequency = {0.1, 0.75}, waveform = {"walk"}, chance = 0.7},
+    ["1size"] = {depth = {5, 40}, offset = {0.1, 1}, frequency = {0.1, 0.75}, waveform = {"walk"}, chance = 0.7},
+    ["2size"] = {depth = {5, 40}, offset = {0.1, 1}, frequency = {0.1, 0.75}, waveform = {"walk"}, chance = 0.7},
+    ["1density"] = {depth = {5, 75}, offset = {0, 1}, frequency = {0.1, 0.75}, waveform = {"walk"}, chance = 0.7},
+    ["2density"] = {depth = {5, 75}, offset = {0, 1}, frequency = {0.1, 0.75}, waveform = {"walk"}, chance = 0.7},
+    ["1volume"] = {depth = {2, 3}, offset = {0, 1}, frequency = {0.1, 0.4}, waveform = {"sine"}, chance = 1.0},
+    ["2volume"] = {depth = {2, 3}, offset = {0, 1}, frequency = {0.1, 0.4}, waveform = {"sine"}, chance = 1.0},
+    ["1seek"] = {depth = {0, 100}, offset = {0, 1}, frequency = {0.1, 0.5}, waveform = {"walk"}, chance = 0.3},
+    ["2seek"] = {depth = {0, 100}, offset = {0, 1}, frequency = {0.1, 0.5}, waveform = {"walk"}, chance = 0.3},
+    ["1speed"] = {depth = {10, 50}, offset = {-1, 1}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.3},
+    ["2speed"] = {depth = {10, 50}, offset = {-1, 1}, frequency = {0.1, 0.6}, waveform = {"walk"}, chance = 0.3},
+    ["1pitch"] = {depth = {5, 30}, offset = {-1, 1}, frequency = {0.1, 0.7}, waveform = {"walk"}, chance = 0.0},
+    ["2pitch"] = {depth = {5, 30}, offset = {-1, 1}, frequency = {0.1, 0.7}, waveform = {"walk"}, chance = 0.0},
+    ["1cutoff"] = {depth = {5, 30}, offset = {0.01, 0.9}, frequency = {0.1, 0.7}, waveform = {"walk"}, chance = 0.15},
+    ["2cutoff"] = {depth = {5, 30}, offset = {0.01, 0.9}, frequency = {0.1, 0.7}, waveform = {"walk"}, chance = 0.15},
+    ["1hpf"] = {depth = {5, 25}, offset = {0.01, 0.9}, frequency = {0.1, 0.7}, waveform = {"walk"}, chance = 0.15},
+    ["2hpf"] = {depth = {5, 25}, offset = {0.01, 0.9}, frequency = {0.1, 0.7}, waveform = {"walk"}, chance = 0.15},
+    ["1eq_tilt"] = {depth = {5, 30}, offset = {0, 0}, frequency = {0.1, 0.7}, waveform = {"sine"}, chance = 0.3},
+    ["2eq_tilt"] = {depth = {5, 50}, offset = {0, 0}, frequency = {0.1, 0.7}, waveform = {"sine"}, chance = 0.3},
 }
 
 local param_ranges = {
@@ -693,11 +693,14 @@ function lfo.process()
                 local rate = freq
                 if rate < 0.01 then rate = 0.01 elseif rate > 10.0 then rate = 10.0 end
                 if obj._walk_rate ~= rate then
-                    obj._walk_rate = rate
-                    local loss = clamp(0.15 * rate, 0.01, 1.0)
+                    local sc = rate < 1.0 and rate or 1.0
+                    local prev_sc = obj._walk_scale
+                    if prev_sc then obj.walk_velocity = obj.walk_velocity * sc / prev_sc end
+                    obj._walk_rate, obj._walk_scale = rate, sc
+                    local loss = clamp(0.15 * rate, 0.002, 1.0)
                     obj._walk_damp = 1.0 - loss
-                    obj._walk_noise = 0.5 * math.sqrt(loss)
-                    obj._walk_spring = clamp(0.2 * rate, 0.01, 1.0)
+                    obj._walk_noise = 0.5 * math.sqrt(loss) * sc
+                    obj._walk_spring = clamp(0.2 * rate, 0.002, 1.0)
                 end
                 local spring = obj._walk_spring
                 local vel = obj.walk_velocity * obj._walk_damp + (rnd() - 0.5) * obj._walk_noise
@@ -878,7 +881,7 @@ function lfo.init()
         params:set_action(DEPTH_KEYS[i], function(v) lfo[i].depth = v end)
         params:add_control(OFFSET_KEYS[i], i .. " offset", controlspec.new(-0.99, 0.99, "lin", 0.001, 0, ""))
         params:set_action(OFFSET_KEYS[i], function(v) lfo[i].offset = v end)
-        params:add_control(FREQ_KEYS[i], i .. " freq", controlspec.new(0.01, 10.00, "lin", 0.01, 0.05, ""))
+        params:add_control(FREQ_KEYS[i], i .. " freq", controlspec.new(0.01, 10.00, "lin", 0.001, 0.05, ""))
         params:set_action(FREQ_KEYS[i], function(v) lfo.recompute_freq(i) end)
     end
     for i = 1, number_of_outputs do
