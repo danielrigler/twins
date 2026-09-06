@@ -881,7 +881,7 @@ function lfo.init()
         params:set_action(DEPTH_KEYS[i], function(v) lfo[i].depth = v end)
         params:add_control(OFFSET_KEYS[i], i .. " offset", controlspec.new(-0.99, 0.99, "lin", 0.001, 0, ""))
         params:set_action(OFFSET_KEYS[i], function(v) lfo[i].offset = v end)
-        params:add_control(FREQ_KEYS[i], i .. " freq", controlspec.new(0.01, 10.00, "lin", 0.001, 0.05, ""))
+        params:add_control(FREQ_KEYS[i], i .. " freq", controlspec.new(0.01, 10.00, "lin", 0.001, 0.1, ""))
         params:set_action(FREQ_KEYS[i], function(v) lfo.recompute_freq(i) end)
     end
     for i = 1, number_of_outputs do
