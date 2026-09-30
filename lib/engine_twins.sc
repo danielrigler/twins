@@ -18,6 +18,7 @@ saveLiveBufferToTape { arg voice, filename; var dir = "/home/we/dust/audio/tape/
 bounce { arg mode, dur, name, pre = 0, xf = 0; fork { var dir = "/home/we/dust/audio/tape/twins/"; var comp = { arg v; if(pre == 1, { (currentVolume[v] ? 1).max(1e-4).reciprocal }, { 1 }) }; var recs = case { mode == 2 } { [[voiceBuses[0].index, voiceBuses[0].index, comp.(0), 0], [voiceBuses[1].index, voiceBuses[1].index, comp.(1), 0]] } { mode == 1 } { [[context.out_b.index, context.out_b.index, 1, 0]] } { [[voiceBuses[0].index, voiceBuses[1].index, comp.(0), comp.(1)]] }; var n = recs.size; var frames = (context.server.sampleRate * dur).round.asInteger; var bufs = Array.fill(n, { Buffer.alloc(context.server, frames, 2) }); var suffix = if(n == 2, { ["_1", "_2"] }, { [""] }); var paths = Array.fill(n, { arg i; dir ++ name ++ suffix[i] ++ ".wav" }); var synths; File.mkdir(dir); context.server.sync; synths = Array.fill(n, { arg i; var r = recs[i]; Synth.new(\bounceRec, [\buf, bufs[i], \bus1, r[0], \bus2, r[1], \c1, r[2], \c2, r[3], \xf, xf], context.xg, 'addToTail'); }); if(pre == 1, { bounceTracks = if(mode == 2, { [[synths[0], \c1], [synths[1], \c1]] }, { [[synths[0], \c1], [synths[0], \c2]] }); }); (dur + xf.clip(0.005, dur) + 0.2).wait; bounceTracks = nil; n.do({ arg i; bufs[i].write(paths[i], "WAV", "float"); }); context.server.sync; synths.do(_.free); bufs.do(_.free); nornsAddr.sendMsg("/twins/bounce_done", mode); }; }
 
 alloc {
+        var t9dub = { arg x, f, amt, k1, k2; var d = x - OnePole.ar(x, 1 - f), h = (Delay1.ar(d) * (k2 / k1) + d).clip2(1 / k1), m = h.abs; x + (h * OnePole.ar(m / log(m * (255 * k1) + 1).max(1e-9), 1 - f) * (amt * (2.40823997 * k1 * k1))) };
         nornsAddr = NetAddr("127.0.0.1", 10111);
         buffersL = Array.fill(2, { Buffer.alloc(context.server, context.server.sampleRate * 1); });
         buffersR = Array.fill(2, { Buffer.alloc(context.server, context.server.sampleRate * 1); });
@@ -408,10 +409,25 @@ alloc {
         }).add;
 
         SynthDef(\tape, {
-            arg bus, mix=0.0;
-            var orig = In.ar(bus, 2);
-            var wet = AnalogTape.ar(orig, 0.9, 0.9, 0.9, 0, 0);
-            ReplaceOut.ar(bus, XFade2.ar(orig, wet, mix * 2 - 1));
+            arg bus;
+            var os = SampleRate.ir / 44100, sh = 0.596, fd = 0.6.pow(6) * 0.0011338, fhz = 0.4.cubed * 140.37, ob = 0.865.cubed * 44100, d, hs, x2, hb, lk;
+            var sig = t9dub.(In.ar(bus, 2) * 2.25 + WhiteNoise.ar(1e-18), (1 - sh) / os, 1.2, 2.848, 1.152);
+            sig = DelayC.ar(sig, 0.003, SinOsc.kr(fhz * LFNoise1.kr(fhz * 0.5 ! 2).range(0.24, 0.98), pi, fd, fd));
+            sig = Slew.ar(sig, ob, ob);
+            d = Delay1.ar(sig) - sig;
+            hs = ((Delay1.ar(d * 0.5 + sig) - sig).abs * 0.12).min(1);
+            hs = hs * (hs * -0.5 + 1);
+            sig = (d * hs + sig).clip2(2.305929);
+            x2 = sig.squared;
+            sig = sig * (x2 * (x2 * (x2 * (x2 * (x2 * -0.000000100208 + 0.00000444473) - 0.0003952447) + 0.014492754) - 0.16666667) + 1);
+            sig = (Delay1.ar(sig) - sig) * hs + sig;
+            lk = (OnePole.ar(LocalIn.ar(2).squared, 0.998) * (0.0927 / os)).clip(1e-6, 0.9);
+            hb = OnePole.ar(sig * (0.066 / os) * (1 - lk) / lk, 1 - lk);
+            LocalOut.ar(hb);
+            hb = BPF.ar(BPF.ar(hb, 60, 1.618), 56.25, 1.618);
+            sig = t9dub.(hb * 0.33 + sig, sh / os, -0.8, 2.628, 1.372).clip2(0.9085097);
+            x2 = HPZ1.ar(sig).abs;
+            ReplaceOut.ar(bus, sig.clip2(0.94 / (x2.max(Delay1.ar(x2)) * 2.7972026 + 1)));
         }).add;
 
         SynthDef(\wobble, {
@@ -560,7 +576,7 @@ alloc {
         sineEffect = Synth.newPaused(\sine, [\bus, context.out_b.index, \sine_drive_wet, 0.0], context.xg, 'addToTail');
         analogDriveEffect = Synth.newPaused(\analogdrive, [\bus, context.out_b.index], context.xg, 'addToTail');
         glitchEffect = Synth.newPaused(\glitch, [\bus, context.out_b.index, \glitch_ratio, 0.0], context.xg, 'addToTail');
-        tapeEffect = Synth.newPaused(\tape, [\bus, context.out_b.index, \mix, 0.0], context.xg, 'addToTail');
+        tapeEffect = Synth.newPaused(\tape, [\bus, context.out_b.index], context.xg, 'addToTail');
         wobbleEffect = Synth.newPaused(\wobble, [\bus, context.out_b.index, \mix, 0.0], context.xg, 'addToTail');
         chewEffect = Synth.newPaused(\chew, [\bus, context.out_b.index, \chew_depth, 0.0], context.xg, 'addToTail');
         lossdegradeEffect = Synth.newPaused(\lossdegrade, [\bus, context.out_b.index, \mix, 0.0], context.xg, 'addToTail');

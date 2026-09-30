@@ -6,7 +6,7 @@
 --            by: @dddstudio                       
 -- 
 --                          
---                           v0.76
+--                           v0.77
 -- E1: Master Volume
 -- K1+E2/E3: Volume
 -- K1+E1: Crossfade/Morph
@@ -47,7 +47,7 @@
 --                    Daniel Rigler
 
 installer_ = include("lib/installer/installer")
-installer = installer_:new{requirements = {"AnalogTape", "AnalogChew", "AnalogLoss", "AnalogDegrade"}, zip = "https://github.com/schollz/portedplugins/releases/download/v0.4.6/PortedPlugins-RaspberryPi.zip"}
+installer = installer_:new{requirements = {"AnalogChew", "AnalogLoss", "AnalogDegrade"}, zip = "https://github.com/schollz/portedplugins/releases/download/v0.4.6/PortedPlugins-RaspberryPi.zip"}
 engine.name = installer:ready() and 'twins' or nil
 local MusicUtil = require("musicutil")
 local utils = include("lib/utils")
@@ -657,7 +657,7 @@ local function setup_params()
     params:add_control("analogdrive_tone", "Tone", controlspec.new(0, 100, 'lin', 1, 60, "%")) params:set_action("analogdrive_tone", function(v) engine.analogdrive_tone(v * 0.01) end)
     params:add_control("analogdrive_mode", "Style", controlspec.new(0, 100, 'lin', 1, 75, "%")) params:set_action("analogdrive_mode", function(v) engine.analogdrive_mode(v * 0.01) end)
     params:add_group("TAPE", 15)
-    params:add_option("tape_mix", "Analog Tape", {"off", "on"}, 1) params:set_action("tape_mix", function(x) engine.tape_mix(x-1) font.update_fx_cache("tape_mix", x) end)
+    params:add_option("tape_mix", "Tape Sim", {"off", "on"}, 1) params:set_action("tape_mix", function(x) engine.tape_mix(x-1) font.update_fx_cache("tape_mix", x) end)
     params:add_control("sine_drive_wet", "Shaper Drive", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("sine_drive_wet", function(value) engine.sine_drive_wet(value * 0.01) font.update_fx_cache("sine_drive_wet", value) end)
     params:add{type = "control", id = "wobble_mix", name = "Wobble", controlspec = controlspec.new(0, 100, "lin", 1, 0, "%"), action = function(value) engine.wobble_mix(value * 0.01) font.update_fx_cache("wobble_mix", value) end}
     params:add{type = "control", id = "wobble_amp", name = "Wow Depth", controlspec = controlspec.new(0, 100, "lin", 1, 20, "%"), action = function(value) engine.wobble_amp(value * 0.01) end}
