@@ -28,6 +28,13 @@ local DRY_VALUES = {
     resonator_mix = 0,
     wavefold_mix = 0,
     ringmod_mix = 0,
+    stchorus_mix = 0,
+    spiral_mix = 0,
+    genloss_mix = 0,
+    fuzz_mix = 0,
+    sub_mix = 0,
+    reel_mix = 0,
+    ott_mix = 0,
     clock_sync = 1,
     arp_on = 1
 }

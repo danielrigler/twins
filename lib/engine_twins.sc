@@ -1,6 +1,6 @@
 Engine_twins : CroneEngine {
 
-var analogDriveEffect, dimensionEffect, haasEffect, bitcrushEffect, resonatorEffect, wavefoldEffect, ringmodEffect, delayEffect, shimmerEffect, tapeEffect, chewEffect, widthEffect, monobassEffect, sineEffect, wobbleEffect, lossdegradeEffect, rotateEffect, glitchEffect, <silentBuffer, <buffersL, <buffersR, wobbleBuffer, glitchBuffer, <voices, bufSine, pg, <liveInputBuffersL, <liveInputBuffersR, <liveInputRecorders, <liveRecPosBuses, o, o_rec, o_voice_peak, o_delayduck, liveBufferAllocGeneration = 0, grainEnvs, pitchScaleBuffers, pitchScaleLengths, nornsAddr, voicesUsingLiveBuffer, currentSpeed, currentJitter, currentSize, currentDensity, currentDensityModAmt, currentPitch, currentPan, currentSpread, currentVolume, currentGranularGain, currentCutoff, currentHpf, currentlpf_gain, currentSubharmonics1, currentSubharmonics2, currentSubharmonics3, currentOvertones1, currentOvertones2, currentPitchMode, currentDirectionMod, currentSizeVariation, currentSmoothbass, currentLowGain, currentMidGain, currentHighGain, currentTiltGain, currentProbability, liveBufferMix = 1.0, currentPitchRandomProb, currentPitchRandomScale, currentRatchetingProb, currentPitchLag, currentGlitchRatio = 0.0, currentGlitchMix = 0.0, currentKeyHold, currentKeyGate, currentAdA, currentAdD, currentVelAmp, currentAmpRandomize, voiceBuses, filterSynths, filterRouters, eqSynths, tiltSynths, dryGroup, drySynths, voiceAmpBuses, voiceRunning, voiceIsStereo, bounceTracks, normOnLoad = 0;
+var analogDriveEffect, dimensionEffect, haasEffect, bitcrushEffect, resonatorEffect, wavefoldEffect, ringmodEffect, delayEffect, shimmerEffect, tapeEffect, chewEffect, widthEffect, monobassEffect, sineEffect, wobbleEffect, lossdegradeEffect, rotateEffect, glitchEffect, stChorusEffect, reelEffect, ottEffect, genlossEffect, fuzzEffect, subEffect, spiralEffect, spiralBuffer, <silentBuffer, <buffersL, <buffersR, wobbleBuffer, glitchBuffer, <voices, bufSine, pg, <liveInputBuffersL, <liveInputBuffersR, <liveInputRecorders, <liveRecPosBuses, o, o_rec, o_voice_peak, o_delayduck, liveBufferAllocGeneration = 0, grainEnvs, pitchScaleBuffers, pitchScaleLengths, nornsAddr, voicesUsingLiveBuffer, currentSpeed, currentJitter, currentSize, currentDensity, currentDensityModAmt, currentPitch, currentPan, currentSpread, currentVolume, currentGranularGain, currentCutoff, currentHpf, currentlpf_gain, currentSubharmonics1, currentSubharmonics2, currentSubharmonics3, currentOvertones1, currentOvertones2, currentPitchMode, currentDirectionMod, currentSizeVariation, currentSmoothbass, currentLowGain, currentMidGain, currentHighGain, currentTiltGain, currentProbability, liveBufferMix = 1.0, currentPitchRandomProb, currentPitchRandomScale, currentRatchetingProb, currentPitchLag, currentGlitchRatio = 0.0, currentGlitchMix = 0.0, currentKeyHold, currentKeyGate, currentAdA, currentAdD, currentVelAmp, currentAmpRandomize, voiceBuses, filterSynths, filterRouters, eqSynths, tiltSynths, dryGroup, drySynths, voiceAmpBuses, voiceRunning, voiceIsStereo, bounceTracks, normOnLoad = 0;
 
 classvar pitchScales;
 *initClass {pitchScales = [[7, 12], [7, 12, 19, 24], [12], [12, 24], [1,2,3,4,5,6,7,8,9,10,11], [2,4,5,7,9,11], [2,3,5,7,8,10], [2,4,7,9], [2,4,6,8,10]];}
@@ -19,6 +19,7 @@ bounce { arg mode, dur, name, pre = 0, xf = 0; fork { var dir = "/home/we/dust/a
 
 alloc {
         var t9dub = { arg x, f, amt, k1, k2; var d = x - OnePole.ar(x, 1 - f), h = (Delay1.ar(d) * (k2 / k1) + d).clip2(1 / k1), m = h.abs; x + (h * OnePole.ar(m / log(m * (255 * k1) + 1).max(1e-9), 1 - f) * (amt * (2.40823997 * k1 * k1))) };
+        var csoft = { arg v; var c = v.clip2(1); c * (c.squared * -0.5 + 1.5) }, tri = { arg d; 1 - ((d - 2048).abs * 0.00048828125) };
         nornsAddr = NetAddr("127.0.0.1", 10111);
         buffersL = Array.fill(2, { Buffer.alloc(context.server, context.server.sampleRate * 1); });
         buffersR = Array.fill(2, { Buffer.alloc(context.server, context.server.sampleRate * 1); });
@@ -34,6 +35,7 @@ alloc {
         bufSine = Buffer.alloc(context.server, 4096, 1);
         bufSine.sine2([2], [0.5], false);
         wobbleBuffer = Buffer.alloc(context.server, context.server.sampleRate * 5, 2);
+        spiralBuffer = Buffer.alloc(context.server, context.server.sampleRate * 3, 2);
         glitchBuffer = Buffer.alloc(context.server, context.server.sampleRate * 1, 2);
         silentBuffer = Buffer.alloc(context.server, context.server.sampleRate.asInteger);
         voiceBuses = Array.fill(2, { Bus.audio(context.server, 2); });
@@ -425,7 +427,7 @@ alloc {
             hb = OnePole.ar(sig * (0.066 / os) * (1 - lk) / lk, 1 - lk);
             LocalOut.ar(hb);
             hb = BPF.ar(BPF.ar(hb, 60, 1.618), 56.25, 1.618);
-            sig = t9dub.(hb * 0.33 + sig, sh / os, -0.8, 2.628, 1.372).clip2(0.9085097);
+            sig = (t9dub.(hb * 0.33 + sig, sh / os, -0.8, 2.628, 1.372) * 0.6309573).clip2(0.9085097);
             x2 = HPZ1.ar(sig).abs;
             ReplaceOut.ar(bus, sig.clip2(0.94 / (x2.max(Delay1.ar(x2)) * 2.7972026 + 1)));
         }).add;
@@ -560,11 +562,73 @@ alloc {
         }).add;
 
         SynthDef(\ringmod, {
-            arg bus, mix=0.0, rate=200, freqmod=0;
-            var sig = In.ar(bus, 2);
-            var modrate = rate * (1 + (LFNoise2.kr(2) * 0.1 * freqmod));
-            var wet = sig * SinOsc.ar(Lag.kr(modrate, 0.05));
-            ReplaceOut.ar(bus, XFade2.ar(sig, wet, mix * 2 - 1));
+            arg bus, mix=0, rate=800, sweep=0.3;
+            var x = In.ar(bus, 2), c = SinOsc.ar(rate * [1, 1.006] * SinOsc.kr(sweep.squared * [12, 9.96], 0, sweep * 0.75, 1));
+            ReplaceOut.ar(bus, (x * c * 0.5 - x) * mix + x);
+        }).add;
+
+        SynthDef(\stchorus, {
+            arg bus, mix=0;
+            var dry = In.ar(bus, 2), sp = (0.5 / 6 + 0.32).pow(10), dp = 0.6 / 60 / sp;
+            var air = OnePole.ar(dry * 252.1646, -0.9921), t = SinOsc.ar(sp * 7018.73, [1.16355, pi], dp, dp + 1) / 44100;
+            var wet = DelayN.ar(HPZ2.ar(air), 0.14, t) * -0.04 + DelayL.ar(LPZ1.ar(air), 0.14, t);
+            ReplaceOut.ar(bus, XFade2.ar(dry, wet, mix * 2 - 1));
+        }).add;
+
+        SynthDef(\spiral, {
+            arg bus, mix=0, bpm=120, div=0.5, feedback=0.5, rise=0.75, glide=0, span=0.5, tone=0.5;
+            var x = In.ar(bus, 2), sr = SampleRate.ir, frames = BufFrames.ir(spiralBuffer), soft = csoft;
+            var mono = x.sum * 0.5, ax = mono.abs, d = (sr * 60 / bpm * div).clip(sr * 0.0348, sr * 2.72);
+            var envF = A2K.kr(OnePole.ar(ax, 0.98)), envS = A2K.kr(OnePole.ar(ax, 0.9992)), peak = PeakFollower.kr(envF, 0.99995465 ** (sr * ControlDur.ir));
+            var fbT = LocalIn.kr(1), t = (envF > (envS * 1.7 + 0.008)) * (1 - SetResetFF.kr(fbT, envF < (peak * 0.08))) * (1 - Trig1.kr(fbT, 0.25));
+            var ramp = 1 - Decay.kr(t, 6.9078 / (((1 - span).cubed * 1.13e-4 + 2.8e-6) * 44100)).min(1);
+            var ratio = (Select.kr(rise < 0.5, [rise * 2, rise + 0.5]) * (glide * 0.6 * ramp * ((rise >= 0.5) * 2 - 1) + 1)).clip(0.25, (d / 1024).clip(1.05, 4));
+            var gtrig = Impulse.ar(sr / 1024), gt = Sweep.ar(gtrig, sr), wp = Phasor.ar(0, 1, 0, frames), e, lp;
+            LocalOut.kr(t);
+            e = (gt.min(1024 - gt) * 0.001953125).clip(0, 1);
+            lp = OnePole.ar(BufRd.ar(2, spiralBuffer, (Latch.ar(wp - d, gtrig) + Sweep.ar(gtrig, ratio * sr)).wrap(0, frames), 1, 2) * (e * e * (3 - (2 * e))), 0.97 - (tone * 0.5));
+            BufWr.ar(soft.(lp * (feedback * 0.965) + x), spiralBuffer, wp);
+            ReplaceOut.ar(bus, (soft.(x + lp) - x) * mix + x);
+        }).add;
+
+        SynthDef(\genloss, {
+            arg bus, mix=0;
+            var x = In.ar(bus, 2), m = SinOsc.ar(0.7, 0, 132) + SinOsc.ar(8, 0, 30) + OnePole.ar(WhiteNoise.ar(90), 0.9988);
+            var w = DelayL.ar(csoft.(x * 1.8), 0.025, (m + 529) / 44100);
+            w = OnePole.ar(w - OnePole.ar(w, 0.988), 0.77) + WhiteNoise.ar(0.0006 ! 2);
+            ReplaceOut.ar(bus, (w * 1.15 - x) * mix + x);
+        }).add;
+
+        SynthDef(\fuzz, {
+            arg bus, mix=0, octave=0.5, gain=0.6, tone=0.5;
+            var x = In.ar(bus, 2), a = csoft.(OnePole.ar(csoft.((x - OnePole.ar(x, 0.987)) * 16 + 0.12) - 0.179136, 0.425) * (gain * 40 + 8));
+            var env = LagUD.ar(a.abs, 0.006904, 0.348), sq = ToggleFF.ar(PulseDivider.ar(Schmidt.ar(OnePole.ar(a, 0.985), -0.02, 0.02), 2)) * 2 - 1;
+            var b = OnePole.ar(csoft.(sq * env * (env > 0.004) * 4), 0.65);
+            var y = (((a - OnePole.ar(a, 0.65245)) * ((tone - 0.5) * 2.2) + a) * (1 - octave) + (b * octave) * 0.06).clip2(1);
+            ReplaceOut.ar(bus, (y - x) * mix + x);
+        }).add;
+
+        SynthDef(\sub, {
+            arg bus, mix=0, detune=0.65;
+            var x = In.ar(bus, 2), mono = x.sum * 0.5, off = SinOsc.kr(0.15, 0, detune * 0.0173287);
+            var d1 = (Phasor.ar(0, [0.5 - off, 0.5 + off], 0, 4096) + [0, 2048]) % 4096, d2 = (d1 + 2048) % 4096;
+            var v = DelayL.ar(mono, 0.1, d1 / 44100) * tri.(d1) + (DelayL.ar(mono, 0.1, d2 / 44100) * tri.(d2));
+            ReplaceOut.ar(bus, (OnePole.ar(csoft.(v * 2.5), 0.89) - x) * mix + x);
+        }).add;
+
+        SynthDef(\reel, {
+            arg bus, mix=0;
+            var x = In.ar(bus, 2), w = OnePole.ar(csoft.(x * 4.24 + 0.1) - 0.1495, 0.58) * 0.612;
+            ReplaceOut.ar(bus, (w - x) * mix + x);
+        }).add;
+
+        SynthDef(\ott, {
+            arg bus, mix=0;
+            var x = In.ar(bus, 2), lc = 0.02725, hc = 0.253, it = 0.5;
+            var lo = OnePole.ar(x, 1 - lc), hi = OnePole.ar(x, 1 - hc), gc = 0.982 - (it * 0.2);
+            var at = -0.00015664 / log(1 - (it * 0.3 + 0.035)), rt = -0.00015664 / log(1 - (it * 0.035 + 0.0015));
+            var wet = [lo, hi - lo, x - hi].collect({ arg b; var e = LagUD.ar(b.abs, at, rt) + 0.0002; b * OnePole.ar(((0.15 / e + 0.25).min(1) * ((0.055 - e) / (e + 0.018) * 0.85 + 1).max(1)).clip(0.3, 3.25), gc) }).sum * 0.78;
+            ReplaceOut.ar(bus, (wet - x) * mix + x);
         }).add;
 
         context.server.sync;
@@ -575,18 +639,25 @@ alloc {
         ringmodEffect = Synth.newPaused(\ringmod, [\bus, context.out_b.index, \mix, 0.0], context.xg, 'addToTail');
         sineEffect = Synth.newPaused(\sine, [\bus, context.out_b.index, \sine_drive_wet, 0.0], context.xg, 'addToTail');
         analogDriveEffect = Synth.newPaused(\analogdrive, [\bus, context.out_b.index], context.xg, 'addToTail');
+        fuzzEffect = Synth.newPaused(\fuzz, [\bus, context.out_b.index], context.xg, 'addToTail');
         glitchEffect = Synth.newPaused(\glitch, [\bus, context.out_b.index, \glitch_ratio, 0.0], context.xg, 'addToTail');
         tapeEffect = Synth.newPaused(\tape, [\bus, context.out_b.index], context.xg, 'addToTail');
+        reelEffect = Synth.newPaused(\reel, [\bus, context.out_b.index], context.xg, 'addToTail');
         wobbleEffect = Synth.newPaused(\wobble, [\bus, context.out_b.index, \mix, 0.0], context.xg, 'addToTail');
         chewEffect = Synth.newPaused(\chew, [\bus, context.out_b.index, \chew_depth, 0.0], context.xg, 'addToTail');
         lossdegradeEffect = Synth.newPaused(\lossdegrade, [\bus, context.out_b.index, \mix, 0.0], context.xg, 'addToTail');
+        genlossEffect = Synth.newPaused(\genloss, [\bus, context.out_b.index], context.xg, 'addToTail');
+        subEffect = Synth.newPaused(\sub, [\bus, context.out_b.index], context.xg, 'addToTail');
+        spiralEffect = Synth.newPaused(\spiral, [\bus, context.out_b.index], context.xg, 'addToTail');
         shimmerEffect = Synth.newPaused(\shimmer, [\bus, context.out_b.index, \mix, 0.0, \mod_mix, 0], context.xg, 'addToTail');
         delayEffect = Synth.newPaused(\delay, [\bus, context.out_b.index, \mix, 0.0], context.xg, 'addToTail');
         rotateEffect = Synth.newPaused(\rotate, [\bus, context.out_b.index], context.xg, 'addToTail');
+        stChorusEffect = Synth.newPaused(\stchorus, [\bus, context.out_b.index], context.xg, 'addToTail');
         dimensionEffect = Synth.newPaused(\dimension, [\bus, context.out_b.index], context.xg, 'addToTail');
         haasEffect = Synth.newPaused(\haas, [\bus, context.out_b.index], context.xg, 'addToTail');
         widthEffect = Synth.newPaused(\width, [\bus, context.out_b.index, \width, 1.0], context.xg, 'addToTail');
         monobassEffect = Synth.newPaused(\monobass, [\bus, context.out_b.index], context.xg, 'addToTail');
+        ottEffect = Synth.newPaused(\ott, [\bus, context.out_b.index], context.xg, 'addToTail');
 
         [
             [\delay, "f", delayEffect, \delay],
@@ -628,7 +699,18 @@ alloc {
             [\wavefold_drive, "f", wavefoldEffect, \drive],
             [\wavefold_sym, "f", wavefoldEffect, \sym],
             [\ringmod_rate, "f", ringmodEffect, \rate],
-            [\ringmod_freqmod, "f", ringmodEffect, \freqmod],
+            [\ringmod_sweep, "f", ringmodEffect, \sweep],
+            [\spiral_bpm, "f", spiralEffect, \bpm],
+            [\spiral_div, "f", spiralEffect, \div],
+            [\spiral_feedback, "f", spiralEffect, \feedback],
+            [\spiral_rise, "f", spiralEffect, \rise],
+            [\spiral_glide, "f", spiralEffect, \glide],
+            [\spiral_span, "f", spiralEffect, \span],
+            [\spiral_tone, "f", spiralEffect, \tone],
+            [\fuzz_octave, "f", fuzzEffect, \octave],
+            [\fuzz_gain, "f", fuzzEffect, \gain],
+            [\fuzz_tone, "f", fuzzEffect, \tone],
+            [\sub_detune, "f", subEffect, \detune],
         ].do({ arg c; this.addCommand(c[0], c[1], { arg msg; c[2].set(c[3], msg[1]); }); });
 
         [
@@ -644,6 +726,13 @@ alloc {
             [\resonator_mix, resonatorEffect, \mix],
             [\wavefold_mix, wavefoldEffect, \mix],
             [\ringmod_mix, ringmodEffect, \mix],
+            [\stchorus_mix, stChorusEffect, \mix],
+            [\spiral_mix, spiralEffect, \mix],
+            [\genloss_mix, genlossEffect, \mix],
+            [\fuzz_mix, fuzzEffect, \mix],
+            [\sub_mix, subEffect, \mix],
+            [\reel_mix, reelEffect, \mix],
+            [\ott_mix, ottEffect, \mix],
             [\dimension_mix, dimensionEffect, \mix],
             [\rspeed, rotateEffect, \rspeed],
         ].do({ arg c; this.addCommand(c[0], "f", { arg msg; c[1].set(c[2], msg[1]); c[1].run(msg[1] > 0); }); });
@@ -734,6 +823,6 @@ free {
         buffersL.do({ arg b; if(b.notNil, { b.free }); });
         buffersR.do({ arg b, i; if(b.notNil && (b !== buffersL[i]), { b.free }); });
         [liveInputBuffersL, liveInputBuffersR, liveRecPosBuses, pitchScaleBuffers, grainEnvs, voiceBuses, voiceAmpBuses].do({ arg col; col.do({ arg b; if(b.notNil, { b.free }); }); });
-        [o, o_rec, o_voice_peak, o_delayduck, wobbleBuffer, glitchBuffer, silentBuffer, bufSine, bitcrushEffect, shimmerEffect, analogDriveEffect, resonatorEffect, wavefoldEffect, ringmodEffect, tapeEffect, chewEffect, widthEffect, monobassEffect, lossdegradeEffect, sineEffect, wobbleEffect, glitchEffect, delayEffect, rotateEffect, haasEffect, dimensionEffect, dryGroup, pg].do({ arg x; if(x.notNil, { x.free }); });
+        [o, o_rec, o_voice_peak, o_delayduck, stChorusEffect, reelEffect, ottEffect, genlossEffect, fuzzEffect, subEffect, spiralEffect, spiralBuffer, wobbleBuffer, glitchBuffer, silentBuffer, bufSine, bitcrushEffect, shimmerEffect, analogDriveEffect, resonatorEffect, wavefoldEffect, ringmodEffect, tapeEffect, chewEffect, widthEffect, monobassEffect, lossdegradeEffect, sineEffect, wobbleEffect, glitchEffect, delayEffect, rotateEffect, haasEffect, dimensionEffect, dryGroup, pg].do({ arg x; if(x.notNil, { x.free }); });
     }
 }

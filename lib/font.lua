@@ -95,6 +95,13 @@ local fx_cache = {
   resonator_mix   = 0,
   wavefold_mix    = 0,
   ringmod_mix     = 0,
+  stchorus_mix    = 0,
+  spiral_mix      = 0,
+  genloss_mix     = 0,
+  fuzz_mix        = 0,
+  sub_mix         = 0,
+  reel_mix        = 0,
+  ott_mix         = 0,
   analogdrive_mix = 0,
   analogdrive_mod = 1,
   ["1cutoff"]     = 20000,
@@ -146,7 +153,7 @@ end
 local BINARY_ON_INTENSITY = 25
 
 local function tape_active(cache)
-  return cache.tape_mix == 2 or cache.sine_drive_wet > 0 or cache.wobble_mix > 0 or cache.chew_depth > 0 or cache.lossdegrade_mix > 0
+  return cache.tape_mix == 2 or cache.sine_drive_wet > 0 or cache.wobble_mix > 0 or cache.chew_depth > 0 or cache.lossdegrade_mix > 0 or cache.genloss_mix > 0 or cache.reel_mix > 0
 end
 
 local function tape_intensity(cache)
@@ -155,17 +162,19 @@ local function tape_intensity(cache)
   if cache.wobble_mix      > maxv then maxv = cache.wobble_mix      end
   if cache.chew_depth      > maxv then maxv = cache.chew_depth      end
   if cache.lossdegrade_mix > maxv then maxv = cache.lossdegrade_mix end
+  if cache.genloss_mix     > maxv then maxv = cache.genloss_mix     end
+  if cache.reel_mix        > maxv then maxv = cache.reel_mix        end
   return maxv
 end
 
 local function stereo_active(cache)
-  return cache.Width ~= 100 or cache.dimension_mix > 0
+  return cache.Width ~= 100 or cache.dimension_mix > 0 or cache.stchorus_mix > 0
       or cache.haas == 2 or cache.rspeed > 0 or cache.monobass_mix == 2
 end
 
 local function stereo_intensity(cache)
   local width_dev = math.abs(cache.Width - 100) / 100
-  local dim = cache.dimension_mix / 100
+  local dim = math.max(cache.dimension_mix, cache.stchorus_mix) / 100
   local haas_val = cache.haas == 2 and (BINARY_ON_INTENSITY / 100) or 0
   local rspeed_val = cache.rspeed
   local mb = cache.monobass_mix == 2 and (BINARY_ON_INTENSITY / 100) or 0
@@ -231,7 +240,10 @@ local FX_SPECS = {
   {glyph = "O", lock = nil,            show = function(c) return c.resonator_mix > 0 end,             val = function(c) return c.resonator_mix end},
   {glyph = "W", lock = nil,            show = function(c) return c.wavefold_mix > 0 end,              val = function(c) return c.wavefold_mix end},
   {glyph = "M", lock = nil,            show = function(c) return c.ringmod_mix > 0 end,               val = function(c) return c.ringmod_mix end},
-  {glyph = "V", lock = nil,            show = function(c) return c.analogdrive_mix > 0 end,           val = function(c) return c.analogdrive_mod == 2 and c.analogdrive_mix * _drive_mod_lfo(_draw_now) or c.analogdrive_mix end},
+  {glyph = "V", lock = nil,            show = function(c) return c.analogdrive_mix > 0 or c.fuzz_mix > 0 end, val = function(c) return math.max(c.analogdrive_mod == 2 and c.analogdrive_mix * _drive_mod_lfo(_draw_now) or c.analogdrive_mix, c.fuzz_mix) end},
+  {glyph = "U", lock = nil,            show = function(c) return c.sub_mix > 0 end, val = function(c) return c.sub_mix end},
+  {glyph = "C", lock = nil,            show = function(c) return c.ott_mix > 0 end, val = function(c) return c.ott_mix end},
+  {glyph = "S", lock = nil,            show = function(c) return c.spiral_mix > 0 end,                val = function(c) return c.spiral_mix end},
   {glyph = "G", lock = "lock_glitch",  show = function(c) return c.glitch_ratio > 0 and c.glitch_mix > 0 end, val = function(c) return c.glitch_ratio end},
   {glyph = "T", lock = "lock_tape",    show = tape_active,                                            val = tape_intensity},
   {glyph = "X", lock = "lock_shimmer", show = function(c) return c.shimmer_mix1 > 0 end,              val = function(c) return c.shimmer_mod1 == 2 and c.shimmer_mix1 * _shimmer_mod_lfo(_draw_now) or c.shimmer_mix1 end},

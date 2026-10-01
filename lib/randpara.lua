@@ -55,6 +55,15 @@ local PARAM_SPECS = {
   ["glitch_maxstutters"]  = {5,   {2,20},    "glitch"},
   ["glitch_reverse"]      = {50,  {0,100},   "glitch"},
   ["glitch_pitch"]        = {50,  {0,100},   "glitch"},
+  ["ringmod_sweep"]       = {40,  {0,100},   "ringmod", "ringmod_mix"},
+  ["fuzz_gain"]           = {30,  {0,100},   "fuzz",    "fuzz_mix"},
+  ["fuzz_octave"]         = {30,  {0,100},   "fuzz",    "fuzz_mix"},
+  ["fuzz_tone"]           = {30,  {0,100},   "fuzz",    "fuzz_mix"},
+  ["sub_detune"]          = {40,  {0,100},   "sub",     "sub_mix"},
+  ["spiral_feedback"]     = {30,  {0,95},    "spiral",  "spiral_mix"},
+  ["spiral_glide"]        = {40,  {0,100},   "spiral",  "spiral_mix"},
+  ["spiral_span"]         = {40,  {0,100},   "spiral",  "spiral_mix"},
+  ["spiral_tone"]         = {40,  {0,100},   "spiral",  "spiral_mix"},
 }
 
 local GROUP_LOCK = {
@@ -77,9 +86,10 @@ local evolution_update_rate = 1 / 8
 local cache_dirty           = true
 local evolution_group_enabled = {
   granular = true, delay = true, reverb = true, tape = true,
-  shimmer = true, eq = true, glitch = true, bitcrush = true}
+  shimmer = true, eq = true, glitch = true, bitcrush = true,
+  ringmod = true, fuzz = true, sub = true, spiral = true}
 
-local evo_names, evo_groups, evo_pobjs, evo_mirror_idx = {}, {}, {}, {}
+local evo_names, evo_groups, evo_pobjs, evo_mirror_idx, evo_gate = {}, {}, {}, {}, {}
 local evo_gid = {}
 local evo_count = 0
 local evo_index_of = {}
@@ -108,6 +118,7 @@ local function build_evolvable_params_cache()
       evo_groups[n] = group
       evo_gid[n]    = GROUP_ID_OF[group] or 0
       evo_pobjs[n]  = pp[idx]
+      evo_gate[n]   = spec[4] and lk[spec[4]] and pp[lk[spec[4]]] or false
     end
   end
   for i = n + 1, evo_count do
@@ -115,6 +126,7 @@ local function build_evolvable_params_cache()
     evo_groups[i]     = nil
     evo_gid[i]        = nil
     evo_pobjs[i]      = nil
+    evo_gate[i]       = nil
     evo_mirror_idx[i] = nil
   end
   evo_count = n
@@ -215,7 +227,8 @@ local function evolution_update()
   local gen = evo_gen
   for i = 1, n do
     local gid = evo_gid[i]
-    if evo_updated[i] ~= gen and not (gid ~= 0 and evo_locked_by_id[gid]) then
+    local gate = evo_gate[i]
+    if evo_updated[i] ~= gen and not (gid ~= 0 and evo_locked_by_id[gid]) and not (gate and gate:get() <= 0) then
       local obj   = evo_pobjs[i]
       local state = evo_states[i]
       local raw   = obj.raw
