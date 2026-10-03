@@ -125,8 +125,7 @@ local _HK = {
     size = {"1size", "2size"}, den = {"1density", "2density"}, pitch = {"1pitch", "2pitch"},
     vol = {"1volume", "2volume"}, seek = {"1seek", "2seek"},
     rand_names = {"speed", "jitter", "size", "density", "spread", "pitch", "seek"},
-    TAP_TIMEOUT = 2, LONGPRESS = 1, UI_FPS = 60,
-    audio_exts = {[".wav"]=true,[".aif"]=true,[".aiff"]=true,[".flac"]=true}}
+    TAP_TIMEOUT = 2, LONGPRESS = 1, UI_FPS = 60, MAX_FRAMES = 16777216, AUDIO_LIST = "/tmp/twins_audio_files.txt"}
 local _grain_pool = {}
 local invalidate_lfo_cache = lfo.invalidate_lfo_param_cache
 local function do_capture_temp_scene() morph.capture_to_temp_scene(lfo.get_active_param_map()) end
@@ -364,7 +363,7 @@ end
 local function get_audio_duration(filepath)
     if not filepath or not util.file_exists(filepath) then return nil end
     local _, samples, rate = audio.file_info(filepath)
-    if samples and rate and rate > 0 then return samples / rate end
+    if samples and rate and rate > 0 then return min(samples, _HK.MAX_FRAMES) / rate end
     return nil
 end
 
@@ -391,22 +390,6 @@ function blim.on_duration(i, dur)
     if p.rj then local jp = i.."jitter"; disable_lfos_for_param(jp); local up = math.random() < 0.75 and min(500, dur * 1000) or dur * 1000; params:set(jp, clamp(math.random() * up, 0, 99999)) end
 end
 
-local function scan_audio_files(dir, files, budget)
-    files = files or {}
-    budget = budget or {256}
-    for _, entry in ipairs(util.scandir(dir)) do
-        local path = dir .. entry
-        if entry:sub(-1) == "/" then scan_audio_files(path, files, budget)
-        else
-            local ext = path:match("^.+(%..+)$")
-            if ext and _HK.audio_exts[ext:lower()] then files[#files+1] = path end
-        end
-        budget[1] = budget[1] - 1
-        if budget[1] <= 0 then budget[1] = 256 clock.sleep(0) end
-    end
-    return files
-end
-
 local function set_track_sample(track_num, file)
     if params:get(track_num .. "live_input") == 1 then return false end
     if params:get(track_num .. "sample") ~= file then params:set(track_num .. "sample", file) end
@@ -428,18 +411,28 @@ local function apply_random_tape(track_num)
     return true
 end
 
-local function load_random_tape_file(track_num)
-    if audio_files_cache then return apply_random_tape(track_num) end
-    hlp.scan_pending = track_num or 0
-    if hlp.scan_co then return false end
-    hlp.scan_co = clock.run(function()
-        local files = scan_audio_files(_path.audio, nil, {256})
+function hlp.scan_audio()
+    if hlp.scan_busy then hlp.scan_again = true return end
+    hlp.scan_busy, hlp.scan_again = true, nil
+    norns.system_cmd("nice -n 10 find '" .. _path.audio .. "' -type f -not -path '*/.*' \\( -iname '*.wav' -o -iname '*.aif' -o -iname '*.aiff' -o -iname '*.flac' \\) > " .. _HK.AUDIO_LIST .. " 2>/dev/null; echo _done_", function()
+        hlp.scan_busy = nil
+        if hlp.dead then return end
+        if hlp.scan_again then return hlp.scan_audio() end
+        local files, f = {}, io.open(_HK.AUDIO_LIST, "r")
+        if f then for line in f:lines() do files[#files + 1] = line end f:close() end
         audio_files_cache = files
-        hlp.scan_co = nil
         local p = hlp.scan_pending
         hlp.scan_pending = nil
         if p then apply_random_tape(p ~= 0 and p or nil) end
     end)
+end
+
+function hlp.audio_dirty() audio_files_cache = nil if hlp.scan_busy then hlp.scan_again = true end end
+
+local function load_random_tape_file(track_num)
+    if audio_files_cache then return apply_random_tape(track_num) end
+    hlp.scan_pending = track_num or 0
+    hlp.scan_audio()
     return false
 end
 
@@ -471,7 +464,7 @@ function hlp.finish_bounce()
     local b = hlp.bounce_pending
     hlp.bounce_pending = nil
     if not b then return end
-    audio_files_cache = nil
+    hlp.audio_dirty()
     if b.paths[2] then
         for i = 1, 2 do params:set(i .. "sample", b.paths[i]) end
     else
@@ -522,7 +515,7 @@ local function delete_unused_bounces()
             end
         end
     end
-    audio_files_cache = nil
+    hlp.audio_dirty()
     fx_popup.label = "Deleted " .. deleted .. " files"
     fx_popup.value = nil
     fx_popup.time = util.time()
@@ -567,7 +560,7 @@ local function setup_params()
     params:add_control("live_buffer_mix", "Overdub", controlspec.new(0, 100, "lin", 1, 100, "%")) params:set_action("live_buffer_mix", function(value) engine.live_buffer_mix(value * 0.01) end)
     params:add_taper("live_buffer_length", "Buffer Length", 0.05, 10, 1, 3, "s") params:set_action("live_buffer_length", function(value) engine.live_buffer_length(value) ctx.live_wf.reset(1) ctx.live_wf.reset(2) for i=1,2 do if params:get(i.."live_input")==1 then if not _G.preset_loading then blim.apply(i, value) else cached_buffer_durations[i]=value end end end end)
     for i = 1, 2 do
-      params:add{type = "trigger", id = "save_live_buffer"..i, name = "Buffer"..i.." to Tape", action = function() engine.save_live_buffer(i, "live"..i.."_"..os.date("%Y%m%d_%H%M%S")..".wav") audio_files_cache = nil end}
+      params:add{type = "trigger", id = "save_live_buffer"..i, name = "Buffer"..i.." to Tape", action = function() engine.save_live_buffer(i, "live"..i.."_"..os.date("%Y%m%d_%H%M%S")..".wav") hlp.audio_dirty() end}
     end
     for i = 1, 2 do
       params:add_binary(i.."live_direct", "Direct "..i.." ►", "toggle", 0) params:set_action(i.."live_direct", function(value) live_state[i].direct = (value == 1) if value == 1 then hlp.pre_direct[i] = {a = audio_active[i], s = params:get(i.."sample")} local was_live = params:get(i.."live_input") if was_live == 1 then params:set(i.."live_input", 0) end engine.live_direct(i, 1) set_sample_live(i) update_pan_positioning() else engine.live_direct(i, 0) local pd = hlp.pre_direct[i] hlp.pre_direct[i] = nil audio_active[i] = (pd and pd.a) or false if not audio_active[i] and params:get(i.."live_input") == 0 then osc_positions[i] = 0 params:set(i.."sample", "-") pause_voice_if_idle(i) else if pd and pd.s then params:set(i.."sample", pd.s, true) else set_sample_live(i) end update_pan_positioning() end end end)
@@ -2338,14 +2331,16 @@ function init()
     clock.transport.stop  = transport_stop
     clock.transport.reset = transport_start
     morph.initialize_scenes_with_current_params()
-    installer:check()
+    hlp.scan_audio()
+    hlp.check_co = clock.run(function() clock.sleep(10) hlp.check_co = nil installer:check() end)
 end
 
 function cleanup()
     clock.tempo_change_handler = nil
     flush_finalize()
     if boot_clock then pcall(clock.cancel, boot_clock) boot_clock = nil end
-    if hlp.scan_co then pcall(clock.cancel, hlp.scan_co) hlp.scan_co = nil end
+    hlp.dead = true
+    if hlp.check_co then pcall(clock.cancel, hlp.check_co) hlp.check_co = nil end
     stop_metro_safe(ui_metro)
     stop_metro_safe(longpress_metro)
     stop_metro_safe(finalize_metro)

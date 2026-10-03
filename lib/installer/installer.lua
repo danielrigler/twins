@@ -53,7 +53,7 @@ local function probe(requirements)
       wanted[h[1]] = { req = req, half = h[2] }
     end
   end
-  local cmd = string.format("find %s \\( %s \\) -not -path '*ignore*' -type f -printf '%%p!' 2>/dev/null",
+  local cmd = string.format("find %s -name .git -prune -o \\( %s \\) -not -path '*ignore*' -type f -printf '%%p!' 2>/dev/null",
     table.concat(SEARCH_FOLDERS, " "), table.concat(clauses, " -o "))
   local raw = util.os_capture(cmd, true) or ""
   for entry in raw:gmatch("([^!]+)") do
@@ -129,14 +129,6 @@ function Installer:install_libs()
   end)
 end
 
-function Installer:is_git()
-  return git(self, "rev-parse --is-inside-work-tree") == "true"
-end
-
-function Installer:is_dirty()
-  return git(self, "status --porcelain --untracked-files=no") ~= ""
-end
-
 function Installer:count_behind()
   return tonumber(git(self, "rev-list --count HEAD..@{u}")) or 0
 end
@@ -148,13 +140,14 @@ end
 
 function Installer:check()
   if not self.satisfied then return end
-  if not self:is_git() then return end
   self.update.state = "checking"
-  norns.system_cmd("timeout -k 5 20 git -C '" .. self.path .. "' fetch --quiet 2>/dev/null; echo _done_", function()
-    self.update.behind = self:count_behind()
+  local g = "nice -n 19 git -C '" .. self.path .. "' "
+  norns.system_cmd("if " .. g .. "rev-parse --is-inside-work-tree >/dev/null 2>&1; then timeout -k 5 20 " .. g .. "fetch --quiet 2>/dev/null; echo B$(" .. g .. "rev-list --count HEAD..@{u} 2>/dev/null); echo D$(" .. g .. "status --porcelain --untracked-files=no 2>/dev/null | wc -l); fi; echo _done_", function(out)
+    out = out or ""
+    self.update.behind = tonumber(out:match("B(%d+)")) or 0
     if self.update.behind <= 0 then
       self.update.state = nil
-    elseif self:is_dirty() then
+    elseif (tonumber(out:match("D(%d+)")) or 0) > 0 then
       print("[installer] " .. self.update.behind .. " update(s) available but working tree has local changes; skipping prompt.")
       self.update.state = nil
     else
