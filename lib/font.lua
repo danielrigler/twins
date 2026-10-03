@@ -5,6 +5,7 @@ font.micro_font = {
   B = {{1,1,0},{0,1,1},{0,0,1}},
   L = {{1,0},{1,0},{1,1}},
   C = {{1,1,1},{1,0,0},{1,1,1}},
+  c = {{1,1},{1,0},{1,1}},
   G = {{1,1,0},{1,0,1},{1,1,1}},
   E = {{1,1,1},{1,1,0},{1,1,1}},
   I = {{1},{1},{1}},
@@ -102,6 +103,7 @@ local fx_cache = {
   sub_mix         = 0,
   reel_mix        = 0,
   ott_mix         = 0,
+  vibe_mix      = 0,
   analogdrive_mix = 0,
   analogdrive_mod = 1,
   ["1cutoff"]     = 20000,
@@ -168,17 +170,15 @@ local function tape_intensity(cache)
 end
 
 local function stereo_active(cache)
-  return cache.Width ~= 100 or cache.dimension_mix > 0 or cache.stchorus_mix > 0
-      or cache.haas == 2 or cache.rspeed > 0 or cache.monobass_mix == 2
+  return cache.Width ~= 100 or cache.haas == 2 or cache.rspeed > 0 or cache.monobass_mix == 2
 end
 
 local function stereo_intensity(cache)
   local width_dev = math.abs(cache.Width - 100) / 100
-  local dim = math.max(cache.dimension_mix, cache.stchorus_mix) / 100
   local haas_val = cache.haas == 2 and (BINARY_ON_INTENSITY / 100) or 0
   local rspeed_val = cache.rspeed
   local mb = cache.monobass_mix == 2 and (BINARY_ON_INTENSITY / 100) or 0
-  local maxv = math.max(width_dev, dim, haas_val, rspeed_val, mb)
+  local maxv = math.max(width_dev, haas_val, rspeed_val, mb)
   return maxv * 100
 end
 
@@ -242,7 +242,7 @@ local FX_SPECS = {
   {glyph = "M", lock = nil,            show = function(c) return c.ringmod_mix > 0 end,               val = function(c) return c.ringmod_mix end},
   {glyph = "V", lock = nil,            show = function(c) return c.analogdrive_mix > 0 or c.fuzz_mix > 0 end, val = function(c) return math.max(c.analogdrive_mod == 2 and c.analogdrive_mix * _drive_mod_lfo(_draw_now) or c.analogdrive_mix, c.fuzz_mix) end},
   {glyph = "U", lock = nil,            show = function(c) return c.sub_mix > 0 end, val = function(c) return c.sub_mix end},
-  {glyph = "C", lock = nil,            show = function(c) return c.ott_mix > 0 end, val = function(c) return c.ott_mix end},
+  {glyph = "c", lock = nil,            show = function(c) return c.ott_mix > 0 end, val = function(c) return c.ott_mix end},
   {glyph = "S", lock = nil,            show = function(c) return c.spiral_mix > 0 end,                val = function(c) return c.spiral_mix end},
   {glyph = "G", lock = "lock_glitch",  show = function(c) return c.glitch_ratio > 0 and c.glitch_mix > 0 end, val = function(c) return c.glitch_ratio end},
   {glyph = "T", lock = "lock_tape",    show = tape_active,                                            val = tape_intensity},
@@ -250,6 +250,7 @@ local FX_SPECS = {
   {glyph = "D", lock = "lock_delay",   show = function(c) return c.delay_mix > 0 end,                 val = function(c) return c.delay_mix end, fade = function() return _delay_duck_gain end},
   {glyph = "R", lock = "lock_reverb",  show = function(c) return c.reverb_mix > -40 end,              val = function(c) return util.linlin(-40, 18, 0, 100, c.reverb_mix) end},
   {glyph = "Z", lock = nil,            show = stereo_active,                                          val = stereo_intensity},
+  {glyph = "C", lock = nil,            show = function(c) return c.dimension_mix > 0 or c.stchorus_mix > 0 or c.vibe_mix > 0 end, val = function(c) return math.max(c.dimension_mix, c.stchorus_mix, c.vibe_mix) end},
 }
 
 local _gradient = {1, 1, 1}

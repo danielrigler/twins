@@ -1,6 +1,6 @@
 Engine_twins : CroneEngine {
 
-var analogDriveEffect, dimensionEffect, haasEffect, bitcrushEffect, resonatorEffect, wavefoldEffect, ringmodEffect, delayEffect, shimmerEffect, tapeEffect, chewEffect, widthEffect, monobassEffect, sineEffect, wobbleEffect, lossdegradeEffect, rotateEffect, glitchEffect, stChorusEffect, reelEffect, ottEffect, genlossEffect, fuzzEffect, subEffect, spiralEffect, spiralBuffer, <silentBuffer, <buffersL, <buffersR, wobbleBuffer, glitchBuffer, <voices, bufSine, pg, <liveInputBuffersL, <liveInputBuffersR, <liveInputRecorders, <liveRecPosBuses, o, o_rec, o_voice_peak, o_delayduck, liveBufferAllocGeneration = 0, grainEnvs, pitchScaleBuffers, pitchScaleLengths, nornsAddr, voicesUsingLiveBuffer, currentSpeed, currentJitter, currentSize, currentDensity, currentDensityModAmt, currentPitch, currentPan, currentSpread, currentVolume, currentGranularGain, currentCutoff, currentHpf, currentlpf_gain, currentSubharmonics1, currentSubharmonics2, currentSubharmonics3, currentOvertones1, currentOvertones2, currentPitchMode, currentDirectionMod, currentSizeVariation, currentSmoothbass, currentLowGain, currentMidGain, currentHighGain, currentTiltGain, currentProbability, liveBufferMix = 1.0, currentPitchRandomProb, currentPitchRandomScale, currentRatchetingProb, currentPitchLag, currentGlitchRatio = 0.0, currentGlitchMix = 0.0, currentKeyHold, currentKeyGate, currentAdA, currentAdD, currentVelAmp, currentAmpRandomize, voiceBuses, filterSynths, filterRouters, eqSynths, tiltSynths, dryGroup, drySynths, voiceAmpBuses, voiceRunning, voiceIsStereo, bounceTracks, normOnLoad = 0, loadGen, loadPath, loadBusy, filePeak, rateScale;
+var analogDriveEffect, dimensionEffect, haasEffect, bitcrushEffect, resonatorEffect, wavefoldEffect, ringmodEffect, delayEffect, shimmerEffect, tapeEffect, chewEffect, widthEffect, monobassEffect, sineEffect, wobbleEffect, lossdegradeEffect, rotateEffect, glitchEffect, stChorusEffect, reelEffect, ottEffect, genlossEffect, fuzzEffect, subEffect, spiralEffect, spiralBuffer, <silentBuffer, <buffersL, <buffersR, wobbleBuffer, glitchBuffer, <voices, bufSine, pg, <liveInputBuffersL, <liveInputBuffersR, <liveInputRecorders, <liveRecPosBuses, o, o_rec, o_voice_peak, o_delayduck, liveBufferAllocGeneration = 0, grainEnvs, pitchScaleBuffers, pitchScaleLengths, nornsAddr, voicesUsingLiveBuffer, currentSpeed, currentJitter, currentSize, currentDensity, currentDensityModAmt, currentPitch, currentPan, currentSpread, currentVolume, currentGranularGain, currentCutoff, currentHpf, currentlpf_gain, currentSubharmonics1, currentSubharmonics2, currentSubharmonics3, currentOvertones1, currentOvertones2, currentPitchMode, currentDirectionMod, currentSizeVariation, currentSmoothbass, currentLowGain, currentMidGain, currentHighGain, currentTiltGain, currentProbability, liveBufferMix = 1.0, currentPitchRandomProb, currentPitchRandomScale, currentRatchetingProb, currentPitchLag, currentGlitchRatio = 0.0, currentGlitchMix = 0.0, currentKeyHold, currentKeyGate, currentAdA, currentAdD, currentVelAmp, currentAmpRandomize, voiceBuses, filterSynths, filterRouters, eqSynths, tiltSynths, dryGroup, drySynths, voiceAmpBuses, voiceRunning, voiceIsStereo, bounceTracks, vibeEffect, normOnLoad = 0, loadGen, loadPath, loadBusy, filePeak, rateScale;
 
 classvar pitchScales;
 *initClass {pitchScales = [[7, 12], [7, 12, 19, 24], [12], [12, 24], [1,2,3,4,5,6,7,8,9,10,11], [2,4,5,7,9,11], [2,3,5,7,8,10], [2,4,7,9], [2,4,6,8,10]];}
@@ -653,6 +653,14 @@ alloc {
             ReplaceOut.ar(bus, (w - x) * mix + x);
         }).add;
 
+        SynthDef(\vibe, {
+            arg bus, drift = 0.5, mix = 0;
+            var x = In.ar(bus, 2), p = Phasor.kr(0, LocalIn.kr(1).max(0.4294967) * drift.cubed * 0.001 * SampleRate.ir * ControlDur.ir, 0, 2pi), ph = (p + 3) % 2pi;
+            var wet = DelayL.ar(x, 260 * SampleDur.ir, (129 - (127 * [sin(ph), cos(ph)])) * SampleDur.ir);
+            LocalOut.kr(TRand.kr(0.4294967, 0.6949, HPZ1.kr(p) < 0));
+            ReplaceOut.ar(bus, x + ((wet - x) * mix));
+        }).add;
+
         SynthDef(\ott, {
             arg bus, mix=0;
             var x = In.ar(bus, 2), lc = 0.02725, hc = 0.253, it = 0.5;
@@ -684,6 +692,7 @@ alloc {
         delayEffect = Synth.newPaused(\delay, [\bus, context.out_b.index, \mix, 0.0], context.xg, 'addToTail');
         rotateEffect = Synth.newPaused(\rotate, [\bus, context.out_b.index], context.xg, 'addToTail');
         stChorusEffect = Synth.newPaused(\stchorus, [\bus, context.out_b.index], context.xg, 'addToTail');
+        vibeEffect = Synth.newPaused(\vibe, [\bus, context.out_b.index], context.xg, 'addToTail');
         dimensionEffect = Synth.newPaused(\dimension, [\bus, context.out_b.index], context.xg, 'addToTail');
         haasEffect = Synth.newPaused(\haas, [\bus, context.out_b.index], context.xg, 'addToTail');
         widthEffect = Synth.newPaused(\width, [\bus, context.out_b.index, \width, 1.0], context.xg, 'addToTail');
@@ -742,6 +751,7 @@ alloc {
             [\fuzz_gain, "f", fuzzEffect, \gain],
             [\fuzz_tone, "f", fuzzEffect, \tone],
             [\sub_detune, "f", subEffect, \detune],
+            [\vibe_drift, "f", vibeEffect, \drift],
         ].do({ arg c; this.addCommand(c[0], c[1], { arg msg; c[2].set(c[3], msg[1]); }); });
 
         [
@@ -766,6 +776,7 @@ alloc {
             [\ott_mix, ottEffect, \mix],
             [\dimension_mix, dimensionEffect, \mix],
             [\rspeed, rotateEffect, \rspeed],
+            [\vibe_mix, vibeEffect, \mix],
         ].do({ arg c; this.addCommand(c[0], "f", { arg msg; c[1].set(c[2], msg[1]); c[1].run(msg[1] > 0); }); });
 
         this.addCommand(\w_depth, "f", { arg msg; delayEffect.set(\w_depth, msg[1]/100); });
@@ -847,12 +858,13 @@ alloc {
 updateFilterRun { arg voice; filterSynths[voice].run((currentCutoff[voice] < 20000) || (currentHpf[voice] > 20)); }
 updateEqRun { arg voice; eqSynths[voice].run((currentLowGain[voice] != 0) || (currentMidGain[voice] != 0) || (currentHighGain[voice] != 0)); }
 updateTiltRun { arg voice; tiltSynths[voice].run(currentTiltGain[voice] != 0); }
+
 updateDryRun { arg voice; drySynths[voice].run(voiceRunning[voice] && (currentGranularGain[voice] < 1)); }
 
 free {
         [voices, drySynths, filterSynths, eqSynths, tiltSynths, filterRouters, liveInputRecorders].do({ arg col; col.do({ arg x; if(x.notNil, { x.free }); }); });
         2.do({ arg i; this.cancelLoad(i); this.freePair(buffersL[i], buffersR[i]); });
         [liveInputBuffersL, liveInputBuffersR, liveRecPosBuses, pitchScaleBuffers, grainEnvs, voiceBuses, voiceAmpBuses].do({ arg col; col.do({ arg b; if(b.notNil, { b.free }); }); });
-        [o, o_rec, o_voice_peak, o_delayduck, stChorusEffect, reelEffect, ottEffect, genlossEffect, fuzzEffect, subEffect, spiralEffect, spiralBuffer, wobbleBuffer, glitchBuffer, silentBuffer, bufSine, bitcrushEffect, shimmerEffect, analogDriveEffect, resonatorEffect, wavefoldEffect, ringmodEffect, tapeEffect, chewEffect, widthEffect, monobassEffect, lossdegradeEffect, sineEffect, wobbleEffect, glitchEffect, delayEffect, rotateEffect, haasEffect, dimensionEffect, dryGroup, pg].do({ arg x; if(x.notNil, { x.free }); });
+        [o, o_rec, o_voice_peak, o_delayduck, vibeEffect, stChorusEffect, reelEffect, ottEffect, genlossEffect, fuzzEffect, subEffect, spiralEffect, spiralBuffer, wobbleBuffer, glitchBuffer, silentBuffer, bufSine, bitcrushEffect, shimmerEffect, analogDriveEffect, resonatorEffect, wavefoldEffect, ringmodEffect, tapeEffect, chewEffect, widthEffect, monobassEffect, lossdegradeEffect, sineEffect, wobbleEffect, glitchEffect, delayEffect, rotateEffect, haasEffect, dimensionEffect, dryGroup, pg].do({ arg x; if(x.notNil, { x.free }); });
     }
 }

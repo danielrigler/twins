@@ -35,6 +35,7 @@ local DRY_VALUES = {
     sub_mix = 0,
     reel_mix = 0,
     ott_mix = 0,
+    vibe_mix = 0,
     clock_sync = 1,
     arp_on = 1
 }

@@ -3,7 +3,7 @@
 --   __ __|         _)          
 --      | \ \  \  / |  \ |  (_< 
 --      |  \_/\_/ _| _| _| __/ 
---            by: @dddstudio               
+--            by: @dddstudio                       
 -- 
 --                          
 --                           v0.77
@@ -691,13 +691,16 @@ local function setup_params()
     params:add_binary("lfo_pause", "Pause ⏸︎", "toggle", 0) params:set_action("lfo_pause", function(value) lfo.set_pause(value == 1) end)
     params:add_binary("ClearLFOs", "Clear All", "trigger", 0) params:set_action("ClearLFOs", function() undo.checkpoint() lfo.clearLFOs() invalidate_lfo_cache() update_pan_positioning() end)
     lfo.init()
-    params:add_group("STEREO", 6)
+    params:add_group("STEREO", 4)
     params:add_control("Width", "Stereo Width", controlspec.new(0, 200, "lin", 2, 100, "%")) params:set_action("Width", function(value) engine.width(value * 0.01) font.update_fx_cache("Width", value) end)
-    params:add_control("dimension_mix", "Dimension", controlspec.new(0, 100, "lin", 2, 0, "%")) params:set_action("dimension_mix", function(value) engine.dimension_mix(value * 0.01) font.update_fx_cache("dimension_mix", value) end)
-    params:add_control("stchorus_mix", "Stereo Chorus", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("stchorus_mix", function(v) engine.stchorus_mix(v * 0.01) font.update_fx_cache("stchorus_mix", v) end)
     params:add_option("haas", "Haas Effect", {"off", "on"}, 1) params:set_action("haas", function(x) engine.haas(x-1) font.update_fx_cache("haas", x) end)
     params:add_taper("rspeed", "Rotation", 0, 1, 0, 1, "Hz") params:set_action("rspeed", function(value) engine.rspeed(value) font.update_fx_cache("rspeed", value) end)
     params:add_option("monobass_mix", "Mono Bass", {"off", "on"}, 1) params:set_action("monobass_mix", function(x) engine.monobass_mix(x-1) font.update_fx_cache("monobass_mix", x) end)
+    params:add_group("CHORUS", 4)
+    params:add_control("dimension_mix", "Dimension", controlspec.new(0, 100, "lin", 2, 0, "%")) params:set_action("dimension_mix", function(value) engine.dimension_mix(value * 0.01) font.update_fx_cache("dimension_mix", value) end)
+    params:add_control("stchorus_mix", "Stereo Chorus", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("stchorus_mix", function(v) engine.stchorus_mix(v * 0.01) font.update_fx_cache("stchorus_mix", v) end)
+    params:add_control("vibe_mix", "Vibe", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("vibe_mix", function(v) engine.vibe_mix(v * 0.01) font.update_fx_cache("vibe_mix", v) end)
+    params:add_control("vibe_drift", "Vibe Drift", controlspec.new(0, 100, "lin", 1, 50, "%")) params:set_action("vibe_drift", function(v) engine.vibe_drift(v * 0.01) end)
     params:add_group("BITCRUSH", 4)
     params:add_taper("bitcrush_mix", "Mix", 0, 100, 0.0, 0, "%") params:set_action("bitcrush_mix", function(value) engine.bitcrush_mix(value * 0.01) font.update_fx_cache("bitcrush_mix", value) end)
     params:add_option("bitcrush_mod", "Mix Mod", {"off", "on"}, 1) params:set_action("bitcrush_mod", function(value) engine.bitcrush_mod(value - 1) font.update_fx_cache("bitcrush_mod", value) end)
