@@ -49,7 +49,6 @@ local PARAM_SPECS = {
   ["1eq_mid_gain"]        = {0.4, {-1,1},    "eq"}, ["2eq_mid_gain"]    = {0.4, {-1,1},"eq"},
   ["1eq_high_gain"]       = {0.4, {-1,1},    "eq"}, ["2eq_high_gain"]   = {0.4, {-1,1},"eq"},
   ["glitch_mix"]          = {40,  {0,100},   "glitch"},
-  ["glitch_probability"]  = {5,   {0.1,20},  "glitch"},
   ["glitch_min_length"]   = {100, {10,150},  "glitch"},
   ["glitch_max_length"]   = {100, {50,300},  "glitch"},
   ["glitch_maxstutters"]  = {5,   {2,20},    "glitch"},
@@ -471,6 +470,7 @@ local param_configs = {
   }},
   sync = { lock_param = "lock_sync", params = {
     {name="clock_sync_delay_div", prob=0.75, default=13, random=function() return random(9,18) end, direct_set=true, condition=function() return params:get("clock_sync") == 2 end},
+    {name="clock_glitch_div", prob=0.5, default=15, random=function() return random(13,17) end, direct_set=true, condition=function() return params:get("clock_sync") == 2 end},
   }},
 }
 

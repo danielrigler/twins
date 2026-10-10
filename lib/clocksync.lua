@@ -92,6 +92,23 @@ local function refresh_reseek()
 end
 
 local sync_co = nil
+local glitch_beats = 0.5
+local glitch_co = nil
+
+local function stop_glitch()
+  if glitch_co then clock.cancel(glitch_co) glitch_co = nil end
+  if engine then engine.glitch_sync(0) end
+end
+
+local function start_glitch()
+  if engine then engine.glitch_sync(1) end
+  glitch_co = glitch_co or clock.run(function()
+    while true do
+      clock.sync(glitch_beats)
+      if params:get("glitch_ratio") > 0 then engine.glitch_trig() end
+    end
+  end)
+end
 
 function clocksync.add_params()
   params:add_option("clock_sync", "Clock Sync", {"off", "on"}, 1)
@@ -104,9 +121,11 @@ function clocksync.add_params()
       sync_co = sync_co or clock.run(function()
         while true do clock.sync(1) push() end
       end)
+      start_glitch()
       push()
     else
       if sync_co then clock.cancel(sync_co) sync_co = nil end
+      stop_glitch()
       if lfo_ref then lfo_ref.apply_clock_sync(nil) lfo_ref.set_sine_all(false) end
       set_density(1, params:get("1density"))
       set_density(2, params:get("2density"))
@@ -134,6 +153,8 @@ function clocksync.add_params()
     delay_div = DIVISIONS[v].beats
     push()
   end)
+  params:add_option("clock_glitch_div", "Glitch Division", DIV_LABELS, DIV["1/8"])
+  params:set_action("clock_glitch_div", function(v) glitch_beats = DIVISIONS[v].beats end)
   params:add_option("clock_reseek", "Beat Repeat", {"off", "on"}, 1)
   params:set_action("clock_reseek", function(v)
     reseek_enabled = (v == 2)
@@ -261,6 +282,7 @@ function clocksync.init(opts)
   lfo_div_beats[1] = DIVISIONS[params:get("clock_lfo_div")].beats
   lfo_div_beats[2] = DIVISIONS[params:get("clock_lfo_div2")].beats
   reseek_beats = DIVISIONS[params:get("clock_reseek_div")].beats
+  glitch_beats = DIVISIONS[params:get("clock_glitch_div")].beats
   reseek_enabled = params:get("clock_reseek") == 2
   if params:get("clock_sync") == 2 then params:lookup_param("clock_sync"):bang() end
   refresh_reseek()
@@ -268,6 +290,7 @@ end
 
 function clocksync.cleanup()
   if sync_co then clock.cancel(sync_co) sync_co = nil end
+  if glitch_co then clock.cancel(glitch_co) glitch_co = nil end
   stop_reseek()
   if lfo_ref then lfo_ref.apply_clock_sync(nil) lfo_ref.set_sine_all(false) end
 end

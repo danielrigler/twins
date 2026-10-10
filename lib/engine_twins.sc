@@ -67,7 +67,7 @@ alloc {
         bufSine.sine2([2], [0.5], false);
         wobbleBuffer = Buffer.alloc(context.server, context.server.sampleRate * 5, 2);
         spiralBuffer = Buffer.alloc(context.server, context.server.sampleRate * 3, 2);
-        glitchBuffer = Buffer.alloc(context.server, context.server.sampleRate * 1, 2);
+        glitchBuffer = Buffer.alloc(context.server, context.server.sampleRate * 10, 2);
         silentBuffer = Buffer.alloc(context.server, context.server.sampleRate.asInteger);
         voiceBuses = Array.fill(2, { Bus.audio(context.server, 2); });
         voiceAmpBuses = Array.fill(2, { Bus.control(context.server, 1); });
@@ -478,36 +478,31 @@ alloc {
         }).add;
 
         SynthDef(\glitch, {
-            arg bus, probability, glitch_ratio = 0.0, mix, minLength, maxLength, reverse, pitch, maxStutters;
-            var sig, bufFrames, writePos, rawTrigOn, trigOn, earlyOff, trigOff, isGlitching, isGlitching_fb, capturePos, chunkLength, chunkStart, stutterCount, autoOff, pitchShift, isReverse, relPos, bufReadPos, wet_raw, wet, fadeSamples, startRamp, endRamp, loopEnv, sr;
+            arg bus, glitch_ratio = 0.0, mix, minLength, maxLength, reverse, pitch, maxStutters, sync = 0, t_ext = 0;
+            var sig, sr, frames, busy, rest, writePos, idle, cool, trig, t, len, start, ps, dur, gate, rel, pos, fade, env, wet;
             sig = In.ar(bus, 2);
             sr = SampleRate.ir;
-            bufFrames = BufFrames.ir(glitchBuffer);
-            fadeSamples = sr * 0.06;
-            writePos = Phasor.ar(0, 1, 0, bufFrames);
+            frames = BufFrames.ir(glitchBuffer);
+            writePos = Phasor.ar(0, 1, 0, frames);
             BufWr.ar(sig, glitchBuffer, writePos);
-            isGlitching_fb = LocalIn.kr(1);
-            rawTrigOn = Dust.kr(probability * glitch_ratio);
-            trigOn = rawTrigOn * (1 - isGlitching_fb);
-            capturePos = Latch.kr(writePos, trigOn);
-            chunkLength = TRand.kr(minLength * sr, maxLength * sr, trigOn);
-            stutterCount = TIRand.kr(2, maxStutters, trigOn);
-            isReverse = TRand.kr(0, 1, trigOn) < reverse;
-            pitchShift = 1.0 + ((TRand.kr(0, 1, trigOn) < pitch) * (Select.kr(TIRand.kr(0, 3, trigOn), [0.707, 0.841, 1.189, 1.414]) - 1.0));
-            chunkStart = (capturePos - chunkLength).wrap(0, bufFrames - 1);
-            autoOff = TDelay.kr(trigOn, stutterCount * (chunkLength / sr) / pitchShift);
-            earlyOff = Dust.kr(probability * (1.0 - glitch_ratio).max(0.001)) * isGlitching_fb;
-            trigOff = earlyOff + autoOff;
-            isGlitching = SetResetFF.kr(trigOn, trigOff);
-            LocalOut.kr(isGlitching);
-            relPos = Phasor.ar(trigOn, pitchShift, 0, chunkLength, 0);
-            bufReadPos = chunkStart + Select.ar(isReverse, [relPos, chunkLength - relPos]);
-            wet_raw = BufRd.ar(2, glitchBuffer, bufReadPos, loop: 1, interpolation: 2);
-            startRamp = (relPos / fadeSamples).clip(0, 1);
-            endRamp = ((chunkLength - relPos) / fadeSamples).clip(0, 1);
-            loopEnv = startRamp.min(endRamp);
-            wet = wet_raw * 2 * loopEnv;
-            ReplaceOut.ar(bus, LinXFade2.ar(sig, wet, (isGlitching * mix * 2) - 1));
+            #busy, rest = LocalIn.kr(2);
+            idle = (2 + maxStutters) * (minLength + maxLength) * 0.25 * (1 - glitch_ratio).max(0.01) / glitch_ratio.max(0.0001);
+            cool = (idle * 0.5).min(4);
+            trig = Select.kr(sync, [Dust.kr((idle - cool).reciprocal) * (1 - rest), CoinGate.kr(glitch_ratio, t_ext)]) * (1 - busy);
+            len = TRand.kr(minLength, maxLength, trig) * sr;
+            start = (Latch.kr(writePos, trig) - len).wrap(0, frames);
+            ps = Select.kr(TRand.kr(0, 1, trig) < pitch, [1, Select.kr(TIRand.kr(0, 3, trig), [0.707, 0.841, 1.189, 1.414])]);
+            dur = (TIRand.kr(2, maxStutters, trig) * len / ps).min(frames - len - (sr * 0.02)) / sr;
+            gate = Trig1.kr(trig, dur);
+            LocalOut.kr([gate, Trig1.kr(busy * (1 - gate), cool)]);
+            t = T2A.ar(trig);
+            len = Latch.ar(len, t);
+            rel = Phasor.ar(t, ps, 0, len);
+            pos = Latch.ar(start, t) + Select.ar(TRand.kr(0, 1, trig) < reverse, [rel, len - rel]);
+            fade = (len * 0.25).clip(1, sr * 0.005);
+            env = (rel / fade).clip(0, 1).min(((len - rel) / fade).clip(0, 1));
+            wet = BufRd.ar(2, glitchBuffer, pos, 1, 2) * env;
+            ReplaceOut.ar(bus, LinXFade2.ar(sig, wet, (Lag.kr(gate, 0.005) * mix * 2) - 1));
         }).add;
 
         SynthDef(\chew, {
@@ -721,12 +716,12 @@ alloc {
             [\bitcrush_rate, "f", bitcrushEffect, \rate],
             [\bitcrush_bits, "f", bitcrushEffect, \bits],
             [\bitcrush_mod, "i", bitcrushEffect, \mod_mix],
-            [\glitch_probability, "f", glitchEffect, \probability],
             [\glitch_maxstutters, "i", glitchEffect, \maxStutters],
             [\glitch_min_length, "f", glitchEffect, \minLength],
             [\glitch_max_length, "f", glitchEffect, \maxLength],
             [\glitch_reverse, "f", glitchEffect, \reverse],
             [\glitch_pitch, "f", glitchEffect, \pitch],
+            [\glitch_sync, "i", glitchEffect, \sync],
             [\wobble_amp, "f", wobbleEffect, \wobble_amp],
             [\wobble_rpm, "f", wobbleEffect, \wobble_rpm],
             [\flutter_amp, "f", wobbleEffect, \flutter_amp],
@@ -818,6 +813,7 @@ alloc {
 
         this.addCommand("glitch_ratio", "f", { arg msg; currentGlitchRatio = msg[1]; glitchEffect.set(\glitch_ratio, currentGlitchRatio); glitchEffect.run((currentGlitchRatio > 0) && (currentGlitchMix > 0)); });
         this.addCommand("glitch_mix", "f", { arg msg; currentGlitchMix = msg[1]; glitchEffect.set(\mix, currentGlitchMix); glitchEffect.run((currentGlitchRatio > 0) && (currentGlitchMix > 0)); });
+        this.addCommand("glitch_trig", "", { glitchEffect.set(\t_ext, 1); });
 
         this.addCommand("resonator_freqs", "fffff", { arg msg; resonatorEffect.set(\f1, msg[1], \f2, msg[2], \f3, msg[3], \f4, msg[4], \f5, msg[5]); });
 
