@@ -470,7 +470,6 @@ local param_configs = {
   }},
   sync = { lock_param = "lock_sync", params = {
     {name="clock_sync_delay_div", prob=0.75, default=13, random=function() return random(9,18) end, direct_set=true, condition=function() return params:get("clock_sync") == 2 end},
-    {name="clock_glitch_div", prob=0.5, default=15, random=function() return random(13,17) end, direct_set=true, condition=function() return params:get("clock_sync") == 2 end},
   }},
 }
 

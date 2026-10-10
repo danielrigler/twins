@@ -478,8 +478,8 @@ alloc {
         }).add;
 
         SynthDef(\glitch, {
-            arg bus, glitch_ratio = 0.0, mix, minLength, maxLength, reverse, pitch, maxStutters, sync = 0, t_ext = 0;
-            var sig, sr, frames, busy, rest, writePos, idle, cool, trig, t, len, start, ps, dur, gate, rel, pos, fade, env, wet;
+            arg bus, glitch_ratio = 0.0, mix, minLength, maxLength, reverse, pitch, maxStutters, gate_amt = 1, decay = 0;
+            var sig, sr, frames, busy, rest, writePos, idle, cool, trig, len, start, ps, dur, on, el, t, rel, pos, fade, env, wet;
             sig = In.ar(bus, 2);
             sr = SampleRate.ir;
             frames = BufFrames.ir(glitchBuffer);
@@ -488,21 +488,22 @@ alloc {
             #busy, rest = LocalIn.kr(2);
             idle = (2 + maxStutters) * (minLength + maxLength) * 0.25 * (1 - glitch_ratio).max(0.01) / glitch_ratio.max(0.0001);
             cool = (idle * 0.5).min(4);
-            trig = Select.kr(sync, [Dust.kr((idle - cool).reciprocal) * (1 - rest), CoinGate.kr(glitch_ratio, t_ext)]) * (1 - busy);
+            trig = Dust.kr((idle - cool).reciprocal) * (1 - rest) * (1 - busy);
             len = TRand.kr(minLength, maxLength, trig) * sr;
             start = (Latch.kr(writePos, trig) - len).wrap(0, frames);
             ps = Select.kr(TRand.kr(0, 1, trig) < pitch, [1, Select.kr(TIRand.kr(0, 3, trig), [0.707, 0.841, 1.189, 1.414])]);
             dur = (TIRand.kr(2, maxStutters, trig) * len / ps).min(frames - len - (sr * 0.02)) / sr;
-            gate = Trig1.kr(trig, dur);
-            LocalOut.kr([gate, Trig1.kr(busy * (1 - gate), cool)]);
+            on = Trig1.kr(trig, dur);
+            el = Sweep.kr(trig, 1);
+            LocalOut.kr([on, Trig1.kr(busy * (1 - on), cool)]);
             t = T2A.ar(trig);
             len = Latch.ar(len, t);
             rel = Phasor.ar(t, ps, 0, len);
             pos = Latch.ar(start, t) + Select.ar(TRand.kr(0, 1, trig) < reverse, [rel, len - rel]);
-            fade = (len * 0.25).clip(1, sr * 0.005);
-            env = (rel / fade).clip(0, 1).min(((len - rel) / fade).clip(0, 1));
-            wet = BufRd.ar(2, glitchBuffer, pos, 1, 2) * env;
-            ReplaceOut.ar(bus, LinXFade2.ar(sig, wet, (Lag.kr(gate, 0.005) * mix * 2) - 1));
+            fade = (len * gate_amt * 0.25).clip(1, sr * 0.005);
+            env = (rel / fade).clip(0, 1).min(((len * gate_amt - rel) / fade).clip(0, 1));
+            wet = BufRd.ar(2, glitchBuffer, pos, 1, 2) * env * (1 - (decay * (el / dur.max(0.001)).clip(0, 1)));
+            ReplaceOut.ar(bus, LinXFade2.ar(sig, wet, (Lag.kr(on, 0.005) * mix * 2) - 1));
         }).add;
 
         SynthDef(\chew, {
@@ -721,7 +722,8 @@ alloc {
             [\glitch_max_length, "f", glitchEffect, \maxLength],
             [\glitch_reverse, "f", glitchEffect, \reverse],
             [\glitch_pitch, "f", glitchEffect, \pitch],
-            [\glitch_sync, "i", glitchEffect, \sync],
+            [\glitch_gate, "f", glitchEffect, \gate_amt],
+            [\glitch_decay, "f", glitchEffect, \decay],
             [\wobble_amp, "f", wobbleEffect, \wobble_amp],
             [\wobble_rpm, "f", wobbleEffect, \wobble_rpm],
             [\flutter_amp, "f", wobbleEffect, \flutter_amp],
@@ -813,7 +815,6 @@ alloc {
 
         this.addCommand("glitch_ratio", "f", { arg msg; currentGlitchRatio = msg[1]; glitchEffect.set(\glitch_ratio, currentGlitchRatio); glitchEffect.run((currentGlitchRatio > 0) && (currentGlitchMix > 0)); });
         this.addCommand("glitch_mix", "f", { arg msg; currentGlitchMix = msg[1]; glitchEffect.set(\mix, currentGlitchMix); glitchEffect.run((currentGlitchRatio > 0) && (currentGlitchMix > 0)); });
-        this.addCommand("glitch_trig", "", { glitchEffect.set(\t_ext, 1); });
 
         this.addCommand("resonator_freqs", "fffff", { arg msg; resonatorEffect.set(\f1, msg[1], \f2, msg[2], \f3, msg[3], \f4, msg[4], \f5, msg[5]); });
 
