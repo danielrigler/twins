@@ -636,10 +636,10 @@ alloc {
 
         SynthDef(\sub, {
             arg bus, mix=0, detune=0.65;
-            var x = In.ar(bus, 2), mono = x.sum * 0.5, off = SinOsc.kr(0.15, 0, detune * 0.0173287);
+            var x = In.ar(bus, 2), mono = x.sum * 0.5, off = SinOsc.kr(0.15, 0, detune * 0.0173287), s = SampleDur.ir;
             var d1 = (Phasor.ar(0, [0.5 - off, 0.5 + off], 0, 4096) + [0, 2048]) % 4096, d2 = (d1 + 2048) % 4096;
-            var v = DelayL.ar(mono, 0.1, d1 / 44100) * tri.(d1) + (DelayL.ar(mono, 0.1, d2 / 44100) * tri.(d2));
-            ReplaceOut.ar(bus, (OnePole.ar(csoft.(v * 2.5), 0.89) - x) * mix + x);
+            var v = DelayL.ar(mono, 0.1, d1 * s) * tri.(d1) + (DelayL.ar(mono, 0.1, d2 * s) * tri.(d2));
+            ReplaceOut.ar(bus, (OnePole.ar(csoft.(v * 2.5), 0.89 ** (44100 * s)) - x) * mix + x);
         }).add;
 
         SynthDef(\reel, {
