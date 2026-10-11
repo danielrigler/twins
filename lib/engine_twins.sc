@@ -657,12 +657,16 @@ alloc {
         }).add;
 
         SynthDef(\ott, {
-            arg bus, mix=0;
-            var x = In.ar(bus, 2), lc = 0.02725, hc = 0.253, it = 0.5;
-            var lo = OnePole.ar(x, 1 - lc), hi = OnePole.ar(x, 1 - hc), gc = 0.982 - (it * 0.2);
-            var at = -0.00015664 / log(1 - (it * 0.3 + 0.035)), rt = -0.00015664 / log(1 - (it * 0.035 + 0.0015));
-            var wet = [lo, hi - lo, x - hi].collect({ arg b; var e = LagUD.ar(b.abs, at, rt) + 0.0002; b * OnePole.ar(((0.15 / e + 0.25).min(1) * ((0.055 - e) / (e + 0.018) * 0.85 + 1).max(1)).clip(0.3, 3.25), gc) }).sum * 0.78;
-            ReplaceOut.ar(bus, (wet - x) * mix + x);
+            arg bus, mix = 0;
+            var x = In.ar(bus, 2), f1 = 88.3, f2 = 2500, amt = Lag.kr(mix, 0.1);
+            var lo = LPF.ar(LPF.ar(x, f1), f1), rest = HPF.ar(HPF.ar(x, f1), f1);
+            var mid = LPF.ar(LPF.ar(rest, f2), f2), hi = HPF.ar(HPF.ar(rest, f2), f2);
+            var wet = [[BAllPass.ar(lo, f2, 1.4142), -33.8, -40.8, 0.0478, 0.282, 10.3, 0.15], [mid, -30.2, -41.8, 0.0224, 0.282, 5.7, 0.1], [hi, -35.5, -40.8, 0.0135, 0.132, 10.3, 0.02]].collect({ arg p;
+                var b = p[0], lvl = (A2K.kr(Lag.ar((b[0].squared + b[1].squared) * 0.5, p[6])).max(1e-10).log10 * 10) + 3;
+                var g = ((p[1] - lvl).min(0) * 0.985) + ((p[2] - lvl).clip(0, 36) * (((lvl + 90) * 0.05).clip(0, 1) * 0.76));
+                b * ((LagUD.kr(g, p[4], p[3]) + p[5] + 6) * amt).dbamp
+            }).sum;
+            ReplaceOut.ar(bus, wet);
         }).add;
 
         context.server.sync;
