@@ -49,7 +49,7 @@ local DRY_VALUES_STEREO = {
     eq_tilt = 0,
     cutoff = 20000,
     hpf = 20,
-    lpf_gain = 0.05,
+    lpf_gain = 0,
     pan = 0
 }
 
