@@ -1720,18 +1720,20 @@ local function refresh_redraw_cache()
     local smoothbass_mult = (pget(K.smoothbass) == 2) and 2.5 or 1
     local hl = C.harm_layers or {}
     local hn = 0
+    local hch = false
     for hi = 1, 5 do
       local d = _HK.harm_def[hi]
       local amt = pget(K[d.key]) or 0
       if amt > 0.001 then
         hn = hn + 1
         local e = hl[hn] or {}
-        e.ratio = d.ratio
-        e.size_mult = d.sub and smoothbass_mult or 1
-        e.alpha = (amt < 1 and amt or 1) * _HK.harm_alpha
+        local sm = d.sub and smoothbass_mult or 1
+        local al = (amt < 1 and amt or 1) * _HK.harm_alpha
+        if e.ratio ~= d.ratio or e.size_mult ~= sm or e.alpha ~= al then e.ratio, e.size_mult, e.alpha, hch = d.ratio, sm, al, true end
         hl[hn] = e
       end
     end
+    if hch or hl.n ~= hn then C.harm_gen = (C.harm_gen or 0) + 1 end
     hl.n = hn
     C.harm_layers = hl
   end
@@ -1759,18 +1761,13 @@ local function speed_text(t, s)
   c.v, c.s = q, str
   return str
 end
-_HK.smear = function(x, seek_y, start_pos, end_pos, gsz, forward, lut, fade, alpha, col)
+_HK.smear = function(acc, start_pos, end_pos, gsz, forward, lut, alpha)
   local dl = start_pos * BAR_W // 1
   local dr = -(-(end_pos * BAR_W) // 1) - 1
   if dr <= dl or gsz * BAR_W <= 1 then
-    local lv = -(-(_ENV_PEAK[lut] * fade * alpha) // 1)
-    if lv < 1 then lv = 1 end
+    local v = _ENV_PEAK[lut] * alpha
     local px = (start_pos + end_pos) * 0.5 * BAR_W // 1 % BAR_W
-    if col then
-      if lv > col[px] then col[px] = lv end
-    else
-      P(lv, x + px, seek_y)
-    end
+    if v > acc[px] then acc[px] = v end
   else
     local inv_gsz = 1 / gsz
     local inv_bar_w = _HK.inv_bar_w
@@ -1780,31 +1777,41 @@ _HK.smear = function(x, seek_y, start_pos, end_pos, gsz, forward, lut, fade, alp
     if not forward then sp_dt = -sp_dt end
     local N, NM, BW = _GLUT_N, _GLUT_NM, BAR_W
     local lo_v, hi_v = lut[0], lut[NM]
-    if col then
-      for px_unwrapped = dl, dr do
-        local idx = sp * N // 1
-        local L = lut[idx]
-        if L == nil then L = idx < 0 and lo_v or hi_v end
-        local lv = -(-(L * fade * alpha) // 1)
-        if lv < 1 then lv = 1 end
-        local px = px_unwrapped % BW
-        if lv > col[px] then col[px] = lv end
-        sp = sp + sp_dt
-      end
-    else
-      local plot = P
-      for px_unwrapped = dl, dr do
-        local idx = sp * N // 1
-        local L = lut[idx]
-        if L == nil then L = idx < 0 and lo_v or hi_v end
-        local lv = -(-(L * fade * alpha) // 1)
-        if lv < 1 then lv = 1 end
-        local px = px_unwrapped % BW
-        plot(lv, x + px, seek_y)
-        sp = sp + sp_dt
-      end
+    for px_unwrapped = dl, dr do
+      local idx = sp * N // 1
+      local L = lut[idx]
+      if L == nil then L = idx < 0 and lo_v or hi_v end
+      L = L * alpha
+      local px = px_unwrapped % BW
+      if L > acc[px] then acc[px] = L end
+      sp = sp + sp_dt
     end
   end
+end
+_HK.acc = {}
+_HK.viz = {{gen = 0}, {gen = 0}}
+_HK.profile = function(g, dur, spd_fwd, dir_mod, is_random_env, lut_default, hl)
+  local acc, smear = _HK.acc, _HK.smear
+  for i = 0, BAR_W - 1 do acc[i] = 0 end
+  local pos = g.pos
+  local base_w = g.size * g.pitch / dur
+  local gsz = base_w < 1 and base_w or 1
+  local forward = spd_fwd ~= (g.rv < dir_mod)
+  local lut = is_random_env and (_ENV_LUT[g.rv * 4 // 1 + 1] or _ENV_LUT[1]) or lut_default
+  if forward then smear(acc, pos, pos + gsz, gsz, true, lut, 1) else smear(acc, pos - gsz, pos, gsz, false, lut, 1) end
+  if hl then
+    for hi = 1, hl.n do
+      local e = hl[hi]
+      local hw = base_w * e.ratio * e.size_mult
+      if hw > 1 then hw = 1 end
+      if forward then smear(acc, pos, pos + hw, hw, true, lut, e.alpha) else smear(acc, pos - hw, pos, hw, false, lut, e.alpha) end
+    end
+  end
+  local px, pv = g.px, g.pv
+  if not px then px, pv = {}, {} g.px, g.pv = px, pv end
+  local n = 0
+  for i = 0, BAR_W - 1 do local v = acc[i] if v > 0 then n = n + 1 px[n] = i pv[n] = v end end
+  g.pn = n
 end
 _HK.advance_grains = function(t, now)
   local grains = grain_positions[t]
@@ -1826,7 +1833,7 @@ _HK.advance_grains = function(t, now)
   for i = keep + 1, #grains do grains[i] = nil end
 end
 _HK.recycle_grains = function(grains) if not grains then return end for i = #grains, 1, -1 do _grain_pool[#_grain_pool + 1] = grains[i] grains[i] = nil end end
-local function draw_grains(t, x, col)
+local function draw_grains(t, col)
   local grains = grain_positions[t]
   if not grains then return end
   local C = PARAM_CACHE.track[t]
@@ -1836,37 +1843,31 @@ local function draw_grains(t, x, col)
   local spd_fwd = C.spd >= -0.01
   local dir_mod = C.dir_mod
   local env_sel = C.env_sel
+  local vz = _HK.viz[t]
+  if vz.dur ~= dur or vz.fwd ~= spd_fwd or vz.dm ~= dir_mod or vz.env ~= env_sel or vz.hg ~= C.harm_gen then
+    vz.dur, vz.fwd, vz.dm, vz.env, vz.hg, vz.gen = dur, spd_fwd, dir_mod, env_sel, C.harm_gen, vz.gen + 1
+  end
+  local gen = vz.gen
   local is_random_env = env_sel == 5
   local lut_default = _ENV_LUT[env_sel] or _ENV_LUT[1]
   local lut_n = _GLUT_N
   local lut_nm = _GLUT_NM
-  local seek_y = Y.seek
   local harm_layers = C.harm_layers
-  local smear = _HK.smear
+  local profile = _HK.profile
   for gi = 1, #grains do
     local g = grains[gi]
     if drawn < 50 or not g.shown then
       drawn = drawn + 1
       g.shown = true
-      local base_w = g.size * g.pitch / dur
-      local gsz = base_w < 1 and base_w or 1
-      local forward = spd_fwd ~= (g.rv < dir_mod)
-      local lut = is_random_env and (_ENV_LUT[g.rv * 4 // 1 + 1] or _ENV_LUT[1]) or lut_default
+      if g.pg ~= gen then profile(g, dur, spd_fwd, dir_mod, is_random_env, lut_default, harm_layers) g.pg = gen end
       local fi = g.lf * lut_n // 1
       if fi > lut_nm then fi = lut_nm end
       local fade = _FADE_LUT[fi]
-      local start_pos, end_pos
-      if forward then start_pos = g.pos; end_pos = g.pos + gsz else start_pos = g.pos - gsz; end_pos = g.pos end
-      smear(x, seek_y, start_pos, end_pos, gsz, forward, lut, fade, 1, col)
-      if harm_layers and harm_layers.n > 0 then
-        for hi = 1, harm_layers.n do
-          local e = harm_layers[hi]
-          local hw = base_w * e.ratio * e.size_mult
-          if hw > 1 then hw = 1 end
-          local hs, he
-          if forward then hs = g.pos; he = g.pos + hw else hs = g.pos - hw; he = g.pos end
-          smear(x, seek_y, hs, he, hw, forward, lut, fade, e.alpha, col)
-        end
+      local px, pv = g.px, g.pv
+      for k = 1, g.pn do
+        local i = px[k]
+        local v = pv[k] * fade
+        if v > col[i] then col[i] = v end
       end
     end
   end
@@ -1905,12 +1906,13 @@ _HK.draw_grain_pans = function(t, base_x)
   end
   if run_lv > 0 then R(run_lv, origin + run_k, 1, 28 - run_k, 1) end
 end
-local function grain_column(t, x)
+local function grain_column(t)
   local gran = PARAM_CACHE.track[t].gran
   if gran and gran > 0 then
     local col = ctx.waveforms[0]
     for i = 0, BAR_W - 1 do col[i] = 0 end
-    draw_grains(t, x, col)
+    draw_grains(t, col)
+    for i = 0, BAR_W - 1 do local v = col[i] if v > 0 then col[i] = -(-v // 1) end end
     return col
   end
   _HK.recycle_grains(grain_positions[t])
@@ -1935,7 +1937,7 @@ local function draw_seek_bar_viz(t, x, mode, wf, active)
   if wf ~= nil then
     local wmid = Y.seek - 4
     if wf then
-      local col = #grain_positions[t] > 0 and grain_column(t, x) or nil
+      local col = #grain_positions[t] > 0 and grain_column(t) or nil
       local base = flash_level(t, 1)
       local run_x, run_lv, run_hh = 0, -1, 0
       for i = 0, animated_bar_w - 1 do
@@ -1970,7 +1972,7 @@ local function draw_seek_bar_viz(t, x, mode, wf, active)
     return
   end
   if C.dir_ ~= 1 then R(1, x, Y.seek, animated_bar_w, 1) end
-  local col = grain_column(t, x)
+  local col = grain_column(t)
   if col then
     local sy = Y.seek
     local run_x, run_lv = 0, col[0]
@@ -2192,7 +2194,7 @@ function redraw()
   screen.update()
 end
 
-local function push_grain(vid, pos, size, rv, pitch, pan, now) if audio_active[vid] or live_state[vid].direct then local b = grain_positions[vid] local n = #b if n < 64 then local np = #_grain_pool local g if np > 0 then g = _grain_pool[np] _grain_pool[np] = nil else g = {} end g.pos, g.size, g.t, g.rv, g.pitch, g.pan, g.shown = pos, size, now, rv or 0.5, pitch or 1, pan or 0, false b[n+1] = g end end end
+local function push_grain(vid, pos, size, rv, pitch, pan, now) if audio_active[vid] or live_state[vid].direct then local b = grain_positions[vid] local n = #b if n < 64 then local np = #_grain_pool local g if np > 0 then g = _grain_pool[np] _grain_pool[np] = nil else g = {} end g.pos, g.size, g.t, g.rv, g.pitch, g.pan, g.shown, g.pg = pos, size, now, rv or 0.5, pitch or 1, pan or 0, false, false b[n+1] = g end end end
 local osc_handlers = {
     ["/twins/rec_pos"] = function(args)
         local vid, pos, peak = args[1] + 1, args[2], args[3]
