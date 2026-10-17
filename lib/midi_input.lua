@@ -26,6 +26,22 @@ local voice_loaded     = function(_) return true end
 local on_transport_start    = nil
 local on_transport_stop     = nil
 local on_transport_continue = nil
+local on_bend               = nil
+
+local chan       = 0
+local bend_range = 2
+local bend_st    = 0
+local bend_ratio = { 1, 1 }
+
+local function apply_bend()
+    for v = 1, 2 do
+        local r = pitch_v[v] and 2 ^ (bend_st / 12) or 1
+        if r ~= bend_ratio[v] then
+            bend_ratio[v] = r
+            if on_bend then on_bend(v) end
+        end
+    end
+end
 
 local set_pitch = function(v, p)
     local k = PITCH_KEY[v]
@@ -182,6 +198,7 @@ local function all_off()
     end
     held = {}; voice_note = { nil, nil }
     applied = { 0, 0 }; rr = 2
+    bend_st = 0; bend_ratio = { 1, 1 }
     engine.key_gate(1, 0); engine.key_gate(2, 0)
 end
 
@@ -222,6 +239,7 @@ end
 
 local function refresh()
     recompute_routing()
+    apply_bend()
     apply_voice_gate(1)
     apply_voice_gate(2)
     rr = 2
@@ -268,6 +286,7 @@ local function handle(data)
     end
     local d = midi.to_msg(data)
     if not d then return end
+    if chan > 0 and d.ch and d.ch ~= chan then return end
     local t = d.type
     if t == "note_on" and d.vel and d.vel > 0 then
         if para_mode then para_note_on(d.note, d.vel)
@@ -277,10 +296,14 @@ local function handle(data)
         else held_remove(d.note); update_voices() end
     elseif t == "cc" and d.cc == 1 then
         local dest = CC1_PARAM[params:get("midi_cc1_dest")]
+        if dest == "morph_amount" and params:get("scene_mode") ~= 2 then dest = nil end
         if dest and params.lookup[dest] then
             local lo, hi = cc_range(dest)
             params:set(dest, floor(util.linlin(0, 127, lo, hi, d.val or 0) + 0.5))
         end
+    elseif t == "pitchbend" then
+        bend_st = ((d.val or 8192) - 8192) / 8192 * bend_range
+        apply_bend()
     elseif t == "start" then
         if on_transport_start then on_transport_start() end
     elseif t == "continue" then
@@ -302,6 +325,22 @@ function midi_input.push_ad()
     push_ad()
 end
 
+function midi_input.bend(v) return bend_ratio[v] end
+
+function midi_input.set_bend_range(r)
+    bend_range = r
+    bend_st = 0
+    apply_bend()
+end
+
+function midi_input.set_channel(c) chan = c end
+
+function midi_input.set_device(n)
+    if m then m.event = nil end
+    m = midi.connect(n)
+    m.event = handle
+end
+
 function midi_input.add_params(opts)
     opts = opts or {}
     if opts.set_pitch then set_pitch = opts.set_pitch end
@@ -311,8 +350,8 @@ function midi_input.add_params(opts)
     if opts.on_transport_start then on_transport_start = opts.on_transport_start end
     if opts.on_transport_stop then on_transport_stop = opts.on_transport_stop end
     if opts.on_transport_continue then on_transport_continue = opts.on_transport_continue end
-    m = midi.connect()
-    m.event = handle
+    if opts.on_bend then on_bend = opts.on_bend end
+    midi_input.set_device(1)
 end
 
 function midi_input.cleanup()
@@ -322,6 +361,7 @@ function midi_input.cleanup()
     on_transport_start    = nil
     on_transport_stop     = nil
     on_transport_continue = nil
+    on_bend               = nil
     all_off()
     if engine and engine.key_hold then engine.key_hold(1, 1); engine.key_hold(2, 1) end
     if engine and engine.vel_amp  then engine.vel_amp(1, 1);  engine.vel_amp(2, 1)  end

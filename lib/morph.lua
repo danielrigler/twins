@@ -241,7 +241,7 @@ end
 
 function morph.recall_scene(track, scene)
     local scene_params = morph.scene_data[track][scene]
-    if not scene_params then return end
+    if not scene_params or next(scene_params) == nil then return end
     assign_valid = false
     for i = 1, 16 do set_morph_range(i, nil) end
     for i = 1, 16 do O_LFO[i]:set(1) end

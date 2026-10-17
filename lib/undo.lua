@@ -134,6 +134,8 @@ function undo.init(opts)
     on_action         = opts.on_action
     capture_extra     = opts.capture_extra
     restore_extra     = opts.restore_extra
+    for k in pairs(opts.exclude or {}) do EXCLUDE[k] = true end
+    capture_ids = nil
     undo.clear()
 end
 

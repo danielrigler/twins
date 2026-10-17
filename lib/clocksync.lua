@@ -99,14 +99,14 @@ function clocksync.add_params()
     if enabled then
       ref_tempo = t60()
       speed_scale_val = 1.0
-      if lfo_ref then lfo_ref.set_sine_all(true) end
+      if lfo_ref then lfo_ref.set_sine_all(true, "clock") end
       sync_co = sync_co or clock.run(function()
         while true do clock.sync(1) push() end
       end)
       push()
     else
       if sync_co then clock.cancel(sync_co) sync_co = nil end
-      if lfo_ref then lfo_ref.apply_clock_sync(nil) lfo_ref.set_sine_all(false) end
+      if lfo_ref then lfo_ref.apply_clock_sync(nil) lfo_ref.set_sine_all(false, "clock") end
       set_density(1, params:get("1density"))
       set_density(2, params:get("2density"))
       ref_tempo = nil
@@ -268,7 +268,7 @@ end
 function clocksync.cleanup()
   if sync_co then clock.cancel(sync_co) sync_co = nil end
   stop_reseek()
-  if lfo_ref then lfo_ref.apply_clock_sync(nil) lfo_ref.set_sine_all(false) end
+  if lfo_ref then lfo_ref.apply_clock_sync(nil) lfo_ref.set_sine_all(false, "clock") end
 end
 
 return clocksync

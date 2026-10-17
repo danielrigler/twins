@@ -20,40 +20,40 @@ local PARAM_SPECS = {
   ["1overtones_1"]        = {1,   {0,1},     "granular"}, ["2overtones_1"]     = {1,   {0,1},     "granular"},
   ["1overtones_2"]        = {1,   {0,1},     "granular"}, ["2overtones_2"]     = {1,   {0,1},     "granular"},
   ["1ratcheting_prob"]    = {25,  {0,100},   "granular"}, ["2ratcheting_prob"] = {25,  {0,100},   "granular"},
-  ["delay_feedback"]      = {100, {0,100},   "delay"},
-  ["stereo"]              = {100, {0,100},   "delay"},
-  ["wiggle_depth"]        = {40,  {0,100},   "delay"},
-  ["wiggle_rate"]         = {6,   {0,6},     "delay"},
-  ["delay_lowpass"]       = {10000,{500,20000},"delay"},
-  ["delay_highpass"]      = {250, {20,20000},"delay"},
-  ["rev_pre_delay"]       = {20,  {0,100},   "reverb"},
-  ["rev_lf_fc"]           = {300, {50,1000}, "reverb"},
-  ["rev_low_time"]        = {3,   {0.1,10},  "reverb"},
-  ["rev_mid_time"]        = {9,   {1,16},    "reverb"},
-  ["rev_hf_damping"]      = {7000,{1500,12000},"reverb"},
-  ["wobble_amp"]          = {100, {0,100},   "tape"},
-  ["wobble_rpm"]          = {90,  {30,90},   "tape"},
-  ["flutter_amp"]         = {100, {0,100},   "tape"},
-  ["flutter_freq"]        = {30,  {3,30},    "tape"},
-  ["flutter_var"]         = {10,  {0.1,10},  "tape"},
-  ["chew_freq"]           = {50,  {1,60},    "tape"},
-  ["chew_variance"]       = {50,  {0,70},    "tape"},
-  ["pitchv1"]             = {4,   {0,4},     "shimmer"},
-  ["lowpass1"]            = {10000,{100,20000},"shimmer"},
-  ["hipass1"]             = {4000,{20,4000}, "shimmer"},
-  ["fb1"]                 = {70,  {0,85},    "shimmer"},
-  ["fbDelay1"]            = {0.5, {0.02,1},  "shimmer"},
-  ["bitcrush_rate"]       = {5500,{2000,5500},"bitcrush"},
-  ["bitcrush_bits"]       = {2,   {10,16},   "bitcrush"},
+  ["delay_feedback"]      = {100, {0,100},   "delay", "delay_mix"},
+  ["stereo"]              = {100, {0,100},   "delay", "delay_mix"},
+  ["wiggle_depth"]        = {40,  {0,100},   "delay", "delay_mix"},
+  ["wiggle_rate"]         = {6,   {0,6},     "delay", "delay_mix"},
+  ["delay_lowpass"]       = {10000,{500,20000},"delay", "delay_mix"},
+  ["delay_highpass"]      = {250, {20,20000},"delay", "delay_mix"},
+  ["rev_pre_delay"]       = {20,  {0,100},   "reverb", "reverb_mix", -40},
+  ["rev_lf_fc"]           = {300, {50,1000}, "reverb", "reverb_mix", -40},
+  ["rev_low_time"]        = {3,   {0.1,10},  "reverb", "reverb_mix", -40},
+  ["rev_mid_time"]        = {9,   {1,16},    "reverb", "reverb_mix", -40},
+  ["rev_hf_damping"]      = {7000,{1500,12000},"reverb", "reverb_mix", -40},
+  ["wobble_amp"]          = {100, {0,100},   "tape", "wobble_mix"},
+  ["wobble_rpm"]          = {90,  {30,90},   "tape", "wobble_mix"},
+  ["flutter_amp"]         = {100, {0,100},   "tape", "wobble_mix"},
+  ["flutter_freq"]        = {30,  {3,30},    "tape", "wobble_mix"},
+  ["flutter_var"]         = {10,  {0.1,10},  "tape", "wobble_mix"},
+  ["chew_freq"]           = {50,  {1,60},    "tape", "chew_depth"},
+  ["chew_variance"]       = {50,  {0,70},    "tape", "chew_depth"},
+  ["pitchv1"]             = {4,   {0,4},     "shimmer", "shimmer_mix1"},
+  ["lowpass1"]            = {10000,{100,20000},"shimmer", "shimmer_mix1"},
+  ["hipass1"]             = {4000,{20,4000}, "shimmer", "shimmer_mix1"},
+  ["fb1"]                 = {70,  {0,85},    "shimmer", "shimmer_mix1"},
+  ["fbDelay1"]            = {0.5, {0.02,1},  "shimmer", "shimmer_mix1"},
+  ["bitcrush_rate"]       = {5500,{2000,5500},"bitcrush", "bitcrush_mix"},
+  ["bitcrush_bits"]       = {2,   {10,16},   "bitcrush", "bitcrush_mix"},
   ["1eq_low_gain"]        = {0.4, {-1,1},    "eq"}, ["2eq_low_gain"]    = {0.4, {-1,1},"eq"},
   ["1eq_mid_gain"]        = {0.4, {-1,1},    "eq"}, ["2eq_mid_gain"]    = {0.4, {-1,1},"eq"},
   ["1eq_high_gain"]       = {0.4, {-1,1},    "eq"}, ["2eq_high_gain"]   = {0.4, {-1,1},"eq"},
-  ["glitch_mix"]          = {40,  {0,100},   "glitch"},
-  ["glitch_min_length"]   = {100, {10,150},  "glitch"},
-  ["glitch_max_length"]   = {100, {50,300},  "glitch"},
-  ["glitch_maxstutters"]  = {5,   {2,20},    "glitch"},
-  ["glitch_reverse"]      = {50,  {0,100},   "glitch"},
-  ["glitch_pitch"]        = {50,  {0,100},   "glitch"},
+  ["glitch_mix"]          = {40,  {0,100},   "glitch", "glitch_ratio"},
+  ["glitch_min_length"]   = {100, {10,150},  "glitch", "glitch_ratio"},
+  ["glitch_max_length"]   = {100, {50,300},  "glitch", "glitch_ratio"},
+  ["glitch_maxstutters"]  = {5,   {2,20},    "glitch", "glitch_ratio"},
+  ["glitch_reverse"]      = {50,  {0,100},   "glitch", "glitch_ratio"},
+  ["glitch_pitch"]        = {50,  {0,100},   "glitch", "glitch_ratio"},
   ["ringmod_sweep"]       = {40,  {0,100},   "ringmod", "ringmod_mix"},
   ["fuzz_gain"]           = {30,  {0,100},   "fuzz",    "fuzz_mix"},
   ["fuzz_octave"]         = {30,  {0,100},   "fuzz",    "fuzz_mix"},
@@ -88,7 +88,7 @@ local evolution_group_enabled = {
   shimmer = true, eq = true, glitch = true, bitcrush = true,
   ringmod = true, fuzz = true, sub = true, spiral = true}
 
-local evo_names, evo_groups, evo_pobjs, evo_mirror_idx, evo_gate = {}, {}, {}, {}, {}
+local evo_names, evo_groups, evo_pobjs, evo_mirror_idx, evo_gate, evo_gate_off = {}, {}, {}, {}, {}, {}
 local evo_gid = {}
 local evo_count = 0
 local evo_index_of = {}
@@ -118,6 +118,7 @@ local function build_evolvable_params_cache()
       evo_gid[n]    = GROUP_ID_OF[group] or 0
       evo_pobjs[n]  = pp[idx]
       evo_gate[n]   = spec[4] and lk[spec[4]] and pp[lk[spec[4]]] or false
+      evo_gate_off[n] = spec[5] or 0
     end
   end
   for i = n + 1, evo_count do
@@ -126,6 +127,7 @@ local function build_evolvable_params_cache()
     evo_gid[i]        = nil
     evo_pobjs[i]      = nil
     evo_gate[i]       = nil
+    evo_gate_off[i]   = nil
     evo_mirror_idx[i] = nil
   end
   evo_count = n
@@ -161,6 +163,10 @@ local function recenter(state, v)
   state.center_value  = v
   state.current_drift = 0
   state.velocity      = 0
+  local lo = state.bound_lo
+  if lo then
+    if v < lo then state.bound_lo = v elseif v > state.bound_hi then state.bound_hi = v end
+  end
 end
 
 local function init_evolution_state(name, cur, slot)
@@ -177,6 +183,7 @@ local function init_evolution_state(name, cur, slot)
     bound_hi             = bounds and bounds[2] or nil,
     range_base           = max_range}
   set_drift_range(state, max_range * evolution_range)
+  recenter(state, cur)
   evolution_states[name] = state
   if slot then evo_states[slot] = state end
   return state
@@ -227,20 +234,16 @@ local function evolution_update()
   for i = 1, n do
     local gid = evo_gid[i]
     local gate = evo_gate[i]
-    if evo_updated[i] ~= gen and not (gid ~= 0 and evo_locked_by_id[gid]) and not (gate and gate:get() <= 0) then
+    if evo_updated[i] ~= gen and not (gid ~= 0 and evo_locked_by_id[gid]) and not (gate and gate:get() <= evo_gate_off[i]) then
       local obj   = evo_pobjs[i]
       local state = evo_states[i]
-      local raw   = obj.raw
       local forced = false
       if not state then
         state = init_evolution_state(evo_names[i], obj:get(), i)
         forced = true
-      elseif state.last_raw ~= nil and raw ~= state.last_raw then
+      elseif state.last_get ~= nil then
         local cur = obj:get()
-        obj.raw = state.last_raw
-        local was = obj:get()
-        obj.raw = raw
-        if cur ~= was then
+        if cur ~= state.last_get then
           recenter(state, cur)
           forced = true
         end
@@ -250,7 +253,7 @@ local function evolution_update()
         obj:set(nv)
         state.last_nv = nv
       end
-      state.last_raw = obj.raw
+      state.last_get = obj:get()
       evo_updated[i] = gen
       local mi = evo_mirror_idx[i]
       if symmetry and mi and evo_updated[mi] ~= gen then
@@ -260,7 +263,7 @@ local function evolution_update()
         recenter(ms, set_value)
         if mobj:get() ~= set_value then mobj:set(set_value) end
         ms.last_nv  = set_value
-        ms.last_raw = mobj.raw
+        ms.last_get = mobj:get()
         evo_updated[mi] = gen
       end
     end
@@ -287,7 +290,7 @@ local function reset_evolution_centers()
   for name, state in pairs(evolution_states) do
     recenter(state, params:get(name))
     state.last_nv  = nil
-    state.last_raw = nil
+    state.last_get = nil
   end
 end
 
@@ -326,6 +329,7 @@ local function queue_target(name, val)
   if e.threshold < 0.001 then e.threshold = 0.001 end
   e.done      = false
   e.mobj      = nil
+  e.opt       = e.pobj.t == 2
 end
 
 local function clear_interpolation()
@@ -359,10 +363,11 @@ local function interp_event(count)
     local e = interp_list[i]
     if not e.done then
       local target, thr = e.target, e.threshold
-      e.done = interp_step(e.pobj, target, thr, alpha, force)
+      local f = force or e.opt
+      e.done = interp_step(e.pobj, target, thr, alpha, f)
       if not e.done then all_done = false end
       local mobj = e.mobj
-      if mobj and not interp_step(mobj, target, thr, alpha, force) then
+      if mobj and not interp_step(mobj, target, thr, alpha, f) then
         all_done = false
         e.done = false
       end
@@ -561,6 +566,7 @@ local function cleanup()
   clear_table(evo_gid)
   clear_table(evo_pobjs)
   clear_table(evo_mirror_idx)
+  clear_table(evo_gate_off)
   clear_table(evo_index_of)
   clear_table(evo_updated)
   evo_count = 0

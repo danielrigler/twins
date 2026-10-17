@@ -126,7 +126,11 @@ end
 lfo.scale_utils = {normalize = normalize_scale_name, get_array = get_scale_array, quantize = quantize_pitch_to_scale, intervals = get_scale_intervals, step = step_in_scale}
 function lfo.scale(v, old_min, old_max, new_min, new_max) return (v - old_min) * (new_max - new_min) / (old_max - old_min) + new_min end
 function lfo.set_pause(paused) lfo_paused = paused update_metro_run() end
-function lfo.set_sine_all(enabled)
+local sine_src = {}
+function lfo.set_sine_all(enabled, src)
+    sine_src[src or "menu"] = enabled or nil
+    enabled = next(sine_src) ~= nil
+    if enabled == lfo.sine_all then return end
     lfo.sine_all = enabled
     if enabled then
         saved_shapes = {}

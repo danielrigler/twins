@@ -9,6 +9,7 @@ local MAX_STEPS = 8
 local DEG_MIN, DEG_MAX = -14, 14
 local SU = nil
 local clocksync = nil
+local bend = function(_) return 1 end
 local is_voice_active = function(_) return true end
 local checkpoint = function() end
 local running   = false
@@ -81,7 +82,7 @@ local function fire(v, idx, invert, oct)
   local base  = SU.quantize(pv(PITCH_KEYS[v]), scale_name)
   local total = clamp(base + st, -48, 48)
   ratio[v] = 2 ^ ((total - base) / 12)
-  local po = 2 ^ (total / 12)
+  local po = 2 ^ (total / 12) * bend(v)
   if po ~= last_po[v] then
     last_po[v] = po
     engine.pitch_offset(v, po)
@@ -248,6 +249,14 @@ local function deg_span()
   return lo, hi
 end
 
+local function sync_params()
+  if not (params.lookup and params.lookup["arp_steps"]) then return end
+  params:set("arp_steps", nsteps, true)
+  params:set("arp_mode", mode, true)
+  params:set("arp_twin", twin, true)
+  params:set("arp_octaves", octaves, true)
+end
+
 local function randomize()
   checkpoint()
   nsteps  = random(2, MAX_STEPS)
@@ -282,6 +291,7 @@ local function randomize()
     step_rat[i] = random()
   end
   step_vol[1] = max(step_vol[1], 80)
+  sync_params()
 end
 
 function arp.ratio(v) return ratio[v] end
@@ -314,7 +324,7 @@ function arp.restore(s)
   nsteps  = clamp(tonumber(s.nsteps) or nsteps, 1, MAX_STEPS)
   mode    = clamp(tonumber(s.mode) or mode, 1, 4)
   twin    = clamp(tonumber(s.twin) or twin, 1, 3)
-  octaves = clamp(tonumber(s.octaves) or octaves, 1, 2)
+  octaves = clamp(tonumber(s.octaves) or octaves, 1, 3)
   if type(s.deg) == "table" and type(s.vol) == "table" then
     for i = 1, MAX_STEPS do
       step_deg[i] = clamp(tonumber(s.deg[i]) or 0, DEG_MIN, DEG_MAX)
@@ -330,16 +340,26 @@ function arp.restore(s)
   pre_arp_prob[1], pre_arp_prob[2] = tonumber(s.pre_prob1), tonumber(s.pre_prob2)
   have_prob[1], have_prob[2] = pre_arp_prob[1] ~= nil, pre_arp_prob[2] ~= nil
   tickn[1], tickn[2] = 0, 0
+  sync_params()
 end
 
 function arp.set_context(ctx)
   clocksync = ctx.clocksync
+  if ctx.bend then bend = ctx.bend end
 end
 
 function arp.add_params()
-  params:add_group("ARP!", 3)
+  params:add_group("ARP!", 7)
   params:add_option("arp_on", "Arp!", {"off", "on"}, 1)
   params:set_action("arp_on", function(v) set_running(v == 2) end)
+  params:add_number("arp_steps", "Steps", 1, MAX_STEPS, nsteps)
+  params:set_action("arp_steps", function(v) nsteps = floor(v) end)
+  params:add_option("arp_mode", "Order", {"up", "down", "up/down", "random"}, mode)
+  params:set_action("arp_mode", function(v) mode = v end)
+  params:add_option("arp_twin", "Twin", {"same", "offset", "mirror"}, twin)
+  params:set_action("arp_twin", function(v) twin = v end)
+  params:add_number("arp_octaves", "Octaves", 1, 3, octaves)
+  params:set_action("arp_octaves", function(v) octaves = floor(v) end)
   params:add_control("arp_overlap", "Overlap", controlspec.new(1, 8, "lin", 0.1, 1, "x"))
   params:set_action("arp_overlap", function(v)
     overlap = v

@@ -130,6 +130,7 @@ end
 
 local SYSTEM_PARAMS_EXCLUDE = utils.system_param_exclude
 local PRESET_EXCLUDE = { dry_mode = true, dry_mode2 = true }
+function presets.exclude(ids) for k in pairs(ids) do SYSTEM_PARAMS_EXCLUDE[k] = true end end
 
 local function preset_capturable(p)
     local id = p.id
@@ -245,7 +246,7 @@ local function apply_params_ordered(p)
     for id, value in pairs(merged) do
         local pidx = params.lookup[id]
         local pobj = pidx and params.params[pidx]
-        if pobj and not PRESET_EXCLUDE[id] and utils.capturable(pobj) and not id:match("^%d+volume$") and not id:match("^%d+granular_gain$") then
+        if pobj and not PRESET_EXCLUDE[id] and not SYSTEM_PARAMS_EXCLUDE[id] and utils.capturable(pobj) and not id:match("^%d+volume$") and not id:match("^%d+granular_gain$") then
             local placed = false
             for i = 1, 3 do
                 if id:match(PARAM_MATCHERS[i]) then
