@@ -1,6 +1,6 @@
 local font = {}
 
-font.micro_font = {
+local micro_font = {
   D = {{1,1,0},{1,0,1},{1,1,0}},
   B = {{1,1,0},{0,1,1},{0,0,1}},
   L = {{1,0},{1,0},{1,1}},
@@ -28,7 +28,7 @@ font.micro_font = {
 }
 
 local micro_font_by_byte = {}
-for ch, glyph in pairs(font.micro_font) do micro_font_by_byte[ch:byte()] = glyph end
+for ch, glyph in pairs(micro_font) do micro_font_by_byte[ch:byte()] = glyph end
 
 local function plot_text(plot, x, y, text, level)
   local cursor_x = x
@@ -133,9 +133,6 @@ end
 local _lock_cache = {}
 local _blink_level = 1
 local _delay_duck_gain = 1.0
-local _beat_level = 100
-local _beat_last = -1
-local BEAT_FLOOR, BEAT_DOWNBEAT, BEAT_OFFBEAT, BEAT_DECAY = 18, 100, 55, 0.62
 
 function font.set_delay_duck(gain)
   _delay_duck_gain = gain
@@ -227,15 +224,14 @@ local CLOCK_DIM_LEVEL = 3
 local FX_SPECS = {
   {glyph = "K", lock = nil,            show = function() return font.clocksync_ref and font.clocksync_ref.grain_synced() end,
     custom_level = function()
-      local beats = (clock and clock.get_beats) and clock.get_beats() or 0
-      local pos = _clock_order[(math.floor(beats) % 4) + 1]
+      local pos = _clock_order[(math.floor(clock.get_beats()) % 4) + 1]
       return function(row, col)
         if row == pos[1] and col == pos[2] then return 15 end
         return CLOCK_DIM_LEVEL
       end
     end},
   {glyph = "A", lock = nil,            show = function() return font.arp_ref and font.arp_ref.is_running() end, val = function() return 100 end, gradient = true},
-  {glyph = "F", lock = "lock_filter",  show = filter_active,                                          val = filter_intensity},
+  {glyph = "F", lock = nil,            show = filter_active,                                          val = filter_intensity},
   {glyph = "B", lock = nil,            show = function(c) return c.bitcrush_mix > 0 end,              val = function(c) return c.bitcrush_mod == 2 and c.bitcrush_mix * _bitcrush_mod_lfo(_draw_now) or c.bitcrush_mix end},
   {glyph = "O", lock = nil,            show = function(c) return c.resonator_mix > 0 end,             val = function(c) return c.resonator_mix end},
   {glyph = "W", lock = nil,            show = function(c) return c.wavefold_mix > 0 end,              val = function(c) return c.wavefold_mix end},
@@ -262,21 +258,7 @@ local function column_gradient(peak)
 end
 
 local function refresh_draw_caches(now)
-  local phase = (now * 2) % 1
-  _blink_level = phase < 0.5 and 4 or 1
-  local cl = clock
-  if cl and cl.get_beats then
-    local bi = math.floor(cl.get_beats())
-    if bi ~= _beat_last then
-      _beat_last = bi
-      _beat_level = (bi % 4 == 0) and BEAT_DOWNBEAT or BEAT_OFFBEAT
-    else
-      local v = _beat_level * BEAT_DECAY
-      _beat_level = v > BEAT_FLOOR and v or BEAT_FLOOR
-    end
-  else
-    _beat_level = BEAT_DOWNBEAT
-  end
+  _blink_level = (now * 2) % 1 < 0.5 and 4 or 1
   for _, spec in ipairs(FX_SPECS) do
     if spec.lock then _lock_cache[spec.lock] = is_locked(spec.lock) end
   end

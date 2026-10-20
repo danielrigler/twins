@@ -108,9 +108,9 @@ local function twin_index(i1, count)
   return i1
 end
 
-local function rebang_pitch(v)
-  local i = params.lookup and params.lookup[PITCH_KEYS[v]]
-  if i then params.params[i]:bang() end
+local function rebang(id)
+  local o = pobj(id)
+  if o then o:bang() end
 end
 
 local function get_hz(v)
@@ -138,11 +138,6 @@ local function apply_size_cap(v, hz, half)
     eff_size[v] = eff
     engine.size(v, eff * 0.001)
   end
-end
-
-local function rebang_size(v)
-  local i = params.lookup and params.lookup[SIZE_KEYS[v]]
-  if i then params.params[i]:bang() end
 end
 
 local function refire(v)
@@ -224,11 +219,11 @@ local function set_running(on)
     for v = 1, 2 do
       ratio[v] = 1
       engine.vel_amp(v, 1)
-      rebang_pitch(v)
+      rebang(PITCH_KEYS[v])
       local id_size = SIZE_KEYS[v]
       local id_prob = v .. "probability"
       if pre_arp_size[v] and params.lookup[id_size] then params:set(id_size, pre_arp_size[v]) end
-      rebang_size(v)
+      rebang(id_size)
       eff_size[v] = nil
       if params.lookup[id_prob] and have_prob[v] then
         params:set(id_prob, pre_arp_prob[v])

@@ -58,19 +58,8 @@ local MONO_PARAMS = {} for k in pairs(DRY_VALUES) do MONO_PARAMS[#MONO_PARAMS + 
 
 local SEEK_PARAMS = {"1seek", "2seek"}
 
-local LFO_TARGETS = {
-    speed = {["1speed"] = true, ["2speed"] = true},
-    seek = {["1seek"] = true, ["2seek"] = true},
-    pan = {["1pan"] = true, ["2pan"] = true},
-    volume = {["1volume"] = true, ["2volume"] = true},
-    cutoff = {["1cutoff"] = true, ["2cutoff"] = true},
-    hpf = {["1hpf"] = true, ["2hpf"] = true}
-}
-
-local LFO_TARGET_TYPES = {"speed", "seek", "pan", "volume", "cutoff", "hpf"}
-
 local RESET_TARGETS = {t1 = {}, t2 = {}, both = {}, none = {}}
-for _, t in ipairs(LFO_TARGET_TYPES) do
+for _, t in ipairs({"speed", "seek", "pan", "volume", "cutoff", "hpf"}) do
     local a, b = "1" .. t, "2" .. t
     RESET_TARGETS.t1[a] = true
     RESET_TARGETS.t2[b] = true
@@ -126,7 +115,7 @@ local function store_and_disable_lfos(targets, storage)
         local target_index = params:get(keys.target[i])
         local target = lfo.lfo_targets[target_index]
         if targets[target] then
-            if storage then storage[i] = utils.capture_lfo_slot(i, keys) end
+            if storage then storage[i] = utils.fill_lfo_slot(i, keys) end
             params:set(keys.lfo[i], 1)
         end
     end
@@ -137,11 +126,7 @@ local function restore_lfos(lfo_table)
     local keys = lfo.keys
     local was_paused = params:get("lfo_pause")
     params:set("lfo_pause", 1)
-    for i, data in pairs(lfo_table) do
-        if data then
-            utils.apply_lfo_slot(i, keys, data)
-        end
-    end
+    for i, data in pairs(lfo_table) do utils.apply_lfo_slot(i, keys, data) end
     params:set("lfo_pause", was_paused)
 end
 
@@ -166,16 +151,10 @@ function drymode.set_dry_mode(on)
         local snap = {
             stereo = store_params(STEREO_PARAMS, true),
             mono = store_params(MONO_PARAMS, false),
-            seek = {},
+            seek = store_params(SEEK_PARAMS, false),
             lfos = {}
         }
-        for _, param in ipairs(SEEK_PARAMS) do
-            snap.seek[param] = params:get(param)
-        end
-        for _, target_type in ipairs(LFO_TARGET_TYPES) do
-            snap.lfos[target_type] = {}
-            store_and_disable_lfos(LFO_TARGETS[target_type], snap.lfos[target_type])
-        end
+        store_and_disable_lfos(RESET_TARGETS.both, snap.lfos)
         prev_settings = snap
         for param, value in pairs(DRY_VALUES) do
             params:set(param, value)
@@ -185,12 +164,8 @@ function drymode.set_dry_mode(on)
         if prev_settings then
             restore_params(prev_settings.stereo, true)
             restore_params(prev_settings.mono, false)
-            for param, v in pairs(prev_settings.seek) do
-                params:set(param, v)
-            end
-            for _, target_type in ipairs(LFO_TARGET_TYPES) do
-                restore_lfos(prev_settings.lfos[target_type])
-            end
+            restore_params(prev_settings.seek, false)
+            restore_lfos(prev_settings.lfos)
         end
     end
 end

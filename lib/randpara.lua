@@ -88,11 +88,10 @@ local evolution_group_enabled = {
   shimmer = true, eq = true, glitch = true, bitcrush = true,
   ringmod = true, fuzz = true, sub = true, spiral = true}
 
-local evo_names, evo_groups, evo_pobjs, evo_mirror_idx, evo_gate, evo_gate_off = {}, {}, {}, {}, {}, {}
+local evo_names, evo_pobjs, evo_mirror_idx, evo_gate, evo_gate_off = {}, {}, {}, {}, {}
 local evo_gid = {}
 local evo_count = 0
 local evo_index_of = {}
-local lock_pobj = {}
 local lock_pobj_by_id = {}
 local evo_states = {}
 local sym_pobj
@@ -114,7 +113,6 @@ local function build_evolvable_params_cache()
     if evolution_group_enabled[group] and idx then
       n = n + 1
       evo_names[n]  = param
-      evo_groups[n] = group
       evo_gid[n]    = GROUP_ID_OF[group] or 0
       evo_pobjs[n]  = pp[idx]
       evo_gate[n]   = spec[4] and lk[spec[4]] and pp[lk[spec[4]]] or false
@@ -123,7 +121,6 @@ local function build_evolvable_params_cache()
   end
   for i = n + 1, evo_count do
     evo_names[i]      = nil
-    evo_groups[i]     = nil
     evo_gid[i]        = nil
     evo_pobjs[i]      = nil
     evo_gate[i]       = nil
@@ -138,11 +135,10 @@ local function build_evolvable_params_cache()
     evo_mirror_idx[i] = name:match("^%d")
       and evo_index_of[mirror_param_name(name)] or false
   end
-  for group, lock in pairs(GROUP_LOCK) do
-    local li = lk[lock]
-    lock_pobj[group] = li and pp[li] or nil
+  for g = 1, NGROUPS do
+    local li = lk[GROUP_LOCK[GROUP_IDS[g]]]
+    lock_pobj_by_id[g] = li and pp[li] or nil
   end
-  for g = 1, NGROUPS do lock_pobj_by_id[g] = lock_pobj[GROUP_IDS[g]] end
   for i = 1, n do evo_states[i] = evolution_states[evo_names[i]] end
   for i = n + 1, #evo_states do evo_states[i] = nil end
   local si = lk["symmetry"]
@@ -562,7 +558,6 @@ local function cleanup()
   stop_interpolation()
   clear_table(evolution_states)
   clear_table(evo_names)
-  clear_table(evo_groups)
   clear_table(evo_gid)
   clear_table(evo_pobjs)
   clear_table(evo_mirror_idx)

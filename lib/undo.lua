@@ -4,7 +4,6 @@ local MAX_DEPTH = 8
 local NUM_LFOS  = 16
 local undo_stack = {}
 local redo_stack = {}
-local lfo_ref = nil
 local keys    = nil
 local on_before_restore, on_after_restore, on_action
 local capture_extra, restore_extra
@@ -86,7 +85,6 @@ local function capture()
     for i = 1, NUM_LFOS do
         utils.fill_lfo_slot(i, keys, sl[i])
     end
-    snap.extra = nil
     if capture_extra then
         local ok, extra = pcall(capture_extra)
         if ok then snap.extra = extra end
@@ -107,9 +105,6 @@ local function restore(snap)
     end
     params:set("lfo_pause", was_paused)
     if restore_extra and snap.extra then pcall(restore_extra, snap.extra) end
-    if lfo_ref and lfo_ref.invalidate_lfo_param_cache then
-        lfo_ref.invalidate_lfo_param_cache()
-    end
     if on_after_restore then pcall(on_after_restore) end
 end
 
@@ -127,8 +122,7 @@ local function notify(msg)
 end
 
 function undo.init(opts)
-    lfo_ref           = opts.lfo
-    keys              = lfo_ref.keys
+    keys              = opts.lfo.keys
     on_before_restore = opts.on_before_restore
     on_after_restore  = opts.on_after_restore
     on_action         = opts.on_action

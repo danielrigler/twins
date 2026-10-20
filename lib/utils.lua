@@ -91,18 +91,8 @@ function utils.random_float(l, h)
     return l + math.random() * (h - l)
 end
 
-function utils.capture_lfo_slot(i, keys)
-    return {
-        state  = params:get(keys.lfo[i]),
-        target = params:get(keys.target[i]),
-        shape  = params:get(keys.shape[i]),
-        freq   = params:get(keys.freq[i]),
-        depth  = params:get(keys.depth[i]),
-        offset = params:get(keys.offset[i]),
-    }
-end
-
 function utils.fill_lfo_slot(i, keys, t)
+    t = t or {}
     t.state  = params:get(keys.lfo[i])
     t.target = params:get(keys.target[i])
     t.shape  = params:get(keys.shape[i])

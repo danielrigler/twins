@@ -1,6 +1,4 @@
 local preset_names = {}
-
-preset_names.__index = preset_names
 preset_names.firstnames_path = _path.code.."twins/lib/firstnames.txt"
 preset_names.secondnames_path = _path.code.."twins/lib/secondnames.txt"
 

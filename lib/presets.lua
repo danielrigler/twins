@@ -31,13 +31,7 @@ local loading_clock = nil
 local rename_clock  = nil
 local LFO_KEYS      = {}
 for i = 1, 16 do LFO_KEYS[i] = i .. "lfo" end
-
-local PARAM_MATCHERS = {
-    "^%d*lock_",
-    "sample_[se][tn][ad]r?t?$",
-    "volume$",
-}
-local PARAM_DELAYS = { 0.02, 0.03, 0.03, 0.03, 0, 0.03 }
+local PARAM_DELAYS = {0.02, 0.03, 0, 0.03}
 
 local function format_number(n) return n >= 100 and tostring(n) or string.format("%02d", n) end
 local function fmt_name(n, w)   return format_number(n) .. " " .. w end
@@ -239,31 +233,22 @@ function presets.delete_preset(name)
 end
 
 local function apply_params_ordered(p)
-    local buckets = { {}, {}, {}, {}, {}, {} }
+    local buckets = {{}, {}, {}, {}}
     local merged = {}
     for id, def_val in pairs(presets.default_params) do merged[id] = def_val end
-    if p then for id, val in pairs(p) do merged[id] = val end end
+    for id, val in pairs(p) do merged[id] = val end
     for id, value in pairs(merged) do
         local pidx = params.lookup[id]
         local pobj = pidx and params.params[pidx]
         if pobj and not PRESET_EXCLUDE[id] and not SYSTEM_PARAMS_EXCLUDE[id] and utils.capturable(pobj) and not id:match("^%d+volume$") and not id:match("^%d+granular_gain$") then
-            local placed = false
-            for i = 1, 3 do
-                if id:match(PARAM_MATCHERS[i]) then
-                    table.insert(buckets[i], { id=id, value=value })
-                    placed = true; break
-                end
-            end
-            if not placed then
-                if id == "allow_volume_lfos" then table.insert(buckets[4], { id=id, value=value })
-                elseif id:match("^%d+lfo$") then table.insert(buckets[5], { id=id, value=value })
-                else table.insert(buckets[6], { id=id, value=value }) end
-            end
+            local b = id:match("^%d*lock_") and 1 or id:match("volume$") and 2 or id:match("^%d+lfo$") and 3 or 4
+            local bucket = buckets[b]
+            bucket[#bucket + 1] = {id, value}
         end
     end
     for i, bucket in ipairs(buckets) do
-        for _, item in ipairs(bucket) do params:set(item.id, item.value) end
-        if PARAM_DELAYS[i] > 0 then clock.sleep(PARAM_DELAYS[i]) end
+        for _, item in ipairs(bucket) do params:set(item[1], item[2]) end
+        if PARAM_DELAYS[i] > 0 and #bucket > 0 then clock.sleep(PARAM_DELAYS[i]) end
     end
 end
 

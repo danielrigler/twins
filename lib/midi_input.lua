@@ -313,17 +313,8 @@ local function handle(data)
     end
 end
 
-function midi_input.set_gate_mode()
-    refresh()
-end
-
-function midi_input.set_voice_mode()
-    refresh()
-end
-
-function midi_input.push_ad()
-    push_ad()
-end
+midi_input.refresh = refresh
+midi_input.push_ad = push_ad
 
 function midi_input.bend(v) return bend_ratio[v] end
 

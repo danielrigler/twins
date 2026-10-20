@@ -20,21 +20,17 @@ local MORPH_THROTTLE_INTERVAL = 0.03
 local lfo_ref = nil
 local clocksync_ref = nil
 local _synced_density = false
-local invalidate_lfo_cache_ref = nil
-local MORPH_LFO_KEYS, MORPH_TARGET_KEYS, MORPH_SHAPE_KEYS, MORPH_FREQ_KEYS, MORPH_DEPTH_KEYS, MORPH_OFFSET_KEYS
 local O_LFO, O_TARGET, O_SHAPE, O_FREQ, O_DEPTH, O_OFFSET = {}, {}, {}, {}, {}, {}
-local OBJ_BY_NAME = {}
 local skip_g = 0
 local ENTRY_CAP = 32
 local entries = {}
 for i = 1, ENTRY_CAP do entries[i] = {} end
 local entry_by_target, order, slot_taken, slot_of_target = {}, {}, {}, {}
-local live_target, wrote = {}, {}
+local live_target = {}
 local assign_valid, sc_changed = false, true
 local slots_gen_seen = -1
 local _t, _t_inv, _morph_dir, _pitch_scale, _get_range_ref
 local _limits_gen = -1
-local _has_lfo_tracking = nil
 local ITEM_BY_NAME = {}
 local moving, moving_count = {}, 0
 local simple, simple_count = {}, 0
@@ -137,44 +133,31 @@ local function resolve_scenes()
     return scene1_1, scene1_2, scene2_1, scene2_2
 end
 
-function morph.init(lfo_module, invalidate_fn, clocksync_module)
+function morph.init(lfo_module, clocksync_module)
     lfo_ref = lfo_module
     clocksync_ref = clocksync_module
-    invalidate_lfo_cache_ref = invalidate_fn
     _quantize = lfo_ref.scale_utils.quantize
     _get_range_ref = lfo_ref.get_parameter_range
-    _grain_synced = clocksync_module and clocksync_module.grain_synced or nil
-    _ready = (_get_range_ref ~= nil) and (lfo_ref.lfo_targets ~= nil)
-    _range_to_norm = lfo_ref.range_to_norm or function(_, lo, hi, v) return (v - lo) / (hi - lo) end
-    set_morph_range = lfo_ref.set_morph_range or function() end
+    _grain_synced = clocksync_module.grain_synced
+    _range_to_norm = lfo_ref.range_to_norm
+    set_morph_range = lfo_ref.set_morph_range
     sc_targets = lfo_ref.lfo_targets
     sc_target_count = #sc_targets
-    MORPH_LFO_KEYS    = lfo_ref.keys.lfo
-    MORPH_TARGET_KEYS = lfo_ref.keys.target
-    MORPH_SHAPE_KEYS  = lfo_ref.keys.shape
-    MORPH_FREQ_KEYS   = lfo_ref.keys.freq
-    MORPH_DEPTH_KEYS  = lfo_ref.keys.depth
-    MORPH_OFFSET_KEYS = lfo_ref.keys.offset
     local function obj_of(name)
         local idx = params.lookup[name]
         return idx and params.params[idx] or nil
     end
+    local K = lfo_ref.keys
     for i = 1, 16 do
-        O_LFO[i]    = obj_of(MORPH_LFO_KEYS[i])
-        O_TARGET[i] = obj_of(MORPH_TARGET_KEYS[i])
-        O_SHAPE[i]  = obj_of(MORPH_SHAPE_KEYS[i])
-        O_FREQ[i]   = obj_of(MORPH_FREQ_KEYS[i])
-        O_DEPTH[i]  = obj_of(MORPH_DEPTH_KEYS[i])
-        O_OFFSET[i] = obj_of(MORPH_OFFSET_KEYS[i])
+        O_LFO[i], O_TARGET[i], O_SHAPE[i] = obj_of(K.lfo[i]), obj_of(K.target[i]), obj_of(K.shape[i])
+        O_FREQ[i], O_DEPTH[i], O_OFFSET[i] = obj_of(K.freq[i]), obj_of(K.depth[i]), obj_of(K.offset[i])
     end
     _scale_pobj = obj_of("pitch_quantize_scale")
     param_registry = {}
-    OBJ_BY_NAME = {}
     ITEM_BY_NAME = {}
     local n = 0
     local function reg(name, is_pitch, t2)
         local o = obj_of(name)
-        OBJ_BY_NAME[name] = o
         n = n + 1
         local eps = nil
         local cs = o and o.controlspec
@@ -196,6 +179,7 @@ function morph.init(lfo_module, invalidate_fn, clocksync_module)
     for _, p in ipairs(morph.global_params) do reg(p, false, false) end
     registry_count = n
     sc_dirty = true
+    _ready = true
 end
 
 function morph.sync_amount(v)
@@ -247,10 +231,11 @@ function morph.recall_scene(track, scene)
     for i = 1, 16 do O_LFO[i]:set(1) end
     for param_name, value in pairs(scene_params) do
         if param_name ~= "lfo_data" and not legacy_rev[param_name] then
-            local o = OBJ_BY_NAME[param_name]
-            if o == nil then
+            local it = ITEM_BY_NAME[param_name]
+            local o = it and it.obj
+            if not o then
                 local idx = params.lookup[param_name]
-                o = idx and params.params[idx] or nil
+                o = idx and params.params[idx]
             end
             if o then o:set(value) end
         end
@@ -275,7 +260,6 @@ function morph.recall_scene(track, scene)
             if dv then clocksync_ref.set_grain_div_index(v, dv) end
         end
     end
-    if invalidate_lfo_cache_ref then invalidate_lfo_cache_ref() end
 end
 
 local function _lerp_div_index(dA, dB, t, t_inv)
@@ -341,7 +325,6 @@ end
 local DEPTH_THRESHOLD = 0.01
 
 local function _ensure_unique_assignment(target, slot)
-    if not _has_lfo_tracking or not target then return end
     if lfo_ref.is_param_assigned(target) then
         local other = lfo_ref.get_lfo_for_param(target)
         if other and other ~= slot then O_LFO[other]:set(1) end
@@ -418,11 +401,10 @@ function morph.apply()
     _morph_dir = morph_direction
     _pitch_scale = _scale_pobj and _scale_pobj:string() or "off"
     _limits_gen = lfo_ref.limits_gen or 0
-    _synced_density = _grain_synced and _grain_synced() or false
+    _synced_density = _grain_synced()
     local scene1_1, scene1_2, scene2_1, scene2_2 = resolve_scenes()
     local has_temp = next(morph.temp_scene) ~= nil
     local lfo_targets = sc_targets
-    if _has_lfo_tracking == nil then _has_lfo_tracking = (lfo_ref.clear_param_assignment and true or false) end
     local stable = assign_valid and not sc_changed and sc_entry_count <= 16
                    and lfo_ref.slots_gen == slots_gen_seen
     sc_changed = false
@@ -482,17 +464,16 @@ function morph.apply()
     for k = ec + 1, #order do order[k] = nil end
     if ec > 16 then table.sort(order, _by_depth) end
     if not stable then
-        local clear_assign = _has_lfo_tracking and lfo_ref.clear_param_assignment or nil
+        local clear_assign = lfo_ref.clear_param_assignment
         for k in pairs(slot_of_target) do slot_of_target[k] = nil end
         for i = 1, 16 do
             slot_taken[i] = nil
             local nm = live_target[i]
             if nm then
-                if clear_assign then clear_assign(nm) end
+                clear_assign(nm)
                 if slot_of_target[nm] == nil then slot_of_target[nm] = i end
             end
         end
-        if ec > 16 then table.sort(order, _by_depth) end
         for k = 1, ec do order[k].slot = nil end
         local assign_n = ec < 16 and ec or 16
         for k = 1, assign_n do
@@ -515,7 +496,6 @@ function morph.apply()
             end
         end
         for i = 1, 16 do
-            wrote[i] = nil
             if not slot_taken[i] then
                 set_morph_range(i, nil)
                 local o = O_LFO[i]
@@ -527,10 +507,7 @@ function morph.apply()
         local it = order[k]
         local slot = it.slot
         if slot then
-            if not stable then
-                _ensure_unique_assignment(it.target, slot)
-                wrote[slot] = it.target
-            end
+            if not stable then _ensure_unique_assignment(it.target, slot) end
             local mi = it.item
             if mi then mi.skip_g = skip_g end
             write_lfo_slot(slot, it.tidx, it.shape, it.freq, it.depth, it.offset)
@@ -603,7 +580,6 @@ function morph.apply()
             end
         end
     end
-    if invalidate_lfo_cache_ref then invalidate_lfo_cache_ref() end
 end
 
 function morph.capture_to_temp_scene(lfo_cache)

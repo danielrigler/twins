@@ -3,9 +3,7 @@ local clamp = util.clamp
 local math_random = math.random
 local math_floor = math.floor
 local lfo_ref = nil
-local set_density = function(v, hz) if engine then engine.density(v, hz) end end
-local on_push_cb = nil
-local on_sync_off_cb = nil
+local set_density = function(v, hz) engine.density(v, hz) end
 local enabled = false
 local delay_div = 1.0
 local lfo_div_beats = {1.0, 1.0}
@@ -63,7 +61,6 @@ local function push()
       params:lookup_param("2speed"):bang()
     end
   end
-  if on_push_cb then on_push_cb() end
 end
 
 local function stop_reseek()
@@ -115,7 +112,6 @@ function clocksync.add_params()
         params:lookup_param("1speed"):bang()
         params:lookup_param("2speed"):bang()
       end
-      if on_sync_off_cb then on_sync_off_cb() end
     end
   end)
   params:add_option("clock_lfo_div", "LFO Division 1", DIV_LABELS, DIV["1 bar"])
@@ -197,15 +193,10 @@ function clocksync.randomize_grain_div(voice, mirror_voice)
   push()
 end
 
-function clocksync.div_index_for_norm(t)
-  local span = DIV_RAND_MAX - DIV_RAND_MIN
-  return clamp(math_floor(DIV_RAND_MIN + t * span + 0.5), DIV_RAND_MIN, DIV_RAND_MAX)
-end
-
 function clocksync.set_grain_div_norm(voice, t)
   if not enabled then return end
   voice = tonumber(voice)
-  local idx = clocksync.div_index_for_norm(t)
+  local idx = clamp(math_floor(DIV_RAND_MIN + t * DIV_RAND_SPAN + 0.5), DIV_RAND_MIN, DIV_RAND_MAX)
   if idx == density_idx[voice] then return end
   apply_div(voice, idx)
   push()
@@ -235,7 +226,7 @@ function clocksync.div_index_for_density(hz)
   return best_idx
 end
 
-function clocksync.div_index_to_norm(idx) return norm_of(idx) end
+clocksync.div_index_to_norm = norm_of
 
 function clocksync.lfo_synced() return enabled end
 clocksync.grain_synced = clocksync.lfo_synced
@@ -254,8 +245,6 @@ function clocksync.init(opts)
   opts = opts or {}
   lfo_ref = opts.lfo
   if opts.set_density then set_density = opts.set_density end
-  on_push_cb = opts.on_push
-  on_sync_off_cb = opts.on_sync_off
   delay_div = DIVISIONS[params:get("clock_sync_delay_div")].beats
   lfo_div_beats[1] = DIVISIONS[params:get("clock_lfo_div")].beats
   lfo_div_beats[2] = DIVISIONS[params:get("clock_lfo_div2")].beats

@@ -14,7 +14,9 @@ freePair { arg l, r; if(l !== silentBuffer, { l.free }); if((r !== l) && (r !== 
 
 normGain { arg i; ^if(normOnLoad == 1, { 0.5012 / filePeak[i].max(0.001) }, { 1 }) }
 
-releaseVoice { arg i; voices[i].set(\buf_l, silentBuffer, \buf_r, silentBuffer, \is_stereo, 0); voices[i].run(false); drySynths[i].set(\buf_l, silentBuffer, \buf_r, silentBuffer); voiceRunning[i] = false; this.updateDryRun(i); this.freePair(buffersL[i], buffersR[i]); buffersL[i] = silentBuffer; buffersR[i] = silentBuffer; }
+silence { arg i; voices[i].set(\buf_l, silentBuffer, \buf_r, silentBuffer, \is_stereo, 0, \t_reset_pos, 1); voices[i].run(false); drySynths[i].set(\buf_l, silentBuffer, \buf_r, silentBuffer, \t_reset_pos, 1); voiceRunning[i] = false; this.updateDryRun(i); }
+
+releaseVoice { arg i; this.silence(i); this.freePair(buffersL[i], buffersR[i]); buffersL[i] = silentBuffer; buffersR[i] = silentBuffer; }
 
 loadLoop { arg i; loadBusy[i] = true; fork { while({ loadPath[i].notNil }, { { this.loadFile(i, loadPath[i], loadGen[i]) }.try({ arg e; e.reportError; loadPath[i] = nil; }); }); loadBusy[i] = false; }; }
 
@@ -42,7 +44,7 @@ loadFile { arg i, path, gen;
 
 installBuf { arg i, bl, br, ch, sr, n, peaks; var oldL = buffersL[i], oldR = buffersR[i], st = (ch > 1).binaryValue, g; buffersL[i] = bl; buffersR[i] = br; filePeak[i] = peaks.maxItem; rateScale[i] = sr / context.server.sampleRate; voiceIsStereo[i] = st; voicesUsingLiveBuffer[i] = false; g = this.normGain(i); voices[i].set(\buf_l, bl, \buf_r, br, \is_stereo, st, \norm, g, \rscale, rateScale[i], \t_reset_pos, 1); voices[i].run(true); drySynths[i].set(\buf_l, bl, \buf_r, br, \norm, g, \rscale, rateScale[i], \t_reset_pos, 1); voiceRunning[i] = true; lastPos[i] = seekPos[i]; this.updateDryRun(i); this.freePair(oldL, oldR); nornsAddr.sendMsg(*(["/twins/waveform", i] ++ peaks)); nornsAddr.sendMsg("/twins/duration", i, n / sr); }
 
-unloadAll { 2.do({ arg i; this.cancelLoad(i) }); fork { 2.do({ arg i; if(voices[i].notNil, { voices[i].set(\buf_l, silentBuffer, \buf_r, silentBuffer, \is_stereo, 0, \t_reset_pos, 1); voices[i].run(false); }); voiceIsStereo[i] = 0; drySynths[i].set(\buf_l, silentBuffer, \buf_r, silentBuffer, \t_reset_pos, 1); voiceRunning[i] = false; this.updateDryRun(i); voicesUsingLiveBuffer[i] = false; this.freePair(buffersL[i], buffersR[i]); buffersL[i] = silentBuffer; buffersR[i] = silentBuffer; liveInputBuffersL[i].zero; liveInputBuffersR[i].zero; if(liveInputRecorders[i].notNil, { liveInputRecorders[i].free; liveInputRecorders[i] = nil; }); }); wobbleBuffer.zero; glitchBuffer.zero; }; }
+unloadAll { 2.do({ arg i; this.cancelLoad(i) }); fork { 2.do({ arg i; voiceIsStereo[i] = 0; voicesUsingLiveBuffer[i] = false; this.releaseVoice(i); liveInputBuffersL[i].zero; liveInputBuffersR[i].zero; if(liveInputRecorders[i].notNil, { liveInputRecorders[i].free; liveInputRecorders[i] = nil; }); }); wobbleBuffer.zero; glitchBuffer.zero; }; }
 
 saveLiveBufferToTape { arg voice, filename; var dir = "/home/we/dust/audio/tape/twins/", path = dir ++ filename, bufL = liveInputBuffersL[voice], bufR = liveInputBuffersR[voice]; fork { var interleaved = Buffer.alloc(context.server, bufL.numFrames, 2); File.mkdir(dir); context.server.sync; Synth.new(\bufInterleave, [\bufL, bufL, \bufR, bufR, \outBuf, interleaved], context.xg, 'addToTail'); ((bufL.numFrames / context.server.sampleRate) + 0.2).wait; interleaved.write(path, "WAV", "float"); context.server.sync; interleaved.free; nornsAddr.sendMsg("/twins/save_complete", voice); }; }
 
@@ -98,7 +100,7 @@ alloc {
         pitchScaleBuffers = pitchScales.collect { |scale| Buffer.sendCollection(context.server, scale, 1) };
         pitchScaleLengths = pitchScales.collect(_.size);
 
-        currentSpeed = [0.1, 0.1]; currentJitter = [0.25, 0.25]; currentSize = [0.1, 0.1]; currentDensity = [10, 10]; currentPitch = [1, 1]; currentPan = [0, 0]; currentSpread = [0, 0]; currentVolume = [1, 1]; currentGranularGain = [1, 1]; currentCutoff = [20000, 20000]; currentlpf_gain = [0.95, 0.95]; currentHpf = [20, 20]; currentSubharmonics1 = [0, 0]; currentSubharmonics2 = [0, 0]; currentSubharmonics3 = [0, 0]; currentOvertones1 = [0, 0]; currentOvertones2 = [0, 0]; currentPitchMode = [0, 0]; currentDirectionMod = [0, 0]; currentSizeVariation = [0, 0]; currentSmoothbass = [1, 1]; currentDensityModAmt = [0, 0]; currentLowGain = [0, 0]; currentMidGain = [0, 0]; currentHighGain = [0, 0]; currentTiltGain = [0, 0]; currentProbability = [100, 100]; liveBufferMix = 1.0; currentPitchRandomProb = [0, 0]; currentPitchRandomScale = [0, 0]; currentRatchetingProb = [0, 0]; currentPitchLag = [0, 0];
+        currentSpeed = [0.1, 0.1]; currentJitter = [0.25, 0.25]; currentSize = [0.1, 0.1]; currentDensity = [10, 10]; currentPitch = [1, 1]; currentPan = [0, 0]; currentSpread = [0, 0]; currentVolume = [1, 1]; currentGranularGain = [1, 1]; currentCutoff = [20000, 20000]; currentlpf_gain = [0.95, 0.95]; currentHpf = [20, 20]; currentSubharmonics1 = [0, 0]; currentSubharmonics2 = [0, 0]; currentSubharmonics3 = [0, 0]; currentOvertones1 = [0, 0]; currentOvertones2 = [0, 0]; currentPitchMode = [0, 0]; currentDirectionMod = [0, 0]; currentSizeVariation = [0, 0]; currentSmoothbass = [1, 1]; currentDensityModAmt = [0, 0]; currentLowGain = [0, 0]; currentMidGain = [0, 0]; currentHighGain = [0, 0]; currentTiltGain = [0, 0]; currentProbability = [100, 100]; currentPitchRandomProb = [0, 0]; currentPitchRandomScale = [0, 0]; currentRatchetingProb = [0, 0]; currentPitchLag = [0, 0];
         loadGen = [0, 0]; loadPath = [nil, nil]; loadBusy = [false, false]; filePeak = [1, 1]; rateScale = [1, 1]; filterOn = [false, false]; filterTok = [0, 0]; currentKeyHold = [1, 1]; currentKeyGate = [0, 0]; currentAdA = [0.005, 0.005]; currentAdD = [0.3, 0.3]; currentVelAmp = [1, 1]; currentAmpRandomize = [0, 0];
 
         context.server.sync;
@@ -810,25 +812,34 @@ alloc {
 
         this.addCommand(\w_depth, "f", { arg msg; delayEffect.set(\w_depth, msg[1]/100); });
 
-        this.addCommand("cutoff", "if", { arg msg; var voice = msg[1] - 1; currentCutoff[voice] = msg[2]; filterSynths[voice].set(\cutoff, msg[2]); this.updateFilterRun(voice); });
-        this.addCommand("lpf_gain", "if", { arg msg; var voice = msg[1] - 1; currentlpf_gain[voice] = msg[2]; filterSynths[voice].set(\lpf_gain, msg[2]); this.updateFilterRun(voice); });
-        this.addCommand("hpf", "if", { arg msg; var voice = msg[1] - 1; currentHpf[voice] = msg[2]; filterSynths[voice].set(\hpf, msg[2]); this.updateFilterRun(voice); });
+        [
+            [\env_select, "ii", currentEnvSelect],
+            [\density_mod_amt, "if", currentDensityModAmt],
+            [\subharmonics_1, "if", currentSubharmonics1],
+            [\subharmonics_2, "if", currentSubharmonics2],
+            [\subharmonics_3, "if", currentSubharmonics3],
+            [\overtones_1, "if", currentOvertones1],
+            [\overtones_2, "if", currentOvertones2],
+            [\pitch_mode, "ii", currentPitchMode],
+            [\pitch_offset, "if", currentPitch],
+            [\direction_mod, "if", currentDirectionMod],
+            [\size_variation, "if", currentSizeVariation],
+            [\amp_randomize, "if", currentAmpRandomize],
+            [\smoothbass, "if", currentSmoothbass],
+            [\probability, "if", currentProbability],
+            [\size, "if", currentSize],
+            [\density, "if", currentDensity],
+            [\spread, "if", currentSpread],
+            [\pitch_lag, "if", currentPitchLag, \pitch_lag_time],
+            [\key_hold, "ii", currentKeyHold],
+            [\key_gate, "ii", currentKeyGate],
+            [\vel_amp, "if", currentVelAmp]
+        ].do({ arg c; this.addCommand(c[0], c[1], { arg msg; var v = msg[1] - 1; c[2][v] = msg[2]; voices[v].set(c[3] ? c[0], msg[2]); }); });
+
+        [[\cutoff, currentCutoff], [\lpf_gain, currentlpf_gain], [\hpf, currentHpf]].do({ arg c; this.addCommand(c[0], "if", { arg msg; var v = msg[1] - 1; c[1][v] = msg[2]; filterSynths[v].set(c[0], msg[2]); this.updateFilterRun(v); }); });
+        [[\eq_low_gain, currentLowGain, \low_gain], [\eq_mid_gain, currentMidGain, \mid_gain], [\eq_high_gain, currentHighGain, \high_gain]].do({ arg c; this.addCommand(c[0], "if", { arg msg; var v = msg[1] - 1; c[1][v] = msg[2]; eqSynths[v].set(c[2], msg[2]); this.updateEqRun(v); }); });
 
         this.addCommand("granular_gain", "if", { arg msg; var voice = msg[1] - 1; currentGranularGain[voice] = msg[2]; voices[voice].set(\granular_gain, msg[2]); drySynths[voice].set(\granular_gain, msg[2]); this.updateDryRun(voice); });
-        this.addCommand("env_select", "ii", { arg msg; var voice = msg[1] - 1; currentEnvSelect[voice] = msg[2]; voices[voice].set(\env_select, msg[2]); });
-        this.addCommand("density_mod_amt", "if", { arg msg; var voice = msg[1] - 1; currentDensityModAmt[voice] = msg[2]; voices[voice].set(\density_mod_amt, msg[2]); });
-        this.addCommand("subharmonics_1", "if", { arg msg; var voice = msg[1] - 1; currentSubharmonics1[voice] = msg[2]; voices[voice].set(\subharmonics_1, msg[2]); });
-        this.addCommand("subharmonics_2", "if", { arg msg; var voice = msg[1] - 1; currentSubharmonics2[voice] = msg[2]; voices[voice].set(\subharmonics_2, msg[2]); });
-        this.addCommand("subharmonics_3", "if", { arg msg; var voice = msg[1] - 1; currentSubharmonics3[voice] = msg[2]; voices[voice].set(\subharmonics_3, msg[2]); });
-        this.addCommand("overtones_1", "if", { arg msg; var voice = msg[1] - 1; currentOvertones1[voice] = msg[2]; voices[voice].set(\overtones_1, msg[2]); });
-        this.addCommand("overtones_2", "if", { arg msg; var voice = msg[1] - 1; currentOvertones2[voice] = msg[2]; voices[voice].set(\overtones_2, msg[2]); });
-        this.addCommand("pitch_mode", "ii", { arg msg; var voice = msg[1] - 1; currentPitchMode[voice] = msg[2]; voices[voice].set(\pitch_mode, msg[2]); });
-        this.addCommand("pitch_offset", "if", { arg msg; var voice = msg[1] - 1; currentPitch[voice] = msg[2]; voices[voice].set(\pitch_offset, msg[2]); });
-        this.addCommand("direction_mod", "if", { arg msg; var voice = msg[1] - 1; currentDirectionMod[voice] = msg[2]; voices[voice].set(\direction_mod, msg[2]); });
-        this.addCommand("size_variation", "if", { arg msg; var voice = msg[1] - 1; currentSizeVariation[voice] = msg[2]; voices[voice].set(\size_variation, msg[2]); });
-        this.addCommand("amp_randomize", "if", { arg msg; var voice = msg[1] - 1; currentAmpRandomize[voice] = msg[2]; voices[voice].set(\amp_randomize, msg[2]); });
-        this.addCommand("smoothbass", "if", { arg msg; var voice = msg[1] - 1; currentSmoothbass[voice] = msg[2]; voices[voice].set(\smoothbass, msg[2]); });
-        this.addCommand("probability", "if", { arg msg; var voice = msg[1] - 1; currentProbability[voice] = msg[2]; voices[voice].set(\probability, msg[2]); });
         this.addCommand("pitch_random_scale_type", "ii", { arg msg; var voice = msg[1] - 1; var scaleType = msg[2]; currentPitchRandomScale[voice] = scaleType; voices[voice].set(\pitch_random_scale_buf, pitchScaleBuffers[scaleType].bufnum, \pitch_random_scale_len, pitchScaleLengths[scaleType]); });
         this.addCommand("pitch_random_prob", "if", { arg msg; var voice = msg[1] - 1; currentPitchRandomProb[voice] = msg[2]; voices[voice].set(\pitch_random_prob, msg[2].abs * 0.01, \pitch_random_direction, msg[2].sign); });
         this.addCommand("ratcheting_prob", "if", { arg msg; var voice = msg[1] - 1; currentRatchetingProb[voice] = msg[2] * 0.01; voices[voice].set(\ratcheting_prob, msg[2] * 0.01); });
@@ -839,10 +850,7 @@ alloc {
         this.addCommand("reseek", "i", { arg msg; var voice = msg[1] - 1; if(voices[voice].notNil, { voices[voice].set(\t_reset_pos, 1); }); if(drySynths[voice].notNil, { drySynths[voice].set(\t_reset_pos, 1); }); });
         this.addCommand("speed", "if", { arg msg; var voice = msg[1] - 1; currentSpeed[voice] = msg[2]; voices[voice].set(\speed, msg[2]); drySynths[voice].set(\speed, msg[2]); });
         this.addCommand("jitter", "if", { arg msg; var voice = msg[1] - 1; currentJitter[voice] = msg[2]; voices[voice].set(\jitter, msg[2] / 2); });
-        this.addCommand("size", "if", { arg msg; var voice = msg[1] - 1; currentSize[voice] = msg[2]; voices[voice].set(\size, msg[2]); });
-        this.addCommand("density", "if", { arg msg; var voice = msg[1] - 1; currentDensity[voice] = msg[2]; voices[voice].set(\density, msg[2]); });
         this.addCommand("pan", "if", { arg msg; var voice = msg[1] - 1; currentPan[voice] = msg[2]; voices[voice].set(\pan, msg[2]); drySynths[voice].set(\pan, msg[2]); });
-        this.addCommand("spread", "if", { arg msg; var voice = msg[1] - 1; currentSpread[voice] = msg[2]; voices[voice].set(\spread, msg[2]); });
         this.addCommand("volume", "if", { arg msg; var voice = msg[1] - 1; currentVolume[voice] = msg[2]; voices[voice].set(\gain, msg[2]); if(bounceTracks.notNil, { var t = bounceTracks[voice]; t[0].set(t[1], msg[2].max(1e-4).reciprocal); }); });
 
         this.addCommand("glitch_ratio", "f", { arg msg; currentGlitchRatio = msg[1]; glitchEffect.set(\glitch_ratio, currentGlitchRatio); this.fxRun(glitchEffect, (currentGlitchRatio > 0) && (currentGlitchMix > 0), 0.6); });
@@ -850,30 +858,23 @@ alloc {
 
         this.addCommand("resonator_freqs", "fffff", { arg msg; resonatorEffect.set(\f1, msg[1], \f2, msg[2], \f3, msg[3], \f4, msg[4], \f5, msg[5]); });
 
-        this.addCommand("eq_low_gain", "if", { arg msg; var voice = msg[1] - 1; currentLowGain[voice] = msg[2]; eqSynths[voice].set(\low_gain, msg[2]); this.updateEqRun(voice); });
-        this.addCommand("eq_mid_gain", "if", { arg msg; var voice = msg[1] - 1; currentMidGain[voice] = msg[2]; eqSynths[voice].set(\mid_gain, msg[2]); this.updateEqRun(voice); });
-        this.addCommand("eq_high_gain", "if", { arg msg; var voice = msg[1] - 1; currentHighGain[voice] = msg[2]; eqSynths[voice].set(\high_gain, msg[2]); this.updateEqRun(voice); });
         this.addCommand("eq_tilt", "if", { arg msg; var voice = msg[1] - 1; currentTiltGain[voice] = msg[2]; tiltSynths[voice].set(\tilt, msg[2]); this.updateTiltRun(voice); });
 
         this.addCommand("width", "f", { arg msg; widthEffect.set(\width, msg[1]); widthEffect.run(msg[1] != 1); });
         this.addCommand("monobass_mix", "f", { arg msg; monobassEffect.run(msg[1] > 0); });
         this.addCommand("haas", "i", { arg msg; haasEffect.run(msg[1] > 0); });
         this.addCommand("limiter", "i", { arg msg; if(msg[1] > 0, { if(limiterEffect.isNil, { limiterEffect = Synth.new(\limiter, [\bus, context.out_b.index], context.xg, 'addToTail') }) }, { if(limiterEffect.notNil, { limiterEffect.free; limiterEffect = nil }) }); });
-        this.addCommand("pitch_lag", "if", { arg msg; var voice = msg[1] - 1; currentPitchLag[voice] = msg[2]; voices[voice].set(\pitch_lag_time, msg[2]); });
 
         this.addCommand("voice_run", "ii", { arg msg; var voice = msg[1] - 1; var state = msg[2]; if(voices[voice].notNil, { voices[voice].run(state > 0); voiceRunning[voice] = (state > 0); this.updateDryRun(voice); }); });
-        this.addCommand("key_hold", "ii", { arg msg; var voice = msg[1] - 1; currentKeyHold[voice] = msg[2]; if(voices[voice].notNil, { voices[voice].set(\key_hold, msg[2]); }); });
-        this.addCommand("key_gate", "ii", { arg msg; var voice = msg[1] - 1; currentKeyGate[voice] = msg[2]; if(voices[voice].notNil, { voices[voice].set(\key_gate, msg[2]); }); });
         this.addCommand("key_grain", "i", { arg msg; var voice = msg[1] - 1; if(voices[voice].notNil, { voices[voice].set(\t_key_trig, 1); }); });
         this.addCommand("key_ad", "iff", { arg msg; var voice = msg[1] - 1; currentAdA[voice] = msg[2]; currentAdD[voice] = msg[3]; if(voices[voice].notNil, { voices[voice].set(\ad_a, msg[2], \ad_d, msg[3]); }); });
-        this.addCommand("vel_amp", "if", { arg msg; var voice = msg[1] - 1; currentVelAmp[voice] = msg[2]; if(voices[voice].notNil, { voices[voice].set(\vel_amp, msg[2]); }); });
         this.addCommand("set_live_input", "ii", { arg msg; var voice = msg[1] - 1; var enable = msg[2]; if (enable == 1, { this.cancelLoad(voice); if (liveInputRecorders[voice].notNil, { liveInputRecorders[voice].free; }); liveRecPosBuses[voice].set(-1.0); liveInputRecorders[voice] = Synth.new(\liveInputRecorder, [ \bufL, liveInputBuffersL[voice], \bufR, liveInputBuffersR[voice], \mix, liveBufferMix, \voice, voice, \recPosBus, liveRecPosBuses[voice].index, \isMono, inMono[voice] ], context.xg, 'addToHead'); voicesUsingLiveBuffer[voice] = true; voices[voice].set( \buf_l, liveInputBuffersL[voice], \buf_r, liveInputBuffersR[voice], \rec_pos_bus, liveRecPosBuses[voice].index, \is_stereo, 1, \norm, 1, \rscale, 1, \t_reset_pos, 1); voiceIsStereo[voice] = 1; voices[voice].run(true); drySynths[voice].set( \buf_l, liveInputBuffersL[voice], \buf_r, liveInputBuffersR[voice], \rec_pos_bus, liveRecPosBuses[voice].index, \norm, 1, \rscale, 1, \t_reset_pos, 1); voiceRunning[voice] = true; lastPos[voice] = seekPos[voice]; this.updateDryRun(voice); }, { if (liveInputRecorders[voice].notNil, { liveInputRecorders[voice].free; }); liveInputRecorders[voice] = nil; liveRecPosBuses[voice].set(-1.0); voices[voice].set(\rec_pos_bus, -1); drySynths[voice].set(\rec_pos_bus, -1); }); });
         this.addCommand("live_buffer_mix", "f", { arg msg; liveBufferMix = msg[1]; liveInputRecorders.do({ arg recorder; if (recorder.notNil, { recorder.set(\mix, liveBufferMix); }); }); });
         this.addCommand("live_direct", "ii", { arg msg; var voice = msg[1] - 1; var enable = msg[2]; if (enable == 1, { this.cancelLoad(voice); if (voices[voice].notNil, { voices[voice].free; }); if (liveInputRecorders[voice].notNil, { liveInputRecorders[voice].free; liveInputRecorders[voice] = nil; }); voices[voice] = Synth.new(\liveDirect, [ \out, voiceBuses[voice].index,\pan, currentPan[voice] ? 0,\gain, currentVolume[voice] ? 1, \voice, voice, \isMono, inMono[voice], \key_hold, currentKeyHold[voice], \key_gate, currentKeyGate[voice], \ad_a, currentAdA[voice], \ad_d, currentAdD[voice], \vel_amp, currentVelAmp[voice] ], target: pg); voices[voice].run(true); voiceRunning[voice] = false; this.updateDryRun(voice); }, { if (voices[voice].notNil, { voices[voice].free; }); this.directOff(voice); }); });
         this.addCommand("isMono", "ii", { arg msg; var voice = msg[1] - 1; inMono[voice] = msg[2]; voices[voice].set(\isMono, msg[2]); });
         this.addCommand("live_mono", "ii", { arg msg; var voice = msg[1] - 1; var mono = msg[2]; inMono[voice] = mono; if(liveInputRecorders[voice].notNil, { liveInputRecorders[voice].set(\isMono, mono); }); if(voicesUsingLiveBuffer[voice] && voices[voice].notNil, { voices[voice].set(\is_stereo, 1 - mono); voiceIsStereo[voice] = 1 - mono; }); });
         this.addCommand("unload_all", "", { this.unloadAll(); });
-        this.addCommand("pause_voice", "i", { arg msg; var voice = msg[1] - 1; this.cancelLoad(voice); if(voices[voice].notNil, { voices[voice].set(\buf_l, silentBuffer, \buf_r, silentBuffer, \is_stereo, 0, \t_reset_pos, 1); voices[voice].run(false); drySynths[voice].set(\buf_l, silentBuffer, \buf_r, silentBuffer, \t_reset_pos, 1); voiceRunning[voice] = false; this.updateDryRun(voice); }); });
+        this.addCommand("pause_voice", "i", { arg msg; var voice = msg[1] - 1; this.cancelLoad(voice); this.silence(voice); });
         this.addCommand("run_voice", "ii", { arg msg; var voice = msg[1] - 1; var on = msg[2]; if(voices[voice].notNil, { if(on == 1, { voices[voice].set(\t_reset_pos, 1); voices[voice].run(true); drySynths[voice].set(\t_reset_pos, 1); voiceRunning[voice] = true; lastPos[voice] = seekPos[voice]; }, { voices[voice].run(false); voiceRunning[voice] = false; }); this.updateDryRun(voice); }); });
         this.addCommand("save_live_buffer", "is", { arg msg; var voice = msg[1] - 1; var filename = msg[2]; this.saveLiveBufferToTape(voice, filename); });
         this.addCommand("bounce", "ifsif", { arg msg; this.bounce(msg[1], msg[2], msg[3].asString, msg[4], msg[5]); });
