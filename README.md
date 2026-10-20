@@ -46,7 +46,7 @@ Hold **K1**+**K2**+**K3**: Randomize Arp
 
 ### Download
 
-**v0.76**
+**v0.79**
 install from Maiden Project Manager, or from Maiden REPL:
 
 ```
