@@ -6,7 +6,7 @@
 --            by: @dddstudio                       
 -- 
 --                          
---                           v0.79
+--                           v0.80
 -- E1: Master Volume
 -- K1+E2/E3: Volume
 -- K1+E1: Crossfade/Morph
@@ -107,13 +107,21 @@ local clamp = util.clamp
 local _pobj = utils.param_obj
 local function pget(id) local o = _pobj(id) if o then return o:get() end return nil end
 local function pset(id, v, silent) local o = _pobj(id) if o then o:set(v, silent) end end
-local function nrev_set_mix(db)
-    if db <= -40 then
-        params:set("reverb", 1)
-        return
-    end
+local function rev_route()
+    local db, sys = params:get("reverb_mix"), params:get("rev_type") == 2
+    local on = db > -40
+    local w = (on and not sys) and 10 ^ (db / 20) or 0
+    if hlp.rev_w ~= w then hlp.rev_w = w engine.rev_mix(w) end
+    if not (sys and on) then params:set("reverb", 1) return end
     params:set("reverb", 2)
     params:set("rev_eng_input", db)
+end
+hlp.REV_PLATE = {"rev_decay", "rev_damp", "rev_pre", "rev_mdepth", "rev_mrate", "rev_series", "delay_series"}
+function hlp.rev_vis()
+    local pl = params:get("rev_type") == 1
+    for _, id in ipairs(hlp.REV_PLATE) do if pl then params:show(id) else params:hide(id) end end
+    for _, id in ipairs(hlp.rev_sys or {}) do if pl then params:hide(id) else params:show(id) end end
+    if _menu and type(_menu.rebuild_params) == "function" then _menu.rebuild_params() end
 end
 local TRACK_KEYS = {}
 for t = 1, 2 do
@@ -523,7 +531,7 @@ end
 
 local function setup_params()
     for _, p in ipairs(params.params) do if p.id then ctx.sys[p.id] = true end end
-    for _, id in ipairs({"arp_steps", "arp_mode", "arp_twin", "arp_octaves", "midi_device", "midi_channel"}) do ctx.sys[id] = true end
+    for _, id in ipairs({"arp_steps", "arp_mode", "arp_twin", "arp_octaves", "midi_device", "midi_channel", "delay_series"}) do ctx.sys[id] = true end
     presets.exclude(ctx.sys)
     local LIVE = _path.tape .. "live!"
     params:add_separator("Input")
@@ -592,10 +600,12 @@ local function setup_params()
     params:add_separator(" ")
     params:add_binary("randomize_granular", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_granular", function() undo.checkpoint() for i=1, 2 do randpara.randomize_granular_params(i, steps) end end)
     params:add_option("lock_granular", "Lock Parameters", {"off", "on"}, 1)
-    params:add_group("DELAY", 13)
+    params:add_group("DELAY", 15)
     params:add_control("delay_mix", "Mix", controlspec.new(0, 100, "lin", 1, 0, "%")) params:set_action("delay_mix", function(x) engine.mix(x * 0.01) font.update_fx_cache("delay_mix", x) end)
     params:add_taper("delay_time", "Time", 0.02, 5, 0.5, 0.1, "s") params:set_action("delay_time", function(value) engine.delay(value) end)
     params:add_binary("tap", "↳ TAP!", "trigger", 0) params:set_action("tap", register_tap)
+    local D_RATIO = {0.25, 1 / 3, 0.5, 2 / 3, 0.75, 1, 4 / 3, 1.5, 2, 3, 4}
+    params:add_option("delay_ratio", "L/R Ratio", {"4:1", "3:1", "2:1", "3:2", "4:3", "1:1", "3:4", "2:3", "1:2", "1:3", "1:4"}, 6) params:set_action("delay_ratio", function(x) engine.d_ratio(D_RATIO[x]) end)
     params:add_taper("delay_feedback", "Feedback", 0, 120, 40, 1, "%") params:set_action("delay_feedback", function(value) engine.fb_amt(value * 0.01) end)
     params:add_control("delay_lowpass", "LPF", controlspec.new(20, 20000, 'exp', 1, 7500, "Hz")) params:set_action('delay_lowpass', function(value) engine.lpf(value) end)
     params:add_control("delay_highpass", "HPF", controlspec.new(20, 20000, 'exp', 1, 200, "Hz")) params:set_action('delay_highpass', function(value) engine.dhpf(value) end)
@@ -603,6 +613,7 @@ local function setup_params()
     params:add_taper("wiggle_rate", "Mod Freq", 0, 20, 2, 1, "Hz") params:set_action("wiggle_rate", function(value) engine.w_rate(value) end)
     params:add_control("stereo", "Ping-Pong", controlspec.new(0, 100, "lin", 1, 20, "%")) params:set_action("stereo", function(x) engine.stereo(x * 0.01) end)
     params:add_taper("delay_duck", "Ducking", 0, 100, 17, 0, "%") params:set_action("delay_duck", function(value) engine.delay_duck(value * 0.01) end)
+    params:add_control("delay_series", "Delay > Reverb", controlspec.new(0, 100, "lin", 1, 25, "%")) params:set_action("delay_series", function(v) params:set("rev_series", v) end) params:lookup_param("delay_series").save = false
     params:add_separator("   ")
     params:add_binary("randomize_delay_params", "RaNd0m1ze!", "trigger", 0) params:set_action("randomize_delay_params", function() undo.checkpoint() randpara.randomize_delay_params(steps) end)
     params:add_option("lock_delay", "Lock Parameters", {"off", "on"}, 1)
@@ -615,8 +626,15 @@ local function setup_params()
         {"rv_hfdamp",   "rev_hf_damping",   "Damping"}}
     local rev_present = {}
     for _, p in ipairs(rev_proxies) do if params.lookup[p[2]] then rev_present[#rev_present + 1] = p end end
-    params:add_group("R3VERB", 3 + #rev_present)
-    params:add_taper("reverb_mix", "Mix", -40, 18, -40, 0, "dB") params:set_action("reverb_mix", function(value) nrev_set_mix(value) font.update_fx_cache("reverb_mix", value) end)
+    params:add_group("R3VERB", 10 + #rev_present)
+    params:add_option("rev_type", "Type", {"plate", "system"}, 1) params:set_action("rev_type", function() rev_route() hlp.rev_vis() end)
+    params:add_taper("reverb_mix", "Mix", -40, 18, -40, 0, "dB") params:set_action("reverb_mix", function(value) rev_route() font.update_fx_cache("reverb_mix", value) end)
+    params:add_control("rev_decay", "Decay", controlspec.new(0.3, 60, "exp", 0, 4, "s")) params:set_action("rev_decay", function(v) engine.rev_decay(10 ^ (-0.468 / v)) end)
+    params:add_control("rev_damp", "Damping", controlspec.new(0, 100, "lin", 1, 40, "%")) params:set_action("rev_damp", function(v) engine.rev_damp(math.exp(-2.356194 * (1 / 30) ^ (v * 0.01))) end)
+    params:add_control("rev_pre", "Pre Delay", controlspec.new(0, 250, "lin", 1, 20, "ms")) params:set_action("rev_pre", function(v) engine.rev_pre(v * 0.001) end)
+    params:add_control("rev_mdepth", "Mod Depth", controlspec.new(0, 100, "lin", 1, 30, "%")) params:set_action("rev_mdepth", function(v) engine.rev_mdepth(v * 0.01) end)
+    params:add_control("rev_mrate", "Mod Rate", controlspec.new(0.05, 5, "exp", 0, 0.5, "Hz")) params:set_action("rev_mrate", function(v) engine.rev_mrate(v) end)
+    hlp.rev_sys = {}
     for _, p in ipairs(rev_present) do
         local proxy_id, sys_id, name = p[1], p[2], p[3]
         local sp = params.params[params.lookup[sys_id]]
@@ -631,6 +649,11 @@ local function setup_params()
             if orig then orig(v) end
             if not rev_sync then rev_sync = true; params:set(proxy_id, v, true); rev_sync = false end
         end
+        hlp.rev_sys[#hlp.rev_sys + 1] = proxy_id
+    end
+    params:add_control("rev_series", "Delay > Reverb", controlspec.new(0, 100, "lin", 1, 25, "%")) params:set_action("rev_series", function(v) engine.rev_series(v * 0.01) params:set("delay_series", v, true) end)
+    for _, id in ipairs({"rev_series", "delay_series"}) do
+        params:lookup_param(id).string = function(p) local v = p:get() return v <= 0 and "parallel" or v >= 100 and "series" or string.format("%d%%", floor(v + 0.5)) end
     end
     params:add_separator("           ")
     params:add_option("lock_reverb", "Lock Parameters", {"off", "on"}, 2)

@@ -31,6 +31,10 @@ local PARAM_SPECS = {
   ["rev_low_time"]        = {3,   {0.1,10},  "reverb", "reverb_mix", -40},
   ["rev_mid_time"]        = {9,   {1,16},    "reverb", "reverb_mix", -40},
   ["rev_hf_damping"]      = {7000,{1500,12000},"reverb", "reverb_mix", -40},
+  ["rev_decay"]           = {4,   {0.3,30},  "reverb", "reverb_mix", -40},
+  ["rev_damp"]            = {30,  {0,100},   "reverb", "reverb_mix", -40},
+  ["rev_mdepth"]          = {40,  {0,100},   "reverb", "reverb_mix", -40},
+  ["rev_mrate"]           = {1,   {0.05,3},  "reverb", "reverb_mix", -40},
   ["wobble_amp"]          = {100, {0,100},   "tape", "wobble_mix"},
   ["wobble_rpm"]          = {90,  {30,90},   "tape", "wobble_mix"},
   ["flutter_amp"]         = {100, {0,100},   "tape", "wobble_mix"},
@@ -434,13 +438,21 @@ local function pitch_scale_allowed()
   return true
 end
 
+local function rev_sys() return params:get("rev_type") == 2 end
+local function rev_plate() return params:get("rev_type") ~= 2 end
+
 local param_configs = {
   dverb = { lock_param = "lock_reverb", params = {
-    {name="rev_pre_delay",  prob=0.5,  default=20,   random=function() return random(20,100)        end, direct_set=true},
-    {name="rev_lf_fc",      prob=0.5,  default=50,   random=function() return random(50,1000)       end},
-    {name="rev_low_time",   prob=0.5,  default=0.1,  random=function() return random_float(0.1,9)   end},
-    {name="rev_mid_time",   prob=0.5,  default=11,   random=function() return random_float(1,16)    end},
-    {name="rev_hf_damping", prob=0.5,  default=4500, random=function() return random(1500,12000)    end},
+    {name="rev_pre_delay",  prob=0.5,  default=20,   random=function() return random(20,100)        end, direct_set=true, condition=rev_sys},
+    {name="rev_lf_fc",      prob=0.5,  default=50,   random=function() return random(50,1000)       end, condition=rev_sys},
+    {name="rev_low_time",   prob=0.5,  default=0.1,  random=function() return random_float(0.1,9)   end, condition=rev_sys},
+    {name="rev_mid_time",   prob=0.5,  default=11,   random=function() return random_float(1,16)    end, condition=rev_sys},
+    {name="rev_hf_damping", prob=0.5,  default=4500, random=function() return random(1500,12000)    end, condition=rev_sys},
+    {name="rev_decay",      prob=0.5,  default=4,    random=function() return random_float(1.5,12)  end, condition=rev_plate},
+    {name="rev_damp",       prob=0.5,  default=40,   random=function() return random(10,70)         end, condition=rev_plate},
+    {name="rev_pre",        prob=0.5,  default=20,   random=function() return random(0,80)          end, direct_set=true, condition=rev_plate},
+    {name="rev_mdepth",     prob=0.3,  default=30,   random=function() return random(10,70)         end, condition=rev_plate},
+    {name="rev_mrate",      prob=0.3,  default=0.5,  random=function() return random_float(0.2,1.5) end, condition=rev_plate},
   }},
   shimmer = { lock_param = "lock_shimmer", params = {
     {name="shimmer_oct1", prob=0.15, default=4,     random=function() return random(3,5)          end, direct_set=true},
