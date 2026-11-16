@@ -6,6 +6,7 @@ local lfo_ref = nil
 local set_density = function(v, hz) engine.density(v, hz) end
 local enabled = false
 local delay_div = 1.0
+local halo_div = 1.0
 local lfo_div_beats = {1.0, 1.0}
 local reseek_enabled = false
 local reseek_beats = 1.0
@@ -53,6 +54,11 @@ local function push()
   set_density(1, clamp(t * density_gpb[1], 0.1, 250))
   set_density(2, clamp(t * density_gpb[2], 0.1, 250))
   if params.lookup["delay_time"] then params:set("delay_time", clamp(delay_div / t, 0.02, 5)) end
+  if params.lookup["halo_time"] then
+    local h = halo_div / t
+    while h > 2 do h = h * 0.5 end
+    params:set("halo_time", h < 0.05 and 0.05 or h)
+  end
   if ref_tempo then
     local s = t / ref_tempo
     if math.abs(s - speed_scale_val) > 1e-6 then
@@ -90,7 +96,7 @@ end
 
 local sync_co = nil
 function clocksync.add_params()
-  params:add_option("clock_sync", "Clock Sync", {"off", "on"}, 1)
+  params:add_option("clock_sync", "Clock Sync", {"OFF", "ON"}, 1)
   params:set_action("clock_sync", function(v)
     enabled = (v == 2)
     if enabled then
@@ -129,7 +135,12 @@ function clocksync.add_params()
     delay_div = DIVISIONS[v].beats
     push()
   end)
-  params:add_option("clock_reseek", "Beat Repeat", {"off", "on"}, 1)
+  params:add_option("clock_sync_halo_div", "Halo Division", DIV_LABELS, DIV["1/4"])
+  params:set_action("clock_sync_halo_div", function(v)
+    halo_div = DIVISIONS[v].beats
+    push()
+  end)
+  params:add_option("clock_reseek", "Beat Repeat", {"OFF", "ON"}, 1)
   params:set_action("clock_reseek", function(v)
     reseek_enabled = (v == 2)
     if reseek_enabled and lfo_ref and not _G.preset_loading then
@@ -246,6 +257,7 @@ function clocksync.init(opts)
   lfo_ref = opts.lfo
   if opts.set_density then set_density = opts.set_density end
   delay_div = DIVISIONS[params:get("clock_sync_delay_div")].beats
+  halo_div = DIVISIONS[params:get("clock_sync_halo_div")].beats
   lfo_div_beats[1] = DIVISIONS[params:get("clock_lfo_div")].beats
   lfo_div_beats[2] = DIVISIONS[params:get("clock_lfo_div2")].beats
   reseek_beats = DIVISIONS[params:get("clock_reseek_div")].beats

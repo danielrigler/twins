@@ -32,7 +32,7 @@ local PITCH_KEYS   = {"1pitch", "2pitch"}
 local SIZE_KEYS    = {"1size", "2size"}
 local DENSITY_KEYS = {"1density", "2density"}
 local RAT_KEYS     = {"1ratcheting_prob", "2ratcheting_prob"}
-local scale_idx, scale_name, scale_ivs, scale_n = nil, "off", nil, nil
+local scale_idx, scale_name, scale_ivs, scale_n = nil, "OFF", nil, nil
 local last_po = {nil, nil}
 
 local _po = {}
@@ -52,7 +52,7 @@ local function refresh_scale()
   local si = o and o:get()
   if si ~= scale_idx then
     scale_idx = si
-    scale_name = o and o:string() or "off"
+    scale_name = o and o:string() or "OFF"
     scale_ivs = SU.intervals(scale_name)
     scale_n = scale_ivs and (#scale_ivs - 1) or nil
   end
@@ -345,7 +345,7 @@ end
 
 function arp.add_params()
   params:add_group("ARP!", 7)
-  params:add_option("arp_on", "Arp!", {"off", "on"}, 1)
+  params:add_option("arp_on", "Arp!", {"OFF", "ON"}, 1)
   params:set_action("arp_on", function(v) set_running(v == 2) end)
   params:add_number("arp_steps", "Steps", 1, MAX_STEPS, nsteps)
   params:set_action("arp_steps", function(v) nsteps = floor(v) end)

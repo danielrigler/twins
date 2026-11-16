@@ -67,13 +67,20 @@ local PARAM_SPECS = {
   ["spiral_glide"]        = {40,  {0,100},   "spiral",  "spiral_mix"},
   ["spiral_span"]         = {40,  {0,100},   "spiral",  "spiral_mix"},
   ["spiral_tone"]         = {40,  {0,100},   "spiral",  "spiral_mix"},
+  ["halo_fb"]             = {40,  {0,95},    "halo",    "halo_mix"},
+  ["halo_depth"]          = {50,  {0,100},   "halo",    "halo_mix"},
+  ["halo_sat"]            = {40,  {0,100},   "halo",    "halo_mix"},
+  ["halo_tone"]           = {3000,{1000,8750},"halo",   "halo_mix"},
+  ["prism_bright"]        = {50,  {0,100},   "prism",   "prism_mix"},
+  ["prism_strike"]        = {40,  {0,100},   "prism",   "prism_mix"},
+  ["prism_band"]          = {800, {300,2500},"prism",   "prism_mix"},
 }
 
 local GROUP_LOCK = {
   granular = "lock_granular", delay   = "lock_delay",
   reverb   = "lock_reverb",   tape    = "lock_tape",
   shimmer  = "lock_shimmer",  eq      = "lock_eq",
-  glitch   = "lock_glitch",
+  glitch   = "lock_glitch",   halo    = "lock_halo",
 }
 
 local GROUP_IDS, GROUP_ID_OF = {}, {}
@@ -90,7 +97,7 @@ local cache_dirty           = true
 local evolution_group_enabled = {
   granular = true, delay = true, reverb = true, tape = true,
   shimmer = true, eq = true, glitch = true, bitcrush = true,
-  ringmod = true, fuzz = true, sub = true, spiral = true}
+  ringmod = true, fuzz = true, sub = true, spiral = true, halo = true, prism = true}
 
 local evo_names, evo_pobjs, evo_mirror_idx, evo_gate, evo_gate_off = {}, {}, {}, {}, {}
 local evo_gid = {}
@@ -472,11 +479,20 @@ local param_configs = {
     {name="wiggle_rate",    prob=0.75, default=2,    random=function() return random_float(0.4,4)  end},
   }},
   tape = { lock_param = "lock_tape", params = {
-    {name="wobble_amp",  prob=0.75, default=10, random=function() return random(1,15)  end},
-    {name="wobble_rpm",  prob=0.75, default=33, random=function() return random(30,70) end},
-    {name="flutter_amp", prob=0.75, default=15, random=function() return random(1,30)  end},
-    {name="flutter_freq",prob=0.75, default=6,  random=function() return random(2,10)  end},
-    {name="flutter_var", prob=0.75, default=2,  random=function() return random(1,5)   end},
+    {name="wobble_amp",  prob=0.75, default=20, random=function() return random(5,50)              end},
+    {name="wobble_rpm",  prob=0.75, default=33, random=function() return random(30,60)             end},
+    {name="flutter_amp", prob=0.75, default=35, random=function() return random(10,60)             end},
+    {name="flutter_freq",prob=0.75, default=6,  random=function() return 3 * 4 ^ random()          end},
+    {name="flutter_var", prob=0.75, default=2,  random=function() return 0.5 * 8 ^ random()        end},
+  }},
+  halo = { lock_param = "lock_halo", params = {
+    {name="halo_time",   prob=0.5,  default=0.48, random=function() return random_float(0.3,0.7)  end, direct_set=true, condition=function() return params:get("clock_sync") ~= 2 end},
+    {name="halo_fb",     prob=0.75, default=43,   random=function() return random(25,60)          end},
+    {name="halo_depth",  prob=0.75, default=46,   random=function() return random(20,70)          end},
+    {name="halo_rate",   prob=0.5,  default=0.25, random=function() return 0.15 * 8 ^ random()    end},
+    {name="halo_sat",    prob=0.5,  default=64,   random=function() return random(30,85)          end},
+    {name="halo_tone",   prob=0.5,  default=4350, random=function() return 2500 * 2.6 ^ random()  end},
+    {name="halo_lowcut", prob=0.3,  default=40,   random=function() return random(20,120)         end},
   }},
   pitch = { lock_param = "lock_pitch", params = {
     {name="pitch_quantize_scale", prob=0.3, default=2, random=function() return random(1,9) end, direct_set=true},
@@ -488,7 +504,7 @@ local param_configs = {
 
 local GLOBAL_GROUP_ORDER = {
   param_configs.tape, param_configs.delay, param_configs.dverb,
-  param_configs.shimmer, param_configs.pitch, param_configs.sync }
+  param_configs.shimmer, param_configs.halo, param_configs.pitch, param_configs.sync }
 
 local track_param_configs = {
   granular = function(track) return { lock_param = "lock_granular", params = {
@@ -584,6 +600,7 @@ return {
   randomize_params          = randomize_params,
   randomize_delay_params    = create_randomizer("delay"),
   randomize_tape_params     = create_randomizer("tape"),
+  randomize_halo_params     = create_randomizer("halo"),
   randomize_granular_params = create_track_randomizer(TRACK_CONFIGS.granular),
   randomize_eq_params       = create_track_randomizer(TRACK_CONFIGS.eq),
   start_evolution           = start_evolution,

@@ -129,30 +129,31 @@ function Installer:install_libs()
   end)
 end
 
-function Installer:count_behind()
-  return tonumber(git(self, "rev-list --count HEAD..@{u}")) or 0
-end
+local MSG = {
+  nogit = {"Not Installed via Git", "Reinstall from maiden"},
+  offline = {"Can't Reach Server", "Check WiFi and try again"},
+  current = {"Twins is Up to Date", "Nothing new to install"},
+  edited = {"Update Skipped", "Local files were modified"},
+  failed = {"Update Failed", "Check WiFi and try again"}
+}
 
-function Installer:pulled_engine_change()
-  local names = util.os_capture("git -C '" .. self.path .. "' diff --name-only ORIG_HEAD..HEAD -- '*.sc' '*.scd' 2>/dev/null") or ""
-  return trim(names) ~= ""
-end
-
-function Installer:check()
+function Installer:check(manual)
   if not self.satisfied then return end
-  self.update.state = "checking"
+  local u, s = self.update, self.update.state
+  if s == "checking" then if manual then u.state = "searching" end return end
+  if s and s ~= "info" and s ~= "update" then return end
+  u.state = manual and "searching" or "checking"
   local g = "nice -n 19 git -C '" .. self.path .. "' "
-  norns.system_cmd("if " .. g .. "rev-parse --is-inside-work-tree >/dev/null 2>&1; then timeout -k 5 20 " .. g .. "fetch --quiet 2>/dev/null; echo B$(" .. g .. "rev-list --count HEAD..@{u} 2>/dev/null); echo D$(" .. g .. "status --porcelain --untracked-files=no 2>/dev/null | wc -l); fi; echo _done_", function(out)
+  norns.system_cmd("if " .. g .. "rev-parse --is-inside-work-tree >/dev/null 2>&1; then timeout -k 5 20 " .. g .. "fetch --quiet 2>/dev/null; echo F$?; echo B$(" .. g .. "rev-list --count HEAD..@{u} 2>/dev/null); echo D$(" .. g .. "status --porcelain --untracked-files=no 2>/dev/null | wc -l); fi; echo _done_", function(out)
     out = out or ""
-    self.update.behind = tonumber(out:match("B(%d+)")) or 0
-    if self.update.behind <= 0 then
-      self.update.state = nil
-    elseif (tonumber(out:match("D(%d+)")) or 0) > 0 then
-      print("[installer] " .. self.update.behind .. " update(s) available but working tree has local changes; skipping prompt.")
-      self.update.state = nil
-    else
-      self.update.state = "update"
-    end
+    local f = out:match("F(%d+)")
+    u.behind = tonumber(out:match("B(%d+)")) or 0
+    local msg = not f and MSG.nogit or f ~= "0" and MSG.offline
+      or u.behind <= 0 and MSG.current
+      or (tonumber(out:match("D(%d+)")) or 0) > 0 and MSG.edited
+    if not msg then u.state = "update" return end
+    print("[installer] " .. msg[1] .. ": " .. msg[2])
+    u.state, u.message = u.state == "searching" and "info" or nil, msg
   end)
 end
 
@@ -160,16 +161,16 @@ function Installer:install_update()
   self.update.state = "installing"
   self.update.message = nil
   norns.system_cmd("git -C '" .. self.path .. "' pull --ff-only 2>&1", function()
-    if self:count_behind() == 0 then
-      if self:pulled_engine_change() then
+    if (tonumber(git(self, "rev-list --count HEAD..@{u}")) or 0) == 0 then
+      if git(self, "diff --name-only ORIG_HEAD..HEAD -- '*.sc' '*.scd'") ~= "" then
         self.update.state = "restart"
       else
         self.update.state = "reloading"
-        clock.run(function() clock.sleep(0.4); norns.rerun() end)
+        clock.run(function() clock.sleep(0.4) norns.rerun() end)
       end
     else
-      self.update.message = "update failed"
-      self.update.state = "error"
+      self.update.message = MSG.failed
+      self.update.state = "info"
     end
   end)
 end
@@ -179,10 +180,10 @@ function Installer:do_restart()
   os.execute(RESTART_CMD)
 end
 
+local PENDING = {update = true, installing = true, reloading = true, searching = true, restart = true, restarting = true, info = true}
+
 function Installer:pending()
-  local s = self.update.state
-  return s == "update" or s == "installing" or s == "reloading"
-      or s == "restart" or s == "restarting" or s == "error"
+  return PENDING[self.update.state] == true
 end
 
 function Installer:key(k, z)
@@ -206,7 +207,7 @@ function Installer:key(k, z)
   elseif s == "restart" then
     if k == 2 then self.update.state = nil
     elseif k == 3 then self:do_restart() end
-  elseif s == "error" then
+  elseif s == "info" then
     if k == 2 or k == 3 then self.update.state = nil end
   end
 end
@@ -256,6 +257,8 @@ function Installer:redraw()
     screen.move(64, 30); screen.text_center(self.update.behind .. " new commit" .. (self.update.behind == 1 and "" or "s"))
     screen.level(15);
     screen.move(64, 46); screen.text_center("K2: Skip   K3: Install")
+  elseif s == "searching" then
+    screen.move(64, 28); screen.text_center("Checking for Updates...")
   elseif s == "installing" then
     screen.move(64, 28); screen.text_center("Installing Update...")
   elseif s == "reloading" then
@@ -268,9 +271,13 @@ function Installer:redraw()
     screen.move(64, 44); screen.text_center("K2: Later   K3: Restart")
   elseif s == "restarting" then
     screen.move(64, 28); screen.text_center("Restarting...")
-  elseif s == "error" then
-    screen.move(64, 24); screen.text_center(self.update.message or "Update Error")
-    screen.move(64, 40); screen.text_center("K2/K3: Dismiss")
+  elseif s == "info" then
+    local m = self.update.message or MSG.failed
+    screen.move(64, 18); screen.text_center(m[1])
+    screen.level(1)
+    screen.move(64, 30); screen.text_center(m[2])
+    screen.level(15)
+    screen.move(64, 46); screen.text_center("K2/K3: Dismiss")
   end
   screen.update()
 end

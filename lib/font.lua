@@ -74,69 +74,31 @@ function font.plot_text_cached(plot, x, y, text, level)
   return x + c.w + 1
 end
 
-local fx_cache = {
-  delay_mix       = 0,
-  reverb_mix      = -40,
-  shimmer_mix1    = 0,
-  tape_mix        = 1,
-  sine_drive_wet  = 0,
-  wobble_mix      = 0,
-  chew_depth      = 0,
-  lossdegrade_mix = 0,
-  Width           = 100,
-  dimension_mix   = 0,
-  haas            = 1,
-  rspeed          = 0,
-  monobass_mix    = 1,
-  bitcrush_mix    = 0,
-  bitcrush_mod    = 1,
-  shimmer_mod1    = 1,
-  glitch_ratio    = 0,
-  glitch_mix      = 0,
-  resonator_mix   = 0,
-  wavefold_mix    = 0,
-  ringmod_mix     = 0,
-  stchorus_mix    = 0,
-  spiral_mix      = 0,
-  genloss_mix     = 0,
-  fuzz_mix        = 0,
-  sub_mix         = 0,
-  reel_mix        = 0,
-  ott_mix         = 0,
-  vibe_mix      = 0,
-  analogdrive_mix = 0,
-  analogdrive_mod = 1,
-  ["1cutoff"]     = 20000,
-  ["2cutoff"]     = 20000,
-  ["1hpf"]        = 20,
-  ["2hpf"]        = 20
-}
+local min, max, floor, abs, log = math.min, math.max, math.floor, math.abs, math.log
 
-function font.update_fx_cache(param_name, value)
-  if fx_cache[param_name] ~= nil then
-    fx_cache[param_name] = value
-  end
-end
+local IDS = {"delay_mix", "reverb_mix", "rev_freeze", "halo_mix", "shimmer_mix1", "shimmer_mod1", "prism_mix", "analogdrive_mix", "analogdrive_mod",
+  "fuzz_mix", "tape_mix", "sine_drive_wet", "wobble_mix", "chew_depth", "lossdegrade_mix", "genloss_mix", "reel_mix",
+  "1eq_low_gain", "1eq_mid_gain", "1eq_high_gain", "1eq_tilt", "2eq_low_gain", "2eq_mid_gain", "2eq_high_gain", "2eq_tilt",
+  "1cutoff", "2cutoff", "1hpf", "2hpf", "Width", "haas", "rspeed", "monobass_mix", "dimension_mix", "stchorus_mix", "vibe_mix",
+  "bitcrush_mix", "bitcrush_mod", "resonator_mix", "wavefold_mix", "ringmod_mix", "spiral_mix", "sub_mix", "ott_mix", "glitch_ratio", "glitch_mix",
+  "lock_glitch", "lock_tape", "lock_shimmer", "lock_halo", "lock_delay", "lock_reverb"}
+local EQ_IDS = {"1eq_low_gain", "1eq_mid_gain", "1eq_high_gain", "1eq_tilt", "2eq_low_gain", "2eq_mid_gain", "2eq_high_gain", "2eq_tilt"}
+
+local fx, objs, nobj = {}, {}, 0
+local function poll() for i = 1, nobj do local o = objs[i] fx[o.id] = o:get() end end
 
 function font.init_fx_cache()
-  for param_name in pairs(fx_cache) do
-    if params:lookup_param(param_name) then
-      fx_cache[param_name] = params:get(param_name)
-    end
+  nobj = 0
+  for _, id in ipairs(IDS) do
+    local i = params.lookup[id]
+    if i then nobj = nobj + 1 objs[nobj] = params.params[i] end
   end
+  for _, id in ipairs(IDS) do fx[id] = 0 end
+  poll()
 end
 
-local function is_locked(lock_key)
-  return params.lookup[lock_key] and params:get(lock_key) == 2
-end
-
-local _lock_cache = {}
-local _blink_level = 1
 local _delay_duck_gain = 1.0
-
-function font.set_delay_duck(gain)
-  _delay_duck_gain = gain
-end
+function font.set_delay_duck(gain) _delay_duck_gain = gain end
 
 font.arp_ref = nil
 font.clocksync_ref = nil
@@ -145,130 +107,104 @@ function font.set_context(ctx)
   font.clocksync_ref = ctx.clocksync
 end
 
-local function value_to_level(val)
-  return 1 + math.floor((val / 100) * 14)
-end
+local function tape_on(c) return c.tape_mix == 2 or c.sine_drive_wet > 0 or c.wobble_mix > 0 or c.chew_depth > 0 or c.lossdegrade_mix > 0 or c.genloss_mix > 0 or c.reel_mix > 0 end
+local function tape_val(c) return max(c.tape_mix == 2 and 25 or 0, c.sine_drive_wet, c.wobble_mix, c.chew_depth, c.lossdegrade_mix, c.genloss_mix, c.reel_mix) end
+local function stereo_on(c) return c.Width ~= 100 or c.haas == 2 or c.rspeed > 0 or c.monobass_mix == 2 end
+local function stereo_val(c) return max(abs(c.Width - 100) / 100, (c.haas == 2 or c.monobass_mix == 2) and 0.25 or 0, c.rspeed) * 100 end
+local function filter_on(c) return c["1cutoff"] < 19999 or c["2cutoff"] < 19999 or c["1hpf"] > 20.1 or c["2hpf"] > 20.1 end
+local LF = 1 / log(1000)
+local function fnorm(f) return log(min(max(f, 20), 20000) / 20) * LF end
+local function filter_val(c) return max(1 - fnorm(c["1cutoff"]), fnorm(c["1hpf"]), 1 - fnorm(c["2cutoff"]), fnorm(c["2hpf"])) * 100 end
+local function eq_val(c) local m = 0 for i = 1, 8 do local v = abs(c[EQ_IDS[i]]) if v > m then m = v end end return m * 100 end
+local function eq_on(c) return eq_val(c) > 0.5 end
+local function chorus_on(c) return c.dimension_mix > 0 or c.stchorus_mix > 0 or c.vibe_mix > 0 end
+local function chorus_val(c) return max(c.dimension_mix, c.stchorus_mix, c.vibe_mix) end
+local function glitch_on(c) return c.glitch_ratio > 0 and c.glitch_mix > 0 end
+local function reverb_on(c) return c.reverb_mix > -40 end
+local function on(id) return function(c) return c[id] > 0 end end
+local function val(id) return function(c) return c[id] end end
 
-local BINARY_ON_INTENSITY = 25
-
-local function tape_active(cache)
-  return cache.tape_mix == 2 or cache.sine_drive_wet > 0 or cache.wobble_mix > 0 or cache.chew_depth > 0 or cache.lossdegrade_mix > 0 or cache.genloss_mix > 0 or cache.reel_mix > 0
-end
-
-local function tape_intensity(cache)
-  local maxv = cache.tape_mix == 2 and BINARY_ON_INTENSITY or 0
-  if cache.sine_drive_wet  > maxv then maxv = cache.sine_drive_wet  end
-  if cache.wobble_mix      > maxv then maxv = cache.wobble_mix      end
-  if cache.chew_depth      > maxv then maxv = cache.chew_depth      end
-  if cache.lossdegrade_mix > maxv then maxv = cache.lossdegrade_mix end
-  if cache.genloss_mix     > maxv then maxv = cache.genloss_mix     end
-  if cache.reel_mix        > maxv then maxv = cache.reel_mix        end
-  return maxv
-end
-
-local function stereo_active(cache)
-  return cache.Width ~= 100 or cache.haas == 2 or cache.rspeed > 0 or cache.monobass_mix == 2
-end
-
-local function stereo_intensity(cache)
-  local width_dev = math.abs(cache.Width - 100) / 100
-  local haas_val = cache.haas == 2 and (BINARY_ON_INTENSITY / 100) or 0
-  local rspeed_val = cache.rspeed
-  local mb = cache.monobass_mix == 2 and (BINARY_ON_INTENSITY / 100) or 0
-  local maxv = math.max(width_dev, haas_val, rspeed_val, mb)
-  return maxv * 100
-end
-
-local function filter_active(cache)
-  return cache["1cutoff"] < 19999 or cache["2cutoff"] < 19999
-      or cache["1hpf"] > 20.1 or cache["2hpf"] > 20.1
-end
-
-local _LOG_FILTER_INV = 1.0 / math.log(20000 / 20)
-local function filter_log_norm(freq)
-  local f = freq < 20 and 20 or (freq > 20000 and 20000 or freq)
-  return math.log(f / 20) * _LOG_FILTER_INV
-end
-
-local function filter_intensity(cache)
-  local v1 = math.max(1 - filter_log_norm(cache["1cutoff"]), filter_log_norm(cache["1hpf"]))
-  local v2 = math.max(1 - filter_log_norm(cache["2cutoff"]), filter_log_norm(cache["2hpf"]))
-  return math.max(v1, v2) * 100
-end
-
-local _draw_now = 0
-local MIX_MOD_FREQ = 0.25
-local MIX_MOD_PERIOD = 1 / MIX_MOD_FREQ
-local function make_mix_mod()
-  local cur, nxt = math.random(), math.random()
-  local seg_start = util.time()
+local function mixmod()
+  local cur, nxt, t0 = math.random(), math.random(), util.time()
   return function(now)
-    local t = now - seg_start
-    if t >= MIX_MOD_PERIOD then
-      repeat
-        cur, nxt = nxt, math.random()
-        seg_start = seg_start + MIX_MOD_PERIOD
-        t = now - seg_start
-      until t < MIX_MOD_PERIOD
-    end
-    return cur + (nxt - cur) * (t * MIX_MOD_FREQ)
+    while now - t0 >= 4 do cur, nxt, t0 = nxt, math.random(), t0 + 4 end
+    return cur + (nxt - cur) * (now - t0) * 0.25
   end
 end
-local _bitcrush_mod_lfo = make_mix_mod()
-local _shimmer_mod_lfo = make_mix_mod()
-local _drive_mod_lfo = make_mix_mod()
+local bc_lfo, sh_lfo, dr_lfo, now_t = mixmod(), mixmod(), mixmod(), 0
 
-local _clock_order = {{1,2},{2,3},{3,2},{2,1}}
-local CLOCK_DIM_LEVEL = 3
-
-local FX_SPECS = {
-  {glyph = "K", lock = nil,            show = function() return font.clocksync_ref and font.clocksync_ref.grain_synced() end,
-    custom_level = function()
-      local pos = _clock_order[(math.floor(clock.get_beats()) % 4) + 1]
-      return function(row, col)
-        if row == pos[1] and col == pos[2] then return 15 end
-        return CLOCK_DIM_LEVEL
-      end
-    end},
-  {glyph = "A", lock = nil,            show = function() return font.arp_ref and font.arp_ref.is_running() end, val = function() return 100 end, gradient = true},
-  {glyph = "F", lock = nil,            show = filter_active,                                          val = filter_intensity},
-  {glyph = "B", lock = nil,            show = function(c) return c.bitcrush_mix > 0 end,              val = function(c) return c.bitcrush_mod == 2 and c.bitcrush_mix * _bitcrush_mod_lfo(_draw_now) or c.bitcrush_mix end},
-  {glyph = "O", lock = nil,            show = function(c) return c.resonator_mix > 0 end,             val = function(c) return c.resonator_mix end},
-  {glyph = "W", lock = nil,            show = function(c) return c.wavefold_mix > 0 end,              val = function(c) return c.wavefold_mix end},
-  {glyph = "M", lock = nil,            show = function(c) return c.ringmod_mix > 0 end,               val = function(c) return c.ringmod_mix end},
-  {glyph = "V", lock = nil,            show = function(c) return c.analogdrive_mix > 0 or c.fuzz_mix > 0 end, val = function(c) return math.max(c.analogdrive_mod == 2 and c.analogdrive_mix * _drive_mod_lfo(_draw_now) or c.analogdrive_mix, c.fuzz_mix) end},
-  {glyph = "U", lock = nil,            show = function(c) return c.sub_mix > 0 end, val = function(c) return c.sub_mix end},
-  {glyph = "c", lock = nil,            show = function(c) return c.ott_mix > 0 end, val = function(c) return c.ott_mix end},
-  {glyph = "S", lock = nil,            show = function(c) return c.spiral_mix > 0 end,                val = function(c) return c.spiral_mix end},
-  {glyph = "G", lock = "lock_glitch",  show = function(c) return c.glitch_ratio > 0 and c.glitch_mix > 0 end, val = function(c) return c.glitch_ratio end},
-  {glyph = "T", lock = "lock_tape",    show = tape_active,                                            val = tape_intensity},
-  {glyph = "X", lock = "lock_shimmer", show = function(c) return c.shimmer_mix1 > 0 end,              val = function(c) return c.shimmer_mod1 == 2 and c.shimmer_mix1 * _shimmer_mod_lfo(_draw_now) or c.shimmer_mix1 end},
-  {glyph = "D", lock = "lock_delay",   show = function(c) return c.delay_mix > 0 end,                 val = function(c) return c.delay_mix end, fade = function() return _delay_duck_gain end},
-  {glyph = "R", lock = "lock_reverb",  show = function(c) return c.reverb_mix > -40 end,              val = function(c) return util.linlin(-40, 18, 0, 100, c.reverb_mix) end},
-  {glyph = "Z", lock = nil,            show = stereo_active,                                          val = stereo_intensity},
-  {glyph = "C", lock = nil,            show = function(c) return c.dimension_mix > 0 or c.stchorus_mix > 0 or c.vibe_mix > 0 end, val = function(c) return math.max(c.dimension_mix, c.stchorus_mix, c.vibe_mix) end},
+local CLOCK = {{1,2},{2,3},{3,2},{2,1}}
+local SPECS = {
+  {"K", show = function() return font.clocksync_ref and font.clocksync_ref.grain_synced() end, clock = true},
+  {"A", show = function() return font.arp_ref and font.arp_ref.is_running() end, val = function() return 100 end, gradient = true},
+  {"F", show = filter_on, val = filter_val},
+  {"E", show = eq_on, val = eq_val},
+  {"B", show = on("bitcrush_mix"), val = function(c) return c.bitcrush_mod == 2 and c.bitcrush_mix * bc_lfo(now_t) or c.bitcrush_mix end},
+  {"O", show = on("resonator_mix"), val = val("resonator_mix")},
+  {"W", show = on("wavefold_mix"), val = val("wavefold_mix")},
+  {"M", show = on("ringmod_mix"), val = val("ringmod_mix")},
+  {"V", show = function(c) return c.analogdrive_mix > 0 or c.fuzz_mix > 0 end, val = function(c) return max(c.analogdrive_mod == 2 and c.analogdrive_mix * dr_lfo(now_t) or c.analogdrive_mix, c.fuzz_mix) end},
+  {"U", show = on("sub_mix"), val = val("sub_mix")},
+  {"c", show = on("ott_mix"), val = val("ott_mix")},
+  {"S", show = on("spiral_mix"), val = val("spiral_mix")},
+  {"G", lock = "lock_glitch", show = glitch_on, val = val("glitch_ratio")},
+  {"T", lock = "lock_tape", show = tape_on, val = tape_val},
+  {"P", show = on("prism_mix"), val = val("prism_mix")},
+  {"X", lock = "lock_shimmer", show = on("shimmer_mix1"), val = function(c) return c.shimmer_mod1 == 2 and c.shimmer_mix1 * sh_lfo(now_t) or c.shimmer_mix1 end},
+  {"H", lock = "lock_halo", show = on("halo_mix"), val = val("halo_mix")},
+  {"D", lock = "lock_delay", show = on("delay_mix"), val = val("delay_mix"), fade = true},
+  {"R", lock = "lock_reverb", show = reverb_on, val = function(c) return c.rev_freeze == 1 and 100 or (c.reverb_mix + 40) / 58 * 100 end},
+  {"Z", show = stereo_on, val = stereo_val},
+  {"C", show = chorus_on, val = chorus_val}
 }
+
+local GROUPS = {
+  {"tw_delay", on("delay_mix"), {delay_mix = 0}},
+  {"tw_reverb", reverb_on, {reverb_mix = -40, rev_freeze = 0}},
+  {"tw_halo", on("halo_mix"), {halo_mix = 0}},
+  {"tw_shimmer", on("shimmer_mix1"), {shimmer_mix1 = 0}},
+  {"tw_prism", on("prism_mix"), {prism_mix = 0}},
+  {"tw_drive", on("analogdrive_mix"), {analogdrive_mix = 0}},
+  {"tw_fuzz", on("fuzz_mix"), {fuzz_mix = 0}},
+  {"tw_tape", tape_on, {tape_mix = 1, sine_drive_wet = 0, wobble_mix = 0, chew_depth = 0, lossdegrade_mix = 0, genloss_mix = 0, reel_mix = 0}},
+  {"tw_eq", eq_on, {["1eq_low_gain"] = 0, ["1eq_mid_gain"] = 0, ["1eq_high_gain"] = 0, ["1eq_tilt"] = 0, ["2eq_low_gain"] = 0, ["2eq_mid_gain"] = 0, ["2eq_high_gain"] = 0, ["2eq_tilt"] = 0}},
+  {"tw_filter", filter_on, {["1cutoff"] = 20000, ["2cutoff"] = 20000, ["1hpf"] = 20, ["2hpf"] = 20}},
+  {"tw_stereo", stereo_on, {Width = 100, haas = 1, rspeed = 0, monobass_mix = 1}},
+  {"tw_chorus", chorus_on, {dimension_mix = 0, stchorus_mix = 0, vibe_mix = 0}},
+  {"tw_bitcrush", on("bitcrush_mix"), {bitcrush_mix = 0}},
+  {"tw_reso", on("resonator_mix"), {resonator_mix = 0}},
+  {"tw_wavefold", on("wavefold_mix"), {wavefold_mix = 0}},
+  {"tw_ringmod", on("ringmod_mix"), {ringmod_mix = 0}},
+  {"tw_spiral", on("spiral_mix"), {spiral_mix = 0}},
+  {"tw_sub", on("sub_mix"), {sub_mix = 0}},
+  {"tw_ott", on("ott_mix"), {ott_mix = 0}},
+  {"tw_glitch", glitch_on, {glitch_ratio = 0}}
+}
+
+function font.groups(t)
+  poll()
+  for i = 1, #GROUPS do local g = GROUPS[i] t[g[1]] = g[2](fx) end
+  return t
+end
+
+function font.clear()
+  poll()
+  for i = 1, #GROUPS do
+    local g = GROUPS[i]
+    if g[2](fx) then for id, v in pairs(g[3]) do params:set(id, v) end end
+  end
+end
 
 local _gradient = {1, 1, 1}
 local function column_gradient(peak)
-  _gradient[1] = math.max(1, math.floor(peak * 0.35))
-  _gradient[2] = math.max(1, math.floor(peak * 0.65))
+  _gradient[1] = max(1, floor(peak * 0.35))
+  _gradient[2] = max(1, floor(peak * 0.65))
   _gradient[3] = peak
   return _gradient
 end
 
-local function refresh_draw_caches(now)
-  _blink_level = (now * 2) % 1 < 0.5 and 4 or 1
-  for _, spec in ipairs(FX_SPECS) do
-    if spec.lock then _lock_cache[spec.lock] = is_locked(spec.lock) end
-  end
-end
-
 local _pc_l, _pc_x, _pc_y, _pc_n = {}, {}, {}, 0
 local _last_update = -1
-local _update_interval = 1 / 10
-local min, max, floor = math.min, math.max, math.floor
-
 local _collect_n = 0
 local function collect(level, px, py)
   _collect_n = _collect_n + 1
@@ -277,40 +213,32 @@ end
 
 function font.draw_fx_status_bucketed(P_func)
   local now = util.time()
-  if now - _last_update >= _update_interval then
-    _last_update = now
-    _draw_now = now
-    refresh_draw_caches(now)
+  if now - _last_update >= 0.1 then
+    _last_update, now_t = now, now
+    poll()
+    local blink = (now * 2) % 1 < 0.5
     _collect_n = 0
     local x = 7
-    for i = 1, #FX_SPECS do
-      local spec = FX_SPECS[i]
-      if spec.show(fx_cache) then
+    for i = 1, #SPECS do
+      local s = SPECS[i]
+      if s.show(fx) then
         local level
-        if spec.custom_level then
-          level = spec.custom_level()
+        if s.clock then
+          local pos = CLOCK[(floor(clock.get_beats()) % 4) + 1]
+          level = function(row, col) return (row == pos[1] and col == pos[2]) and 15 or 3 end
         else
-          level = value_to_level(spec.val(fx_cache))
-          if spec.lock and _lock_cache[spec.lock] then
-            level = min(15, level + (_blink_level == 4 and 2 or 0))
-          end
-          if spec.fade then
-            local f = max(0, min(1, spec.fade(fx_cache)))
-            level = max(1, 1 + floor((level - 1) * f))
-          end
-          if spec.gradient then
-            level = column_gradient(level)
-          end
+          level = 1 + floor(min(max(s.val(fx), 0), 100) * 0.14)
+          if s.lock and blink and fx[s.lock] == 2 then level = min(15, level + 2) end
+          if s.fade then level = max(1, 1 + floor((level - 1) * max(0, min(1, _delay_duck_gain)))) end
+          if s.gradient then level = column_gradient(level) end
         end
-        x = plot_text(collect, x, 0, spec.glyph, level)
+        x = plot_text(collect, x, 0, s[1], level)
       end
     end
     _pc_n = _collect_n
   end
   local l, px, py = _pc_l, _pc_x, _pc_y
-  for i = 1, _pc_n do
-    P_func(l[i], px[i], py[i])
-  end
+  for i = 1, _pc_n do P_func(l[i], px[i], py[i]) end
 end
 
 return font

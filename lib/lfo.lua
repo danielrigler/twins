@@ -75,7 +75,7 @@ local scale_array_cache = {}
 local snap_lut_cache = {}
 local SCALE_ALIASES = {["major pent."] = "major pentatonic", ["minor pent."] = "minor pentatonic"}
 local function normalize_scale_name(name)
-    if name == "none" or name == "off" then return "none" end
+    if name == "none" or name == "off" or name == "OFF" then return "none" end
     return SCALE_ALIASES[name] or name
 end
 local function get_scale_array(scale_name)
@@ -811,7 +811,7 @@ end
 function lfo.init()
     for i = 1, number_of_outputs do
         params:add_separator("LFO " .. i)
-        params:add_option(LFO_KEYS[i], i .. " LFO", {"off", "on"}, 1)
+        params:add_option(LFO_KEYS[i], i .. " LFO", {"OFF", "ON"}, 1)
         params:set_action(LFO_KEYS[i], function(v)
             lfo[i].active = (v == 2)
             lfo[i].last_val = nil

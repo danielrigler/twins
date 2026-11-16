@@ -10,6 +10,9 @@ local lfo
 local DRY_VALUES = {
     reverb_mix = -40,
     delay_mix = 0,
+    halo_mix = 0,
+    prism_mix = 0,
+    rev_freeze = 0,
     bitcrush_mix = 0,
     glitch_ratio = 0,
     glitch_mix = 0,
