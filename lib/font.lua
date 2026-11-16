@@ -84,14 +84,20 @@ local IDS = {"delay_mix", "reverb_mix", "rev_freeze", "halo_mix", "shimmer_mix1"
   "lock_glitch", "lock_tape", "lock_shimmer", "lock_halo", "lock_delay", "lock_reverb"}
 local EQ_IDS = {"1eq_low_gain", "1eq_mid_gain", "1eq_high_gain", "1eq_tilt", "2eq_low_gain", "2eq_mid_gain", "2eq_high_gain", "2eq_tilt"}
 
-local fx, objs, nobj = {}, {}, 0
-local function poll() for i = 1, nobj do local o = objs[i] fx[o.id] = o:get() end end
+local fx, objs, raws, nobj = {}, {}, {}, 0
+local function poll()
+  for i = 1, nobj do
+    local o = objs[i]
+    local r = o.raw or o.value or o.selected
+    if r ~= raws[i] then raws[i] = r fx[o.id] = o:get() end
+  end
+end
 
 function font.init_fx_cache()
   nobj = 0
   for _, id in ipairs(IDS) do
     local i = params.lookup[id]
-    if i then nobj = nobj + 1 objs[nobj] = params.params[i] end
+    if i then nobj = nobj + 1 objs[nobj], raws[nobj] = params.params[i], nil end
   end
   for _, id in ipairs(IDS) do fx[id] = 0 end
   poll()
@@ -203,15 +209,18 @@ local function column_gradient(peak)
   return _gradient
 end
 
-local _pc_l, _pc_x, _pc_y, _pc_n = {}, {}, {}, 0
+local _pc_l, _pc_x, _pc_y, _pc_w, _pc_n = {}, {}, {}, {}, 0
 local _last_update = -1
 local _collect_n = 0
 local function collect(level, px, py)
-  _collect_n = _collect_n + 1
-  _pc_l[_collect_n], _pc_x[_collect_n], _pc_y[_collect_n] = level, px, py
+  local n = _collect_n
+  if n > 0 and _pc_y[n] == py and _pc_l[n] == level and _pc_x[n] + _pc_w[n] == px then _pc_w[n] = _pc_w[n] + 1 return end
+  n = n + 1
+  _collect_n = n
+  _pc_l[n], _pc_x[n], _pc_y[n], _pc_w[n] = level, px, py, 1
 end
 
-function font.draw_fx_status_bucketed(P_func)
+function font.draw_fx_status_bucketed(R_func)
   local now = util.time()
   if now - _last_update >= 0.1 then
     _last_update, now_t = now, now
@@ -237,8 +246,8 @@ function font.draw_fx_status_bucketed(P_func)
     end
     _pc_n = _collect_n
   end
-  local l, px, py = _pc_l, _pc_x, _pc_y
-  for i = 1, _pc_n do P_func(l[i], px[i], py[i]) end
+  local l, px, py, pw = _pc_l, _pc_x, _pc_y, _pc_w
+  for i = 1, _pc_n do R_func(l[i], px[i], py[i], pw[i], 1) end
 end
 
 return font

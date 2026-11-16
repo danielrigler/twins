@@ -6,7 +6,7 @@
 --            by: @dddstudio                       
 -- 
 --                          
---                           v0.81
+--                           v0.80
 -- E1: Master Volume
 -- K1+E2/E3: Volume
 -- K1+E1: Crossfade/Morph
@@ -64,7 +64,7 @@ local undo = include("lib/undo")
 local midi_input = include("lib/midi_input")
 local arp = include("lib/arp")
 local clocksync = include("lib/clocksync")
-local ctx = {lfo = lfo, arp = arp, clocksync = clocksync, bend = midi_input.bend, waveforms = {[0] = {}}, sys = {}}
+local ctx = {lfo = lfo, arp = arp, clocksync = clocksync, bend = midi_input.bend, waveforms = {}, sys = {}}
 for _, m in ipairs({presets, macro, drymode, font, lfo, arp}) do m.set_context(ctx) end
 local randomize_metro = {}
 local boot_clock = nil
@@ -502,18 +502,14 @@ local function setup_ui_metro()
             return
         end
         ui_skip = 0
-        local busy = not animation_complete or pan_slide_start_time ~= nil
+        local fast = not animation_complete or pan_slide_start_time ~= nil
             or key_state[1] or key_state[2] or key_state[3]
             or (now - (hlp.last_input or 0)) < 2
-            or is_voice_loaded(1) or is_voice_loaded(2)
-            or (hlp.saving and now < hlp.saving)
             or (fx_popup.time ~= nil and (now - fx_popup.time) < FX_POPUP_DURATION)
             or randomize_flash[1] > 0.001 or randomize_flash[2] > 0.001
             or randomize_flash.midi[1] > 0.001 or randomize_flash.midi[2] > 0.001
-        if not busy then
-            idle_skip = idle_skip + 1
-            if idle_skip < 4 then return end
-        end
+        idle_skip = idle_skip + 1
+        if not fast and idle_skip < ((ld > 0 or (hlp.saving and now < hlp.saving)) and 2 or 4) then return end
         idle_skip = 0
         if not animation_complete then
             animation_start_time = animation_start_time or now
@@ -1796,27 +1792,54 @@ local FORMAT = {
   spread = function(v) return string.format("%.0f%%", v) end,
   jitter = function(value) return value > 999 and string.format("%.1f s", value / 1000) or string.format("%.0f ms", value) end,
   size = function(value) return value > 999 and string.format("%.2f s", value / 1000) or string.format("%.0f ms", value) end}
-local buckets, drawn = {}, {}
-for _i = 1, 15 do
-  buckets[_i] = {rx={}, ry={}, rw={}, rh={}, px={}, py={}, tx={}, ty={}, ts={}, ta={}, r_len=0, p_len=0, t_len=0}
-  drawn[_i] = {rx={}, ry={}, rw={}, rh={}, px={}, py={}, tx={}, ty={}, ts={}, ta={}, r_len=-1, p_len=0, t_len=0}
-end
-local function same_arr(a, b, n) for i = 1, n do if a[i] ~= b[i] then return false end end return true end
-local function same_ops()
+local R, P, T, RV, clear_ops, flush
+do
+  local buckets, drawn = {}, {}
   for l = 1, 15 do
-    local a, b = buckets[l], drawn[l]
-    local rn, pn, tn = a.r_len, a.p_len, a.t_len
-    if rn ~= b.r_len or pn ~= b.p_len or tn ~= b.t_len then return false end
-    if rn > 0 and not (same_arr(a.rx, b.rx, rn) and same_arr(a.ry, b.ry, rn) and same_arr(a.rw, b.rw, rn) and same_arr(a.rh, b.rh, rn)) then return false end
-    if pn > 0 and not (same_arr(a.px, b.px, pn) and same_arr(a.py, b.py, pn)) then return false end
-    if tn > 0 and not (same_arr(a.tx, b.tx, tn) and same_arr(a.ty, b.ty, tn) and same_arr(a.ts, b.ts, tn) and same_arr(a.ta, b.ta, tn)) then return false end
+    buckets[l] = {rx={}, ry={}, rw={}, rh={}, px={}, py={}, tx={}, ty={}, ts={}, ta={}, r_len=0, p_len=0, t_len=0}
+    drawn[l] = {rx={}, ry={}, rw={}, rh={}, px={}, py={}, tx={}, ty={}, ts={}, ta={}, r_len=-1, p_len=0, t_len=0}
   end
-  return true
+  local function same_ops()
+    for l = 1, 15 do
+      local a, b = buckets[l], drawn[l]
+      local rn, pn, tn = a.r_len, a.p_len, a.t_len
+      if rn ~= b.r_len or pn ~= b.p_len or tn ~= b.t_len then return false end
+      if rn > 0 then local ax, ay, aw, ah, bx, by, bw, bh = a.rx, a.ry, a.rw, a.rh, b.rx, b.ry, b.rw, b.rh for i = 1, rn do if ax[i] ~= bx[i] or ay[i] ~= by[i] or aw[i] ~= bw[i] or ah[i] ~= bh[i] then return false end end end
+      if pn > 0 then local ax, ay, bx, by = a.px, a.py, b.px, b.py for i = 1, pn do if ax[i] ~= bx[i] or ay[i] ~= by[i] then return false end end end
+      if tn > 0 then local ax, ay, as, aa, bx, by, bs, ba = a.tx, a.ty, a.ts, a.ta, b.tx, b.ty, b.ts, b.ta for i = 1, tn do if ax[i] ~= bx[i] or ay[i] ~= by[i] or as[i] ~= bs[i] or aa[i] ~= ba[i] then return false end end end
+    end
+    return true
+  end
+  clear_ops = function() for l = 1, 15 do local b = buckets[l] b.r_len, b.p_len, b.t_len = 0, 0, 0 end end
+  R = function(l, x, y, w, h) local b = buckets[l] local i = b.r_len + 1 b.r_len, b.rx[i], b.ry[i], b.rw[i], b.rh[i] = i, x, y, w, h end
+  RV = function(t, l, y, h) R(l, t == 1 and 0 or 126, y, 2, h) end
+  P = function(l, x, y) local b = buckets[l] local i = b.p_len + 1 b.p_len, b.px[i], b.py[i] = i, x, y end
+  T = function(l, x, y, s, a) local b = buckets[l] local i = b.t_len + 1 b.t_len, b.tx[i], b.ty[i], b.ts[i], b.ta[i] = i, x, y, s, a end
+  flush = function(full)
+    if not full and same_ops() then return false end
+    local s_level, s_rect, s_pixel, s_fill = screen.level, screen.rect, screen.pixel, screen.fill
+    local s_move, s_text, s_text_center = screen.move, screen.text, screen.text_center
+    screen.clear()
+    for l = 1, 15 do
+      local b = buckets[l]
+      local rn, pn, tn = b.r_len, b.p_len, b.t_len
+      if rn > 0 or pn > 0 or tn > 0 then
+        s_level(l)
+        if rn > 0 or pn > 0 then
+          local rx, ry, rw, rh = b.rx, b.ry, b.rw, b.rh
+          for i = 1, rn do s_rect(rx[i], ry[i], rw[i], rh[i]) end
+          local px, py = b.px, b.py
+          for i = 1, pn do s_pixel(px[i], py[i]) end
+          s_fill()
+        end
+        local tx, ty, ts, ta = b.tx, b.ty, b.ts, b.ta
+        for i = 1, tn do s_move(tx[i], ty[i]) if ta[i] == "center" then s_text_center(ts[i]) else s_text(ts[i]) end end
+      end
+    end
+    buckets, drawn = drawn, buckets
+    return true
+  end
 end
-local function clear_ops() for i=1,15 do local b=buckets[i] b.r_len, b.p_len, b.t_len = 0, 0, 0 end end
-local function R(l,x,y,w,h) local b=buckets[l] local i=b.r_len+1 b.r_len=i b.rx[i]=x b.ry[i]=y b.rw[i]=w b.rh[i]=h end
-local function P(l,x,y) local b=buckets[l] local i=b.p_len+1 b.p_len=i b.px[i]=x b.py[i]=y end
-local function T(l,x,y,s,a) local b=buckets[l] local i=b.t_len+1 b.t_len=i b.tx[i]=x b.ty[i]=y b.ts[i]=s b.ta[i]=a end
 local draw_lock, draw_size_link
 do
   local LOCK_OFFSETS = {{-3,0},{-4,0},{-4,-1},{-4,-2}}
@@ -1824,33 +1847,6 @@ do
   local SIZE_LINK_PTS = {}
   for _, offset in ipairs({1,3,5,7,9,11,13,15}) do local level = floor(10 * (1 - abs(offset - 8) / 8)) SIZE_LINK_PTS[#SIZE_LINK_PTS+1] = level SIZE_LINK_PTS[#SIZE_LINK_PTS+1] = offset end
   draw_size_link = function(x,y) for i = 1, 16, 2 do P(SIZE_LINK_PTS[i], x-4, y+SIZE_LINK_PTS[i+1]) end end
-end
-local function flush()
-  local s_level, s_rect, s_pixel, s_fill = screen.level, screen.rect, screen.pixel, screen.fill
-  local s_move, s_text, s_text_center = screen.move, screen.text, screen.text_center
-  for l = 1, 15 do
-    local b = buckets[l]
-    local rn, pn, tn = b.r_len, b.p_len, b.t_len
-    if rn > 0 or pn > 0 or tn > 0 then
-      s_level(l)
-      if rn > 0 then
-        local rx, ry, rw, rh = b.rx, b.ry, b.rw, b.rh
-        for i = 1, rn do s_rect(rx[i], ry[i], rw[i], rh[i]) end
-      end
-      if pn > 0 then
-        local px, py = b.px, b.py
-        for i = 1, pn do s_pixel(px[i], py[i]) end
-      end
-      if rn > 0 or pn > 0 then s_fill() end
-      if tn > 0 then
-        local tx, ty, ts, ta = b.tx, b.ty, b.ts, b.ta
-        for i = 1, tn do
-          s_move(tx[i], ty[i])
-          if ta[i] == "center" then s_text_center(ts[i]) else s_text(ts[i]) end
-        end
-      end
-    end
-  end
 end
 local SYM_CACHE = {}
 for sy = 4, 64, 2 do local lvl = max(1, floor(10 * (1 - abs(sy - 34) / 32))); SYM_CACHE[#SYM_CACHE+1] = sy; SYM_CACHE[#SYM_CACHE+1] = lvl end
@@ -2096,7 +2092,7 @@ _HK.advance_grains = function(t, now)
     else
       keep = keep + 1
       grains[keep] = g
-      g.lf = age / dlife
+      g.lf = age > 0 and age / dlife or 0
     end
   end
   for i = keep + 1, #grains do grains[i] = nil end
@@ -2175,10 +2171,16 @@ _HK.draw_grain_pans = function(t, base_x)
   end
   if run_lv > 0 then R(run_lv, origin + run_k, 1, 28 - run_k, 1) end
 end
+_HK.gcol, _HK.gkey, _HK.gnow = {{}, {}}, {{}, {}}, 0
 local function grain_column(t)
-  local gran = PARAM_CACHE.track[t].gran
+  local C = PARAM_CACHE.track[t]
+  local gran = C.gran
   if gran and gran > 0 then
-    local col = ctx.waveforms[0]
+    local grains = grain_positions[t]
+    local n, col, k = #grains, _HK.gcol[t], _HK.gkey[t]
+    local dur, fwd = cached_buffer_durations[t], C.spd >= -0.01
+    if k[1] == _HK.gnow and k[2] == n and k[3] == grains[n] and k[4] == dur and k[5] == fwd and k[6] == C.dir_mod and k[7] == C.env_sel and k[8] == C.harm_gen then return col end
+    k[1], k[2], k[3], k[4], k[5], k[6], k[7], k[8] = _HK.gnow, n, grains[n], dur, fwd, C.dir_mod, C.env_sel, C.harm_gen
     for i = 0, BAR_W - 1 do col[i] = 0 end
     draw_grains(t, col)
     for i = 0, BAR_W - 1 do local v = col[i] if v > 0 then col[i] = -(-v // 1) end end
@@ -2265,8 +2267,12 @@ function redraw()
   if _G.preset_loading then hlp.force = true screen.clear() screen.level(15) screen.move(64, 32) screen.text_center("Loading...") screen.update() return end
   refresh_redraw_cache()
   local now = util.time()
-  _HK.advance_grains(1, now)
-  _HK.advance_grains(2, now)
+  local gnow = (now * 30) // 1 / 30
+  if gnow ~= _HK.gnow then
+    _HK.gnow = gnow
+    _HK.advance_grains(1, gnow)
+    _HK.advance_grains(2, gnow)
+  end
   local cur_mode = current_mode
   local cur_filter = current_filter_mode
   local upper = UPPER[cur_mode]
@@ -2399,7 +2405,7 @@ function redraw()
     local C = PARAM_CACHE.track[t]
     local h = (C.vol + 70) * _VOL_LINLIN_MUL
     if h < 0 then h = 0 elseif h > 64 then h = 64 end
-    R(LEVEL.dim - 3, current_vol_x, 64 - h + volume_bar_y[t], 2, h)
+    if offset_x == 0 then RV(t, LEVEL.dim - 3, 64 - h + volume_bar_y[t], h) else R(LEVEL.dim - 3, current_vol_x, 64 - h + volume_bar_y[t], 2, h) end
     local loaded = C.loaded
     local peak_amp = loaded and max(voice_peak_amplitudes[t].l, voice_peak_amplitudes[t].r) or 0
     if peak_amp > 0 then
@@ -2408,7 +2414,7 @@ function redraw()
       local pre_fader_ratio = (pre_fader_db + 70) / 70
       if pre_fader_ratio < 0 then pre_fader_ratio = 0 elseif pre_fader_ratio > 1 then pre_fader_ratio = 1 end
       local peak_h = pre_fader_ratio * h
-      if peak_h > 0 then R(LEVEL.hi - 1, current_vol_x, 64 - peak_h + volume_bar_y[t], 2, peak_h) end
+      if peak_h > 0 then if offset_x == 0 then RV(t, LEVEL.hi - 1, 64 - peak_h + volume_bar_y[t], peak_h) else R(LEVEL.hi - 1, current_vol_x, 64 - peak_h + volume_bar_y[t], 2, peak_h) end end
     end
     if loaded then
       _HK.draw_grain_pans(t, current_pan_x)
@@ -2429,7 +2435,7 @@ function redraw()
   elseif hlp.bounce_done_time and (now - hlp.bounce_done_time) < 2 then
     font.plot_text_cached(P, 7 + left_slide, 0, "BOUNCED", LEVEL.hi)
   else
-    font.draw_fx_status_bucketed(P)
+    font.draw_fx_status_bucketed(R)
     if morph.scene_mode == "on" then
       R(1, 7 + left_slide, 4, 22, 1)
       if morph.amount > 0 then R(LEVEL.hi, 7 + left_slide, 4, util.linlin(0, 100, 0, 22, morph.amount), 1) end
@@ -2447,11 +2453,9 @@ function redraw()
     pop = "SAVING..."
     fx_popup._w = 56
   end
-  if not pop and not hlp.force and same_ops() then return end
+  local drew = flush(pop ~= nil or hlp.force)
   hlp.force = pop ~= nil
-  screen.clear()
-  flush()
-  buckets, drawn = drawn, buckets
+  if not drew then return end
   if pop then
     local w = fx_popup._w
     local x, y, h = 64 - floor(w * 0.5), sub and 22 or 26, sub and 20 or 12
@@ -2464,7 +2468,7 @@ function redraw()
   screen.update()
 end
 
-local function push_grain(vid, pos, size, rv, pitch, pan, now) if audio_active[vid] or live_state[vid].direct then local b = grain_positions[vid] local n = #b if n < 64 then local np = #_grain_pool local g if np > 0 then g = _grain_pool[np] _grain_pool[np] = nil else g = {} end g.pos, g.size, g.t, g.rv, g.pitch, g.pan, g.shown, g.pg = pos, size, now, rv or 0.5, pitch or 1, pan or 0, false, false b[n+1] = g end end end
+local function push_grain(vid, pos, size, rv, pitch, pan, now) if audio_active[vid] or live_state[vid].direct then local b = grain_positions[vid] local n = #b if n < 64 then local np = #_grain_pool local g if np > 0 then g = _grain_pool[np] _grain_pool[np] = nil else g = {} end g.pos, g.size, g.t, g.rv, g.pitch, g.pan, g.shown, g.pg, g.lf = pos, size, now, rv or 0.5, pitch or 1, pan or 0, false, false, 0 b[n+1] = g end end end
 local osc_handlers = {
     ["/twins/rec_pos"] = function(args)
         local vid, pos, peak = args[1] + 1, args[2], args[3]

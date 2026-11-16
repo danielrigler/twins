@@ -345,7 +345,7 @@ alloc {
                 LocalOut.ar(wet);
                 dryAmp = Amplitude.kr(input.sum, 0.005, 0.05);
                 duck = LagUD.kr((1 - (dryAmp.sqrt * duck_amt * 6).clip(0, 1)), 0.15, 0.02);
-                SendReply.kr(Impulse.kr(20), '/delay_duck', [duck]);
+                SendReply.kr(Impulse.kr(10), '/delay_duck', [duck]);
                 wet = wet * (Lag.kr(mix, 0.04) * 1.6 * duck);
                 Out.ar(wbus, wet);
                 ReplaceOut.ar(bus, input + wet);
