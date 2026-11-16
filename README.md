@@ -11,7 +11,8 @@ Inspired by @cfd90’s Twine and contains influence and code from a lot of other
 **Some of the new features:**
 
 * Morphing
-* Delay, chorus, tape effects, shimmer, glitch, EQ, filters, bit reduction, etc.
+* Delay, halo, plate reverb with freeze, shimmer, prism, chorus, tape effects, glitch, multiband compression, EQ, filters, bit reduction, etc.
+* Active effects are listed first in the PARAMS menu
 * Extra granular parameters, increased parameter ranges
 * Freely assignable LFOs with randomization
 * On screen navigation with parameter locking
@@ -24,6 +25,9 @@ Inspired by @cfd90’s Twine and contains influence and code from a lot of other
 
 norns / norns shield
 *some features might require a pi4 based unit. If you hear clicks and crackles try turning off a few effects or limit grain size and density.
+
+On first launch twins checks for the SuperCollider libraries it needs (AnalogChew, AnalogLoss, AnalogDegrade). If they are missing, press **K3** to install them, then restart.
+
 ### Documentation
 
 **E1**: Master Volume  
@@ -38,15 +42,15 @@ Hold **K2**: Linked Mode
 Hold **K3**: Symmetry  
 **K2**+**K3**+**E1**/**E2**/**E3**: Effect Mix  
 **K2**/**K3**+**E1**/**E2**/**E3**: Adjust LFO  
-Hold **K2**+**K3**: HPF/LPF  
-Hold **K2**+**K3**: Add Random LFOs  
+Hold **K2**+**K3**: HPF/LPF (on the filter row), Add Random LFOs (on other rows)  
 Hold **K1**+**K2**: Clock Sync  
-Hold **K1**+**K3**: Arp Mode   
+Hold **K1**+**K3**: Arp Mode  
 Hold **K1**+**K2**+**K3**: Randomize Arp  
+**K1**+**K2**+**K3** (tap): Undo  
 
 ### Download
 
-**v0.79**
+**v0.80**
 install from Maiden Project Manager, or from Maiden REPL:
 
 ```
@@ -54,3 +58,5 @@ install from Maiden Project Manager, or from Maiden REPL:
 ```
 
 do not forget to restart.
+
+To check for updates, use PARAMS > OTHER > Check for Updates. Automatic checking at startup can be turned on there too.
