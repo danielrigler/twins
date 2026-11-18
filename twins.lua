@@ -105,7 +105,21 @@ local ui_metro = nil
 local floor, abs, log, max, min, sqrt, sin = math.floor, math.abs, math.log, math.max, math.min, math.sqrt, math.sin
 local clamp = util.clamp
 local _pobj = utils.param_obj
-local function pget(id) local o = _pobj(id) if o then return o:get() end return nil end
+local pget
+do
+    local pvc = {}
+    pget = function(id)
+        local o = _pobj(id)
+        if not o then return nil end
+        local r = o.raw or o.value or o.selected
+        if r == nil then return o:get() end
+        local c = pvc[id]
+        if c and c[1] == r then return c[2] end
+        local v = o:get()
+        if c then c[1], c[2] = r, v else pvc[id] = {r, v} end
+        return v
+    end
+end
 local function pset(id, v, silent) local o = _pobj(id) if o then o:set(v, silent) end end
 local function rev_route()
     local db, sys = params:get("reverb_mix"), params:get("rev_type") == 2
@@ -454,7 +468,7 @@ function hlp.key_fx()
     if params:get("resonator_voicing") == 9 then hlp.set_reso_voicing(9) hlp.update_resonator() end
 end
 
-local CFG = {ids = {"auto_update", "lfo_manual"}}
+local CFG = {ids = {"auto_update", "lfo_manual", "grain_limit"}}
 local function ser(t)
     local o = {"return {"}
     for k, v in pairs(t) do o[#o + 1] = string.format("[%q]=%s,", k, type(v) == "string" and string.format("%q", v) or tostring(v)) end
@@ -733,7 +747,7 @@ end
 
 local function setup_params()
     for _, p in ipairs(params.params) do if p.id then ctx.sys[p.id] = true end end
-    for _, id in ipairs({"arp_steps", "arp_mode", "arp_twin", "arp_octaves", "midi_device", "midi_channel", "delay_series", "rev_freeze", "auto_update", "lfo_manual"}) do ctx.sys[id] = true end
+    for _, id in ipairs({"arp_steps", "arp_mode", "arp_twin", "arp_octaves", "midi_device", "midi_channel", "delay_series", "rev_freeze", "auto_update", "lfo_manual", "grain_limit"}) do ctx.sys[id] = true end
     presets.exclude(ctx.sys)
     local LIVE = _path.tape .. "live!"
     params:add_separator("Input")
@@ -1131,7 +1145,7 @@ local function setup_params()
     params:add_option("bounce_reset", "Reset After", {"OFF", "voice 1", "voice 2", "both"}, 2)
     params:add_separator("                        ")
     params:add_binary("delete_unused_bounces", "Delete Unused Files", "trigger", 0) params:set_action("delete_unused_bounces", delete_unused_bounces)
-    params:add_group("OTHER", 29)
+    params:add_group("OTHER", 30)
     params:add_binary("dry_mode", "Dry Mode", "toggle", 0) params:set_action("dry_mode", function(x) drymode.set_dry_mode(x == 1) end)
     for i = 1, 2 do
       params:add_binary("randomtape"..i, "Random Tape "..i, "trigger", 0) params:set_action("randomtape"..i, function() load_random_tape_file(i) end)
@@ -1139,6 +1153,7 @@ local function setup_params()
     params:add_binary("unload_all", "Unload All Audio", "trigger", 0) params:set_action("unload_all", function() for i=1, 2 do params:set(i.."seek", 0) params:set(i.."sample", "-") params:set(i.."live_input", 0) params:set(i.."live_direct", 0) audio_active[i] = false osc_positions[i] = 0 ctx.live_wf.reset(i) end engine.unload_all() update_pan_positioning() end)
     params:add_option("norm_load", "Normalize Load", {"OFF", "ON"}, 2) params:set_action("norm_load", function(x) engine.norm_load(x - 1) end)
     params:add_option("limiter", "Output Limiter", {"OFF", "ON"}, 1) params:set_action("limiter", function(x) engine.limiter(x - 1) end)
+    params:add_option("grain_limit", "Grain Limit", {"64", "128", "256", "OFF"}, 2) params:set_action("grain_limit", function(x) engine.grain_budget(({64, 128, 256, 1e6})[x]) end)
     params:add_binary("global_pitch_size_density_link", "Linked Mode", "toggle", 0) params:set_action("global_pitch_size_density_link", function(value) if value == 1 then for i = 1, 2 do hlp.set_link_base(i, clocksync.grain_density(i) or params:get(i.."density")) end end end)
     params:add_option("steps", "Transition Time", {"short", "medium", "long"}, 1) params:set_action("steps", function(value) steps = utils.STEP_COUNTS[value] end)
     params:add_binary("check_update", "Check for Updates", "trigger", 0) params:set_action("check_update", function() menu_close() installer:check(true) end)
@@ -1146,6 +1161,7 @@ local function setup_params()
     params:set_save("auto_update", false)
     params:set_save("rev_freeze", false)
     params:set_save("lfo_manual", false)
+    params:set_save("grain_limit", false)
     params:add_separator("                                  ")
     for i = 1, 2 do
       params:add_taper(i.. "volume", i.. " volume", -70, 10, -15, 0, "dB") params:set_action(i.. "volume", hlp.push_vol)
@@ -1924,7 +1940,9 @@ local PARAM_CACHE = { track = { {locked={},lfo_on={}}, {locked={},lfo_on={}} } }
 local _LFO_RANGE_CACHE = {}
 local function fill_range_cache(fk)
   local rc = _LFO_RANGE_CACHE[fk]
-  if not rc then rc = {0,0,0} _LFO_RANGE_CACHE[fk] = rc end
+  if not rc then rc = {0,0,0,-1} _LFO_RANGE_CACHE[fk] = rc end
+  if rc[4] == lfo.limits_gen then return rc end
+  rc[4] = lfo.limits_gen
   local a, b = lfo.get_parameter_range(fk, true)
   local _, fb = lfo.get_parameter_range(fk, false)
   rc[1], rc[2], rc[3] = a, b, fb
@@ -2078,9 +2096,12 @@ _HK.profile = function(g, dur, spd_fwd, dir_mod, is_random_env, lut_default, hl)
   for i = 0, BAR_W - 1 do local v = acc[i] if v > 0 then n = n + 1 px[n] = i pv[n] = v end end
   g.pn = n
 end
+_HK.gver = {0, 0}
+_HK.pan_runs = {{v = -1, m = 0}, {v = -1, m = 0}}
 _HK.advance_grains = function(t, now)
   local grains = grain_positions[t]
   if not grains then return end
+  _HK.gver[t] = _HK.gver[t] + 1
   local keep = 0
   for gi = 1, #grains do
     local g = grains[gi]
@@ -2097,7 +2118,7 @@ _HK.advance_grains = function(t, now)
   end
   for i = keep + 1, #grains do grains[i] = nil end
 end
-_HK.recycle_grains = function(grains) if not grains then return end for i = #grains, 1, -1 do _grain_pool[#_grain_pool + 1] = grains[i] grains[i] = nil end end
+_HK.recycle_grains = function(grains) if not grains or #grains == 0 then return end _HK.gver[1], _HK.gver[2] = _HK.gver[1] + 1, _HK.gver[2] + 1 for i = #grains, 1, -1 do _grain_pool[#_grain_pool + 1] = grains[i] grains[i] = nil end end
 local function draw_grains(t, col)
   local grains = grain_positions[t]
   if not grains then return end
@@ -2144,32 +2165,38 @@ _HK.draw_grain_pans = function(t, base_x)
   local n = #grains
   if n == 0 then return end
   local slide = pan_indicator_x[t]
-  local hi_x = base_x + 25
-  local pc = _PAN_COL
-  local origin = floor(base_x + slide + 0.5) - 1
-  for k = 0, 27 do pc[k] = 0 end
-  for gi = 1, n do
-    local g = grains[gi]
-    local lf = g.lf
-    local lv = (24 * lf * (1 - lf) + 0.5) // 1
-    if lv > 0 then
-      local px = base_x + (g.pan + 1) * 12.5
-      if px < base_x then px = base_x elseif px > hi_x then px = hi_x end
-      local i0 = (px + slide + 0.5) // 1 - origin
-      local i1 = i0
-      if lf > 0.25 and lf < 0.75 then i0 = i0 - 1 i1 = i1 + 1 end
-      for k = i0, i1 do if lv > pc[k] then pc[k] = lv end end
+  local c = _HK.pan_runs[t]
+  local ver = _HK.gver[t]
+  if c.v ~= ver or c.bx ~= base_x or c.sl ~= slide then
+    c.v, c.bx, c.sl = ver, base_x, slide
+    local hi_x = base_x + 25
+    local pc = _PAN_COL
+    local origin = floor(base_x + slide + 0.5) - 1
+    for k = 0, 27 do pc[k] = 0 end
+    for gi = 1, n do
+      local g = grains[gi]
+      local lf = g.lf
+      local lv = (24 * lf * (1 - lf) + 0.5) // 1
+      if lv > 0 then
+        local px = base_x + (g.pan + 1) * 12.5
+        if px < base_x then px = base_x elseif px > hi_x then px = hi_x end
+        local i0 = (px + slide + 0.5) // 1 - origin
+        local i1 = i0
+        if lf > 0.25 and lf < 0.75 then i0 = i0 - 1 i1 = i1 + 1 end
+        for k = i0, i1 do if lv > pc[k] then pc[k] = lv end end
+      end
     end
-  end
-  local run_k, run_lv = 0, pc[0]
-  for k = 1, 27 do
-    local lv = pc[k]
-    if lv ~= run_lv then
-      if run_lv > 0 then R(run_lv, origin + run_k, 1, k - run_k, 1) end
-      run_k, run_lv = k, lv
+    local m, run_k, run_lv = 0, 0, pc[0]
+    for k = 1, 28 do
+      local lv = pc[k] or 0
+      if lv ~= run_lv then
+        if run_lv > 0 then c[m + 1], c[m + 2], c[m + 3] = run_lv, origin + run_k, k - run_k m = m + 3 end
+        run_k, run_lv = k, lv
+      end
     end
+    c.m = m
   end
-  if run_lv > 0 then R(run_lv, origin + run_k, 1, 28 - run_k, 1) end
+  for i = 1, c.m, 3 do R(c[i], c[i + 1], 1, c[i + 2], 1) end
 end
 _HK.gcol, _HK.gkey, _HK.gnow = {{}, {}}, {{}, {}}, 0
 local function grain_column(t)
@@ -2281,6 +2308,7 @@ function redraw()
   clear_ops()
   local left_slide = -anim_offset_x
   local hint = hlp.hint and hlp.hint_text(now)
+  local grain_synced = clocksync.grain_synced()
   OFFS[1], OFFS[2] = -anim_offset_x, anim_offset_x
   TXP[1], TXP[2] = TRACK_X[1] + OFFS[1], TRACK_X[2] + OFFS[2]
   for ri = 1, #param_rows do local row = param_rows[ri]
@@ -2289,7 +2317,7 @@ function redraw()
     local y = row.y
     T(LEVEL.hi, 6 + left_slide, y, hi and (hint or row.label_upper) or row.label)
     local fmt = FORMAT[row.fmt_key]
-    local density_synced = (name == "density" and clocksync.grain_synced())
+    local density_synced = name == "density" and grain_synced
     local is_size_row = (name == "size")
     for t = 1,2 do
       local x = TXP[t]

@@ -1,6 +1,6 @@
 Engine_twins : CroneEngine {
 
-var analogDriveEffect, dimensionEffect, haasEffect, bitcrushEffect, resonatorEffect, wavefoldEffect, ringmodEffect, delayEffect, shimmerEffect, tapeEffect, chewEffect, widthEffect, monobassEffect, sineEffect, wobbleEffect, lossdegradeEffect, rotateEffect, glitchEffect, stChorusEffect, reelEffect, ottEffect, genlossEffect, fuzzEffect, subEffect, spiralEffect, haloEffect, prismEffect, levelEffect, spiralBuffer, <silentBuffer, <buffersL, <buffersR, wobbleBuffer, glitchBuffer, <voices, bufSine, pg, <liveInputBuffersL, <liveInputBuffersR, <liveInputRecorders, <liveRecPosBuses, o, o_rec, o_voice_peak, o_delayduck, liveBufferAllocGeneration = 0, grainEnvs, pitchScaleBuffers, pitchScaleLengths, nornsAddr, voicesUsingLiveBuffer, currentSpeed, currentJitter, currentSize, currentDensity, currentDensityModAmt, currentPitch, currentPan, currentSpread, currentVolume, currentGranularGain, currentCutoff, currentHpf, currentlpf_gain, currentSubharmonics1, currentSubharmonics2, currentSubharmonics3, currentOvertones1, currentOvertones2, currentPitchMode, currentDirectionMod, currentSizeVariation, currentSmoothbass, currentLowGain, currentMidGain, currentHighGain, currentTiltGain, currentProbability, liveBufferMix = 1.0, currentPitchRandomProb, currentPitchRandomScale, currentRatchetingProb, currentPitchLag, currentGlitchRatio = 0.0, currentGlitchMix = 0.0, currentKeyHold, currentKeyGate, currentAdA, currentAdD, currentVelAmp, currentAmpRandomize, voiceBuses, filterSynths, filterRouters, eqSynths, tiltSynths, dryGroup, drySynths, voiceAmpBuses, voiceRunning, voiceIsStereo, bounceTracks, vibeEffect, normOnLoad = 0, loadGen, loadPath, loadBusy, filePeak, rateScale, filterOn, filterTok, meterBuses, lastPos, seekPos, dryOn, inMono, currentEnvSelect, fxTok, limiterEffect, reverbEffect, delayWetBus, reportRate = 30;
+var analogDriveEffect, dimensionEffect, haasEffect, bitcrushEffect, resonatorEffect, wavefoldEffect, ringmodEffect, delayEffect, shimmerEffect, tapeEffect, chewEffect, widthEffect, monobassEffect, sineEffect, wobbleEffect, lossdegradeEffect, rotateEffect, glitchEffect, stChorusEffect, reelEffect, ottEffect, genlossEffect, fuzzEffect, subEffect, spiralEffect, haloEffect, prismEffect, levelEffect, spiralBuffer, <silentBuffer, <buffersL, <buffersR, wobbleBuffer, glitchBuffer, <voices, bufSine, pg, <liveInputBuffersL, <liveInputBuffersR, <liveInputRecorders, <liveRecPosBuses, o, o_rec, o_voice_peak, o_delayduck, liveBufferAllocGeneration = 0, grainEnvs, pitchScaleBuffers, pitchScaleLengths, nornsAddr, voicesUsingLiveBuffer, currentSpeed, currentJitter, currentSize, currentDensity, currentDensityModAmt, currentPitch, currentPan, currentSpread, currentVolume, currentGranularGain, currentCutoff, currentHpf, currentlpf_gain, currentSubharmonics1, currentSubharmonics2, currentSubharmonics3, currentOvertones1, currentOvertones2, currentPitchMode, currentDirectionMod, currentSizeVariation, currentSmoothbass, currentLowGain, currentMidGain, currentHighGain, currentTiltGain, currentProbability, liveBufferMix = 1.0, currentPitchRandomProb, currentPitchRandomScale, currentRatchetingProb, currentPitchLag, currentGlitchRatio = 0.0, currentGlitchMix = 0.0, currentKeyHold, currentKeyGate, currentAdA, currentAdD, currentVelAmp, currentAmpRandomize, voiceBuses, filterSynths, filterRouters, eqSynths, tiltSynths, dryGroup, drySynths, voiceAmpBuses, voiceRunning, voiceIsStereo, bounceTracks, vibeEffect, normOnLoad = 0, loadGen, loadPath, loadBusy, filePeak, rateScale, filterOn, filterTok, meterBuses, lastPos, seekPos, dryOn, inMono, currentEnvSelect, fxTok, limiterEffect, reverbEffect, delayWetBus, reportRate = 30, grainBudget = 128;
 
 classvar pitchScales;
 *initClass {pitchScales = [[7, 12], [7, 12, 19, 24], [12], [12, 24], [1,2,3,4,5,6,7,8,9,10,11], [2,4,5,7,9,11], [2,3,5,7,8,10], [2,4,7,9], [2,4,6,8,10]];}
@@ -14,7 +14,7 @@ freePair { arg l, r; if(l !== silentBuffer, { l.free }); if((r !== l) && (r !== 
 
 normGain { arg i; ^if(normOnLoad == 1, { 0.5012 / filePeak[i].max(0.001) }, { 1 }) }
 
-envArgs { ^[\env0, grainEnvs[0].bufnum, \env1, grainEnvs[1].bufnum, \env2, grainEnvs[2].bufnum, \rrate, reportRate] }
+envArgs { ^[\env0, grainEnvs[0].bufnum, \env1, grainEnvs[1].bufnum, \env2, grainEnvs[2].bufnum, \rrate, reportRate, \grain_budget, grainBudget] }
 
 silence { arg i; voices[i].set(\buf_l, silentBuffer, \buf_r, silentBuffer, \is_stereo, 0, \t_reset_pos, 1); voices[i].run(false); drySynths[i].set(\buf_l, silentBuffer, \buf_r, silentBuffer, \t_reset_pos, 1); voiceRunning[i] = false; this.updateDryRun(i); }
 
@@ -127,107 +127,68 @@ alloc {
             if(stamp.size > 0, { { File.mkdir(defDir); (defDir ++ "*.scsyndef").pathMatch.do({ arg f; File.delete(f) }); File.delete(defDir ++ "stamp") }.try });
 
             keep.(SynthDef(\twvoice, {
-                arg out, voice, buf_l, buf_r, pos, speed, jitter, size, density, density_mod_amt, pitch_offset, pan, spread, gain, t_reset_pos, granular_gain, pitch_mode, subharmonics_1, subharmonics_2, subharmonics_3, overtones_1, overtones_2, direction_mod, size_variation, smoothbass, probability, env_select = 0, pitch_random_prob=0, pitch_random_scale_buf=0, pitch_random_scale_len=1, pitch_random_direction=1, ratcheting_prob=0, pitch_lag_time, rec_pos_bus = -1, key_hold = 1, key_gate = 0, ad_a = 0.005, ad_d = 0.3, vel_amp = 1, t_key_trig = 0, amp_bus, amp_randomize = 0, is_stereo = 0, norm = 1, rscale = 1, meter_bus = 0, env0 = 0, env1 = 0, env2 = 0, rrate = 30;
-                var grain_trig, grain_rate, jitter_sig, buf_pos, sig_mix, density_mod, granular_sig, base_pitch, grain_pitch, grain_size, key_env, amp_scale, dmod_half, grain_amp_rand;
-                var base_trig, grain_count, conc, keep_main, keep_sub, htrig, vtrig, meter;
+                arg out, voice, buf_l, buf_r, pos, speed, jitter, size, density, density_mod_amt, pitch_offset, pan, spread, gain, t_reset_pos, granular_gain, pitch_mode, subharmonics_1, subharmonics_2, subharmonics_3, overtones_1, overtones_2, direction_mod, size_variation, smoothbass, probability, env_select = 0, pitch_random_prob=0, pitch_random_scale_buf=0, pitch_random_scale_len=1, pitch_random_direction=1, ratcheting_prob=0, pitch_lag_time, rec_pos_bus = -1, key_hold = 1, key_gate = 0, ad_a = 0.005, ad_d = 0.3, vel_amp = 1, t_key_trig = 0, amp_bus, amp_randomize = 0, is_stereo = 0, norm = 1, rscale = 1, meter_bus = 0, env0 = 0, env1 = 0, env2 = 0, rrate = 30, grain_budget = 128;
                 var main_vol = 1 / (1 + subharmonics_1 + subharmonics_2 + subharmonics_3 + overtones_1 + overtones_2);
-                var subharmonic_1_vol = subharmonics_1 * main_vol * 2;
-                var subharmonic_2_vol = subharmonics_2 * main_vol * 2;
-                var subharmonic_3_vol = subharmonics_3 * main_vol * 2;
-                var overtone_1_vol = overtones_1 * main_vol * 1.5;
-                var overtone_2_vol = overtones_2 * main_vol * 1.5;
-                var report_trig = Impulse.kr(rrate.clip(1, 60));
-                var envs = [env0, env1, env2];
-                var grain_direction, speed_dir, base_grain_trig, rand_val, rand_val2, random_interval, ratchet_gate, extra_trig, signal, envBuf, randomEnv, harmonics, volumes, l_harmonics, r_harmonics, size_mults, jitter_range, buf_frames_l, buf_dur_recip, wrapped_grain_pos;
-                var spreadMults, stereoSpreadMults, haasOffsets, detuneCents, density_phase, pan_u_l, pan_u_r, pan_flip, pan_alt, pan_dist_l, pan_dist_r, spread_lag, g_mid, g_side, report_lo, report_hi, report_lo_r, report_hi_r, report_pan;
+                var volumes = [main_vol, subharmonics_1 * main_vol * 2, subharmonics_2 * main_vol * 2, subharmonics_3 * main_vol * 2, overtones_1 * main_vol * 1.5, overtones_2 * main_vol * 1.5];
+                var envs = [env0, env1, env2], harmonics = [1, 1/2, 1/4, 1/8, 2, 4], spreadMults = [1.0, 0.5, 0.25, 0.0, 1.0, 1.0], stereoSpreadMults = [1.0, 0.6, 0.3, 0.0, 1.0, 1.0], haasOffsets = [0.0015, 0.006, 0.0005, 0.0, 0.003, 0.005], detuneCents = [0.0, 0.0, 0.0, 0.0, 2.0, 3.0];
+                var dmod_half = density_mod_amt * 0.5, density_mod, base_trig, ratchet_gate, key_env, grain_trig, rand_val, rand_val2, grain_amp_rand, grain_size, grain_direction, buf_dur_recip, jitter_sig, buf_pos, grain_pitch, grain_rate, envBuf, gpos;
+                var pan_dist_l, pan_dist_r, pan_flip, pan_alt, pan_k, st_c, report_pan, conc, c_main, c_sub, keep_main, keep_sub, h_scale, h_amp, gate_on, keeps, htrig, sizes, rates, amps, l_harmonics, r_harmonics, sig_mix, w, amp_scale, p, q;
                 speed = Lag.kr(speed, 1);
-                dmod_half = density_mod_amt * 0.5;
                 density_mod = density * (2 ** LFNoise1.kr(density, dmod_half, dmod_half));
-                density_phase = Phasor.kr(trig: t_key_trig, rate: density_mod / ControlRate.ir, start: 0, end: 1, resetPos: 0);
-                base_trig = HPZ1.kr(density_phase) < 0;
+                base_trig = HPZ1.kr(Phasor.kr(trig: t_key_trig, rate: density_mod / ControlRate.ir, start: 0, end: 1, resetPos: 0)) < 0;
                 ratchet_gate = CoinGate.kr(ratcheting_prob, base_trig);
-                extra_trig = TDelay.kr(ratchet_gate, density_mod.reciprocal * 0.5, 2.0);
-                base_grain_trig = base_trig + extra_trig;
                 key_env = EnvGen.kr(Env.asr(ad_a, 1, ad_d, \sin), gate: key_gate.max(key_hold));
-                grain_trig = (CoinGate.kr(probability, base_grain_trig) * (key_env > 0.0001)) + t_key_trig;
+                grain_trig = (CoinGate.kr(probability, base_trig + TDelay.kr(ratchet_gate, density_mod.reciprocal * 0.5, 2.0)) * (key_env > 0.0001)) + t_key_trig;
                 rand_val = TRand.kr(trig: grain_trig, lo: 0, hi: 1);
                 rand_val2 = TRand.kr(trig: grain_trig, lo: 0, hi: 1);
                 grain_amp_rand = 1 - (amp_randomize * TRand.kr(trig: grain_trig, lo: 0, hi: 1));
                 grain_size = size * (1 + TRand.kr(trig: grain_trig, lo: size_variation.neg, hi: size_variation));
-                speed_dir = Select.kr(pitch_mode, [1, Select.kr(speed.abs > 0.001, [1, speed.sign])]);
-                grain_direction = speed_dir * Select.kr((rand_val < direction_mod), [1, -1]);
-                buf_frames_l = BufFrames.kr(buf_l);
-                buf_dur_recip = SampleRate.ir / buf_frames_l * rscale;
-                jitter_range = buf_dur_recip * jitter;
-                jitter_sig = TRand.kr(trig: grain_trig, lo: jitter_range.neg, hi: jitter_range);
+                grain_direction = Select.kr(pitch_mode, [1, Select.kr(speed.abs > 0.001, [1, speed.sign])]) * Select.kr((rand_val < direction_mod), [1, -1]);
+                buf_dur_recip = SampleRate.ir / BufFrames.kr(buf_l) * rscale;
+                jitter_sig = TRand.kr(trig: grain_trig, lo: (buf_dur_recip * jitter).neg, hi: buf_dur_recip * jitter);
                 buf_pos = Phasor.kr(trig: t_reset_pos, rate: buf_dur_recip / ControlRate.ir * speed, start: 0, end: 1, resetPos: pos);
-                base_pitch = Select.kr(pitch_mode, [speed * pitch_offset, pitch_offset]);
-                grain_pitch = Lag.kr(base_pitch, pitch_lag_time);
-                random_interval = BufRd.kr(1, pitch_random_scale_buf, TIRand.kr(0, pitch_random_scale_len - 1, grain_trig));
-                grain_pitch = grain_pitch * (((rand_val2 < pitch_random_prob) * random_interval * pitch_random_direction).midiratio);
-                grain_rate = grain_pitch * rscale;
-                randomEnv = TIRand.kr(0, 2, grain_trig);
-                envBuf = Select.kr(env_select, [-1] ++ envs ++ [Select.kr(randomEnv, envs)]);
-                harmonics   = [1, 1/2, 1/4, 1/8, 2, 4];
-                volumes     = [main_vol, subharmonic_1_vol, subharmonic_2_vol, subharmonic_3_vol, overtone_1_vol, overtone_2_vol];
-                size_mults  = [1, smoothbass, smoothbass, smoothbass, 1, 1];
-                spreadMults = [1.0, 0.5, 0.25, 0.0, 1.0, 1.0];
-                stereoSpreadMults = [1.0, 0.6, 0.3, 0.0, 1.0, 1.0];
-                haasOffsets = [0.0015, 0.006, 0.0005, 0.0, 0.003, 0.005];
-                detuneCents = [0.0, 0.0, 0.0, 0.0, 2.0, 3.0];
-                pan_u_l = TRand.kr(trig: grain_trig, lo: -1, hi: 1);
-                pan_u_r = TRand.kr(trig: grain_trig, lo: -1, hi: 1);
+                gpos = buf_pos + jitter_sig;
+                grain_pitch = Lag.kr(Select.kr(pitch_mode, [speed * pitch_offset, pitch_offset]), pitch_lag_time);
+                grain_pitch = grain_pitch * (((rand_val2 < pitch_random_prob) * BufRd.kr(1, pitch_random_scale_buf, TIRand.kr(0, pitch_random_scale_len - 1, grain_trig)) * pitch_random_direction).midiratio);
+                grain_rate = grain_pitch * rscale * grain_direction;
+                envBuf = Select.kr(env_select, [-1] ++ envs ++ [Select.kr(TIRand.kr(0, 2, grain_trig), envs)]);
                 pan_flip = (ToggleFF.kr(grain_trig) * 2) - 1;
                 pan_alt = spread * spread * 0.7;
-                pan_dist_l = (pan_u_l.sign * pan_u_l.abs.sqrt * (1 - pan_alt)) + (pan_flip * pan_alt);
-                pan_dist_r = (pan_u_r.sign * pan_u_r.abs.sqrt * (1 - pan_alt)) + (pan_flip * pan_alt);
-                report_lo = Select.kr(is_stereo, [spread.neg, -1.0]);
-                report_hi = Select.kr(is_stereo, [spread, (2 * spread) - 1]);
-                report_lo_r = Select.kr(is_stereo, [spread.neg, 1 - (2 * spread)]);
-                report_hi_r = Select.kr(is_stereo, [spread, 1.0]);
-                report_pan = (pan + (((((((report_lo + report_hi) * 0.5) + (((report_hi - report_lo) * 0.5) * pan_dist_l)) + (((report_lo_r + report_hi_r) * 0.5) + (((report_hi_r - report_lo_r) * 0.5) * pan_dist_r))) * 0.5) * (1 - pan.abs)))).clip(-1.0, 1.0);
+                pan_dist_l = { var u = TRand.kr(trig: grain_trig, lo: -1, hi: 1); (u.sign * u.abs.sqrt * (1 - pan_alt)) + (pan_flip * pan_alt) }.value;
+                pan_dist_r = { var u = TRand.kr(trig: grain_trig, lo: -1, hi: 1); (u.sign * u.abs.sqrt * (1 - pan_alt)) + (pan_flip * pan_alt) }.value;
+                pan_k = 1 - pan.abs;
+                report_pan = (pan + (spread * 0.5 * (pan_dist_l + pan_dist_r) * pan_k)).clip(-1.0, 1.0);
+                st_c = is_stereo * (spread - 1);
                 conc = density_mod * size * (1 + size_variation) * (1 + ratcheting_prob);
+                c_main = conc.min(56);
+                c_sub = (conc * smoothbass).min(56);
                 keep_main = (56 / conc.max(1e-3)).min(1);
                 keep_sub = (56 / (conc * smoothbass).max(1e-3)).min(1);
-                htrig = [keep_main, keep_sub, keep_sub, keep_sub, keep_main, keep_main].collect { |k, i| CoinGate.kr(k, grain_trig * (granular_gain > 0)) * (volumes[i] > 0) };
-                vtrig = htrig[0];
-                l_harmonics = harmonics.collect { |harmonic, i|
-                    var harmonic_spread = spread * spreadMults[i];
-                    var sm = stereoSpreadMults[i];
-                    var pan_lo = Select.kr(is_stereo, [harmonic_spread.neg, sm.neg]);
-                    var pan_hi = Select.kr(is_stereo, [harmonic_spread, sm * ((2 * spread) - 1)]);
-                    var pan_c = (pan_lo + pan_hi) * 0.5;
-                    var pan_h = (pan_hi - pan_lo) * 0.5;
-                    var hd = haasOffsets[i] * spread;
-                    var trig_l = Select.kr(hd > (0.5 / ControlRate.ir), [htrig[i], TDelay.kr(htrig[i], hd)]);
-                    var harmonic_pan = (pan + ((pan_c + (pan_h * pan_dist_l)) * (1 - pan.abs))).clip(-1.0, 1.0);
-                    GrainBuf.ar(numChannels: 2, trigger: trig_l, dur: grain_size * size_mults[i], sndbuf: buf_l, rate: grain_rate * harmonic * grain_direction, pos: buf_pos + jitter_sig, interp: 2, pan: harmonic_pan, envbufnum: envBuf, mul: volumes[i] * grain_amp_rand, maxGrains: 80);
-                };
-                r_harmonics = harmonics.collect { |harmonic, i|
-                    var detuneRatio = ((detuneCents[i] * spread) / 1200).midiratio;
-                    var harmonic_spread = spread * spreadMults[i];
-                    var sm = stereoSpreadMults[i];
-                    var pan_lo = Select.kr(is_stereo, [harmonic_spread.neg, sm * (1 - (2 * spread))]);
-                    var pan_hi = Select.kr(is_stereo, [harmonic_spread, sm]);
-                    var pan_c = (pan_lo + pan_hi) * 0.5;
-                    var pan_h = (pan_hi - pan_lo) * 0.5;
-                    var harmonic_pan = (pan + ((pan_c + (pan_h * pan_dist_r)) * (1 - pan.abs))).clip(-1.0, 1.0);
-                    GrainBuf.ar(numChannels: 2, trigger: htrig[i], dur: grain_size * size_mults[i], sndbuf: buf_r, rate: grain_rate * harmonic * grain_direction * detuneRatio, pos: buf_pos + jitter_sig, interp: 2, pan: harmonic_pan, envbufnum: envBuf, mul: volumes[i] * grain_amp_rand, maxGrains: 80);
-                };
-                granular_sig = (Mix.ar(l_harmonics) + Mix.ar(r_harmonics)) * norm;
-                sig_mix = (granular_sig * granular_gain).tanh;
-                spread_lag = Lag.kr(spread, 0.2);
-                g_mid = (sig_mix[0] + sig_mix[1]) * 0.5;
-                g_side = (sig_mix[0] - sig_mix[1]) * 0.5 * (1 + (spread_lag * 0.5));
-                sig_mix = [g_mid + g_side, g_mid - g_side];
+                h_scale = ((grain_budget - (2 * c_main)).max(grain_budget * 0.5) / ((((volumes[1] > 0) + (volumes[2] > 0) + (volumes[3] > 0)) * c_sub) + (((volumes[4] > 0) + (volumes[5] > 0)) * c_main) * 2).max(1e-3)).min(1);
+                h_amp = grain_amp_rand * h_scale.sqrt.reciprocal.min(3);
                 amp_scale = Lag.kr(gain) * key_env * vel_amp;
-                signal = sig_mix * amp_scale;
+                gate_on = grain_trig * (granular_gain > 0) * (amp_scale > 0.0001);
+                keeps = [keep_main, keep_sub * h_scale, keep_sub * h_scale, keep_sub * h_scale, keep_main * h_scale, keep_main * h_scale];
+                htrig = keeps.collect { |k, i| if(i == 0, { CoinGate.kr(k, gate_on) }, { CoinGate.kr(k, gate_on) * (volumes[i] > 0) }) };
+                sizes = [grain_size, grain_size * smoothbass];
+                rates = harmonics.collect { |h| grain_rate * h };
+                amps = volumes.collect { |v, i| v * if(i == 0, { grain_amp_rand }, { h_amp }) };
+                l_harmonics = Array.new(6); r_harmonics = Array.new(6);
+                6.do { |i|
+                    var a = spreadMults[i], b = stereoSpreadMults[i], hd = haasOffsets[i] * spread;
+                    var half = spread * if(a == b, { a }, { a + ((b - a) * is_stereo) }), cen = st_c * b, dur = sizes[[0, 1, 1, 1, 0, 0][i]];
+                    var trig_l = if(haasOffsets[i] > 0, { Select.kr(hd > (0.5 / ControlRate.ir), [htrig[i], TDelay.kr(htrig[i], hd)]) }, { htrig[i] });
+                    var rate_r = if(detuneCents[i] > 0, { rates[i] * ((detuneCents[i] * spread) / 1200).midiratio }, { rates[i] });
+                    l_harmonics = l_harmonics.add(GrainBuf.ar(2, trig_l, dur, buf_l, rates[i], gpos, 2, (pan + ((cen + (half * pan_dist_l)) * pan_k)).clip(-1.0, 1.0), envBuf, 80, amps[i]));
+                    r_harmonics = r_harmonics.add(GrainBuf.ar(2, htrig[i], dur, buf_r, rate_r, gpos, 2, (pan + (((half * pan_dist_r) - cen) * pan_k)).clip(-1.0, 1.0), envBuf, 80, amps[i]));
+                };
+                sig_mix = (Mix.ar(l_harmonics ++ r_harmonics) * (norm * granular_gain)).tanh;
+                w = (1 + (Lag.kr(spread, 0.2) * 0.5)) * 0.5;
+                p = (0.5 + w) * amp_scale;
+                q = (0.5 - w) * amp_scale;
                 Out.kr(amp_bus, amp_scale);
-                wrapped_grain_pos = Wrap.kr(buf_pos + jitter_sig);
-                grain_count = PulseCount.kr(vtrig);
-                meter = In.kr(meter_bus, 2);
-                SendReply.kr(report_trig, '/voice_state', [voice, buf_pos, meter[0], meter[1], grain_count, Latch.kr(wrapped_grain_pos, vtrig), Latch.kr(grain_size, vtrig), Latch.kr(rand_val, vtrig), Latch.kr(grain_pitch.abs, vtrig), Latch.kr(report_pan, vtrig)]);
-                Out.ar(out, signal);
+                SendReply.kr(Impulse.kr(rrate.clip(1, 60)), '/voice_state', [voice, buf_pos] ++ In.kr(meter_bus, 2) ++ [PulseCount.kr(htrig[0]), Latch.kr(Wrap.kr(gpos), htrig[0]), Latch.kr(grain_size, htrig[0]), Latch.kr(rand_val, htrig[0]), Latch.kr(grain_pitch.abs, htrig[0]), Latch.kr(report_pan, htrig[0])]);
+                Out.ar(out, [(sig_mix[0] * p) + (sig_mix[1] * q), (sig_mix[1] * p) + (sig_mix[0] * q)]);
             }));
 
             keep.(SynthDef(\tweq, {
@@ -787,6 +748,7 @@ alloc {
         this.addCommand("glitch_mix", "f", { arg msg; currentGlitchMix = msg[1]; glitchEffect.set(\mix, currentGlitchMix); this.fxRun(glitchEffect, (currentGlitchRatio > 0) && (currentGlitchMix > 0), 0.6); });
         this.addCommand("resonator_freqs", "fffff", { arg msg; resonatorEffect.set(\f1, msg[1], \f2, msg[2], \f3, msg[3], \f4, msg[4], \f5, msg[5]); });
         this.addCommand("limiter", "i", { arg msg; if(msg[1] > 0, { if(limiterEffect.isNil, { limiterEffect = Synth.new(\twlimiter, [\bus, context.out_b.index], context.xg, 'addToTail') }) }, { if(limiterEffect.notNil, { limiterEffect.free; limiterEffect = nil }) }); });
+        this.addCommand("grain_budget", "f", { arg msg; grainBudget = msg[1]; voices.do({ arg s; if(s.notNil, { s.set(\grain_budget, grainBudget) }) }); });
         this.addCommand("report_rate", "f", { arg msg; reportRate = msg[1]; (voices ++ liveInputRecorders).do({ arg s; if(s.notNil, { s.set(\rrate, reportRate) }) }); });
 
         this.addCommand("voice_run", "ii", { arg msg; var voice = msg[1] - 1; var state = msg[2]; if(voices[voice].notNil, { voices[voice].run(state > 0); voiceRunning[voice] = (state > 0); this.updateDryRun(voice); }); });
