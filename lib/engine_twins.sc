@@ -79,7 +79,7 @@ alloc {
         var t9dub = { arg x, f, amt, k1, k2; var d = x - OnePole.ar(x, 1 - f), h = (Delay1.ar(d) * (k2 / k1) + d).clip2(1 / k1), m = h.abs; x + (h * OnePole.ar(m / log(m * (255 * k1) + 1).max(1e-9), 1 - f) * (amt * (2.40823997 * k1 * k1))) };
         var csoft = { arg v; var c = v.clip2(1); c * (c.squared * -0.5 + 1.5) }, tri = { arg d; 1 - ((d - 2048).abs * 0.00048828125) };
         var fin = { arg m, hold; var l = Lag.kr(m, 0.04); l.min(DelayN.kr(l, hold, hold)) };
-        var defDir, stamp, cached, keep, fxs;
+        var defDir, stamp, cached, keep, fxs, voiceDef, useTG;
         nornsAddr = NetAddr("127.0.0.1", 10111);
         buffersL = Array.fill(2, { Buffer.alloc(context.server, context.server.sampleRate * 1); });
         buffersR = Array.fill(2, { Buffer.alloc(context.server, context.server.sampleRate * 1); });
@@ -119,20 +119,13 @@ alloc {
 
         context.server.sync;
 
-        defDir = Platform.userHomeDir ++ "/dust/data/twins/defs/";
-        stamp = { File.mtime(this.class.filenameSymbol.asString).asString ++ "_" ++ Main.version }.try({ "" });
-        cached = (stamp.size > 0) and: { { File.use(defDir ++ "stamp", "r", { arg f; f.readAllString }) == stamp }.try({ false }) };
-        keep = { arg d; d.add; if(stamp.size > 0, { { d.writeDefFile(defDir) }.try }) };
-        if(cached, { context.server.sendMsg(\d_loadDir, defDir) }, {
-            if(stamp.size > 0, { { File.mkdir(defDir); (defDir ++ "*.scsyndef").pathMatch.do({ arg f; File.delete(f) }); File.delete(defDir ++ "stamp") }.try });
-
-            keep.(SynthDef(\twvoice, {
+        voiceDef = { arg name, tg; SynthDef(name, {
                 arg out, voice, buf_l, buf_r, pos, speed, jitter, size, density, density_mod_amt, pitch_offset, pan, spread, gain, t_reset_pos, granular_gain, pitch_mode, subharmonics_1, subharmonics_2, subharmonics_3, overtones_1, overtones_2, direction_mod, size_variation, smoothbass, probability, env_select = 0, pitch_random_prob=0, pitch_random_scale_buf=0, pitch_random_scale_len=1, pitch_random_direction=1, ratcheting_prob=0, pitch_lag_time, rec_pos_bus = -1, key_hold = 1, key_gate = 0, ad_a = 0.005, ad_d = 0.3, vel_amp = 1, t_key_trig = 0, amp_bus, amp_randomize = 0, is_stereo = 0, norm = 1, rscale = 1, meter_bus = 0, env0 = 0, env1 = 0, env2 = 0, rrate = 30, grain_budget = 128;
                 var main_vol = 1 / (1 + subharmonics_1 + subharmonics_2 + subharmonics_3 + overtones_1 + overtones_2);
                 var volumes = [main_vol, subharmonics_1 * main_vol * 2, subharmonics_2 * main_vol * 2, subharmonics_3 * main_vol * 2, overtones_1 * main_vol * 1.5, overtones_2 * main_vol * 1.5];
                 var envs = [env0, env1, env2], harmonics = [1, 1/2, 1/4, 1/8, 2, 4], spreadMults = [1.0, 0.5, 0.25, 0.0, 1.0, 1.0], stereoSpreadMults = [1.0, 0.6, 0.3, 0.0, 1.0, 1.0], haasOffsets = [0.0015, 0.006, 0.0005, 0.0, 0.003, 0.005], detuneCents = [0.0, 0.0, 0.0, 0.0, 2.0, 3.0];
                 var dmod_half = density_mod_amt * 0.5, density_mod, base_trig, ratchet_gate, key_env, grain_trig, rand_val, rand_val2, grain_amp_rand, grain_size, grain_direction, buf_dur_recip, jitter_sig, buf_pos, grain_pitch, grain_rate, envBuf, gpos;
-                var pan_dist_l, pan_dist_r, pan_flip, pan_alt, pan_k, st_c, report_pan, conc, c_main, c_sub, keep_main, keep_sub, h_scale, h_amp, gate_on, keeps, htrig, sizes, rates, amps, l_harmonics, r_harmonics, sig_mix, w, amp_scale, p, q;
+                var pan_dist_l, pan_dist_r, pan_flip, pan_alt, pan_k, st_c, report_pan, cap, conc, csub, c_main, c_sub, m_amp, s_amp, pinc, layers, keep_main, keep_sub, h_scale, h_amp, gate_on, keeps, htrig, sizes, rates, amps, sig_mix, w, amp_scale, p, q;
                 speed = Lag.kr(speed, 1);
                 density_mod = density * (2 ** LFNoise1.kr(density, dmod_half, dmod_half));
                 base_trig = HPZ1.kr(Phasor.kr(trig: t_key_trig, rate: density_mod / ControlRate.ir, start: 0, end: 1, resetPos: 0)) < 0;
@@ -159,37 +152,72 @@ alloc {
                 pan_k = 1 - pan.abs;
                 report_pan = (pan + (spread * 0.5 * (pan_dist_l + pan_dist_r) * pan_k)).clip(-1.0, 1.0);
                 st_c = is_stereo * (spread - 1);
+                cap = (grain_budget * 0.5).min(56);
                 conc = density_mod * size * (1 + size_variation) * (1 + ratcheting_prob);
-                c_main = conc.min(56);
-                c_sub = (conc * smoothbass).min(56);
-                keep_main = (56 / conc.max(1e-3)).min(1);
-                keep_sub = (56 / (conc * smoothbass).max(1e-3)).min(1);
+                csub = conc * smoothbass;
+                c_main = conc.min(cap);
+                c_sub = csub.min(cap);
+                keep_main = (cap / conc.max(1e-3)).min(1);
+                keep_sub = (cap / csub.max(1e-3)).min(1);
+                m_amp = ((56 / conc.max(1e-3)).min(1) / keep_main).sqrt;
+                s_amp = ((56 / csub.max(1e-3)).min(1) / keep_sub).sqrt;
                 h_scale = ((grain_budget - (2 * c_main)).max(grain_budget * 0.5) / ((((volumes[1] > 0) + (volumes[2] > 0) + (volumes[3] > 0)) * c_sub) + (((volumes[4] > 0) + (volumes[5] > 0)) * c_main) * 2).max(1e-3)).min(1);
-                h_amp = grain_amp_rand * h_scale.sqrt.reciprocal.min(3);
+                h_amp = h_scale.sqrt.reciprocal.min(3);
                 amp_scale = Lag.kr(gain) * key_env * vel_amp;
                 gate_on = grain_trig * (granular_gain > 0) * (amp_scale > 0.0001);
                 keeps = [keep_main, keep_sub * h_scale, keep_sub * h_scale, keep_sub * h_scale, keep_main * h_scale, keep_main * h_scale];
                 htrig = keeps.collect { |k, i| if(i == 0, { CoinGate.kr(k, gate_on) }, { CoinGate.kr(k, gate_on) * (volumes[i] > 0) }) };
                 sizes = [grain_size, grain_size * smoothbass];
                 rates = harmonics.collect { |h| grain_rate * h };
-                amps = volumes.collect { |v, i| v * if(i == 0, { grain_amp_rand }, { h_amp }) };
-                l_harmonics = Array.new(6); r_harmonics = Array.new(6);
-                6.do { |i|
+                amps = volumes.collect { |v, i| v * grain_amp_rand * [m_amp, s_amp * h_amp, s_amp * h_amp, s_amp * h_amp, m_amp * h_amp, m_amp * h_amp][i] };
+                pinc = buf_dur_recip / ControlRate.ir * speed;
+                layers = Array.fill(6, { |i|
                     var a = spreadMults[i], b = stereoSpreadMults[i], hd = haasOffsets[i] * spread;
                     var half = spread * if(a == b, { a }, { a + ((b - a) * is_stereo) }), cen = st_c * b, dur = sizes[[0, 1, 1, 1, 0, 0][i]];
-                    var trig_l = if(haasOffsets[i] > 0, { Select.kr(hd > (0.5 / ControlRate.ir), [htrig[i], TDelay.kr(htrig[i], hd)]) }, { htrig[i] });
                     var rate_r = if(detuneCents[i] > 0, { rates[i] * ((detuneCents[i] * spread) / 1200).midiratio }, { rates[i] });
-                    l_harmonics = l_harmonics.add(GrainBuf.ar(2, trig_l, dur, buf_l, rates[i], gpos, 2, (pan + ((cen + (half * pan_dist_l)) * pan_k)).clip(-1.0, 1.0), envBuf, 80, amps[i]));
-                    r_harmonics = r_harmonics.add(GrainBuf.ar(2, htrig[i], dur, buf_r, rate_r, gpos, 2, (pan + (((half * pan_dist_r) - cen) * pan_k)).clip(-1.0, 1.0), envBuf, 80, amps[i]));
-                };
-                sig_mix = (Mix.ar(l_harmonics ++ r_harmonics) * (norm * granular_gain)).tanh;
+                    var pan_l = (pan + ((cen + (half * pan_dist_l)) * pan_k)).clip(-1.0, 1.0), pan_r = (pan + (((half * pan_dist_r) - cen) * pan_k)).clip(-1.0, 1.0);
+                    var nblk, trig_l;
+                    if(tg, {
+                        nblk = if(haasOffsets[i] > 0, { ((hd * ControlRate.ir) + 0.5).floor * (hd > (0.5 / ControlRate.ir)) }, { 0 });
+                        TwinGrain.ar(htrig[i], dur, buf_l, buf_r, rates[i], rate_r, if(haasOffsets[i] > 0, { gpos + (nblk * pinc) }, { gpos }), gpos, pan_l, pan_r, envBuf, nblk, 80, 0, amps[i])
+                    }, {
+                        trig_l = if(haasOffsets[i] > 0, { Select.kr(hd > (0.5 / ControlRate.ir), [htrig[i], TDelay.kr(htrig[i], hd)]) }, { htrig[i] });
+                        GrainBuf.ar(2, trig_l, dur, buf_l, rates[i], gpos, 2, pan_l, envBuf, 80, amps[i]) + GrainBuf.ar(2, htrig[i], dur, buf_r, rate_r, gpos, 2, pan_r, envBuf, 80, amps[i])
+                    })
+                });
+                sig_mix = (Mix.ar(layers) * (norm * granular_gain)).tanh;
                 w = (1 + (Lag.kr(spread, 0.2) * 0.5)) * 0.5;
                 p = (0.5 + w) * amp_scale;
                 q = (0.5 - w) * amp_scale;
                 Out.kr(amp_bus, amp_scale);
                 SendReply.kr(Impulse.kr(rrate.clip(1, 60)), '/voice_state', [voice, buf_pos] ++ In.kr(meter_bus, 2) ++ [PulseCount.kr(htrig[0]), Latch.kr(Wrap.kr(gpos), htrig[0]), Latch.kr(grain_size, htrig[0]), Latch.kr(rand_val, htrig[0]), Latch.kr(grain_pitch.abs, htrig[0]), Latch.kr(report_pan, htrig[0])]);
                 Out.ar(out, [(sig_mix[0] * p) + (sig_mix[1] * q), (sig_mix[1] * p) + (sig_mix[0] * q)]);
-            }));
+        }) };
+        useTG = \TwinGrain.asClass.notNil and: { var d = PathName(\TwinGrain.asClass.filenameSymbol.asString).pathOnly; File.exists(d ++ "TwinGrain.so") or: { File.exists(d ++ "TwinGrain_scsynth.so") } };
+        if(useTG, {
+            var ok = false, c = Condition.new, id = context.server.nextNodeID, b = Bus.audio(context.server, 2), go, fa;
+            go = OSCFunc({ arg m; if(m[1] == id, { ok = true; c.unhang }) }, '/n_go', context.server.addr);
+            fa = OSCFunc({ arg m; if(m[1].asString == "/s_new", { c.unhang }) }, '/fail', context.server.addr);
+            SynthDef(\twtgprobe, { Out.ar(b.index, TwinGrain.ar(0)) }).send(context.server);
+            context.server.sync;
+            context.server.sendMsg(\s_new, \twtgprobe, id, 1, context.xg.nodeID);
+            SystemClock.sched(1, { c.unhang; nil });
+            c.hang;
+            go.free; fa.free;
+            if(ok, { context.server.sendMsg(\n_free, id) });
+            context.server.sync;
+            b.free;
+            useTG = ok;
+        });
+        ("twins: grains via " ++ if(useTG, { "TwinGrain" }, { "GrainBuf" })).postln;
+        defDir = Platform.userHomeDir ++ "/dust/data/twins/defs/";
+        stamp = { File.mtime(this.class.filenameSymbol.asString).asString ++ "_" ++ Main.version ++ if(useTG, { "_tg" }, { "" }) }.try({ "" });
+        cached = (stamp.size > 0) and: { { File.use(defDir ++ "stamp", "r", { arg f; f.readAllString }) == stamp }.try({ false }) };
+        keep = { arg d; d.add; if(stamp.size > 0, { { d.writeDefFile(defDir) }.try }) };
+        if(cached, { context.server.sendMsg(\d_loadDir, defDir) }, {
+            if(stamp.size > 0, { { File.mkdir(defDir); (defDir ++ "*.scsyndef").pathMatch.do({ arg f; File.delete(f) }); File.delete(defDir ++ "stamp") }.try });
+
+            keep.(voiceDef.(\twvoice, useTG));
 
             keep.(SynthDef(\tweq, {
                 arg bus, low_gain = 0, mid_gain = 0, high_gain = 0;

@@ -248,10 +248,12 @@ function lfo.get_parameter_range(param_name, for_randomize)
     return lo, hi
 end
 for i = 1, number_of_outputs do
-    lfo[i] = {freq = 0.05, phase = 0, waveform = "walk", shape_int = 4, depth = 50, offset = 0, prev = 0, walk_value = 0, walk_velocity = 0, sync_invert = false, active = false, target_name = "none", kind = 0, no_gdepth = false, track_num = "1", is_t2 = false, morph_range = false, has_user_limits = false, def_min = 0, def_max = 100, lim_lo = 0, lim_hi = 100, lim_half = 50, lim_ratio = 1, lim_dirty = false}
+    lfo[i] = {freq = 0.05, phase = 0, waveform = "walk", shape_int = 4, depth = 50, offset = 0, prev = 0, db_kind = 0, walk_value = 0, walk_velocity = 0, sync_invert = false, active = false, target_name = "none", kind = 0, no_gdepth = false, track_num = "1", is_t2 = false, morph_range = false, has_user_limits = false, def_min = 0, def_max = 100, lim_lo = 0, lim_hi = 100, lim_half = 50, lim_ratio = 1, lim_dirty = false}
 end
 local KIND_SIZE, KIND_FILTER, KIND_VOLUME, KIND_PITCH, KIND_DENSITY = 1, 2, 3, 4, 5
 local KIND_BY_SUFFIX = {size = KIND_SIZE, cutoff = KIND_FILTER, hpf = KIND_FILTER, volume = KIND_VOLUME, pitch = KIND_PITCH, density = KIND_DENSITY}
+local DB_BY_SUFFIX = {seek = {0, 0}, pitch = {0, 0}, size = {2, 0.01}, density = {2, 0.01}, cutoff = {2, 0.005}, hpf = {2, 0.005}, volume = {1, 0.004}}
+local DB_DEFAULT = {1, 0.01}
 local function classify_target(i, target_idx)
     local obj = lfo[i]
     local tname = lfo.lfo_targets[target_idx]
@@ -264,6 +266,9 @@ local function classify_target(i, target_idx)
         obj.track_num = track
         obj.is_t2 = (track == "2")
         obj.kind = KIND_BY_SUFFIX[suffix] or 0
+        local db = DB_BY_SUFFIX[suffix] or DB_DEFAULT
+        obj.db_kind, obj.db = db[1], db[2]
+        obj.db_hi, obj.db_lo = 1 + db[2], 1 / (1 + db[2])
         obj.no_gdepth = (suffix == "volume" or suffix == "pan")
         if USER_LIMIT_PARAMS[suffix] then
             local d = USER_LIMIT_DEFAULTS[suffix]
@@ -286,6 +291,7 @@ local function classify_target(i, target_idx)
         obj.track_num = "1"
         obj.is_t2 = false
         obj.kind = 0
+        obj.db_kind = 0
         obj.no_gdepth = false
         obj.has_user_limits = false
         obj.min_key, obj.max_key = nil, nil
@@ -751,6 +757,16 @@ function lfo.process()
             if tick_pitch_scale then
                 value = quantize_pitch_to_scale(value, tick_pitch_scale)
                 if value < mn then value = mn elseif value > mx then value = mx end
+            end
+        end
+        local dk, lv = obj.db_kind, obj.last_val
+        if dk ~= 0 and lv then
+            if dk == 1 then
+                local d, t = value - lv, (mx - mn) * obj.db
+                if d < t and d > -t then goto continue_lfo end
+            elseif lv > 0 then
+                local r = value / lv
+                if r < obj.db_hi and r > obj.db_lo then goto continue_lfo end
             end
         end
         write_value(obj, value)

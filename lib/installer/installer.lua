@@ -9,8 +9,11 @@ local SEARCH_FOLDERS = {
   "/home/we/dust/code",
 }
 local RESTART_CMD = "sudo systemctl restart norns-jack.service norns-crone.service norns-matron.service"
+local USER_EXT = "/home/we/.local/share/SuperCollider/Extensions"
+local BUNDLE_DIR = USER_EXT .. "/twins"
 
 local function basename(path) return path:match("([^\\/]+)$") or path end
+local ELF_ARCH = {["1:40"] = "armv7l", ["2:183"] = "aarch64", ["2:62"] = "x86_64"}
 
 local function trim(s)
   s = (s or ""):gsub("^%s+", "")
@@ -27,6 +30,21 @@ function Installer:new(args)
   for k, v in pairs(args or {}) do m[k] = v end
   m.path = trim(m.path or norns.state.path):gsub("/$", "")
   m.update = { state = nil, behind = 0, message = nil }
+  m.requirements = m.requirements or {}
+  m.bundled_ok = {}
+  if m.bundled then
+    local b = {}
+    for v in (util.os_capture("od -An -tu1 -N20 \"$(command -v scsynth)\" 2>/dev/null", true) or ""):gmatch("%d+") do b[#b + 1] = v end
+    local arch = #b >= 20 and ELF_ARCH[b[5] .. ":" .. b[19]]
+    for req, dir in pairs(m.bundled) do
+      local base = m.path .. "/" .. dir .. "/"
+      local sc, so = base .. req .. ".sc.in", arch and (base .. arch .. "/" .. req .. ".so.in")
+      if arch and util.file_exists(sc) and util.file_exists(so) and not util.file_exists(_path.data .. "twins/skip_" .. req .. "_" .. arch) then
+        m.bundled_ok[req] = { sc = sc, so = so, skip = _path.data .. "twins/skip_" .. req .. "_" .. arch }
+        m.requirements[#m.requirements + 1] = req
+      end
+    end
+  end
   m:scan()
   return m
 end
@@ -68,6 +86,19 @@ local function probe(requirements)
   return missing, found
 end
 
+function Installer:missing()
+  local missing, detail = probe(self.requirements)
+  local gone = {}
+  for _, req in ipairs(missing) do gone[req] = true end
+  for req, b in pairs(self.bundled_ok) do
+    if not gone[req] then
+      local same = util.os_capture(string.format("cmp -s '%s' '%s/%s.sc' && cmp -s '%s' '%s/%s.so' && echo ok", b.sc, BUNDLE_DIR, req, b.so, BUNDLE_DIR, req))
+      if trim(same) ~= "ok" then missing[#missing + 1] = req end
+    end
+  end
+  return missing, detail
+end
+
 function Installer:scan()
   if self.zip == nil or self.zip == "" then print("[installer] NEED TO SPECIFY ZIP FILE") end
   self.requirements     = self.requirements or {}
@@ -75,10 +106,10 @@ function Installer:scan()
   self.installing       = false
   self.satisfied        = false
   self.install_error    = nil
-  local missing, detail = probe(self.requirements)
+  local missing, detail = self:missing()
   for _, req in ipairs(missing) do
     print(string.format("[installer] missing %s (class file: %s, server plugin: %s)",
-      req, detail[req].sc and "yes" or "NO", detail[req].so and "yes" or "NO"))
+      req, detail[req] and detail[req].sc and "yes" or "NO", detail[req] and detail[req].so and "yes" or "NO"))
   end
   self.missing_requirements = missing
   self.satisfied = (#missing == 0)
@@ -95,27 +126,49 @@ function Installer:install_libs()
   if self.installing then return end
   self.installing    = true
   self.install_error = nil
-  print(string.format("[installer] downloading %s", self.zip))
-  self.message_progress = "Downloading..."
-  local names = {}
+  local names, cmds, copy = {}, {}, {}
   for _, req in ipairs(self.missing_requirements) do
-    for _, h in ipairs({ halves(req) }) do
-      names[#names + 1] = string.format("-name '%s'", h[1])
+    local b = self.bundled_ok[req]
+    if b then
+      copy[#copy + 1] = string.format("if python3 -c 'import ctypes,sys; ctypes.CDLL(sys.argv[1])' '%s' >/dev/null 2>&1; then find '%s' \\( -name '%s.sc' -o -name '%s.so' -o -name '%s_scsynth.so' \\) -type f -delete; cp '%s' '%s/%s.sc'; cp '%s' '%s/%s.so'; else echo SKIP:%s; fi",
+        b.so, USER_EXT, req, req, req, b.sc, BUNDLE_DIR, req, b.so, BUNDLE_DIR, req, req)
+    else
+      for _, h in ipairs({ halves(req) }) do
+        names[#names + 1] = string.format("-name '%s'", h[1])
+      end
     end
   end
-  local cmd = table.concat({
-    string.format("rm -rf %s", TMP_DIR),
-    string.format("mkdir -p %s '%s'", TMP_DIR, EXTENSIONS_DIR),
-    string.format("wget -q -O %s/bundle.zip '%s'", TMP_DIR, self.zip),
-    string.format("cd %s", TMP_DIR),
-    "unzip -o -q bundle.zip",
-    string.format("find . \\( %s \\) -type f -exec cp {} '%s/' ';'",
-      table.concat(names, " -o "), EXTENSIONS_DIR),
-    "cd /tmp",
-    "rm -rf norns-installer",
-  }, " && ")
-  norns.system_cmd(cmd .. " 2>&1; echo _done_", function(out)
-    local still_missing = probe(self.requirements)
+  if #names > 0 then
+    print(string.format("[installer] downloading %s", self.zip))
+    self.message_progress = "Downloading..."
+    cmds = {
+      string.format("rm -rf %s", TMP_DIR),
+      string.format("mkdir -p %s '%s'", TMP_DIR, EXTENSIONS_DIR),
+      string.format("wget -q -O %s/bundle.zip '%s'", TMP_DIR, self.zip),
+      string.format("cd %s", TMP_DIR),
+      "unzip -o -q bundle.zip",
+      string.format("find . \\( %s \\) -type f -exec cp {} '%s/' ';'", table.concat(names, " -o "), EXTENSIONS_DIR),
+      "cd /tmp",
+      "rm -rf norns-installer",
+    }
+  end
+  if #copy > 0 then
+    cmds[#cmds + 1] = string.format("mkdir -p '%s'", BUNDLE_DIR)
+    for _, c in ipairs(copy) do cmds[#cmds + 1] = c end
+  end
+  norns.system_cmd(table.concat(cmds, " && ") .. " 2>&1; echo _done_", function(out)
+    for req in tostring(out):gmatch("SKIP:(%w+)") do
+      local b = self.bundled_ok[req]
+      if b then
+        util.make_dir(_path.data .. "twins")
+        local f = io.open(b.skip, "w")
+        if f then f:write("1") f:close() end
+        print("[installer] " .. req .. " can't load on this system; using built-in grains")
+        self.bundled_ok[req] = nil
+        for i = #self.requirements, 1, -1 do if self.requirements[i] == req then table.remove(self.requirements, i) end end
+      end
+    end
+    local still_missing = self:missing()
     self.installing = false
     self.message_progress = nil
     if #still_missing == 0 then

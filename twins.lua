@@ -47,7 +47,7 @@
 --
 --                    Daniel Rigler
 
-local installer = include("lib/installer/installer"):new{requirements = {"AnalogChew", "AnalogLoss", "AnalogDegrade"}, zip = "https://github.com/schollz/portedplugins/releases/download/v0.4.6/PortedPlugins-RaspberryPi.zip"}
+local installer = include("lib/installer/installer"):new{requirements = {"AnalogChew", "AnalogLoss", "AnalogDegrade"}, bundled = {TwinGrain = "lib/ugens"}, zip = "https://github.com/schollz/portedplugins/releases/download/v0.4.6/PortedPlugins-RaspberryPi.zip"}
 engine.name = installer:ready() and 'twins' or nil
 local MusicUtil = require("musicutil")
 local utils = include("lib/utils")
@@ -563,7 +563,7 @@ local function setup_ui_metro()
             if randomize_flash[i] > 0.001 and not randomize_flash.held[i] then randomize_flash[i] = randomize_flash[i] * 0.9 end
             if randomize_flash.midi[i] > 0.001 and not randomize_flash.held[i] then randomize_flash.midi[i] = randomize_flash.midi[i] * 0.9 end
         end
-        redraw()
+        _HK.tick = true redraw() _HK.tick = false
     end)
     ui_metro.time = 1 / _HK.UI_FPS
     utils.metro_start(ui_metro)
@@ -1968,8 +1968,8 @@ local function refresh_redraw_cache()
     C.locked.eq = eq_locked
   end
   _slow_refresh_countdown = _slow_refresh_countdown - 1
-  if _slow_refresh_countdown > 0 then return end
-  _slow_refresh_countdown = 4
+  if _slow_refresh_countdown > 0 and _HK.ps == _HK.pseq then return end
+  _slow_refresh_countdown, _HK.ps = 4, _HK.pseq
   PARAM_CACHE.link = pget("global_pitch_size_density_link") == 1
   PARAM_CACHE.dry = pget("dry_mode") == 1
   PARAM_CACHE.sym = pget("symmetry") == 1
@@ -2287,12 +2287,28 @@ local function draw_seek_bar_viz(t, x, mode, wf, active)
 end
 
 local OFFS, TXP = {0, 0}, {0, 0}
+_HK.seq, _HK.pseq, _HK.sig, _HK.vsig = 0, 0, {}, {{}, {}}
+_HK.dirty = function(now, gnow)
+  local s, f, h = _HK.sig, randomize_flash, hlp.hint
+  local ep = (now * 10) // 1
+  local g = (#grain_positions[1] > 0 or #grain_positions[2] > 0) and gnow or -1
+  local d1, d2 = clocksync.grain_division_index(1), clocksync.grain_division_index(2)
+  local live = not animation_complete or pan_slide_start_time ~= nil
+    or f[1] > 0.001 or f[2] > 0.001 or f.midi[1] > 0.001 or f.midi[2] > 0.001 or f.held[1] or f.held[2]
+    or (h and now - h.t < 1.6) or hlp.bounce_pending ~= nil or (hlp.bounce_done_time and now - hlp.bounce_done_time < 2.1)
+    or (hlp.saving and now < hlp.saving + 0.1) or (fx_popup.time and now - fx_popup.time < FX_POPUP_DURATION + 0.1)
+    or pget("evolution") == 1
+  if live or s[1] ~= _HK.seq or s[2] ~= ep or s[3] ~= g or s[4] ~= d1 or s[5] ~= d2 or s[6] ~= current_mode or s[7] ~= current_filter_mode or s[8] ~= _HK.pseq then
+    s[1], s[2], s[3], s[4], s[5], s[6], s[7], s[8] = _HK.seq, ep, g, d1, d2, current_mode, current_filter_mode, _HK.pseq
+    return true
+  end
+  return false
+end
 
 function redraw()
   if not installer:ready() or installer:pending() then hlp.force = true installer:redraw() return end
   if presets.draw_menu() then hlp.force = true return end
   if _G.preset_loading then hlp.force = true screen.clear() screen.level(15) screen.move(64, 32) screen.text_center("Loading...") screen.update() return end
-  refresh_redraw_cache()
   local now = util.time()
   local gnow = (now * 30) // 1 / 30
   if gnow ~= _HK.gnow then
@@ -2300,6 +2316,8 @@ function redraw()
     _HK.advance_grains(1, gnow)
     _HK.advance_grains(2, gnow)
   end
+  if _HK.tick and not hlp.force and not _HK.dirty(now, gnow) then return end
+  refresh_redraw_cache()
   local cur_mode = current_mode
   local cur_filter = current_filter_mode
   local upper = UPPER[cur_mode]
@@ -2431,7 +2449,7 @@ function redraw()
     local current_vol_x = VOL_X[t] + offset_x
     local current_pan_x = PAN_X[t] + offset_x
     local C = PARAM_CACHE.track[t]
-    local h = (C.vol + 70) * _VOL_LINLIN_MUL
+    local h = ((C.vol + 70) * _VOL_LINLIN_MUL + 0.5) // 1
     if h < 0 then h = 0 elseif h > 64 then h = 64 end
     if offset_x == 0 then RV(t, LEVEL.dim - 3, 64 - h + volume_bar_y[t], h) else R(LEVEL.dim - 3, current_vol_x, 64 - h + volume_bar_y[t], 2, h) end
     local loaded = C.loaded
@@ -2441,7 +2459,7 @@ function redraw()
       local pre_fader_db = peak_db - C.vol + hlp.mlog
       local pre_fader_ratio = (pre_fader_db + 70) / 70
       if pre_fader_ratio < 0 then pre_fader_ratio = 0 elseif pre_fader_ratio > 1 then pre_fader_ratio = 1 end
-      local peak_h = pre_fader_ratio * h
+      local peak_h = (pre_fader_ratio * h + 0.5) // 1
       if peak_h > 0 then if offset_x == 0 then RV(t, LEVEL.hi - 1, 64 - peak_h + volume_bar_y[t], peak_h) else R(LEVEL.hi - 1, current_vol_x, 64 - peak_h + volume_bar_y[t], 2, peak_h) end end
     end
     if loaded then
@@ -2466,7 +2484,7 @@ function redraw()
     font.draw_fx_status_bucketed(R)
     if morph.scene_mode == "on" then
       R(1, 7 + left_slide, 4, 22, 1)
-      if morph.amount > 0 then R(LEVEL.hi, 7 + left_slide, 4, util.linlin(0, 100, 0, 22, morph.amount), 1) end
+      if morph.amount > 0 then R(LEVEL.hi, 7 + left_slide, 4, (morph.amount * 0.22 + 0.5) // 1, 1) end
     end
   end
   local pop, sub = nil, nil
@@ -2557,7 +2575,11 @@ local osc_handlers = {
     if gc and gc ~= ctx.grain_seq[vid] then
         ctx.grain_seq[vid] = gc
         push_grain(vid, args[6], args[7], args[8], args[9], args[10], util.time())
+        _HK.seq = _HK.seq + 1
     end
+    local vs, pk = _HK.vsig[vid], va.l > va.r and va.l or va.r
+    local pv, pb = (pos * 100) // 1 * 32 + (pos * 30) // 1, pk > 0 and (log(pk) * 18) // 1 or -1
+    if pv ~= vs[1] or pb ~= vs[2] then vs[1], vs[2] = pv, pb _HK.seq = _HK.seq + 1 end
     if is_voice_loaded(vid) then
         osc_positions[vid] = pos
         local pct = pos * 100
@@ -2575,7 +2597,7 @@ local osc_handlers = {
     for c = 0, BAR_W - 1 do wf[c] = floor(wf[c] * s + 0.5) end
     ctx.waveforms[vid] = wf
     end}
-local function setup_osc() osc.event = function(path, args) local h = osc_handlers[path] if h then h(args) end end end
+local function setup_osc() osc.event = function(path, args) local h = osc_handlers[path] if h then h(args) if path ~= "/twins/voice_state" then _HK.seq = _HK.seq + 1 end end end end
 
 local function snapshot_scene_data()
     local sd = morph.scene_data
@@ -2621,6 +2643,7 @@ function init()
     params:set('monitor_level', -math.huge)
     setup_ui_metro()
     setup_params()
+    for _, p in ipairs(params.params) do local b = p.bang if b then p.bang = function(o) _HK.pseq = _HK.pseq + 1 return b(o) end end end
     setup_undo()
     setup_osc()
     morph.init(lfo, clocksync)

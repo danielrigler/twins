@@ -222,8 +222,9 @@ end
 
 function font.draw_fx_status_bucketed(R_func)
   local now = util.time()
-  if now - _last_update >= 0.1 then
-    _last_update, now_t = now, now
+  local ep = (now * 10) // 1
+  if ep ~= _last_update then
+    _last_update, now_t = ep, now
     poll()
     local blink = (now * 2) % 1 < 0.5
     _collect_n = 0
