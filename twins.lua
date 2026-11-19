@@ -1085,7 +1085,7 @@ local function setup_params()
     params:add_group("LIMITS", 30)
     for i = 1, 2 do
         params:add_separator("Voice "..i)
-        for _, l in ipairs({{"jitter", 0, 999999, 0, 4999, 5, "ms"}, {"size", 20, 999, 40, 999, 5, "ms"}, {"density", 0.1, 50, 0.25, 20, 5, "Hz"}, {"spread", 0, 100, 0, 100, 0, "%"}, {"pitch"}, {"speed", -2, 2, -0.1, 0.25, 0, "x"}, {"seek", 0, 100, 0, 100, 0, "%"}}) do
+        for _, l in ipairs({{"jitter", 0, 999999, 0, 4999, 5, "ms"}, {"size", 20, 999, 40, 999, 5, "ms"}, {"density", 0.1, 250, 0.25, 50, 5, "Hz"}, {"spread", 0, 100, 0, 100, 0, "%"}, {"pitch"}, {"speed", -2, 2, -0.1, 0.25, 0, "x"}, {"seek", 0, 100, 0, 100, 0, "%"}}) do
             local s = l[1]
             local lo, hi = i.."min_"..s, i.."max_"..s
             if s == "pitch" then
